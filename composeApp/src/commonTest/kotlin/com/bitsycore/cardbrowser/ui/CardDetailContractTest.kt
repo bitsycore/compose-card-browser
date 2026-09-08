@@ -172,7 +172,7 @@ class CardDetailContractTest {
 	//  Per-card honesty, across a swipe
 
 	@Test
-	fun `each card's language options are derived from that card, not from the screen`() {
+	fun `each card's language options are derived from that card -- not from the screen`() {
 		// The pager renders neighbouring pages at once, so a page must not read the current card's
 		// coverage. Here one card has a French printing and its neighbour does not.
 		val vFrench = card("2", languages = LanguageCoverage(confirmed = setOf(CardLanguage.FRENCH)))

@@ -66,7 +66,7 @@ class TcgdexMapperTest {
 	}
 
 	@Test
-	fun `the card count includes secret rares, since the grid shows them`() {
+	fun `the card count includes secret rares -- since the grid shows them`() {
 		// `official` is 189 and `total` is 201. Showing 189 beside a grid of 201 tiles reads as a
 		// bug in the app rather than as two different counts.
 		assertEquals(201, mSet.cardCount)
@@ -162,7 +162,7 @@ class TcgdexMapperTest {
 	}
 
 	@Test
-	fun `Cardmarket product ids are carried across, de-duplicated`() {
+	fun `Cardmarket product ids are carried across -- de-duplicated`() {
 		val vCard = TcgdexMapper.toPrinting(
 			dto = TcgdexCardDto(
 				id = "swsh3-1",
@@ -183,7 +183,7 @@ class TcgdexMapperTest {
 	}
 
 	@Test
-	fun `Pokemon gets no energy cost, because a card has no single one`() {
+	fun `Pokemon gets no energy cost -- because a card has no single one`() {
 		// Cost is per attack. Filling this from the first attack would produce a sortable number
 		// that means nothing.
 		val vCard = TcgdexMapper.toPrinting(

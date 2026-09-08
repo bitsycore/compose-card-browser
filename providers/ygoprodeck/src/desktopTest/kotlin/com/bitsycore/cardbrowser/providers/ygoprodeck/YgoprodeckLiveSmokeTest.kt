@@ -112,7 +112,7 @@ class YgoprodeckLiveSmokeTest {
 	}
 
 	@Test
-	fun `omitting a language gets the app's top preference, not English`() = runBlocking<Unit> {
+	fun `omitting a language gets the app's top preference -- not English`() = runBlocking<Unit> {
 		// `resolveLanguage(null)` walks `CardLanguage.PREFERENCE_ORDER` and takes the first the
 		// provider carries, which for a source serving all four is French. This is the intended
 		// behaviour and it is easy to mistake for a bug -- a test written without an explicit

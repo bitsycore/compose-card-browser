@@ -304,7 +304,7 @@ class CardGridContractTest {
 	}
 
 	@Test
-	fun `resolving capabilities also records the game, so the sheet speaks its vocabulary`() {
+	fun `resolving capabilities also records the game -- so the sheet speaks its vocabulary`() {
 		// The filter sheet says "Colour" for Magic and "Domain" for Riftbound, and this is where
 		// it learns which. A grid that never resolved its game would silently use Riftbound's
 		// words for every game.

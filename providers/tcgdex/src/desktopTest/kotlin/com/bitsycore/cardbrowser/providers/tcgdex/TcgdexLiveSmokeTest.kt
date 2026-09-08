@@ -89,7 +89,7 @@ class TcgdexLiveSmokeTest {
 	}
 
 	@Test
-	fun `a French card is French, text and image alike`() = runBlocking {
+	fun `a French card is French -- text and image alike`() = runBlocking {
 		val vPage = provider().listCards(
 			CardPageRequest(
 				setId = SourceId(TcgdexProvider.PROVIDER_ID, "swsh3"),
@@ -111,7 +111,7 @@ class TcgdexLiveSmokeTest {
 	}
 
 	@Test
-	fun `finishes are stated on both sides, not merely left unknown`() = runBlocking {
+	fun `finishes are stated on both sides -- not merely left unknown`() = runBlocking {
 		val vCard = provider().cardDetail(
 			SourceId(TcgdexProvider.PROVIDER_ID, "swsh3-1"),
 			CardLanguage.ENGLISH,

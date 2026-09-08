@@ -41,7 +41,7 @@ class OptcgMapperTest {
 	)
 
 	@Test
-	fun `a set states neither a date nor a count, and neither is invented`() {
+	fun `a set states neither a date nor a count -- and neither is invented`() {
 		val vSet = OptcgMapper.toSet(OptcgSetDto(setName = "Romance Dawn", setId = "OP-01"), mProvider)
 
 		assertNotNull(vSet)
@@ -88,7 +88,7 @@ class OptcgMapperTest {
 	}
 
 	@Test
-	fun `no language is confirmed, because the API states none`() {
+	fun `no language is confirmed -- because the API states none`() {
 		val vCard = OptcgMapper.toPrinting(card(), mProvider, null)
 
 		assertNotNull(vCard)
@@ -117,7 +117,7 @@ class OptcgMapperTest {
 	}
 
 	@Test
-	fun `the grid and the detail screen share one image, since no small variant exists`() {
+	fun `the grid and the detail screen share one image -- since no small variant exists`() {
 		val vCard = OptcgMapper.toPrinting(card(), mProvider, null)
 
 		assertNotNull(vCard)

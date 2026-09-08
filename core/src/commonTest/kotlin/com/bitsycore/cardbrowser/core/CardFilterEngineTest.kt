@@ -56,7 +56,7 @@ class CardFilterEngineTest {
 	}
 
 	@Test
-	fun `a collector number search matches by prefix, not substring`() {
+	fun `a collector number search matches by prefix -- not substring`() {
 		// Typing "1" should offer 1, 10 and 11 -- not every card with a 1 buried in its number.
 		val vResult = CardFilterEngine.apply(mAll, CardQuery(text = "1"))
 
@@ -171,7 +171,7 @@ class CardFilterEngineTest {
 	}
 
 	@Test
-	fun `sorting by energy puts cards with no cost last, not first`() {
+	fun `sorting by energy puts cards with no cost last -- not first`() {
 		val vResult = CardFilterEngine.apply(mAll, CardQuery(sortBy = CardSortField.ENERGY_COST))
 
 		// A card with no energy is not a zero-cost card.
@@ -190,7 +190,7 @@ class CardFilterEngineTest {
 	}
 
 	@Test
-	fun `rarity sorts by the game ladder, not alphabetically`() {
+	fun `rarity sorts by the game ladder -- not alphabetically`() {
 		// Alphabetically this is Common, Epic, Rare, Showcase, Uncommon -- which puts Common between
 		// nothing sensible and reads as noise. Riftbound's ladder is Common to Showcase.
 		val vCards = listOf("Showcase", "Common", "Epic", "Uncommon", "Rare")
@@ -245,7 +245,7 @@ class CardFilterEngineTest {
 	//  Facets
 
 	@Test
-	fun `facets list only what is present, sorted`() {
+	fun `facets list only what is present -- sorted`() {
 		val vFacets = CardFilterEngine.facetsOf(mAll)
 
 		assertEquals(listOf("Fury", "Order"), vFacets.domains)

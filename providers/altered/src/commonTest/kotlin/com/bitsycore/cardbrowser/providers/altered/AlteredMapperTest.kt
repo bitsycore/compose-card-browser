@@ -120,7 +120,7 @@ class AlteredMapperTest {
 	}
 
 	@Test
-	fun `images point at the mirror, not the official bucket that answers 403`() {
+	fun `images point at the mirror -- not the official bucket that answers 403`() {
 		val vCard = AlteredMapper.toPrinting(card(), mProvider, mSet, CardLanguage.FRENCH, mImages)
 
 		assertNotNull(vCard)
@@ -156,7 +156,7 @@ class AlteredMapperTest {
 	}
 
 	@Test
-	fun `a banned card is still shown, and says it is banned`() {
+	fun `a banned card is still shown -- and says it is banned`() {
 		val vCard = AlteredMapper.toPrinting(card(isBanned = true), mProvider, mSet, CardLanguage.FRENCH, mImages)
 
 		assertNotNull(vCard)

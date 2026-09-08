@@ -61,7 +61,7 @@ class ScryfallMapperTest {
 	//  Sets
 
 	@Test
-	fun `a set is keyed by its printed code, not its UUID`() {
+	fun `a set is keyed by its printed code -- not its UUID`() {
 		// `q=set:blb` takes the code, the code is what is printed on the card, and a UUID can
 		// change if Scryfall rebuilds -- which would orphan every cached set.
 		val vSet = ScryfallMapper.toSet(
@@ -85,7 +85,7 @@ class ScryfallMapperTest {
 	//  Cards
 
 	@Test
-	fun `a localised printing shows the printed name, not the English one`() {
+	fun `a localised printing shows the printed name -- not the English one`() {
 		// The whole point of the language feature. `printed_name` is absent on English cards, so
 		// the fallback direction matters: preferring `name` would make every French card English.
 		val vCard = ScryfallMapper.toPrinting(
@@ -129,7 +129,7 @@ class ScryfallMapperTest {
 	}
 
 	@Test
-	fun `finishes are exhaustive, so what is missing is genuinely absent`() {
+	fun `finishes are exhaustive -- so what is missing is genuinely absent`() {
 		val vCard = ScryfallMapper.toPrinting(
 			dto = card(finishes = listOf("nonfoil", "foil")),
 			provider = mProvider,
@@ -233,7 +233,7 @@ class ScryfallMapperTest {
 	}
 
 	@Test
-	fun `treatments come from stated fields, most specific first`() {
+	fun `treatments come from stated fields -- most specific first`() {
 		val vExtended = ScryfallMapper.toPrinting(
 			dto = card().copy(frameEffects = listOf("extendedart")),
 			provider = mProvider,

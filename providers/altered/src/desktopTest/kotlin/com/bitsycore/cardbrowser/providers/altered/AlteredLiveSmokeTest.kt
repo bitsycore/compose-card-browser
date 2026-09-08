@@ -86,7 +86,7 @@ class AlteredLiveSmokeTest {
 	}
 
 	@Test
-	fun `French is French, in text and in the image path`() = runBlocking {
+	fun `French is French -- in text and in the image path`() = runBlocking {
 		val vPage = provider().listCards(
 			CardPageRequest(
 				setId = SourceId(AlteredProvider.PROVIDER_ID, "ALIZE"),

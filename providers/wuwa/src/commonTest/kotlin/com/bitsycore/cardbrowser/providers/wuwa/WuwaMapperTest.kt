@@ -17,7 +17,7 @@ class WuwaMapperTest {
 	private val mSet = WuwaMapper.toSet("SD01", 25, mProvider)
 
 	@Test
-	fun `sets are derived from the code prefix, since the API has none`() {
+	fun `sets are derived from the code prefix -- since the API has none`() {
 		assertEquals("SD01", WuwaMapper.setCodeOf("SD01-003"))
 		assertEquals("BP01", WuwaMapper.setCodeOf("BP01-024"))
 		assertNull(WuwaMapper.setCodeOf(""))
@@ -64,7 +64,7 @@ class WuwaMapperTest {
 	}
 
 	@Test
-	fun `the id is the API's numeric key, which is what the detail endpoint takes`() {
+	fun `the id is the API's numeric key -- which is what the detail endpoint takes`() {
 		val vCard = WuwaMapper.toPrinting(
 			WuwaCardBriefDto(id = 651, code = "SD01-001", name = "漂泊者（女）"),
 			mProvider,

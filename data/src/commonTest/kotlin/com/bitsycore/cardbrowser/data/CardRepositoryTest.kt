@@ -441,7 +441,7 @@ class CardRepositoryTest {
 	}
 
 	@Test
-	fun `pages are reassembled in page order, not in the order they answer`() = runTest {
+	fun `pages are reassembled in page order -- not in the order they answer`() = runTest {
 		// They are now fetched concurrently, so completion order is not request order. Collector
 		// numbers must still come back 1..5 or the cached set depends on network timing.
 		val vProvider = FakeProvider(
@@ -461,7 +461,7 @@ class CardRepositoryTest {
 	}
 
 	@Test
-	fun `the first request is small, so something is drawn before a full page transfers`() = runTest {
+	fun `the first request is small -- so something is drawn before a full page transfers`() = runTest {
 		// This API's transfer time tracks payload and varies wildly -- a 100-card page was measured
 		// between 1.6 s and 11.8 s, a 24-card one at about a second. The first request is therefore
 		// deliberately small and thrown away; the real pagination follows at full page size.
@@ -699,7 +699,7 @@ class CardRepositoryTest {
 	//  De-duplication across the cache boundary
 
 	@Test
-	fun `duplicates stay collapsed after a restart, not just on the first load`() = runTest {
+	fun `duplicates stay collapsed after a restart -- not just on the first load`() = runTest {
 		// The bug this guards. The complete-set cache was written with the *raw* list while the
 		// de-duplicated one was displayed, so the collapse held for exactly one session: the next
 		// launch read the raw records straight back off disk and drew them all.

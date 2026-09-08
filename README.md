@@ -30,10 +30,15 @@ in detail. No backend: the apps talk to each game's card database directly over 
 |---|---|
 | **JVM desktop** | Built, launched, browsed. Real sets and real cards on screen. |
 | **Android** | Debug APK builds and runs on a real device. Game picker, set lists and card grids verified on screen. |
-| **iOS** | Kotlin and Swift written. **Never compiled.** No Mac, no Xcode. See [`iosApp/README.md`](iosApp/README.md). |
+| **iOS** | **Kotlin now compiles** for `iosArm64` and `iosSimulatorArm64`, from scratch, as part of `./gradlew build`. Linking the framework and building the Swift shell still need a Mac and have never been done. See [`iosApp/README.md`](iosApp/README.md). |
 
-216 deterministic tests pass, plus 48 live-API smoke checks across the seven providers. See
-[Build, run, test](#build-run-test).
+216 deterministic tests pass on every target, plus 48 live-API smoke checks across the seven
+providers. See [Build, run, test](#build-run-test).
+
+`./gradlew build` is green end to end, which it previously was not: `compileCommonMainKotlinMetadata`
+failed on an unnecessary `coil3.disk.directory` import, and behind it the iOS test compilation
+failed on backtick test names containing commas, which Kotlin/Native forbids. Both are fixed, so the
+shared test suite now compiles for iOS as well.
 
 ---
 

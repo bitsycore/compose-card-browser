@@ -71,7 +71,7 @@ class CardIdentityAndCoverageTest {
 	//  Language coverage
 
 	@Test
-	fun `an unstated language is unknown, not unavailable`() {
+	fun `an unstated language is unknown -- not unavailable`() {
 		// This is the central distinction. Riftcodex says nothing about Korean, and the app must
 		// not turn that silence into "no Korean printing exists".
 		val vCoverage = LanguageCoverage.ENGLISH_ONLY
@@ -83,7 +83,7 @@ class CardIdentityAndCoverageTest {
 	}
 
 	@Test
-	fun `a language stated absent is unavailable, which is not the same as unknown`() {
+	fun `a language stated absent is unavailable -- which is not the same as unknown`() {
 		val vCoverage = LanguageCoverage(
 			confirmed = setOf(CardLanguage.ENGLISH),
 			absent = setOf(CardLanguage.KOREAN),

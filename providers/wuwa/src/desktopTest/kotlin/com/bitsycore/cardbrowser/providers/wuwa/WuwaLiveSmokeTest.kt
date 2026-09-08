@@ -62,7 +62,7 @@ class WuwaLiveSmokeTest {
 	}
 
 	@Test
-	fun `Japanese is what comes back, and it is labelled Japanese`() = runBlocking<Unit> {
+	fun `Japanese is what comes back -- and it is labelled Japanese`() = runBlocking<Unit> {
 		val vPage = provider().listCards(
 			CardPageRequest(setId = SourceId(WuwaProvider.PROVIDER_ID, "SD01")),
 		)

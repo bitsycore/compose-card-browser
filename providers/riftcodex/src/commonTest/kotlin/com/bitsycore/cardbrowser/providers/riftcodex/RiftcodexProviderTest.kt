@@ -64,7 +64,7 @@ class RiftcodexProviderTest {
 	//  Sets
 
 	@Test
-	fun `sets map with dates, counts and both shapes of cardmarket id`() = runTest {
+	fun `sets map with dates -- counts and both shapes of cardmarket id`() = runTest {
 		val vProvider = RiftcodexProvider(jsonClient(RiftcodexFixtures.SETS))
 
 		val vSets = vProvider.listSets(Game.RIFTBOUND)
@@ -90,7 +90,7 @@ class RiftcodexProviderTest {
 	}
 
 	@Test
-	fun `a set's id is its game code, which is what the cards endpoint needs`() = runTest {
+	fun `a set's id is its game code -- which is what the cards endpoint needs`() = runTest {
 		// Regression. The id used to be Riftcodex's own record id, and `/cards?set_id=<record id>`
 		// answers 200 with an empty page -- so every set browsed that way looked like a set with no
 		// cards in it, and the empty result was then cached.
@@ -191,7 +191,7 @@ class RiftcodexProviderTest {
 	}
 
 	@Test
-	fun `the display variant asks for the asset's own width, not a bigger one`() = runTest {
+	fun `the display variant asks for the asset's own width -- not a bigger one`() = runTest {
 		// The CDN will resize up to any width, but the source is 744 px and the upscale carries no
 		// detail -- its w=1488 render is measurably less sharp than a plain Lanczos upscale of the
 		// native one. Asking for more spends megabytes on interpolation.
@@ -377,7 +377,7 @@ class RiftcodexProviderTest {
 	//  Paging and requests
 
 	@Test
-	fun `hasMore comes from the server's page count, not from how full the page was`() = runTest {
+	fun `hasMore comes from the server's page count -- not from how full the page was`() = runTest {
 		val vFirst = RiftcodexProvider(jsonClient(RiftcodexFixtures.PAGE_ONE_OF_TWO))
 			.listCards(request(page = 1))
 		val vSecond = RiftcodexProvider(jsonClient(RiftcodexFixtures.PAGE_TWO_OF_TWO))
@@ -408,7 +408,7 @@ class RiftcodexProviderTest {
 	}
 
 	@Test
-	fun `the search endpoint is never used, whatever the query says`() = runTest {
+	fun `the search endpoint is never used -- whatever the query says`() = runTest {
 		// A regression guard on a deliberate decision. `/cards/search` exists, takes a `query` and
 		// answers 200 -- and its matching is unusable: re-checked 2026-09-08, `query=Cull` returns
 		// nothing while `query=Cull the Weak` returns "Aspirant's Climb". Wiring the search box to
@@ -460,7 +460,7 @@ class RiftcodexProviderTest {
 	//  Errors
 
 	@Test
-	fun `a 404 on detail is an answer of null, not a failure`() = runTest {
+	fun `a 404 on detail is an answer of null -- not a failure`() = runTest {
 		val vClient = clientOf { respondError(HttpStatusCode.NotFound) }
 
 		val vResult = RiftcodexProvider(vClient).cardDetail(SourceId(RiftcodexProvider.PROVIDER_ID, "nope"))
@@ -534,7 +534,7 @@ class RiftcodexProviderTest {
 	}
 
 	@Test
-	fun `cancellation propagates as cancellation, never as a ProviderError`() = runTest {
+	fun `cancellation propagates as cancellation -- never as a ProviderError`() = runTest {
 		// The behaviour that keeps a superseded set selection from painting an error over the
 		// screen the user just opened.
 		val vGate = CompletableDeferred<Unit>()

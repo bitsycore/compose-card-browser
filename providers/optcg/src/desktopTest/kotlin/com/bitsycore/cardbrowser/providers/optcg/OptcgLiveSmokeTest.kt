@@ -73,7 +73,7 @@ class OptcgLiveSmokeTest {
 	}
 
 	@Test
-	fun `no language is claimed, because the API states none`() = runBlocking {
+	fun `no language is claimed -- because the API states none`() = runBlocking {
 		val vPage = provider().listCards(
 			CardPageRequest(setId = SourceId(OptcgProvider.PROVIDER_ID, "OP-01")),
 		)

@@ -71,7 +71,7 @@ class ScryfallLiveSmokeTest {
 	}
 
 	@Test
-	fun `French printings come back French, with printed names`() = runBlocking {
+	fun `French printings come back French -- with printed names`() = runBlocking {
 		val vPage = provider().listCards(
 			CardPageRequest(
 				setId = SourceId(ScryfallProvider.PROVIDER_ID, "blb"),
@@ -111,7 +111,7 @@ class ScryfallLiveSmokeTest {
 	}
 
 	@Test
-	fun `finishes are exhaustive, so absence is a real statement`() = runBlocking {
+	fun `finishes are exhaustive -- so absence is a real statement`() = runBlocking {
 		val vPage = provider().listCards(
 			CardPageRequest(
 				setId = SourceId(ScryfallProvider.PROVIDER_ID, "blb"),

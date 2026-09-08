@@ -72,7 +72,7 @@ class AppModuleTest {
 	}
 
 	@Test
-	fun `every adapter is a distinct instance, not the same one seven times`() {
+	fun `every adapter is a distinct instance -- not the same one seven times`() {
 		val vProviders = graph().getAll<CardProvider>()
 
 		val vIds = vProviders.map { it.id.value }

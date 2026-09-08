@@ -58,7 +58,7 @@ class YgoprodeckMapperTest {
 	//  Sets
 
 	@Test
-	fun `a set is keyed by its name, because that is what the API filters on`() {
+	fun `a set is keyed by its name -- because that is what the API filters on`() {
 		// `cardinfo.php` has a `cardset` parameter that takes a name and no parameter that takes a
 		// code. Keying on the code would mean carrying a map purely to undo it on every request.
 		val vSet = YgoprodeckMapper.toSet(
@@ -87,7 +87,7 @@ class YgoprodeckMapperTest {
 	//  Cards
 
 	@Test
-	fun `the collector number comes from this set's printing, not the first one listed`() {
+	fun `the collector number comes from this set's printing -- not the first one listed`() {
 		// The card's first listed appearance is Gold Series. Reading the number off that would put
 		// "GLD1-EN001" on a card being browsed in Metal Raiders.
 		val vCard = YgoprodeckMapper.toPrinting(card(), mProvider, mMetalRaiders, CardLanguage.ENGLISH)
@@ -135,7 +135,7 @@ class YgoprodeckMapperTest {
 	}
 
 	@Test
-	fun `no identity is claimed, since one record is one card rather than one printing`() {
+	fun `no identity is claimed -- since one record is one card rather than one printing`() {
 		// The passcode is shared by every printing, but this adapter emits one record per card, so
 		// there is no set of printings for an identity to group. Pointing a card at itself would
 		// be an identity that says nothing.
