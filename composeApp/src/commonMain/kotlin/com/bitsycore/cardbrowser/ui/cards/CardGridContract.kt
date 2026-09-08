@@ -116,6 +116,16 @@ object CardGridContract :
 			val isFinal: Boolean,
 		) : Intent
 
+		/**
+		 * The load ended, however it ended.
+		 *
+		 * A flow can finish without a final emission -- a fresh cached set emits once and returns --
+		 * so without this [UiState.isLoading] stayed true forever. That is not merely untidy:
+		 * [UiState.isEmptyAfterFilter] is gated on it, so filtering a cached set down to nothing
+		 * showed neither cards nor the "no matches" message.
+		 */
+		data class LoadFinished(val generation: Int) : Intent
+
 		/** The filter values present in the set, once the whole set is known. */
 		data class FacetsComputed(val facets: CardFacets) : Intent
 
@@ -178,6 +188,9 @@ object CardGridContract :
 				)
 			}
 		}
+
+		is Intent.LoadFinished ->
+			if (intent.generation == state.requestGeneration) state.copy(isLoading = false) else state
 
 		is Intent.FacetsComputed -> state.copy(facets = intent.facets)
 

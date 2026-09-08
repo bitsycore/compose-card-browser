@@ -73,10 +73,14 @@ class CardRepositoryTest {
 		private val mSetsError: ProviderError? = null,
 		private val mRemoteFilters: Set<CardFilterField> = setOf(CardFilterField.TEXT),
 		private val mDelayByPage: Map<Int, Long> = emptyMap(),
+		private val mMaxPageSize: Int = 2,
 	) : CardProvider {
 
 		var listCardsCallCount = 0
 			private set
+
+		/** Every page size asked for, in order, so the first-paint request can be asserted on. */
+		val requestedPageSizes = mutableListOf<Int>()
 
 		override val displayName = "Fake"
 
@@ -97,7 +101,7 @@ class CardRepositoryTest {
 				cardmarketProductMapping = false,
 			),
 			attribution = null,
-			maxPageSize = 2,
+			maxPageSize = mMaxPageSize,
 		)
 
 		override suspend fun listSets(game: Game): List<CardSet> {
@@ -107,17 +111,22 @@ class CardRepositoryTest {
 
 		override suspend fun listCards(request: CardPageRequest): CardPage {
 			listCardsCallCount++
+			requestedPageSizes += request.pageSize
 			mDelayByPage[request.page]?.let { kotlinx.coroutines.delay(it) }
 			if (mFailFromPage != null && request.page >= mFailFromPage) {
 				throw ProviderError.Offline()
 			}
-			val vItems = mPages.getOrElse(request.page - 1) { emptyList() }
+			// Paged over the flat list so any requested page size behaves sensibly, including the
+			// small first-paint request.
+			val vAll = mPages.flatten()
+			val vFrom = (request.page - 1) * request.pageSize
+			val vItems = vAll.drop(vFrom).take(request.pageSize)
 			return CardPage(
 				cards = vItems,
 				page = request.page,
 				pageSize = request.pageSize,
-				totalCount = mPages.sumOf { it.size },
-				hasMore = request.page < mPages.size,
+				totalCount = vAll.size,
+				hasMore = vFrom + vItems.size < vAll.size,
 			)
 		}
 
@@ -399,11 +408,11 @@ class CardRepositoryTest {
 			.cards(mSetId, Game.RIFTBOUND, CardQuery(), knownSetSize = 5)
 			.toList()
 
-		assertEquals(2, vEmissions.size, "expected a partial first page then the complete set")
+		assertTrue(vEmissions.size >= 2, "expected at least a partial paint then the complete set")
 
 		val vFirst = assertNotNull(vEmissions.first().value)
-		assertEquals(2, vFirst.cards.size)
-		assertFalse(vFirst.isCompleteSet, "page one must not claim to be the set")
+		assertTrue(vFirst.cards.isNotEmpty(), "something should be drawn before the set finishes")
+		assertFalse(vFirst.isCompleteSet, "the first paint must not claim to be the set")
 		assertEquals(5, vFirst.knownSetSize)
 
 		val vLast = assertNotNull(vEmissions.last().value)
@@ -441,6 +450,50 @@ class CardRepositoryTest {
 		assertEquals(
 			listOf("1", "2", "3", "4", "5"),
 			assertNotNull(vResult.value).cards.map { it.collectorNumber },
+		)
+	}
+
+	@Test
+	fun `the first request is small, so something is drawn before a full page transfers`() = runTest {
+		// This API's transfer time tracks payload and varies wildly -- a 100-card page was measured
+		// between 1.6 s and 11.8 s, a 24-card one at about a second. The first request is therefore
+		// deliberately small and thrown away; the real pagination follows at full page size.
+		val vProvider = FakeProvider(
+			id = mProviderId,
+			mPages = listOf((1..30).map { card(it) }),
+			mMaxPageSize = 100,
+		)
+
+		val vEmissions = repositoryFor(vProvider)
+			.cards(mSetId, Game.RIFTBOUND, CardQuery(), knownSetSize = 30)
+			.toList()
+
+		assertEquals(
+			listOf(24, 100),
+			vProvider.requestedPageSizes,
+			"a small first paint, then the provider's full page size",
+		)
+		// And the small one really did reach the screen ahead of the rest.
+		assertEquals(24, assertNotNull(vEmissions.first().value).cards.size)
+		assertFalse(assertNotNull(vEmissions.first().value).isCompleteSet)
+		assertEquals(30, assertNotNull(vEmissions.last().value).cards.size)
+		assertTrue(assertNotNull(vEmissions.last().value).isCompleteSet)
+	}
+
+	@Test
+	fun `a provider with small pages of its own is not asked twice`() = runTest {
+		// maxPageSize is 2 here, so a 24-card "preview" would be nonsense: the extra round trip
+		// would cost time and save nothing.
+		val vProvider = FakeProvider(
+			id = mProviderId,
+			mPages = listOf(listOf(card(1), card(2)), listOf(card(3))),
+		)
+
+		repositoryFor(vProvider).cards(mSetId, Game.RIFTBOUND, CardQuery()).toList()
+
+		assertTrue(
+			vProvider.requestedPageSizes.all { it == 2 },
+			"every request should use the provider's own page size, was ${vProvider.requestedPageSizes}",
 		)
 	}
 

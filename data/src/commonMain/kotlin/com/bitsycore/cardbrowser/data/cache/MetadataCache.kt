@@ -244,14 +244,15 @@ class MetadataCache(
 	companion object {
 
 		/**
-		 * 32 MB.
+		 * 256 MB.
 		 *
-		 * Chosen against the real data rather than picked round: the largest Riftbound set is 358
-		 * cards and a complete-set record for it is roughly 400 KB of JSON, so this holds every set
-		 * the game has several times over with room for the set list and detail records. Deliberately
-		 * modest, and a constructor argument precisely so it is easy to change.
+		 * The largest Riftbound set is 358 cards and its complete-set record is roughly 460 KB of
+		 * JSON, so every set the game has comes to a few megabytes. This is deliberately far above
+		 * that: card metadata is what makes the app work offline, it is the cheapest thing here by
+		 * two orders of magnitude next to images, and evicting it to save a few megabytes would be
+		 * a poor trade. Room for a second and third game later without revisiting the number.
 		 */
-		const val DEFAULT_MAX_BYTES: Long = 32L * 1024 * 1024
+		const val DEFAULT_MAX_BYTES: Long = 256L * 1024 * 1024
 
 		private const val TEMP_SUFFIX = ".tmp"
 	}

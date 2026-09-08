@@ -67,13 +67,14 @@ class SetListViewModel(
 						origin = vSnapshot.origin,
 						isStale = vSnapshot.isStale,
 						error = vSnapshot.error,
-						// A cached emission is never final: the network one is still coming. An
-						// error is, because nothing follows it.
+						// Whether *this emission* settles the screen. Whether the load is over is a
+						// separate question, answered by LoadFinished below.
 						isFinal = vSnapshot.origin != com.bitsycore.cardbrowser.data.repository.DataOrigin.CACHE ||
 							vSnapshot.error != null,
 					),
 				)
 			}
+			dispatch(SetListContract.Intent.LoadFinished(vGeneration))
 		}
 	}
 }

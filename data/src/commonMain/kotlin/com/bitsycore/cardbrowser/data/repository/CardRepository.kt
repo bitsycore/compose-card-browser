@@ -53,6 +53,7 @@ class CardRepository(
 	private val mClock: () -> Long,
 	private val mSetListTtlMillis: Long = DEFAULT_SET_LIST_TTL_MILLIS,
 	private val mCardsTtlMillis: Long = DEFAULT_CARDS_TTL_MILLIS,
+	private val mSetListRevalidateAfterMillis: Long = DEFAULT_SET_LIST_REVALIDATE_MILLIS,
 ) {
 
 	// ============
@@ -88,9 +89,12 @@ class CardRepository(
 					isStale = vIsStale,
 				),
 			)
-			// Fresh enough: no request at all. Respecting a provider's limits starts with not
-			// asking for what we already have.
-			if (!vIsStale) return@flow
+			// Very recently checked: do not ask again. This is the only case that skips the
+			// network, and the window is minutes rather than the full freshness TTL -- a set list
+			// is one small request, and "is there a new set?" is a question worth asking on
+			// launch rather than once a day.
+			val vAge = vNow - vCached.fetchedAtEpochMillis
+			if (vAge < mSetListRevalidateAfterMillis) return@flow
 		}
 
 		try {
@@ -239,30 +243,15 @@ class CardRepository(
 		val vPageSize = provider.capabilities.maxPageSize
 		var vComplete = true
 
-		// Page one on its own, because nothing can be planned until it answers: it carries the
-		// total and therefore how many more pages there are.
-		currentCoroutineContext().ensureActive()
-		val vFirst = provider.listCards(
-			// Deliberately unfiltered: this is the *whole set*, and it is cached as such. Caching a
-			// filtered page under a complete-set key is precisely the bug that would make later
-			// filters silently wrong.
-			CardPageRequest(setId = setId, query = CardQuery(), page = 1, pageSize = vPageSize),
-		)
-		val vCollected = vFirst.cards.toMutableList()
-		var vTotal: Int? = vFirst.totalCount
-
-		// Straight to the screen, before the rest is even requested. Origins is four pages and
-		// roughly seven seconds of round trips; waiting for all of it before drawing anything meant
-		// seven seconds of spinner over cards that were already in hand after the first second.
-		// This is marked partial, so it is not a claim to be the whole set.
-		if (vFirst.hasMore && vFirst.cards.isNotEmpty()) {
+		/** Emits what has been collected so far, marked partial. */
+		suspend fun emitProgress(cards: List<CardPrinting>, total: Int?) {
 			emit(
 				DataSnapshot(
 					value = SetCards(
-						cards = CardFilterEngine.apply(vCollected, query),
+						cards = CardFilterEngine.apply(cards, query),
 						isCompleteSet = false,
-						knownSetSize = knownSetSize ?: vTotal,
-						cachedCardCount = vCollected.size,
+						knownSetSize = knownSetSize ?: total,
+						cachedCardCount = cards.size,
 					),
 					origin = DataOrigin.NETWORK,
 					completeness = Completeness.PARTIAL,
@@ -272,54 +261,105 @@ class CardRepository(
 			)
 		}
 
-		if (vFirst.hasMore && vFirst.cards.isNotEmpty()) {
-			// How many pages are left. Derived from the provider's own total where it gives one, so
-			// the remaining requests can go out together rather than one after another: four
-			// sequential pages of Origins cost about seven seconds, four concurrent ones about two.
-			val vLastPage = when {
-				vTotal != null -> ((vTotal + vPageSize - 1) / vPageSize).coerceAtMost(MAX_PAGES_PER_SET)
-				else -> MAX_PAGES_PER_SET
+		// A deliberately small first request, purely to put something on screen.
+		//
+		// This API's transfer time tracks payload closely and varies wildly: a 100-card page is
+		// ~116 KB and measured between 1.6 s and 11.8 s, while a 24-card page is ~27 KB and lands
+		// in about a second. Paying for one extra small request buys a first paint that does not
+		// depend on the worst case.
+		// Skipped entirely for a provider whose own pages are already this small: the extra request
+		// would cost a round trip and save nothing.
+		val vWantsPreview = vPageSize > FIRST_PAGE_SIZE
+		var vTotal: Int? = null
+		val vCollected = mutableListOf<CardPrinting>()
+		var vPreviewWasWholeSet = false
+
+		if (vWantsPreview) {
+			currentCoroutineContext().ensureActive()
+			val vPreview = provider.listCards(
+				// Deliberately unfiltered: what is cached under a complete-set key must be the whole
+				// set. Caching a filtered page there is precisely the bug that would make later
+				// filters silently wrong.
+				CardPageRequest(setId = setId, query = CardQuery(), page = 1, pageSize = FIRST_PAGE_SIZE),
+			)
+			vTotal = vPreview.totalCount
+			if (!vPreview.hasMore) {
+				// A set small enough to arrive whole in the preview needs nothing further.
+				vCollected += vPreview.cards
+				vPreviewWasWholeSet = true
+			} else if (vPreview.cards.isNotEmpty()) {
+				emitProgress(vPreview.cards, vTotal)
+			}
+		}
+
+		if (!vPreviewWasWholeSet) {
+			// Page one at the provider's own size, on its own, because nothing can be planned until
+			// it answers: it carries the total and therefore how many more pages there are. When a
+			// preview ran, this overlaps it and supersedes it.
+			currentCoroutineContext().ensureActive()
+			val vFirst = provider.listCards(
+				CardPageRequest(setId = setId, query = CardQuery(), page = 1, pageSize = vPageSize),
+			)
+			vCollected += vFirst.cards
+			vTotal = vFirst.totalCount ?: vTotal
+
+			// Without a preview this is the first thing the user could possibly see, so it goes to
+			// the screen before the remaining pages are requested.
+			if (!vWantsPreview && vFirst.hasMore && vFirst.cards.isNotEmpty()) {
+				emitProgress(vCollected, vTotal)
 			}
 
-			// Bounded, and small. These are volunteer-run APIs; "as fast as possible" is not a
-			// licence to open a hundred sockets at a stranger's server.
-			val vRemaining = (2..vLastPage).toList()
-			val vBatches = vRemaining.chunked(MAX_CONCURRENT_PAGE_REQUESTS)
+			if (vFirst.hasMore) {
+				// How many pages remain. Taken from the provider's own total where it gives one, so
+				// the rest can go out together rather than one after another: four sequential pages
+				// of Origins cost about seven seconds, four concurrent ones about two.
+				val vLastPage = when {
+					vTotal != null -> ((vTotal + vPageSize - 1) / vPageSize).coerceAtMost(MAX_PAGES_PER_SET)
+					else -> MAX_PAGES_PER_SET
+				}
 
-			outer@ for (vBatch in vBatches) {
-				currentCoroutineContext().ensureActive()
-				val vResults = coroutineScope {
-					vBatch.map { vPageNumber ->
-						async {
-							vPageNumber to runCatching {
-								provider.listCards(
-									CardPageRequest(
-										setId = setId,
-										query = CardQuery(),
-										page = vPageNumber,
-										pageSize = vPageSize,
-									),
-								)
+				// Bounded, and small. These are volunteer-run APIs; "as fast as possible" is not a
+				// licence to open a hundred sockets at a stranger's server.
+				outer@ for (vBatch in (2..vLastPage).chunked(MAX_CONCURRENT_PAGE_REQUESTS)) {
+					currentCoroutineContext().ensureActive()
+					val vResults = coroutineScope {
+						vBatch.map { vPageNumber ->
+							async {
+								vPageNumber to runCatching {
+									provider.listCards(
+										CardPageRequest(
+											setId = setId,
+											query = CardQuery(),
+											page = vPageNumber,
+											pageSize = vPageSize,
+										),
+									)
+								}
 							}
-						}
-					}.awaitAll()
-				}
-
-				// Reassembled in page order, never in completion order, so the cached set does not
-				// depend on which request happened to come back first.
-				for ((_, vOutcome) in vResults.sortedBy { it.first }) {
-					val vPage = vOutcome.getOrElse {
-						// Cancellation is not a failed page; it must unwind rather than be recorded
-						// as an incomplete set.
-						if (it is CancellationException) throw it
-						vComplete = false
-						break@outer
+						}.awaitAll()
 					}
-					vCollected += vPage.cards
-					vTotal = vPage.totalCount ?: vTotal
-				}
 
-				if (vTotal != null && vCollected.size >= vTotal) break
+					// Reassembled in page order, never in completion order, so the cached set does
+					// not depend on which request happened to come back first.
+					var vRanOut = false
+					for ((_, vOutcome) in vResults.sortedBy { it.first }) {
+						val vPage = vOutcome.getOrElse {
+							// Cancellation is not a failed page; it must unwind rather than be
+							// recorded as an incomplete set.
+							if (it is CancellationException) throw it
+							vComplete = false
+							break@outer
+						}
+						vCollected += vPage.cards
+						vTotal = vPage.totalCount ?: vTotal
+						if (!vPage.hasMore) vRanOut = true
+					}
+
+					val vDone = vRanOut || (vTotal != null && vCollected.size >= vTotal)
+					// The grid fills in batch by batch rather than jumping straight to the end.
+					if (!vDone) emitProgress(vCollected, vTotal)
+					if (vDone) break
+				}
 			}
 		}
 
@@ -484,8 +524,23 @@ class CardRepository(
 			.thenByDescending { it.releaseDate }
 			.thenBy { it.name }
 
-		/** Set catalogues change when a set is announced, which is not often. */
+		/**
+		 * How old a set list may be before it is *shown as stale*.
+		 *
+		 * Distinct from the revalidate window below: this decides whether the UI says "saved copy",
+		 * not whether a request goes out.
+		 */
 		const val DEFAULT_SET_LIST_TTL_MILLIS: Long = 24L * 60 * 60 * 1000
+
+		/**
+		 * How old a set list may be before it is checked again in the background.
+		 *
+		 * Five minutes, which in practice means every launch. The cached list is always drawn first
+		 * and the check never blocks it, so the cost of being wrong here is one 2 KB request, and
+		 * the cost of *not* asking is a set the game released this morning not appearing until
+		 * tomorrow.
+		 */
+		const val DEFAULT_SET_LIST_REVALIDATE_MILLIS: Long = 5L * 60 * 1000
 
 		/**
 		 * Card data changes when a provider corrects a record, so a day is generous but not silly.
@@ -495,6 +550,14 @@ class CardRepository(
 
 		/** A stop against a provider whose paging never terminates. 100 pages is 10,000 cards. */
 		private const val MAX_PAGES_PER_SET = 100
+
+		/**
+		 * The size of the throwaway first request, chosen for time-to-first-card.
+		 *
+		 * Enough to fill the visible part of a grid on any screen this app runs on, and small
+		 * enough that it arrives while a full page is still transferring.
+		 */
+		private const val FIRST_PAGE_SIZE = 24
 
 		/**
 		 * How many pages of a set may be in flight at once.

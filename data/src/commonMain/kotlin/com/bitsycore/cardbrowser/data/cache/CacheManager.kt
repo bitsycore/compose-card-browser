@@ -87,14 +87,20 @@ class CacheManager(
 	companion object {
 
 		/**
-		 * 128 MB of images.
+		 * 1 GB of images.
 		 *
-		 * Sized from the real data: a Riftbound thumbnail at `w=320` is roughly 300 KB and a full
-		 * card image around 1.1 MB, so this holds a few complete sets browsed as thumbnails plus
-		 * the cards actually opened. Deliberately modest, and a constructor argument so it is one
-		 * edit to change.
+		 * Generous on purpose, and affordable because of what the images now cost: a WebP thumbnail
+		 * is ~22 KB and a full-size card ~180 KB, so this is room for tens of thousands of cards --
+		 * far more than any one game has. In practice the limit stops being the thing that evicts.
+		 *
+		 * A ceiling is not an allocation. Nothing is reserved; the cache only grows as cards are
+		 * actually looked at, and a real browse of all 352 Origins cards came to under 4 MB.
+		 *
+		 * It is also the OS's to overrule. On Android and iOS this lives in the system cache
+		 * directory, which the platform may purge whenever it wants the space back -- which is
+		 * precisely why a disposable cache is the right place to be generous.
 		 */
-		const val DEFAULT_IMAGE_CACHE_MAX_BYTES: Long = 128L * 1024 * 1024
+		const val DEFAULT_IMAGE_CACHE_MAX_BYTES: Long = 1024L * 1024 * 1024
 	}
 }
 

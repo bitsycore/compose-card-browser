@@ -130,6 +130,9 @@ class CardGridViewModel(
 					)
 				}
 			}
+			// The flow is done. A fresh cached set emits once and returns, so this is the only
+			// thing that clears the loading flag on that path.
+			dispatch(CardGridContract.Intent.LoadFinished(vGeneration))
 		}
 	}
 

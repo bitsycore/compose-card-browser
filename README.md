@@ -32,7 +32,7 @@ no deckbuilding.
 | **Android** | Debug APK builds (23 MB). **Not installed or run** — no device or emulator was available. |
 | **iOS** | Kotlin and Swift written. **Never compiled.** No Mac, no Xcode. See [`iosApp/README.md`](iosApp/README.md). |
 
-139 deterministic tests and 5 live-API smoke checks pass. See [Build, run, test](#build-run-test).
+141 deterministic tests and 5 live-API smoke checks pass. See [Build, run, test](#build-run-test).
 
 ---
 
@@ -217,19 +217,25 @@ Where the brief left a choice, these were taken. All are one edit to change.
 
 | Choice | Value | Why |
 |---|---|---|
-| Metadata cache ceiling | 32 MB | The largest set is 358 cards ≈ 460 KB of JSON, so this holds every Riftbound set several times over. |
-| Image cache ceiling | 128 MB | A WebP thumbnail is ~22 KB and a full card ~1.1 MB, so this holds every Riftbound set as thumbnails several times over plus the cards actually opened. |
+| Metadata cache ceiling | 256 MB | Every Riftbound set is a few megabytes of JSON. Card metadata is what makes the app work offline and is two orders of magnitude cheaper than images, so evicting it to save megabytes would be a poor trade. |
+| Image cache ceiling | 1 GB | A ceiling, not an allocation — a full browse of all 352 Origins cards came to under 4 MB. At ~22 KB a thumbnail this is room for tens of thousands of cards, so the limit stops being what evicts. On Android and iOS it sits in the OS cache directory, which the system may purge regardless. |
 | Thumbnail format | WebP at `w=320` | Pinned, not negotiated — see [Known limitations](#known-limitations). ~22 KB against ~260 KB for the same image as PNG. |
 | Detail image | WebP at the asset's native width, `q=90` | ~180 KB against ~1.17 MB for the lossless PNG, and no visible difference. Decoded at source resolution rather than layout size so zoom has real pixels. |
+| First request when opening a set | 24 cards, thrown away | Time-to-first-card. This API's transfer time tracks payload and swings hard — a 100-card page measured between 1.6 s and 11.8 s, a 24-card one about 1 s. Skipped for a provider whose own pages are already that small. |
 | Pages fetched at once | 4 | Page one is drawn before the rest are even requested; the remainder go out together. Four covers every Riftbound set in one batch while staying polite to a free API. |
 | Set list freshness | 24 hours | Set catalogues change when a set is announced. |
 | Card data freshness | 24 hours | Stale data still displays immediately; this only governs when a refresh is attempted. |
 
-**What "freshness" means in practice.** Within the window, opening a cached set makes **no network
-request at all** — it is served from disk and that is the end of it. Past the window, the cached
-copy is still drawn immediately and a refresh runs behind it, with the screen saying "Saved copy,
-refreshing…". A refresh that fails leaves the cached data in place and adds a retry, so going
+**What "freshness" means in practice.** The cached copy is *always* drawn first and a refresh never
+blocks it. What the window controls is whether the screen calls the copy stale ("Saved copy,
+refreshing…"). A refresh that fails leaves the cached data in place and adds a retry, so going
 offline never costs you what you already had.
+
+The **set list** is additionally revalidated in the background if it is more than five minutes old,
+which in practice means on every launch: the list is one 2 KB request, it is drawn from cache
+instantly either way, and the cost of not asking is a set released this morning not showing up until
+tomorrow. Card data uses the full 24 hours before re-fetching, because re-checking a set is four
+requests rather than one.
 
 The refresh re-fetches the whole set rather than asking what changed, because it cannot do better:
 the API sends no `ETag`, no `Last-Modified` and no `Cache-Control`, so there is nothing to make a

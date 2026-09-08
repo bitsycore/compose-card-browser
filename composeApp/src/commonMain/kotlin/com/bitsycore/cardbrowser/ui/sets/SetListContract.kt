@@ -76,6 +76,14 @@ object SetListContract :
 			val isFinal: Boolean,
 		) : Intent
 
+		/**
+		 * The load ended, however it ended.
+		 *
+		 * Needed because a flow can finish without a final emission: a fresh cache emits once and
+		 * returns, so nothing else was ever going to clear [UiState.isLoading].
+		 */
+		data class LoadFinished(val generation: Int) : Intent
+
 		/** Preferences finished loading and told us where the user was. */
 		data class LastOpenedSetRestored(val setId: String?) : Intent
 
@@ -113,6 +121,9 @@ object SetListContract :
 				)
 			}
 		}
+
+		is Intent.LoadFinished ->
+			if (intent.generation == state.requestGeneration) state.copy(isLoading = false) else state
 
 		is Intent.LastOpenedSetRestored -> state.copy(lastOpenedSetId = intent.setId)
 
