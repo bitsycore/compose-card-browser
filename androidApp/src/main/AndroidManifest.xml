@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+	<!-- The only permission the app needs: it reads a public card database and nothing else. -->
+	<uses-permission android:name="android.permission.INTERNET" />
+
+	<application
+		android:name=".CardBrowserApplication"
+		android:allowBackup="true"
+		android:icon="@android:drawable/ic_menu_gallery"
+		android:label="CardBrowser"
+		android:supportsRtl="true"
+		android:theme="@style/Theme.CardBrowser">
+
+		<activity
+			android:name=".MainActivity"
+			android:exported="true"
+			android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+			android:theme="@style/Theme.CardBrowser">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+			</intent-filter>
+		</activity>
+	</application>
+
+	<queries>
+		<!-- Required on Android 11+ for the Cardmarket link to resolve to a browser. -->
+		<intent>
+			<action android:name="android.intent.action.VIEW" />
+			<data android:scheme="https" />
+		</intent>
+	</queries>
+
+</manifest>

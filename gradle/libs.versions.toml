@@ -1,0 +1,141 @@
+# ##########################################################################################################################
+# MARK: VERSIONS
+# ##########################################################################################################################
+#
+# Every version here is pinned exactly. No dynamic versions, no `+`, no `latest.release`.
+#
+# The combination below is not guessed: Gradle 9.7.1 + AGP 9.4.0 + Compose Multiplatform 1.12.0 and
+# Gradle 9.7.1 + AGP 9.4.0 + Pulse 0.3.7 + Koin 4.2.2 + Ktor 3.5.2 + Okio 3.18.1 are each already
+# building in a sibling project on this machine. See README "Dependency verification".
+
+[versions]
+
+# =========================================
+# MARK: KMP
+
+kotlin = "2.4.20"
+
+# KotlinX
+kotlinxCoroutines = "1.11.0"
+kotlinxSerialization = "1.11.0"
+kotlinxDatetime = "0.8.0"
+
+# Compose
+composeMultiplatform = "1.12.0"
+material3 = "1.9.0"
+materialIconsExtended = "1.7.3"
+
+# AndroidX (KMP)
+androidxLifecycle = "2.11.0"
+androidxNavigation3 = "1.1.1"
+androidxNavigationEvent = "1.1.0"
+
+# Bitsycore
+# MVI. Published to https://maven.bitsycore.com/releases, not Maven Central.
+pulse = "0.3.7"
+
+# Data / IO
+okio = "3.18.1"
+ktor = "3.5.2"
+
+# Images. Coil 3 is the only mainstream image loader that targets Android, iOS and JVM desktop from
+# one API, and it accepts a Ktor engine so the app keeps a single HTTP stack.
+coil = "3.6.2"
+
+# DI
+koin = "4.2.2"
+
+# =========================================
+# MARK: Android
+
+agp = "9.4.0"
+#noinspection UnusedVersionCatalogEntry
+androidCompileSdk = "37"
+#noinspection UnusedVersionCatalogEntry
+androidMinSdk = "24"
+#noinspection UnusedVersionCatalogEntry
+androidTargetSdk = "37"
+
+androidxActivityCompose = "1.13.0"
+
+# ##########################################################################################################################
+# MARK: LIBRARIES
+# ##########################################################################################################################
+
+[libraries]
+
+# KotlinX
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "kotlinxCoroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDatetime" }
+
+# Compose
+jetbrains-compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }
+jetbrains-compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "composeMultiplatform" }
+jetbrains-compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMultiplatform" }
+jetbrains-compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "composeMultiplatform" }
+jetbrains-compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "material3" }
+jetbrains-compose-material-icons-extended = { module = "org.jetbrains.compose.material:material-icons-extended", version.ref = "materialIconsExtended" }
+jetbrains-compose-ui-tooling = { module = "org.jetbrains.compose.ui:ui-tooling", version.ref = "composeMultiplatform" }
+
+# AndroidX (KMP). Navigation 3 is the current multiplatform navigation story and is what carries the
+# back stack across Android, iOS and desktop without a per-platform shim.
+androidx-navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui", version.ref = "androidxNavigation3" }
+androidx-lifecycle-viewmodel-navigation3 = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3", version.ref = "androidxLifecycle" }
+androidx-navigationevent-compose = { module = "org.jetbrains.androidx.navigationevent:navigationevent-compose", version.ref = "androidxNavigationEvent" }
+
+# Bitsycore
+pulse = { module = "com.bitsycore.lib:pulse", version.ref = "pulse" }
+pulse-viewmodel = { module = "com.bitsycore.lib:pulse-viewmodel", version.ref = "pulse" }
+pulse-compose = { module = "com.bitsycore.lib:pulse-compose", version.ref = "pulse" }
+pulse-test = { module = "com.bitsycore.lib:pulse-test", version.ref = "pulse" }
+
+# Data / IO
+okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
+okio-fakefilesystem = { module = "com.squareup.okio:okio-fakefilesystem", version.ref = "okio" }
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-client-logging = { module = "io.ktor:ktor-client-logging", version.ref = "ktor" }
+ktor-serialization-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
+ktor-client-java = { module = "io.ktor:ktor-client-java", version.ref = "ktor" }
+ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
+# Test only: an engine that answers from a lambda, so the request the app really builds can be
+# asserted on without a network.
+ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
+
+# Images
+coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+coil-network-ktor3 = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
+
+# DI
+koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
+koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }
+koin-compose-viewmodel = { module = "io.insert-koin:koin-compose-viewmodel", version.ref = "koin" }
+koin-android = { module = "io.insert-koin:koin-android", version.ref = "koin" }
+koin-test = { module = "io.insert-koin:koin-test", version.ref = "koin" }
+
+# Android only
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivityCompose" }
+
+# Test
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
+
+# ##########################################################################################################################
+# MARK: PLUGINS
+# ##########################################################################################################################
+
+[plugins]
+
+kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
+composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+androidApplication = { id = "com.android.application", version.ref = "agp" }
+# AGP 9's KMP library plugin. `com.android.library` is deprecated for KMP under AGP 9 and removed in
+# AGP 10, and KMP may not be applied in the same subproject as `com.android.application` -- which is
+# why :androidApp exists as a separate module from :composeApp.
+androidKmpLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }

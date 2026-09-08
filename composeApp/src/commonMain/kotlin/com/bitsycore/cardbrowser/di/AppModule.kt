@@ -1,0 +1,99 @@
+package com.bitsycore.cardbrowser.di
+
+import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.provider.CardProvider
+import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
+import com.bitsycore.cardbrowser.core.provider.ProviderRoute
+import com.bitsycore.cardbrowser.data.cache.CacheManager
+import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.net.HttpClientFactory
+import com.bitsycore.cardbrowser.data.repository.CardRepository
+import com.bitsycore.cardbrowser.data.settings.PreferencesStore
+import com.bitsycore.cardbrowser.providers.riftcodex.RiftcodexProvider
+import com.bitsycore.cardbrowser.ui.cards.CardGridViewModel
+import com.bitsycore.cardbrowser.ui.detail.CardDetailViewModel
+import com.bitsycore.cardbrowser.ui.sets.SetListViewModel
+import com.bitsycore.cardbrowser.ui.settings.SettingsViewModel
+import kotlinx.coroutines.Dispatchers
+import org.koin.core.module.dsl.viewModel
+import org.koin.dsl.module
+
+/**
+ * The object graph, minus the three things only a platform can supply.
+ *
+ * See `platformModule()` for the file system, the storage roots and the link opener.
+ */
+val appModule = module {
+
+	// ============
+	//  Infrastructure
+
+	single { HttpClientFactory.json }
+	single { HttpClientFactory.create() }
+
+	single {
+		MetadataCache(
+			mStorage = get(),
+			mJson = get(),
+			mIoDispatcher = Dispatchers.Default,
+			mClock = { nowEpochMillis() },
+		)
+	}
+
+	single { CacheManager(get(), get(), Dispatchers.Default) }
+
+	single { PreferencesStore(get(), get(), Dispatchers.Default) }
+
+	// ============
+	//  Providers
+	//
+	// This block, and the routing table below it, are the whole of what registering a provider
+	// costs. A second adapter is one `single` here, one entry in `providerRoutes`, and nothing
+	// else -- the browse and detail screens never name a provider.
+
+	single<CardProvider> { RiftcodexProvider(mClient = get()) }
+
+	single {
+		ProviderRegistry(
+			providers = getAll<CardProvider>(),
+			routes = providerRoutes,
+		)
+	}
+
+	single { CardRepository(mRegistry = get(), mCache = get(), mClock = { nowEpochMillis() }) }
+
+	// ============
+	//  Presentation
+
+	viewModel { SetListViewModel(get(), get()) }
+	viewModel { CardGridViewModel(get(), get(), get()) }
+	viewModel { CardDetailViewModel(get(), get(), get()) }
+	viewModel { SettingsViewModel(get(), get(), get()) }
+}
+
+/**
+ * Which provider answers for which game, and optionally for which language.
+ *
+ * One authoritative route per game. Nothing here merges two providers or fails over between them.
+ *
+ * A later provider filling a language gap is added as a second entry with a `language` set -- for
+ * example a Korean-capable Riftbound source would be:
+ *
+ * ```kotlin
+ * ProviderRoute(Game.RIFTBOUND, SomeProvider.PROVIDER_ID, language = CardLanguage.KOREAN)
+ * ```
+ *
+ * Games with no entry are not offered by the app at all; there are no dead menu items.
+ */
+val providerRoutes: List<ProviderRoute> = listOf(
+	ProviderRoute(game = Game.RIFTBOUND, provider = RiftcodexProvider.PROVIDER_ID),
+)
+
+/**
+ * Wall-clock milliseconds.
+ *
+ * A function rather than a direct call at each site so tests can bind a fixed clock and assert on
+ * staleness without sleeping.
+ */
+@OptIn(kotlin.time.ExperimentalTime::class)
+fun nowEpochMillis(): Long = kotlin.time.Clock.System.now().toEpochMilliseconds()

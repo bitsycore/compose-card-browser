@@ -1,0 +1,9 @@
+# Normalise line endings so sources are stable across platforms.
+* text=auto eol=lf
+
+*.bat text eol=crlf
+gradlew text eol=lf
+
+*.jar binary
+*.png binary
+*.jks binary
