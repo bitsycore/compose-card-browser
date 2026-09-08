@@ -504,6 +504,26 @@ class CardRepositoryTest {
 		)
 	}
 
+	@Test
+	fun `the grid fills page by page instead of jumping from the preview to the finished set`() = runTest {
+		// Every remaining page of a Riftbound set fits in one concurrent batch, so emitting per
+		// batch and emitting at the end were the same thing: the user saw 24 cards and then, some
+		// seconds later, all of them. Pages are now awaited in order and emitted one at a time.
+		val vProvider = FakeProvider(
+			id = mProviderId,
+			mPages = listOf((1..250).map { card(it) }),
+			mMaxPageSize = 100,
+		)
+
+		val vCounts = repositoryFor(vProvider)
+			.cards(mSetId, Game.RIFTBOUND, CardQuery(), knownSetSize = 250)
+			.toList()
+			.map { assertNotNull(it.value).cards.size }
+
+		// 24 from the quick first paint, then each page as it lands, then the whole set.
+		assertEquals(listOf(24, 100, 200, 250), vCounts)
+	}
+
 	// ============
 	//  Duplicate records
 

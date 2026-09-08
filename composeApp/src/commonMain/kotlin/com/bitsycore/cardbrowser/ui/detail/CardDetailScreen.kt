@@ -82,6 +82,7 @@ import com.bitsycore.cardbrowser.ui.common.ImageVariant
 import com.bitsycore.cardbrowser.ui.common.ErrorState
 import com.bitsycore.cardbrowser.ui.common.FullscreenCardViewer
 import com.bitsycore.cardbrowser.ui.common.LoadingState
+import com.bitsycore.cardbrowser.ui.common.PrefetchCardArt
 import com.bitsycore.cardbrowser.ui.common.sharedCardArt
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import com.bitsycore.lib.pulse.compose.collectEffect
@@ -208,18 +209,35 @@ private fun CardPager(
 	)
 	val vScope = rememberCoroutineScope()
 
-	// Settled page, not the in-flight one: the title and the strip should follow a completed swipe
-	// rather than flicker through every card a fast fling passes over.
+	// The page being *moved to*, not the one already arrived at.
+	//
+	// `settledPage` waited for the animation to finish, so tapping a thumbnail left the strip
+	// highlighting the old card for the length of the scroll. `targetPage` updates the moment a
+	// destination is known -- immediately on a tap, as soon as a swipe commits -- while still not
+	// flickering through every card a fast fling passes over, which is what `currentPage` would do.
 	LaunchedEffect(vPagerState) {
-		snapshotFlow { vPagerState.settledPage }.collect(onPageChanged)
+		snapshotFlow { vPagerState.targetPage }.collect(onPageChanged)
 	}
 
-	// The other direction: tapping the strip, which moves the pager rather than the state.
+	// The other direction: something outside the pager moved the selection, so the pager follows.
+	// Compared against `targetPage` rather than `currentPage` so a tap does not start a second
+	// animation toward a destination it is already travelling to.
 	LaunchedEffect(state.currentIndex) {
-		if (state.currentIndex != vPagerState.currentPage) {
+		if (state.currentIndex != vPagerState.targetPage) {
 			vPagerState.animateScrollToPage(state.currentIndex)
 		}
 	}
+
+	// The cards either side, fetched before they are asked for. Combined with the thumbnail showing
+	// underneath a loading image, a swipe lands on finished art rather than on a spinner.
+	PrefetchCardArt(
+		artworks = state.cards
+			.slice(
+				(state.currentIndex - PREFETCH_RADIUS).coerceAtLeast(0)..
+					(state.currentIndex + PREFETCH_RADIUS).coerceAtMost(state.cards.lastIndex),
+			)
+			.map { it.artwork },
+	)
 
 	Column(modifier.fillMaxSize()) {
 		if (state.canSwipe) {
@@ -233,6 +251,10 @@ private fun CardPager(
 
 		HorizontalPager(
 			state = vPagerState,
+			// One page either side stays composed, so the neighbour is already laid out and drawn
+			// when a swipe starts. Three either side are *prefetched* above, which costs no
+			// composition -- keeping seven full detail pages alive would.
+			beyondViewportPageCount = 1,
 			// Off while zoomed, or a pan across a magnified card would flick to the next one.
 			userScrollEnabled = !state.isZoomed,
 			modifier = Modifier.fillMaxSize(),
@@ -785,3 +807,11 @@ private val PREVIEW_HEIGHT = 52.dp
 
 /** The thumbnail, its collector number underneath, and the row's own padding. */
 private val PREVIEW_ROW_HEIGHT = 84.dp
+
+/**
+ * How many cards either side of the current one have their art fetched in advance.
+ *
+ * Three covers a fast flick in either direction. At ~180 KB a full-size WebP card that is about a
+ * megabyte of speculative traffic per card opened, against a cache ceiling of a gigabyte.
+ */
+private const val PREFETCH_RADIUS = 3

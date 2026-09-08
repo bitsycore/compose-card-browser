@@ -304,9 +304,10 @@ class CardRepository(
 			vCollected += vFirst.cards
 			vTotal = vFirst.totalCount ?: vTotal
 
-			// Without a preview this is the first thing the user could possibly see, so it goes to
-			// the screen before the remaining pages are requested.
-			if (!vWantsPreview && vFirst.hasMore && vFirst.cards.isNotEmpty()) {
+			// Straight to the screen, whether or not a preview preceded it: page one is a hundred
+			// cards where the preview was two dozen, and the user should see the grid fill rather
+			// than sit on the preview until the whole set lands.
+			if (vFirst.hasMore && vFirst.cards.isNotEmpty()) {
 				emitProgress(vCollected, vTotal)
 			}
 
@@ -323,10 +324,17 @@ class CardRepository(
 				// licence to open a hundred sockets at a stranger's server.
 				outer@ for (vBatch in (2..vLastPage).chunked(MAX_CONCURRENT_PAGE_REQUESTS)) {
 					currentCoroutineContext().ensureActive()
-					val vResults = coroutineScope {
-						vBatch.map { vPageNumber ->
-							async {
-								vPageNumber to runCatching {
+					var vRanOut = false
+
+					coroutineScope {
+						// Requested together, but consumed in page order and emitted one at a time.
+						// Awaiting the whole batch before emitting is what made the grid jump from
+						// the preview straight to the finished set: every remaining page of a
+						// Riftbound set fits in a single batch, so "per batch" and "at the end"
+						// were the same thing.
+						val vPending = vBatch.map { vPageNumber ->
+							vPageNumber to async {
+								runCatching {
 									provider.listCards(
 										CardPageRequest(
 											setId = setId,
@@ -337,29 +345,31 @@ class CardRepository(
 									)
 								}
 							}
-						}.awaitAll()
-					}
-
-					// Reassembled in page order, never in completion order, so the cached set does
-					// not depend on which request happened to come back first.
-					var vRanOut = false
-					for ((_, vOutcome) in vResults.sortedBy { it.first }) {
-						val vPage = vOutcome.getOrElse {
-							// Cancellation is not a failed page; it must unwind rather than be
-							// recorded as an incomplete set.
-							if (it is CancellationException) throw it
-							vComplete = false
-							break@outer
 						}
-						vCollected += vPage.cards
-						vTotal = vPage.totalCount ?: vTotal
-						if (!vPage.hasMore) vRanOut = true
+
+						for ((_, vDeferred) in vPending) {
+							val vPage = vDeferred.await().getOrElse {
+								// Cancellation is not a failed page; it must unwind rather than be
+								// recorded as an incomplete set.
+								if (it is CancellationException) throw it
+								vComplete = false
+								// Whatever is still in flight is abandoned with the scope.
+								return@coroutineScope
+							}
+							vCollected += vPage.cards
+							vTotal = vPage.totalCount ?: vTotal
+							if (!vPage.hasMore) vRanOut = true
+
+							// Ordered growth: 24, then 100, 200, 300, and finally the whole set.
+							// Awaiting in page order means a page that answers early waits its turn,
+							// which is what keeps the cached set independent of network timing.
+							val vReachedEnd = vRanOut || (vTotal != null && vCollected.size >= vTotal)
+							if (!vReachedEnd) emitProgress(vCollected, vTotal)
+						}
 					}
 
-					val vDone = vRanOut || (vTotal != null && vCollected.size >= vTotal)
-					// The grid fills in batch by batch rather than jumping straight to the end.
-					if (!vDone) emitProgress(vCollected, vTotal)
-					if (vDone) break
+					if (!vComplete) break@outer
+					if (vRanOut || (vTotal != null && vCollected.size >= vTotal)) break
 				}
 			}
 		}

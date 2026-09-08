@@ -88,15 +88,35 @@ class CardmarketLinkBuilderTest {
 	}
 
 	@Test
-	fun `a set with no Cardmarket id degrades to the expansion singles listing`() {
-		// Vendetta is real and has `cardmarket_id: null`. The slug is still derivable, so the user
-		// gets the set's singles page rather than nothing.
+	fun `a set with no Cardmarket id still gets a filled-in search`() {
+		// Vendetta is real and has `cardmarket_id: null`. Dropping the search over that sent people
+		// to an unfiltered listing of 358 cards to find the one they were already looking at. The
+		// path already names the expansion, so the scope survives without `idExpansion`.
 		val vVendetta = TestCards.ORIGINS.copy(name = "Vendetta", externalIds = emptyMap())
 
-		val vLink = CardmarketLinkBuilder.linkFor(TestCards.printing(), vVendetta)
+		val vLink = CardmarketLinkBuilder.linkFor(
+			printing = TestCards.printing(name = "Renekton, Rage Fueled"),
+			set = vVendetta,
+		)
+
+		val vSearch = assertIs<CardmarketLink.CardSearch>(vLink)
+		assertTrue(
+			vSearch.url.startsWith("https://www.cardmarket.com/en/Riftbound/Products/Singles/Vendetta?"),
+		)
+		assertTrue(vSearch.url.contains("searchString=Renekton%2C+Rage+Fueled"), vSearch.url)
+		// The one parameter that genuinely could not be known is simply absent.
+		assertFalse(vSearch.url.contains("idExpansion"), vSearch.url)
+	}
+
+	@Test
+	fun `a card with no usable name falls back to the expansion listing`() {
+		val vLink = CardmarketLinkBuilder.linkFor(
+			printing = TestCards.printing(name = "   "),
+			set = TestCards.ORIGINS,
+		)
 
 		val vSingles = assertIs<CardmarketLink.ExpansionSingles>(vLink)
-		assertEquals("https://www.cardmarket.com/en/Riftbound/Products/Singles/Vendetta", vSingles.url)
+		assertEquals("https://www.cardmarket.com/en/Riftbound/Products/Singles/Origins", vSingles.url)
 	}
 
 	@Test

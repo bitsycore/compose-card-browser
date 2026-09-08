@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -21,11 +23,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
+import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
 import coil3.memory.MemoryCache
@@ -85,6 +90,11 @@ fun CardImage(
 ) {
 	val vUrl = variant.urlFor(artwork)
 
+	// The same art, smaller, and almost certainly already in the cache because the grid drew it.
+	// Shown underneath while the full-size one is still coming down, so opening a card lands on the
+	// card rather than on a grey rectangle. `null` when this *is* the small one.
+	val vPlaceholderUrl = artwork.thumbnailUrl?.takeIf { it != vUrl }
+
 	if (vUrl.isBlank()) {
 		// Nothing to retry: the provider supplied no image at all.
 		ImagePlaceholder(modifier, isError = true, onRetry = null)
@@ -116,14 +126,37 @@ fun CardImage(
 			.build()
 	}
 
-	key(vAttempt) {
+	Box(modifier) {
+		// Drawn for the whole life of the composable rather than only while loading, so the
+		// full-size image simply appears on top of it. Swapping one for the other at the moment the
+		// load finishes would flash the background between them.
+		if (vPlaceholderUrl != null) {
+			AsyncImage(
+				model = vPlaceholderUrl,
+				// The real image carries the description; this is decoration behind it.
+				contentDescription = null,
+				modifier = Modifier.matchParentSize(),
+				contentScale = contentScale,
+				filterQuality = filterQuality,
+			)
+		}
+
+		key(vAttempt) {
 		SubcomposeAsyncImage(
 			model = vModel,
 			contentDescription = contentDescription ?: artwork.accessibilityText,
-			modifier = modifier,
+			modifier = Modifier.matchParentSize(),
 			contentScale = contentScale,
 			filterQuality = filterQuality,
-			loading = { ImagePlaceholder(Modifier.fillMaxSize(), isError = false, onRetry = null) },
+			loading = {
+				if (vPlaceholderUrl != null) {
+					// Something recognisable is already behind this, so all that is needed is a
+					// sign that a better one is on the way.
+					LoadingOverlay()
+				} else {
+					ImagePlaceholder(Modifier.fillMaxSize(), isError = false, onRetry = null)
+				}
+			},
 			error = {
 				LaunchedEffect(vUrl) {
 					// Once, and only once. A CDN that is genuinely down should not be hammered by
@@ -142,6 +175,31 @@ fun CardImage(
 				)
 			},
 		)
+		}
+	}
+}
+
+/**
+ * A spinner over art that is already showing, at lower resolution.
+ *
+ * Sat on its own scrim disc because card art is busy and a bare indicator disappears into it.
+ */
+@Composable
+private fun LoadingOverlay() {
+	Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+		Box(
+			modifier = Modifier
+				.size(44.dp)
+				.clip(CircleShape)
+				.background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.45f)),
+			contentAlignment = Alignment.Center,
+		) {
+			CircularProgressIndicator(
+				modifier = Modifier.size(24.dp),
+				strokeWidth = 2.dp,
+				color = Color.White,
+			)
+		}
 	}
 }
 
@@ -219,5 +277,30 @@ enum class ImageVariant {
 		THUMBNAIL -> artwork.thumbnailUrl ?: artwork.displayUrl ?: artwork.imageUrl
 		DISPLAY -> artwork.displayUrl ?: artwork.imageUrl
 		ORIGINAL -> artwork.imageUrl
+	}
+}
+
+/**
+ * Warms the cache for artwork the user has not asked for yet but is about to.
+ *
+ * Enqueued rather than composed: Coil fetches and decodes into its memory and disk caches without a
+ * layout node, so the neighbours of a card cost bandwidth but no composition. When the user swipes,
+ * the image is already there and there is nothing to wait for.
+ *
+ * Deliberately cheap to get wrong -- a prefetch that never gets used is a few tens of kilobytes of
+ * WebP, and one that does is the difference between a smooth swipe and a spinner.
+ */
+@Composable
+fun PrefetchCardArt(artworks: List<Artwork>, variant: ImageVariant = ImageVariant.DISPLAY) {
+	val vContext = LocalPlatformContext.current
+	val vUrls = artworks.map(variant::urlFor).filter { it.isNotBlank() }
+
+	LaunchedEffect(vUrls) {
+		val vLoader = SingletonImageLoader.get(vContext)
+		vUrls.forEach { vUrl ->
+			// Fire and forget. `enqueue` does not suspend and its result is of no interest: a
+			// prefetch that fails simply means the real request will do the work later.
+			vLoader.enqueue(ImageRequest.Builder(vContext).data(vUrl).build())
+		}
 	}
 }

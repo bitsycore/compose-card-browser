@@ -32,7 +32,7 @@ no deckbuilding.
 | **Android** | Debug APK builds (23 MB). **Not installed or run** — no device or emulator was available. |
 | **iOS** | Kotlin and Swift written. **Never compiled.** No Mac, no Xcode. See [`iosApp/README.md`](iosApp/README.md). |
 
-144 deterministic tests and 6 live-API smoke checks pass. See [Build, run, test](#build-run-test).
+146 deterministic tests and 6 live-API smoke checks pass. See [Build, run, test](#build-run-test).
 
 ---
 
@@ -222,6 +222,7 @@ Where the brief left a choice, these were taken. All are one edit to change.
 | Thumbnail format | WebP at `w=320` | Pinned, not negotiated — see [Known limitations](#known-limitations). ~22 KB against ~260 KB for the same image as PNG. |
 | Detail image | WebP at the asset's native width, `q=90` | ~180 KB against ~1.17 MB for the lossless PNG, and no visible difference. Decoded at source resolution rather than layout size so zoom has real pixels. |
 | First request when opening a set | 24 cards, thrown away | Time-to-first-card. This API's transfer time tracks payload and swings hard — a 100-card page measured between 1.6 s and 11.8 s, a 24-card one about 1 s. Skipped for a provider whose own pages are already that small. |
+| Card art prefetched around the open card | 3 either side | Enqueued into the cache without composing anything, so a swipe lands on finished art. ~180 KB apiece against a 1 GB ceiling. |
 | Pages fetched at once | 4 | Page one is drawn before the rest are even requested; the remainder go out together. Four covers every Riftbound set in one batch while staying polite to a free API. |
 | Set list freshness | 24 hours | Set catalogues change when a set is announced. |
 | Card data freshness | 24 hours | Stale data still displays immediately; this only governs when a refresh is attempted. |

@@ -179,23 +179,29 @@ object CardmarketLinkBuilder {
 		val vExpansion = set?.let(::expansionSlug)
 		val vSinglesPath = vExpansion?.let { "$BASE_URL/$UI_LOCALE/$vGame/Products/Singles/$it" }
 
-		// 2. A name search scoped to the expansion. Needs the expansion's own Cardmarket id, which
-		//    the provider supplies for most sets, and the path segment for the base URL.
+		// 2. A name search scoped to the expansion.
+		//
+		//    `idExpansion` is included when the provider supplied one and simply left out when it
+		//    did not -- Riftcodex has no Cardmarket id for Vendetta, and dropping the whole search
+		//    over a missing filter sent people to an unfiltered listing of 358 cards to find the one
+		//    they were already looking at. The URL path already names the expansion, so the scope
+		//    survives without it; every parameter still comes from the observed URL and none is
+		//    invented to replace it.
 		val vExpansionId = set?.externalIds?.get(ExternalIdKey.CARDMARKET_EXPANSION)?.firstOrNull()
 		val vTerms = searchTermsFor(printing)
-		if (vSinglesPath != null && vExpansionId != null && vTerms.isNotBlank()) {
-			val vQuery = listOf(
+		if (vSinglesPath != null && vTerms.isNotBlank()) {
+			val vQuery = buildList {
 				// Cardmarket's current search implementation. Sending v1 parameters to a v2 page
 				// silently returns the unfiltered listing.
-				"searchMode=v2",
+				add("searchMode=v2")
 				// The "Cards" product category, as opposed to sealed product or accessories.
-				"idCategory=$CATEGORY_CARDS",
-				"idExpansion=$vExpansionId",
-				"searchString=${formEncode(vTerms)}",
+				add("idCategory=$CATEGORY_CARDS")
+				vExpansionId?.let { add("idExpansion=$it") }
+				add("searchString=${formEncode(vTerms)}")
 				// 0 is "any rarity". Sent explicitly because the v2 form always submits it.
-				"idRarity=0",
-				"perSite=$RESULTS_PER_PAGE",
-			).joinToString("&")
+				add("idRarity=0")
+				add("perSite=$RESULTS_PER_PAGE")
+			}.joinToString("&")
 			return CardmarketLink.CardSearch(
 				url = "$vSinglesPath?$vQuery",
 				expansion = vExpansion,
