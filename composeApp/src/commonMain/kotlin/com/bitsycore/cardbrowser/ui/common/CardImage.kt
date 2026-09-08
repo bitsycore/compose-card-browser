@@ -29,6 +29,8 @@ import coil3.SingletonImageLoader
 import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
 import coil3.memory.MemoryCache
+import coil3.request.ImageRequest
+import coil3.size.Size
 import com.bitsycore.cardbrowser.core.model.Artwork
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -54,9 +56,14 @@ import kotlinx.coroutines.withContext
  * cache. If that also fails the mark stays, and where there is room for it the user gets a retry
  * button.
  *
- * @param useThumbnail true in the grid. The provider's thumbnail URL is a fraction of the full
- *   image's bytes, and loading full-resolution art for a scrolling grid is the single easiest way
- *   to make a card browser unusable on a phone
+ * @param variant which of the provider's image sizes to ask for. [ImageVariant.THUMBNAIL] in the
+ *   grid and the preview strip: loading full-resolution art for a scrolling grid is the single
+ *   easiest way to make a card browser unusable on a phone
+ * @param decodeAtSourceResolution decodes the image at its own pixels instead of at the size of the
+ *   box it is drawn in. Off by default, because decoding a 744 px card into a 108 dp tile wastes
+ *   memory on every tile in a grid -- but **on** wherever the image can be magnified, since Coil's
+ *   default sizes the bitmap to the layout and zooming then magnifies a box-sized bitmap rather
+ *   than the card
  * @param filterQuality how the bitmap is resampled when it does not land on screen at its native
  *   size. Compose defaults to [FilterQuality.Low], plain bilinear, which visibly aliases card art
  *   shrunk into a grid tile -- fine lines in card borders and text crawl and shimmer. [FilterQuality.High]
@@ -70,12 +77,13 @@ fun CardImage(
 	artwork: Artwork,
 	contentDescription: String?,
 	modifier: Modifier = Modifier,
-	useThumbnail: Boolean = true,
+	variant: ImageVariant = ImageVariant.THUMBNAIL,
+	decodeAtSourceResolution: Boolean = false,
 	contentScale: ContentScale = ContentScale.Fit,
 	filterQuality: FilterQuality = FilterQuality.High,
 	allowManualRetry: Boolean = false,
 ) {
-	val vUrl = if (useThumbnail) artwork.thumbnailUrl ?: artwork.imageUrl else artwork.imageUrl
+	val vUrl = variant.urlFor(artwork)
 
 	if (vUrl.isBlank()) {
 		// Nothing to retry: the provider supplied no image at all.
@@ -101,9 +109,16 @@ fun CardImage(
 
 	// Changing the key rebuilds the painter, which is what issues a genuinely new request. Reusing
 	// the same model string would let Coil hand back the cached failure.
+	val vModel = remember(vUrl, decodeAtSourceResolution, vContext) {
+		ImageRequest.Builder(vContext)
+			.data(vUrl)
+			.apply { if (decodeAtSourceResolution) size(Size.ORIGINAL) }
+			.build()
+	}
+
 	key(vAttempt) {
 		SubcomposeAsyncImage(
-			model = vUrl,
+			model = vModel,
 			contentDescription = contentDescription ?: artwork.accessibilityText,
 			modifier = modifier,
 			contentScale = contentScale,
@@ -171,5 +186,38 @@ private fun ImagePlaceholder(
 				tint = MaterialTheme.colorScheme.onSurfaceVariant,
 			)
 		}
+	}
+}
+
+/**
+ * Which of a provider's renditions of one artwork to load.
+ *
+ * An enum rather than a boolean because there are genuinely three, they are used in three different
+ * places for three different reasons, and `useThumbnail = false` said nothing about which of the
+ * other two you were getting.
+ */
+enum class ImageVariant {
+
+	/** Grid tiles and the preview strip. Tens of kilobytes. */
+	THUMBNAIL,
+
+	/**
+	 * The detail screen and the fullscreen viewer: the source's own resolution, compressed.
+	 *
+	 * Not the same as [ORIGINAL]. Both are 744 px wide for a Riftbound card; this one is WebP at
+	 * ~180 KB and the other is lossless PNG at ~1.17 MB. There is no resolution to be gained by
+	 * taking the larger -- see `RiftcodexMapper.displayUrl`.
+	 */
+	DISPLAY,
+
+	/** Exactly what the provider published, untouched. Nothing asks for this today. */
+	ORIGINAL,
+	;
+
+	/** The URL for this variant, falling back through the ones a provider did supply. */
+	fun urlFor(artwork: Artwork): String = when (this) {
+		THUMBNAIL -> artwork.thumbnailUrl ?: artwork.displayUrl ?: artwork.imageUrl
+		DISPLAY -> artwork.displayUrl ?: artwork.imageUrl
+		ORIGINAL -> artwork.imageUrl
 	}
 }

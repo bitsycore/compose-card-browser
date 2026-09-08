@@ -32,7 +32,7 @@ no deckbuilding.
 | **Android** | Debug APK builds (23 MB). **Not installed or run** — no device or emulator was available. |
 | **iOS** | Kotlin and Swift written. **Never compiled.** No Mac, no Xcode. See [`iosApp/README.md`](iosApp/README.md). |
 
-136 deterministic tests and 5 live-API smoke checks pass. See [Build, run, test](#build-run-test).
+139 deterministic tests and 5 live-API smoke checks pass. See [Build, run, test](#build-run-test).
 
 ---
 
@@ -220,6 +220,7 @@ Where the brief left a choice, these were taken. All are one edit to change.
 | Metadata cache ceiling | 32 MB | The largest set is 358 cards ≈ 460 KB of JSON, so this holds every Riftbound set several times over. |
 | Image cache ceiling | 128 MB | A WebP thumbnail is ~22 KB and a full card ~1.1 MB, so this holds every Riftbound set as thumbnails several times over plus the cards actually opened. |
 | Thumbnail format | WebP at `w=320` | Pinned, not negotiated — see [Known limitations](#known-limitations). ~22 KB against ~260 KB for the same image as PNG. |
+| Detail image | WebP at the asset's native width, `q=90` | ~180 KB against ~1.17 MB for the lossless PNG, and no visible difference. Decoded at source resolution rather than layout size so zoom has real pixels. |
 | Pages fetched at once | 4 | Page one is drawn before the rest are even requested; the remainder go out together. Four covers every Riftbound set in one batch while staying polite to a free API. |
 | Set list freshness | 24 hours | Set catalogues change when a set is announced. |
 | Card data freshness | 24 hours | Stale data still displays immediately; this only governs when a refresh is attempted. |
@@ -262,6 +263,21 @@ large detail image, where there is room for it, a retry button appears if that a
 
 The full-resolution URL is untouched — it carries no resize parameter and the CDN always answers it
 with the original PNG.
+
+### There is no higher-resolution card art
+
+Riftbound card assets are 744x1040, and that is the ceiling. The CDN will happily resize one *up* —
+`w=1488` returns a 1488x2080 PNG of 5 MB — but it is interpolating, and badly: measured against a
+real asset, its 1488 render has a high-pass variance of 94 against 122 for a plain Lanczos upscale
+of the native image, and the two differ by a mean of under 4/255. It is softer than what the client
+would produce itself.
+
+So the app asks for the native width and no more. Zooming past roughly 2x is soft because the source
+is soft at that magnification, not because of how it is being drawn.
+
+What *was* a rendering fault: Coil sizes a request from the layout by default, so the detail
+screen's 420 dp box received a ~420 px bitmap and zooming magnified that rather than the card. Both
+the inline image and the fullscreen viewer now decode at source resolution.
 
 ### Not verified
 

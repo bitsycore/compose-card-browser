@@ -86,8 +86,10 @@ enum class ArtworkTreatment(val displayName: String) {
  * languages do not multiply tiles -- they are choices inside the detail screen.
  *
  * @property imageUrl the largest image the provider offers
- * @property thumbnailUrl a smaller variant when the provider's CDN can produce one, else `null`
- *   and the grid falls back to [imageUrl]
+ * @property thumbnailUrl a small variant for the grid and the preview strip, or `null` when the
+ *   provider's CDN cannot resize, in which case the grid falls back to [imageUrl]
+ * @property displayUrl the variant the detail screen and fullscreen viewer load: native resolution,
+ *   compressed. `null` falls back to [imageUrl]
  * @property language the language of the *image*, which is not always the language of the text
  */
 @Serializable
@@ -95,6 +97,7 @@ data class Artwork(
 	val id: SourceId,
 	val imageUrl: String,
 	val thumbnailUrl: String?,
+	val displayUrl: String? = null,
 	val artist: String?,
 	val treatment: ArtworkTreatment,
 	val language: CardLanguage?,

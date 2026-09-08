@@ -102,7 +102,8 @@ object TestCards {
 		artwork = Artwork(
 			id = SourceId(PROVIDER, id),
 			imageUrl = imageUrl,
-			thumbnailUrl = "$imageUrl&w=320",
+			thumbnailUrl = "$imageUrl&w=320&fm=webp",
+			displayUrl = "$imageUrl&w=744&fm=webp&q=90",
 			artist = "Polar Engine Studio",
 			treatment = treatment,
 			language = CardLanguage.ENGLISH,

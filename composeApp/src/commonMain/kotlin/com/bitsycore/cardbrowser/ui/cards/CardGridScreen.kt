@@ -52,6 +52,7 @@ import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardOrientation
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.ui.common.CardImage
+import com.bitsycore.cardbrowser.ui.common.ImageVariant
 import com.bitsycore.cardbrowser.ui.common.EmptyState
 import com.bitsycore.cardbrowser.ui.common.ErrorState
 import com.bitsycore.cardbrowser.ui.common.LoadingState
@@ -246,7 +247,7 @@ private fun CardTile(card: CardPrinting, onClick: () -> Unit) {
 		CardImage(
 			artwork = card.artwork,
 			contentDescription = card.displayName,
-			useThumbnail = true,
+			variant = ImageVariant.THUMBNAIL,
 			contentScale = ContentScale.Crop,
 			modifier = Modifier
 				.fillMaxWidth()

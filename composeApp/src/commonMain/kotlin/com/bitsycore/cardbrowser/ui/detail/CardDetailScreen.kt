@@ -78,7 +78,9 @@ import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.Finish
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.ui.common.CardImage
+import com.bitsycore.cardbrowser.ui.common.ImageVariant
 import com.bitsycore.cardbrowser.ui.common.ErrorState
+import com.bitsycore.cardbrowser.ui.common.FullscreenCardViewer
 import com.bitsycore.cardbrowser.ui.common.LoadingState
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import com.bitsycore.lib.pulse.compose.collectEffect
@@ -115,6 +117,7 @@ fun CardDetailScreen(
 		}
 	}
 
+	Box(Modifier.fillMaxSize()) {
 	Scaffold(
 		topBar = {
 			TopAppBar(
@@ -159,9 +162,21 @@ fun CardDetailScreen(
 				onLanguageSelected = { viewModel.dispatch(CardDetailContract.Intent.LanguageSelected(it)) },
 				onFinishSelected = { viewModel.dispatch(CardDetailContract.Intent.FinishSelected(it)) },
 				onOpenCardmarket = { viewModel.dispatch(CardDetailContract.Intent.OpenCardmarket(it)) },
+				onOpenFullscreen = { viewModel.dispatch(CardDetailContract.Intent.FullscreenToggled(true)) },
 				modifier = Modifier.padding(vPadding),
 			)
 		}
+	}
+
+	// Outside the Scaffold so it covers the app bar as well; a card is worth the whole screen.
+	vState.card?.let { vCard ->
+		FullscreenCardViewer(
+			artwork = vCard.artwork,
+			contentDescription = vCard.artwork.accessibilityText ?: vCard.displayName,
+			isVisible = vState.isFullscreen,
+			onDismiss = { viewModel.dispatch(CardDetailContract.Intent.FullscreenToggled(false)) },
+		)
+	}
 	}
 }
 
@@ -183,6 +198,7 @@ private fun CardPager(
 	onLanguageSelected: (CardLanguage) -> Unit,
 	onFinishSelected: (Finish) -> Unit,
 	onOpenCardmarket: (String) -> Unit,
+	onOpenFullscreen: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
 	val vPagerState = rememberPagerState(
@@ -228,6 +244,7 @@ private fun CardPager(
 				onLanguageSelected = onLanguageSelected,
 				onFinishSelected = onFinishSelected,
 				onOpenCardmarket = { onOpenCardmarket(vCard.id.qualified) },
+				onOpenFullscreen = onOpenFullscreen,
 			)
 		}
 	}
@@ -270,7 +287,7 @@ private fun PreviewStrip(
 				CardImage(
 					artwork = vCard.artwork,
 					contentDescription = vCard.displayName,
-					useThumbnail = true,
+					variant = ImageVariant.THUMBNAIL,
 					contentScale = ContentScale.Crop,
 					modifier = Modifier
 						.width(if (vIsCurrent) PREVIEW_WIDTH_CURRENT else PREVIEW_WIDTH)
@@ -324,6 +341,7 @@ private fun CardDetailContent(
 	onLanguageSelected: (CardLanguage) -> Unit,
 	onFinishSelected: (Finish) -> Unit,
 	onOpenCardmarket: () -> Unit,
+	onOpenFullscreen: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
 	// Measured outside the scroll on purpose. A vertically scrolling Column hands its children an
@@ -346,6 +364,7 @@ private fun CardDetailContent(
 				card = card,
 				maxImageHeight = vMaxImageHeight,
 				onZoomToggle = onZoomToggle,
+				onOpenFullscreen = onOpenFullscreen,
 			)
 
 			Spacer(Modifier.height(16.dp))
@@ -564,6 +583,7 @@ private fun ZoomableCardImage(
 	card: CardPrinting,
 	maxImageHeight: Dp,
 	onZoomToggle: (Boolean) -> Unit,
+	onOpenFullscreen: () -> Unit,
 ) {
 	var vScale by remember(card.id) { mutableFloatStateOf(1f) }
 	var vOffsetX by remember(card.id) { mutableFloatStateOf(0f) }
@@ -612,20 +632,26 @@ private fun ZoomableCardImage(
 				}
 			}
 			.clickable {
-				// Tapping a magnified card puts it back, which is the gesture people try first when
-				// they are lost.
 				if (vScale > 1f) {
+					// Tapping a magnified card puts it back, which is the gesture people try first
+					// when they are lost.
 					vScale = 1f
 					vOffsetX = 0f
 					vOffsetY = 0f
 					onZoomToggle(false)
+				} else {
+					// At rest, a tap means "show me this properly".
+					onOpenFullscreen()
 				}
 			},
 	) {
 		CardImage(
 			artwork = card.artwork,
 			contentDescription = card.artwork.accessibilityText ?: card.displayName,
-			useThumbnail = false,
+			variant = ImageVariant.DISPLAY,
+			// The inline image can be pinched, so it needs real pixels rather than a bitmap sized
+			// to the box it sits in.
+			decodeAtSourceResolution = true,
 			contentScale = ContentScale.Fit,
 			modifier = Modifier
 				.fillMaxSize()

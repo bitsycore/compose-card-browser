@@ -185,8 +185,45 @@ class RiftcodexProviderTest {
 	}
 
 	@Test
-	fun `an image URL from an unknown host gets no invented thumbnail`() {
+	fun `an image URL from an unknown host gets no invented variants`() {
 		assertNull(RiftcodexMapper.thumbnailUrl("https://example.com/card.png"))
+		assertNull(RiftcodexMapper.displayUrl("https://example.com/card.png"))
+	}
+
+	@Test
+	fun `the display variant asks for the asset's own width, not a bigger one`() = runTest {
+		// The CDN will resize up to any width, but the source is 744 px and the upscale carries no
+		// detail -- its w=1488 render is measurably less sharp than a plain Lanczos upscale of the
+		// native one. Asking for more spends megabytes on interpolation.
+		val vProvider = RiftcodexProvider(
+			jsonClient("""{"items":[${RiftcodexFixtures.CARD_ORDINARY}],"total":1,"page":1,"size":100,"pages":1}"""),
+		)
+
+		val vDisplay = vProvider.listCards(request()).cards.single().artwork.displayUrl!!
+
+		// 744 is what the asset's own filename says: `...-744x1039.png`.
+		assertTrue(vDisplay.contains("w=744"), vDisplay)
+		assertTrue(vDisplay.contains("fm=webp"), vDisplay)
+		assertTrue(vDisplay.contains("q=90"), vDisplay)
+	}
+
+	@Test
+	fun `the native width is read from the asset filename rather than assumed`() {
+		// Riftbound cards are not all the same size: 744x1039 and 744x1040 both occur.
+		assertEquals(744, RiftcodexMapper.nativeWidthOf("https://x/a-744x1040.png?y=1"))
+		assertEquals(1024, RiftcodexMapper.nativeWidthOf("https://x/a-1024x768.jpg"))
+		assertNull(RiftcodexMapper.nativeWidthOf("https://x/no-dimensions.png"))
+	}
+
+	@Test
+	fun `a card with no dimensions in its filename still gets a display variant`() {
+		// No `w` at all, which returns the original -- right, since the point is to avoid resampling.
+		val vUrl = RiftcodexMapper.displayUrl(
+			"https://cmsassets.rgpub.io/sanity/images/x/y/plain.png?accountingTag=RB",
+		)!!
+
+		assertFalse(vUrl.contains("w="), vUrl)
+		assertTrue(vUrl.contains("fm=webp"), vUrl)
 	}
 
 	@Test

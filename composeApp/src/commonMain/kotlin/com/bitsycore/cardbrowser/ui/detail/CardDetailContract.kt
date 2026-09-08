@@ -39,6 +39,7 @@ object CardDetailContract :
 		val requestedLanguage: CardLanguage = CardLanguage.ENGLISH,
 		val selectedFinish: Finish? = null,
 		val isZoomed: Boolean = false,
+		val isFullscreen: Boolean = false,
 		val providerStatesIdentity: Boolean = false,
 		val providerStatesFinishes: Boolean = false,
 		val attribution: String? = null,
@@ -165,6 +166,9 @@ object CardDetailContract :
 
 		data class ZoomToggled(val isZoomed: Boolean) : Intent
 
+		/** The card image was tapped, or the fullscreen viewer was dismissed. */
+		data class FullscreenToggled(val isFullscreen: Boolean) : Intent
+
 		/** Opening a link never places an order. */
 		data class OpenCardmarket(val cardId: String) : Intent
 	}
@@ -200,6 +204,7 @@ object CardDetailContract :
 				currentIndex = intent.index.coerceIn(0, state.cards.size - 1),
 				// A new card is not the card that was zoomed in on.
 				isZoomed = false,
+				isFullscreen = false,
 				// Finish is a property of the printing, so a selection does not carry across.
 				selectedFinish = null,
 			)
@@ -210,6 +215,8 @@ object CardDetailContract :
 		is Intent.FinishSelected -> state.copy(selectedFinish = intent.finish)
 
 		is Intent.ZoomToggled -> state.copy(isZoomed = intent.isZoomed)
+
+		is Intent.FullscreenToggled -> state.copy(isFullscreen = intent.isFullscreen)
 
 		is Intent.OpenCardmarket -> state
 	}

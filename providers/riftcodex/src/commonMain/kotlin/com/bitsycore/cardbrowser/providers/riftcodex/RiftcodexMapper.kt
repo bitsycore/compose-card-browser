@@ -117,6 +117,7 @@ internal object RiftcodexMapper {
 				id = SourceId(provider, dto.id),
 				imageUrl = vImage.orEmpty(),
 				thumbnailUrl = vImage?.let(::thumbnailUrl),
+				displayUrl = vImage?.let(::displayUrl),
 				artist = dto.media.artist?.takeIf { it.isNotBlank() },
 				treatment = vTreatment,
 				language = CardLanguage.ENGLISH,
@@ -203,17 +204,52 @@ internal object RiftcodexMapper {
 	 * `fm=webp` removes the negotiation entirely. WebP decodes on Skia and on Android from API 14,
 	 * comfortably below this app's minimum of 24.
 	 *
-	 * It is also far smaller. Measured on real assets at `w=320`: PNG ~310 KB, WebP ~25 KB. Across a
-	 * 352-card set that is the difference between roughly 100 MB of thumbnails and roughly 9 MB.
-	 *
-	 * The full-resolution URL is deliberately left untouched -- it carries no `w`, and the CDN
-	 * always answers it with the original PNG.
+	 * It is also far smaller. Measured on real assets at `w=320`: PNG ~260 KB, WebP ~22 KB.
 	 */
-	fun thumbnailUrl(imageUrl: String): String? {
+	fun thumbnailUrl(imageUrl: String): String? =
+		sanityVariant(imageUrl, width = THUMBNAIL_WIDTH, quality = null)
+
+	/**
+	 * The variant the detail screen and the fullscreen viewer load.
+	 *
+	 * Native resolution and nothing more. The CDN will happily serve `w=1488`, but it is
+	 * interpolating: measured against a real asset, its 1488 render is *less* sharp than a plain
+	 * Lanczos upscale of the 744 one (high-pass variance 94 against 122) and differs from it by a
+	 * mean of under 4/255. There is no extra detail to buy -- 744x1040 is the source -- so asking
+	 * for more spends 5 MB of PNG on pixels that carry nothing.
+	 *
+	 * What it does change is the format. At native width, lossless PNG is ~1.17 MB and WebP at
+	 * `q=90` is ~180 KB for an image nobody can tell apart at this size. That is the whole win.
+	 *
+	 * The width is read from the asset's own filename rather than assumed, because Riftbound cards
+	 * are not all the same size -- 744x1039 and 744x1040 both occur, and a landscape card would be
+	 * neither.
+	 */
+	fun displayUrl(imageUrl: String): String? =
+		sanityVariant(imageUrl, width = nativeWidthOf(imageUrl), quality = DISPLAY_QUALITY)
+
+	/**
+	 * The asset's own pixel width, from the `-WIDTHxHEIGHT` Sanity puts in every filename.
+	 *
+	 * `null` when the name does not carry one, in which case the caller asks for no `w` at all and
+	 * gets the original -- which is right, since the point is to avoid resampling.
+	 */
+	fun nativeWidthOf(imageUrl: String): Int? =
+		NATIVE_SIZE.find(imageUrl.substringBefore('?'))?.groupValues?.get(1)?.toIntOrNull()
+
+	/** Builds a CDN variant URL, or `null` for anything not on the CDN. */
+	private fun sanityVariant(imageUrl: String, width: Int?, quality: Int?): String? {
 		if (!imageUrl.contains(SANITY_CDN_HOST)) return null
+		val vParameters = buildList {
+			width?.let { add("w=$it") }
+			add("fm=$IMAGE_FORMAT")
+			quality?.let { add("q=$it") }
+		}
 		val vSeparator = if (imageUrl.contains('?')) '&' else '?'
-		return "$imageUrl${vSeparator}w=$THUMBNAIL_WIDTH&fm=$THUMBNAIL_FORMAT"
+		return imageUrl + vSeparator + vParameters.joinToString("&")
 	}
+
+	private val NATIVE_SIZE = Regex("""-(\d+)x(\d+)\.[A-Za-z0-9]+$""")
 
 	private const val SANITY_CDN_HOST = "cmsassets.rgpub.io"
 
@@ -221,5 +257,13 @@ internal object RiftcodexMapper {
 	private const val THUMBNAIL_WIDTH = 320
 
 	/** Decodable everywhere this app runs, unlike the CDN's own default. See [thumbnailUrl]. */
-	private const val THUMBNAIL_FORMAT = "webp"
+	private const val IMAGE_FORMAT = "webp"
+
+	/**
+	 * WebP quality for the full-size image.
+	 *
+	 * 90 rather than the CDN's default of 75: this is the one image a user looks at closely and
+	 * zooms into, and the step from 97 KB to 180 KB is worth not having to argue about artefacts.
+	 */
+	private const val DISPLAY_QUALITY = 90
 }
