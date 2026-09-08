@@ -55,6 +55,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -220,10 +221,19 @@ private fun CardPager(
 	}
 
 	// The other direction: something outside the pager moved the selection, so the pager follows.
-	// Compared against `targetPage` rather than `currentPage` so a tap does not start a second
-	// animation toward a destination it is already travelling to.
-	LaunchedEffect(state.currentIndex) {
-		if (state.currentIndex != vPagerState.targetPage) {
+	//
+	// The first move is a *jump*, not an animation. Cards load after the screen opens, so the pager
+	// starts at page 0 and only then learns it should be on, say, 297 -- and animating there scrolls
+	// through every page between, composing and discarding them as fast as the device can manage.
+	// That is the stutter on opening a card from deep in a set. Afterwards, moves are real navigation
+	// between neighbours and are worth animating.
+	var vHasPositioned by remember { mutableStateOf(false) }
+	LaunchedEffect(state.currentIndex, state.cards.size) {
+		if (state.cards.isEmpty()) return@LaunchedEffect
+		if (!vHasPositioned) {
+			vPagerState.scrollToPage(state.currentIndex)
+			vHasPositioned = true
+		} else if (state.currentIndex != vPagerState.targetPage) {
 			vPagerState.animateScrollToPage(state.currentIndex)
 		}
 	}
@@ -298,15 +308,21 @@ private fun PreviewStrip(
 	onSelect: (Int) -> Unit,
 ) {
 	val vListState = rememberLazyListState()
+	// Same reasoning as the pager: the first positioning is a jump. Animating from card 1 to card 297
+	// drags the whole strip past 296 thumbnails, each of which is a real image request.
+	var vHasPositioned by remember { mutableStateOf(false) }
 
 	LaunchedEffect(currentIndex) {
 		// Centred rather than merely visible: the point of the strip is seeing both directions.
 		val vViewport = vListState.layoutInfo.viewportEndOffset - vListState.layoutInfo.viewportStartOffset
 		val vItemWidth = vListState.layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 0
-		vListState.animateScrollToItem(
-			index = currentIndex,
-			scrollOffset = -(vViewport / 2 - vItemWidth / 2).coerceAtLeast(0),
-		)
+		val vOffset = -(vViewport / 2 - vItemWidth / 2).coerceAtLeast(0)
+		if (vHasPositioned) {
+			vListState.animateScrollToItem(index = currentIndex, scrollOffset = vOffset)
+		} else {
+			vListState.scrollToItem(index = currentIndex, scrollOffset = vOffset)
+			vHasPositioned = true
+		}
 	}
 
 	LazyRow(

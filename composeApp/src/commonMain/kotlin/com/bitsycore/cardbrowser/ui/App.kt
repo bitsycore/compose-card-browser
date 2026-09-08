@@ -89,6 +89,15 @@ fun App() {
 				rememberSaveableStateHolderNavEntryDecorator(),
 				rememberViewModelStoreNavEntryDecorator(),
 			),
+			// Plain cross-fades, and -- the part that actually matters -- no size transform.
+			//
+			// Predictive back is a *separate* parameter with its own default, and on Android that
+			// default is `ContentTransform(fadeIn(...), scaleOut(targetScale = 0.7f))`. The scaleOut is
+			// what shrinks the whole screen into a little rectangle while a card is supposed to be
+			// flying back to its tile. Overriding the push and pop specs alone leaves it in place.
+			transitionSpec = fadeThrough(zIndex = 1f),
+			popTransitionSpec = fadeThrough(zIndex = 0f),
+			predictivePopTransitionSpec = { fadeThrough<Route>(zIndex = 0f).invoke(this) },
 			entryProvider = { vRoute ->
 				when (vRoute) {
 

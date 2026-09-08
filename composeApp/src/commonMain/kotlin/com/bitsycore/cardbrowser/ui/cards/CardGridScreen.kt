@@ -41,6 +41,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -137,6 +138,10 @@ fun CardGridScreen(
 	Scaffold(
 		modifier = Modifier.nestedScroll(vScrollBehavior.nestedScrollConnection),
 		topBar = {
+			// A surface, not a bare Column. The app bar paints its own background but the controls
+			// stacked under it do not, so the grid scrolling underneath showed straight through the
+			// search field and the filter chips and made them unreadable.
+			Surface(color = MaterialTheme.colorScheme.surface) {
 			Column {
 				MediumTopAppBar(
 					title = {
@@ -232,6 +237,7 @@ fun CardGridScreen(
 						},
 					)
 				}
+			}
 			}
 		},
 	) { vPadding ->
