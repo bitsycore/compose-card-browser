@@ -37,11 +37,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.model.CardSet
+import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.cardbrowser.ui.common.EmptyState
 import com.bitsycore.cardbrowser.ui.common.ErrorState
 import com.bitsycore.cardbrowser.ui.common.LoadingState
 import com.bitsycore.cardbrowser.ui.common.NoticeBanner
+import com.bitsycore.cardbrowser.ui.preview.PreviewData
+import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
+import androidx.compose.ui.tooling.preview.Preview
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -51,7 +55,6 @@ import org.koin.compose.viewmodel.koinViewModel
  * Newest first, searchable by name or code, and honest about whether what is on screen came off the
  * network or off the disk.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SetListScreen(
 	onOpenSet: (CardSet) -> Unit,
@@ -59,6 +62,32 @@ fun SetListScreen(
 	viewModel: SetListViewModel = koinViewModel(),
 ) {
 	val vState by viewModel.collectAsStateWithLifecycle()
+
+	SetListContent(
+		state = vState,
+		dispatch = viewModel::dispatch,
+		onOpenSet = onOpenSet,
+		onOpenSettings = onOpenSettings,
+	)
+}
+
+/**
+ * The set list, given a state and somewhere to send intents.
+ *
+ * No view model, no Koin, no coroutines: everything it needs arrives as arguments, which is what
+ * makes it previewable and what keeps the screen's layout separable from how its data is obtained.
+ * Navigation stays as callbacks rather than intents -- where the app goes next is the caller's
+ * business, not this screen's state machine's.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SetListContent(
+	state: SetListContract.UiState,
+	dispatch: (SetListContract.Intent) -> Unit,
+	onOpenSet: (CardSet) -> Unit,
+	onOpenSettings: () -> Unit,
+) {
+	val vState = state
 
 	Scaffold(
 		topBar = {
@@ -90,7 +119,7 @@ fun SetListScreen(
 
 			OutlinedTextField(
 				value = vState.search,
-				onValueChange = { viewModel.dispatch(SetListContract.Intent.SearchChanged(it)) },
+				onValueChange = { dispatch(SetListContract.Intent.SearchChanged(it)) },
 				label = { Text("Search sets") },
 				leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
 				singleLine = true,
@@ -101,7 +130,7 @@ fun SetListScreen(
 			when {
 				vState.error != null && vState.sets.isNotEmpty() -> NoticeBanner(
 					text = "Showing saved sets. Refresh failed.",
-					onAction = { viewModel.dispatch(SetListContract.Intent.Refresh) },
+					onAction = { dispatch(SetListContract.Intent.Refresh) },
 				)
 				vState.origin == DataOrigin.CACHE && vState.isStale -> NoticeBanner(
 					text = "Saved copy, refreshing…",
@@ -115,7 +144,7 @@ fun SetListScreen(
 
 					vState.sets.isEmpty() && vState.error != null -> ErrorState(
 						error = vState.error!!,
-						onRetry = { viewModel.dispatch(SetListContract.Intent.Refresh) },
+						onRetry = { dispatch(SetListContract.Intent.Refresh) },
 					)
 
 					vState.isEmptySearch -> EmptyState("No set matches \"${vState.search}\".")
@@ -129,7 +158,7 @@ fun SetListScreen(
 								set = vSet,
 								isLastOpened = vSet.id.qualified == vState.lastOpenedSetId,
 								onClick = {
-									viewModel.dispatch(SetListContract.Intent.SetOpened(vSet.id.qualified))
+									dispatch(SetListContract.Intent.SetOpened(vSet.id.qualified))
 									onOpenSet(vSet)
 								},
 							)
@@ -246,3 +275,67 @@ private fun monthName(monthOrdinal: Int): String =
 private val MONTH_NAMES = listOf(
 	"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 )
+
+// ==================
+// MARK: Previews
+// ==================
+
+@Preview
+@Composable
+private fun SetListLoadedPreview() = PreviewFrame {
+	SetListContent(
+		state = SetListContract.UiState(
+			sets = PreviewData.SETS,
+			isLoading = false,
+			lastOpenedSetId = PreviewData.ORIGINS.id.qualified,
+		),
+		dispatch = {},
+		onOpenSet = {},
+		onOpenSettings = {},
+	)
+}
+
+@Preview
+@Composable
+private fun SetListLoadingPreview() = PreviewFrame {
+	SetListContent(
+		state = SetListContract.UiState(isLoading = true),
+		dispatch = {},
+		onOpenSet = {},
+		onOpenSettings = {},
+	)
+}
+
+@Preview
+@Composable
+private fun SetListOfflinePreview() = PreviewFrame {
+	// The state that matters most and is hardest to reach by hand: cached data on screen with a
+	// failed refresh behind it.
+	SetListContent(
+		state = SetListContract.UiState(
+			sets = PreviewData.SETS,
+			isLoading = false,
+			origin = DataOrigin.CACHE,
+			isStale = true,
+			error = ProviderError.Offline(),
+		),
+		dispatch = {},
+		onOpenSet = {},
+		onOpenSettings = {},
+	)
+}
+
+@Preview
+@Composable
+private fun SetListEmptySearchPreview() = PreviewFrame(isDark = false) {
+	SetListContent(
+		state = SetListContract.UiState(
+			sets = PreviewData.SETS,
+			search = "nothing matches this",
+			isLoading = false,
+		),
+		dispatch = {},
+		onOpenSet = {},
+		onOpenSettings = {},
+	)
+}

@@ -54,6 +54,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -69,7 +70,13 @@ import com.bitsycore.cardbrowser.ui.common.sharedCardArt
 import com.bitsycore.cardbrowser.ui.common.EmptyState
 import com.bitsycore.cardbrowser.ui.common.ErrorState
 import com.bitsycore.cardbrowser.ui.common.LoadingState
+import com.bitsycore.cardbrowser.core.filter.CardFilterEngine
+import com.bitsycore.cardbrowser.core.provider.CardFilterField
+import com.bitsycore.cardbrowser.core.provider.CardQuery
+import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.ui.common.NoticeBanner
+import com.bitsycore.cardbrowser.ui.preview.PreviewData
+import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.distinctUntilChanged
 import com.bitsycore.cardbrowser.ui.browse.BrowseSession
@@ -84,7 +91,6 @@ import org.koin.compose.viewmodel.koinViewModel
  * does *not* multiply tiles is finish or language -- those are choices inside the detail screen, and
  * duplicating a tile for them would triple a set with nothing new to look at.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CardGridScreen(
 	setId: String,
@@ -103,6 +109,33 @@ fun CardGridScreen(
 			viewModel.dispatch(CardGridContract.Intent.SetSelected(setId, setName, setCode))
 		}
 	}
+
+	CardGridContent(
+		state = vState,
+		dispatch = viewModel::dispatch,
+		fallbackSetName = setName,
+		onBack = onBack,
+		onOpenCard = onOpenCard,
+	)
+}
+
+/**
+ * The card grid, given a state and somewhere to send intents.
+ *
+ * @param fallbackSetName shown until the loaded state carries a name of its own, so the bar is
+ *   never briefly blank on the way in
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CardGridContent(
+	state: CardGridContract.UiState,
+	dispatch: (CardGridContract.Intent) -> Unit,
+	fallbackSetName: String = "",
+	onBack: () -> Unit = {},
+	onOpenCard: (CardPrinting) -> Unit = {},
+) {
+	val vState = state
+	val setName = fallbackSetName
 
 	val vGridState = rememberLazyGridState(initialFirstVisibleItemIndex = vState.firstVisibleIndex)
 
@@ -127,7 +160,7 @@ fun CardGridScreen(
 	LaunchedEffect(vGridState) {
 		snapshotFlow { vGridState.firstVisibleItemIndex }
 			.distinctUntilChanged()
-			.collect { viewModel.dispatch(CardGridContract.Intent.ScrollPositionChanged(it)) }
+			.collect { dispatch(CardGridContract.Intent.ScrollPositionChanged(it)) }
 	}
 
 	// `enterAlways`, not `exitUntilCollapsed`.
@@ -171,7 +204,7 @@ fun CardGridScreen(
 						// strip of a screen whose whole job is showing pictures.
 						IconButton(
 							onClick = {
-								viewModel.dispatch(
+								dispatch(
 									CardGridContract.Intent.SearchToggled(!vState.isSearchOpen),
 								)
 							},
@@ -200,7 +233,7 @@ fun CardGridScreen(
 						) {
 							IconButton(
 								onClick = {
-									viewModel.dispatch(CardGridContract.Intent.FilterSheetToggled(true))
+									dispatch(CardGridContract.Intent.FilterSheetToggled(true))
 								},
 							) {
 								Icon(Icons.Outlined.FilterList, contentDescription = "Filters")
@@ -220,7 +253,7 @@ fun CardGridScreen(
 					SearchField(
 						text = vState.query.text.orEmpty(),
 						onTextChanged = { vText ->
-							viewModel.dispatch(
+							dispatch(
 								CardGridContract.Intent.QueryChanged(
 									vState.query.copy(text = vText.takeIf { it.isNotBlank() }),
 								),
@@ -232,15 +265,15 @@ fun CardGridScreen(
 				// Controls, not content: these stay put while the grid scrolls underneath.
 				ActiveFilterChips(
 					state = vState,
-					onQueryChanged = { viewModel.dispatch(CardGridContract.Intent.QueryChanged(it)) },
-					onClearAll = { viewModel.dispatch(CardGridContract.Intent.ClearFilters) },
+					onQueryChanged = { dispatch(CardGridContract.Intent.QueryChanged(it)) },
+					onClearAll = { dispatch(CardGridContract.Intent.ClearFilters) },
 				)
 
 				vState.coverageNotice?.let { vNotice ->
 					NoticeBanner(
 						text = vNotice,
 						onAction = if (vState.noticeIsRetryable) {
-							{ viewModel.dispatch(CardGridContract.Intent.Load) }
+							{ dispatch(CardGridContract.Intent.Load) }
 						} else {
 							null
 						},
@@ -256,7 +289,7 @@ fun CardGridScreen(
 
 				vState.cards.isEmpty() && vState.error != null -> ErrorState(
 					error = vState.error!!,
-					onRetry = { viewModel.dispatch(CardGridContract.Intent.Load) },
+					onRetry = { dispatch(CardGridContract.Intent.Load) },
 					modifier = Modifier.padding(vPadding),
 				)
 
@@ -285,13 +318,13 @@ fun CardGridScreen(
 	if (vState.isFilterSheetOpen) {
 		val vSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 		ModalBottomSheet(
-			onDismissRequest = { viewModel.dispatch(CardGridContract.Intent.FilterSheetToggled(false)) },
+			onDismissRequest = { dispatch(CardGridContract.Intent.FilterSheetToggled(false)) },
 			sheetState = vSheetState,
 		) {
 			FilterSheet(
 				state = vState,
-				onQueryChanged = { viewModel.dispatch(CardGridContract.Intent.QueryChanged(it)) },
-				onClearAll = { viewModel.dispatch(CardGridContract.Intent.ClearFilters) },
+				onQueryChanged = { dispatch(CardGridContract.Intent.QueryChanged(it)) },
+				onClearAll = { dispatch(CardGridContract.Intent.ClearFilters) },
 			)
 		}
 	}
@@ -420,3 +453,91 @@ private const val MIN_TILE_WIDTH = 108
 
 /** The gap between tiles, and the margin around the grid. */
 private val TILE_GAP = 12.dp
+
+// ==================
+// MARK: Previews
+// ==================
+
+private fun previewGridState(
+	cards: List<CardPrinting> = PreviewData.CARDS,
+	query: CardQuery = CardQuery(),
+	isLoading: Boolean = false,
+	isCompleteSet: Boolean = true,
+	cachedCardCount: Int = PreviewData.CARDS.size,
+	knownSetSize: Int? = PreviewData.CARDS.size,
+	error: ProviderError? = null,
+) = CardGridContract.UiState(
+	setId = "riftcodex:OGN",
+	setName = "Origins",
+	setCode = "OGN",
+	cards = cards,
+	query = query,
+	isLoading = isLoading,
+	isCompleteSet = isCompleteSet,
+	cachedCardCount = cachedCardCount,
+	knownSetSize = knownSetSize,
+	error = error,
+	supportedFilters = setOf(
+		CardFilterField.TEXT,
+		CardFilterField.DOMAIN,
+		CardFilterField.CARD_TYPE,
+		CardFilterField.RARITY,
+		CardFilterField.ENERGY_COST,
+	),
+	facets = CardFilterEngine.facetsOf(PreviewData.CARDS),
+)
+
+@Preview
+@Composable
+private fun CardGridPreview() = PreviewFrame {
+	CardGridContent(state = previewGridState(), dispatch = {})
+}
+
+@Preview
+@Composable
+private fun CardGridFilteredPreview() = PreviewFrame {
+	// Filters on, and only part of the set downloaded -- the state where the screen has to be
+	// explicit that the results are not exhaustive.
+	CardGridContent(
+		state = previewGridState(
+			cards = PreviewData.CARDS.take(3),
+			query = CardQuery(text = "annie", rarities = setOf("Epic"), domains = setOf("Fury")),
+			isCompleteSet = false,
+			cachedCardCount = 200,
+			knownSetSize = 352,
+		),
+		dispatch = {},
+	)
+}
+
+@Preview
+@Composable
+private fun CardGridEmptyPreview() = PreviewFrame {
+	CardGridContent(
+		state = previewGridState(
+			cards = emptyList(),
+			query = CardQuery(rarities = setOf("Showcase")),
+			cachedCardCount = 352,
+			knownSetSize = 352,
+		),
+		dispatch = {},
+	)
+}
+
+@Preview
+@Composable
+private fun CardGridOfflinePreview() = PreviewFrame(isDark = false) {
+	CardGridContent(
+		state = previewGridState(error = ProviderError.Offline()),
+		dispatch = {},
+	)
+}
+
+@Preview
+@Composable
+private fun CardGridLoadingPreview() = PreviewFrame {
+	CardGridContent(
+		state = previewGridState(cards = emptyList(), isLoading = true, knownSetSize = null),
+		dispatch = {},
+	)
+}

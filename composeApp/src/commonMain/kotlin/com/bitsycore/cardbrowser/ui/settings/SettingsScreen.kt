@@ -34,7 +34,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.data.settings.BrowsingPreferences
+import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.tooling.preview.Preview
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -43,13 +45,25 @@ import org.koin.compose.viewmodel.koinViewModel
  * The two caches are reported and cleared separately because they behave differently: metadata is
  * what makes offline browsing work and is cheap to refetch, images are most of the bytes.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
 	onBack: () -> Unit,
 	viewModel: SettingsViewModel = koinViewModel(),
 ) {
 	val vState by viewModel.collectAsStateWithLifecycle()
+
+	SettingsContent(state = vState, dispatch = viewModel::dispatch, onBack = onBack)
+}
+
+/** The settings screen, given a state and somewhere to send intents. */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+fun SettingsContent(
+	state: SettingsContract.UiState,
+	dispatch: (SettingsContract.Intent) -> Unit,
+	onBack: () -> Unit,
+) {
+	val vState = state
 
 	Scaffold(
 		topBar = {
@@ -84,7 +98,7 @@ fun SettingsScreen(
 			FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
 				vState.preferredLanguages.forEachIndexed { vIndex, vLanguage ->
 					AssistChip(
-						onClick = { viewModel.dispatch(SettingsContract.Intent.PromoteLanguage(vLanguage)) },
+						onClick = { dispatch(SettingsContract.Intent.PromoteLanguage(vLanguage)) },
 						label = { Text("${vIndex + 1}. ${vLanguage.displayName}") },
 					)
 				}
@@ -134,7 +148,7 @@ fun SettingsScreen(
 				options = BrowsingPreferences.IMAGE_CACHE_CHOICES,
 				selected = vState.imageLimitBytes,
 				render = ::formatBytes,
-				onSelect = { viewModel.dispatch(SettingsContract.Intent.ImageCacheLimitChosen(it)) },
+				onSelect = { dispatch(SettingsContract.Intent.ImageCacheLimitChosen(it)) },
 			)
 
 			ChoiceRow(
@@ -144,17 +158,17 @@ fun SettingsScreen(
 				options = BrowsingPreferences.METADATA_CACHE_CHOICES,
 				selected = vState.metadataLimitBytes,
 				render = ::formatBytes,
-				onSelect = { viewModel.dispatch(SettingsContract.Intent.MetadataCacheLimitChosen(it)) },
+				onSelect = { dispatch(SettingsContract.Intent.MetadataCacheLimitChosen(it)) },
 			)
 
 			Spacer(Modifier.height(12.dp))
 			Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
 				OutlinedButton(
-					onClick = { viewModel.dispatch(SettingsContract.Intent.ClearMetadata) },
+					onClick = { dispatch(SettingsContract.Intent.ClearMetadata) },
 					modifier = Modifier.weight(1f),
 				) { Text("Clear card data") }
 				OutlinedButton(
-					onClick = { viewModel.dispatch(SettingsContract.Intent.ClearImages) },
+					onClick = { dispatch(SettingsContract.Intent.ClearImages) },
 					modifier = Modifier.weight(1f),
 				) { Text("Clear images") }
 			}
@@ -172,7 +186,7 @@ fun SettingsScreen(
 				options = BrowsingPreferences.PREFETCH_CHOICES,
 				selected = vState.prefetchRadius,
 				render = { if (it == 0) "Off" else "$it" },
-				onSelect = { viewModel.dispatch(SettingsContract.Intent.PrefetchRadiusChosen(it)) },
+				onSelect = { dispatch(SettingsContract.Intent.PrefetchRadiusChosen(it)) },
 			)
 
 			Spacer(Modifier.height(12.dp))
@@ -190,7 +204,7 @@ fun SettingsScreen(
 				Switch(
 					checked = vState.revalidateSetsOnLaunch,
 					onCheckedChange = {
-						viewModel.dispatch(SettingsContract.Intent.RevalidateOnLaunchChanged(it))
+						dispatch(SettingsContract.Intent.RevalidateOnLaunchChanged(it))
 					},
 				)
 			}
@@ -288,4 +302,44 @@ internal fun formatBytes(bytes: Long): String = when {
 	bytes < 1024 * 1024 -> "${bytes / 1024} KB"
 	bytes < 1024L * 1024 * 1024 -> "${(bytes * 10 / (1024 * 1024)) / 10.0} MB"
 	else -> "${(bytes * 10 / (1024L * 1024 * 1024)) / 10.0} GB"
+}
+
+// ==================
+// MARK: Previews
+// ==================
+
+@Preview
+@Composable
+private fun SettingsPreview() = PreviewFrame {
+	SettingsContent(
+		state = SettingsContract.UiState(
+			metadataBytes = 4L * 1024 * 1024,
+			metadataEntries = 9,
+			metadataLimitBytes = BrowsingPreferences.DEFAULT_METADATA_CACHE_LIMIT_BYTES,
+			imageBytes = 82L * 1024 * 1024,
+			imageLimitBytes = BrowsingPreferences.DEFAULT_IMAGE_CACHE_LIMIT_BYTES,
+			providerAttribution = "Card data from Riftcodex, an unofficial fan project not " +
+				"affiliated with Riot Games.",
+		),
+		dispatch = {},
+		onBack = {},
+	)
+}
+
+@Preview
+@Composable
+private fun SettingsLightPreview() = PreviewFrame(isDark = false) {
+	SettingsContent(
+		state = SettingsContract.UiState(
+			metadataBytes = 240L * 1024 * 1024,
+			metadataEntries = 812,
+			metadataLimitBytes = 256L * 1024 * 1024,
+			imageBytes = 120L * 1024 * 1024,
+			imageLimitBytes = 128L * 1024 * 1024,
+			prefetchRadius = 0,
+			revalidateSetsOnLaunch = false,
+		),
+		dispatch = {},
+		onBack = {},
+	)
 }

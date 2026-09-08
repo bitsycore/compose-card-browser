@@ -71,6 +71,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -87,6 +88,8 @@ import com.bitsycore.cardbrowser.ui.common.ImageVariant
 import com.bitsycore.cardbrowser.ui.common.ErrorState
 import com.bitsycore.cardbrowser.ui.common.FullscreenCardViewer
 import com.bitsycore.cardbrowser.ui.common.LoadingState
+import com.bitsycore.cardbrowser.ui.preview.PreviewData
+import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.ui.common.PrefetchCardArt
 import com.bitsycore.cardbrowser.ui.common.sharedCardArt
@@ -105,7 +108,6 @@ import org.koin.compose.viewmodel.koinViewModel
  * stated, then what it stated partially, then what it did not state at all. The last group is still
  * shown: silence about Korean is not the same as there being no Korean printing.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CardDetailScreen(
 	cardId: String,
@@ -118,12 +120,39 @@ fun CardDetailScreen(
 	val vState by viewModel.collectAsStateWithLifecycle()
 	val vSnackbarHost = remember { SnackbarHostState() }
 
+	// Effects belong to the screen, not to the content: they need the view model, and a preview has
+	// none.
 	viewModel.collectEffect { vEffect ->
 		when (vEffect) {
 			is CardDetailContract.Effect.LinkFailed ->
 				vSnackbarHost.showSnackbar("Could not open a browser for that link.")
 		}
 	}
+
+	CardDetailContent(
+		state = vState,
+		dispatch = viewModel::dispatch,
+		onBack = onBack,
+		snackbarHostState = vSnackbarHost,
+	)
+}
+
+/**
+ * The card detail screen, given a state and somewhere to send intents.
+ *
+ * @param snackbarHostState hoisted so the screen can post to it from an effect. A preview passes a
+ *   fresh one and never uses it
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CardDetailContent(
+	state: CardDetailContract.UiState,
+	dispatch: (CardDetailContract.Intent) -> Unit,
+	onBack: () -> Unit = {},
+	snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+) {
+	val vState = state
+	val vSnackbarHost = snackbarHostState
 
 	Box(Modifier.fillMaxSize()) {
 	// `enterAlways` rather than `exitUntilCollapsed`: this bar is one line of title and a position
@@ -173,12 +202,12 @@ fun CardDetailScreen(
 
 			else -> CardPager(
 				state = vState,
-				onPageChanged = { viewModel.dispatch(CardDetailContract.Intent.PageChanged(it)) },
-				onZoomToggle = { viewModel.dispatch(CardDetailContract.Intent.ZoomToggled(it)) },
-				onLanguageSelected = { viewModel.dispatch(CardDetailContract.Intent.LanguageSelected(it)) },
-				onFinishSelected = { viewModel.dispatch(CardDetailContract.Intent.FinishSelected(it)) },
-				onOpenCardmarket = { viewModel.dispatch(CardDetailContract.Intent.OpenCardmarket(it)) },
-				onOpenFullscreen = { viewModel.dispatch(CardDetailContract.Intent.FullscreenToggled(true)) },
+				onPageChanged = { dispatch(CardDetailContract.Intent.PageChanged(it)) },
+				onZoomToggle = { dispatch(CardDetailContract.Intent.ZoomToggled(it)) },
+				onLanguageSelected = { dispatch(CardDetailContract.Intent.LanguageSelected(it)) },
+				onFinishSelected = { dispatch(CardDetailContract.Intent.FinishSelected(it)) },
+				onOpenCardmarket = { dispatch(CardDetailContract.Intent.OpenCardmarket(it)) },
+				onOpenFullscreen = { dispatch(CardDetailContract.Intent.FullscreenToggled(true)) },
 				modifier = Modifier.padding(vPadding),
 			)
 		}
@@ -190,7 +219,7 @@ fun CardDetailScreen(
 			artwork = vCard.artwork,
 			contentDescription = vCard.artwork.accessibilityText ?: vCard.displayName,
 			isVisible = vState.isFullscreen,
-			onDismiss = { viewModel.dispatch(CardDetailContract.Intent.FullscreenToggled(false)) },
+			onDismiss = { dispatch(CardDetailContract.Intent.FullscreenToggled(false)) },
 		)
 	}
 	}
@@ -296,7 +325,7 @@ private fun CardPager(
 			modifier = Modifier.fillMaxSize(),
 		) { vPage ->
 			val vCard = state.cards[vPage]
-			CardDetailContent(
+			CardDetailPage(
 				state = state,
 				card = vCard,
 				// Only the page actually on screen takes part in the shared transition.
@@ -416,7 +445,7 @@ private fun PreviewStrip(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CardDetailContent(
+private fun CardDetailPage(
 	state: CardDetailContract.UiState,
 	card: CardPrinting,
 	onZoomToggle: (Boolean) -> Unit,
@@ -864,3 +893,56 @@ private val PREVIEW_ROW_HEIGHT = 84.dp
 /** Breathing room between the preview strip and the card it is describing. */
 private val STRIP_TO_CARD_GAP = 8.dp
 
+// ==================
+// MARK: Previews
+// ==================
+
+private fun previewDetailState(
+	cards: List<CardPrinting> = PreviewData.CARDS,
+	currentIndex: Int = 0,
+	isLoading: Boolean = false,
+	requestedLanguage: CardLanguage = CardLanguage.ENGLISH,
+) = CardDetailContract.UiState(
+	cards = cards,
+	currentIndex = currentIndex,
+	set = PreviewData.ORIGINS,
+	isLoading = isLoading,
+	requestedLanguage = requestedLanguage,
+	attribution = "Card data from Riftcodex, an unofficial fan project not affiliated with Riot Games.",
+)
+
+@Preview
+@Composable
+private fun CardDetailPreview() = PreviewFrame {
+	CardDetailContent(state = previewDetailState(), dispatch = {})
+}
+
+@Preview
+@Composable
+private fun CardDetailFrenchFallbackPreview() = PreviewFrame {
+	// The state the whole language model exists for: French asked for, English shown, and the
+	// screen saying so rather than pretending the record is French.
+	CardDetailContent(
+		state = previewDetailState(currentIndex = 5, requestedLanguage = CardLanguage.FRENCH),
+		dispatch = {},
+	)
+}
+
+@Preview
+@Composable
+private fun CardDetailSingleCardPreview() = PreviewFrame(isDark = false) {
+	// One card, so no preview strip and no position counter.
+	CardDetailContent(
+		state = previewDetailState(cards = listOf(PreviewData.card())),
+		dispatch = {},
+	)
+}
+
+@Preview
+@Composable
+private fun CardDetailLoadingPreview() = PreviewFrame {
+	CardDetailContent(
+		state = previewDetailState(cards = emptyList(), isLoading = true),
+		dispatch = {},
+	)
+}

@@ -60,6 +60,9 @@ kotlin {
 			implementation(libs.jetbrains.compose.ui)
 			implementation(libs.jetbrains.compose.components.resources)
 			implementation(libs.jetbrains.compose.material.icons.extended)
+			// `@Preview` in common code. The annotation only -- the renderer is the IDE's, and on
+			// Android it is `ui-tooling`, added to androidMain below.
+			implementation(libs.jetbrains.compose.ui.tooling.preview)
 
 			// Navigation 3: the current multiplatform navigation story. Its nav-entry decorators
 			// are what scope a ViewModel and a saveable state holder to a back-stack entry, which
