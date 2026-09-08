@@ -42,23 +42,27 @@ class CardGridViewModel(
 
 	private var mLoadJob: Job? = null
 
-	init {
-		// What the routed provider can filter on. Read once: the sheet must not offer a control
-		// the provider cannot honour, and this is the only thing that decides which controls exist.
-		val vProvider = mRegistry.resolve(Game.RIFTBOUND)
-		if (vProvider != null) {
-			dispatch(
-				CardGridContract.Intent.CapabilitiesResolved(
-					vProvider.capabilities.filtering.supported,
-				),
-			)
-		}
-	}
-
 	override suspend fun handleIntent(intent: CardGridContract.Intent) {
 		when (intent) {
 			is CardGridContract.Intent.SetSelected -> {
 				mPreferences.update { it.copy(lastSetId = intent.setId) }
+				// What the routed provider can filter on, and which game's vocabulary the sheet
+				// should speak. Resolved here rather than in `init` because both depend on the set
+				// -- and therefore on the provider -- which is not known until a set is selected.
+				//
+				// The provider comes from the set id itself: every id in this app is
+				// source-qualified, so it already names its provider, and the routing table turns
+				// that into a game. No game argument has to be threaded through navigation.
+				val vGame = gameOf(intent.setId)
+				val vProvider = vGame?.let { mRegistry.resolve(it) }
+				if (vGame != null && vProvider != null) {
+					dispatch(
+						CardGridContract.Intent.CapabilitiesResolved(
+							supportedFilters = vProvider.capabilities.filtering.supported,
+							game = vGame,
+						),
+					)
+				}
 				dispatch(CardGridContract.Intent.Load)
 			}
 			CardGridContract.Intent.Load -> startLoad(debounce = false)
@@ -83,7 +87,8 @@ class CardGridViewModel(
 		// entries -- by "French" would key four identical copies of a set under four languages and
 		// throw the cache away every time the preference changed, for no difference in the data.
 		val vPreferred = mPreferences.preferences.value.primaryLanguage
-		val vProviderLanguages = mRegistry.resolve(Game.RIFTBOUND)?.capabilities?.data?.languages.orEmpty()
+		val vGame = gameOf(vSnapshot.setId) ?: return
+		val vProviderLanguages = mRegistry.resolve(vGame)?.capabilities?.data?.languages.orEmpty()
 		val vLanguage = vPreferred.takeIf { it in vProviderLanguages && vProviderLanguages.size > 1 }
 
 		mLoadJob?.cancel()
@@ -92,7 +97,7 @@ class CardGridViewModel(
 
 			mRepository.cards(
 				setId = vSetId,
-				game = Game.RIFTBOUND,
+				game = vGame,
 				query = vQuery,
 				language = vLanguage,
 				knownSetSize = vSnapshot.knownSetSize,
@@ -125,7 +130,7 @@ class CardGridViewModel(
 				if (vCards?.isCompleteSet == true) {
 					dispatch(
 						CardGridContract.Intent.FacetsComputed(
-							mRepository.facetsFor(vSetId, Game.RIFTBOUND),
+							mRepository.facetsFor(vSetId, vGame),
 						),
 					)
 				}
@@ -135,6 +140,15 @@ class CardGridViewModel(
 			dispatch(CardGridContract.Intent.LoadFinished(vGeneration))
 		}
 	}
+
+	/**
+	 * The game a set id belongs to, via the provider that issued it.
+	 *
+	 * `null` when the id will not parse or names a provider this build does not route -- both of
+	 * which are reachable from a restored back stack, and neither of which should crash.
+	 */
+	private fun gameOf(qualifiedSetId: String): Game? =
+		SourceId.parse(qualifiedSetId)?.let { mRegistry.gameFor(it.provider) }
 
 	companion object {
 

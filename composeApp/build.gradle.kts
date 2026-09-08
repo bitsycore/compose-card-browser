@@ -50,9 +50,15 @@ kotlin {
 		commonMain.dependencies {
 			api(project(":core"))
 			implementation(project(":data"))
-			// The only place a provider adapter is named. Registration is one line in
-			// AppModule.kt; see docs/ARCHITECTURE.md for what adding a second one costs.
+			// The only place provider adapters are named. This list and the routing table in
+			// AppModule.kt are the whole of what registering one costs; see docs/ARCHITECTURE.md.
 			implementation(project(":providers:riftcodex"))
+			implementation(project(":providers:tcgdex"))
+			implementation(project(":providers:scryfall"))
+			implementation(project(":providers:optcg"))
+			implementation(project(":providers:altered"))
+			implementation(project(":providers:ygoprodeck"))
+			implementation(project(":providers:wuwa"))
 
 			implementation(libs.jetbrains.compose.runtime)
 			implementation(libs.jetbrains.compose.foundation)
@@ -127,10 +133,25 @@ compose.desktop {
 		nativeDistributions {
 			packageName = "CardBrowser"
 			packageVersion = "1.0.0"
-			description = "Browse Riftbound card sets"
+			description = "Browse trading card game sets"
 			// Desktop distribution is later work; an app image is enough to run one locally and
 			// needs no installer toolchain.
 			targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.AppImage)
+
+			// The app image's icon. Each platform insists on its own container format and only
+			// the host platform's entry is read.
+			//
+			// The `.ico` is generated from the 512px source rather than taken from the icon kit's
+			// `web/favicon.ico`, which holds only 16x16 and 32x32 and renders blurry at the sizes
+			// Windows actually uses. macOS has no entry: it needs `.icns`, which cannot be built
+			// on this machine, and a wrong-format file is worse than none -- jpackage falls back
+			// to a default rather than failing.
+			windows {
+				iconFile.set(project.file("src/desktopMain/resources/app-icon.ico"))
+			}
+			linux {
+				iconFile.set(project.file("src/desktopMain/resources/app-icon-512.png"))
+			}
 		}
 	}
 }

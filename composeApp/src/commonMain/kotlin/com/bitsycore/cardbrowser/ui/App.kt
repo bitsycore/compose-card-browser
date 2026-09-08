@@ -23,6 +23,9 @@ import com.bitsycore.cardbrowser.ui.cards.CardGridScreen
 import com.bitsycore.cardbrowser.ui.common.InstallImageLoader
 import com.bitsycore.cardbrowser.ui.common.LocalSharedTransitionScope
 import com.bitsycore.cardbrowser.ui.detail.CardDetailScreen
+import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.ui.games.GameListScreen
+import com.bitsycore.cardbrowser.ui.search.SearchScreen
 import com.bitsycore.cardbrowser.ui.sets.SetListScreen
 import com.bitsycore.cardbrowser.ui.settings.SettingsScreen
 import com.bitsycore.cardbrowser.ui.theme.CardBrowserTheme
@@ -42,8 +45,17 @@ import kotlinx.serialization.Serializable
 @Serializable
 sealed interface Route : NavKey {
 
+	/**
+	 * The game picker, and the app's start destination.
+	 *
+	 * Ahead of the set list rather than replacing its game switcher: the picker is where you choose
+	 * deliberately, the chips are for flicking between games once you are already browsing.
+	 */
 	@Serializable
-	data object Sets : Route
+	data object Games : Route
+
+	@Serializable
+	data class Sets(val game: String) : Route
 
 	@Serializable
 	data class Cards(val setId: String, val setName: String, val setCode: String) : Route
@@ -53,6 +65,15 @@ sealed interface Route : NavKey {
 
 	@Serializable
 	data object Settings : Route
+
+	/**
+	 * Cross-set search within one game.
+	 *
+	 * The game travels in the route rather than being read from preferences, so the back stack
+	 * restores a search of the game it was actually opened for.
+	 */
+	@Serializable
+	data class Search(val game: String) : Route
 }
 
 // ==================
@@ -76,7 +97,7 @@ fun App() {
 		// and the bounded disk cache rather than Coil's defaults.
 		InstallImageLoader()
 
-		val vBackStack = remember { mutableStateListOf<Route>(Route.Sets) }
+		val vBackStack = remember { mutableStateListOf<Route>(Route.Games) }
 
 		// Everything navigable is drawn inside one shared-transition scope, so a card's artwork can
 		// be the same element in the grid and in detail rather than two images that cross-fade.
@@ -101,8 +122,20 @@ fun App() {
 			entryProvider = { vRoute ->
 				when (vRoute) {
 
+					is Route.Games -> NavEntry(vRoute) {
+						GameListScreen(
+							onOpenGame = { vGame -> vBackStack.add(Route.Sets(vGame.name)) },
+							onOpenSettings = { vBackStack.add(Route.Settings) },
+						)
+					}
+
 					is Route.Sets -> NavEntry(vRoute) {
 						SetListScreen(
+							// A route naming a game this build no longer routes falls back rather
+							// than crashing on a restored back stack.
+							game = Game.entries.firstOrNull { it.name == vRoute.game }
+								?: Game.RIFTBOUND,
+							onBack = { vBackStack.removeLastOrNull() },
 							onOpenSet = { vSet ->
 								vBackStack.add(
 									Route.Cards(
@@ -113,6 +146,28 @@ fun App() {
 								)
 							},
 							onOpenSettings = { vBackStack.add(Route.Settings) },
+							onOpenSearch = { vGame -> vBackStack.add(Route.Search(vGame.name)) },
+						)
+					}
+
+					is Route.Search -> NavEntry(vRoute) {
+						SearchScreen(
+							// A route naming a game this build no longer routes falls back rather
+							// than crashing on a restored back stack.
+							game = Game.entries.firstOrNull { it.name == vRoute.game }
+								?: Game.RIFTBOUND,
+							onBack = { vBackStack.removeLastOrNull() },
+							onOpenCard = { vCard ->
+								vBackStack.add(
+									Route.Detail(
+										cardId = vCard.id.qualified,
+										// The card's own set, not the search. The detail screen
+										// looks the set up in the cache to swipe through, and a
+										// search result list is not a set.
+										setId = vCard.setId.qualified,
+									),
+								)
+							},
 						)
 					}
 

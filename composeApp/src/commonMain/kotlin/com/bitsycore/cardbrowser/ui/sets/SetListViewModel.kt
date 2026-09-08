@@ -2,15 +2,20 @@ package com.bitsycore.cardbrowser.ui.sets
 
 import androidx.lifecycle.viewModelScope
 import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.repository.CardRepository
+import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.lib.pulse.viewmodel.PulseViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+/** Which game this set list is for. Passed at construction so the first frame already knows. */
+data class SetListArgs(val game: Game)
+
 /**
- * Loads the Riftbound set list and remembers which set was last opened.
+ * Loads the set list for the chosen game, and remembers both the game and the set last opened.
  *
  * The only asynchronous work on this screen. Everything it learns re-enters the state through
  * [SetListContract.Intent.Loaded], so the state machine stays in one readable place.
@@ -18,8 +23,12 @@ import kotlinx.coroutines.launch
 class SetListViewModel(
 	private val mRepository: CardRepository,
 	private val mPreferences: PreferencesStore,
+	private val mRegistry: ProviderRegistry,
+	private val mArgs: SetListArgs,
 ) : PulseViewModel<SetListContract.UiState, SetListContract.Intent, SetListContract.Effect>(
-	initialState = SetListContract.UiState(),
+	// Seeded at construction from the route, so the first frame already names the right game
+	// rather than showing "Riftbound" for a moment on the way to Pokémon.
+	initialState = SetListContract.UiState(game = mArgs.game),
 	containerContract = SetListContract,
 ) {
 
@@ -35,31 +44,59 @@ class SetListViewModel(
 	init {
 		viewModelScope.launch {
 			mPreferences.load()
-			dispatch(SetListContract.Intent.LastOpenedSetRestored(mPreferences.preferences.value.lastSetId))
+			val vPreferences = mPreferences.preferences.value
+
+			// Straight from the routing table, so a game with no registered adapter can never
+			// appear in the switcher. Ordered as `Game.entries` declares them rather than as the
+			// routes happen to be listed, which keeps the switcher stable.
+			val vGames = Game.entries.filter { it in mRegistry.games }
+			// The route wins over the remembered game: the user just picked one, and honouring a
+			// stale preference over an explicit choice would open the wrong game.
+			val vGame = mArgs.game.takeIf { it in vGames }
+				?: vGames.firstOrNull()
+				?: Game.RIFTBOUND
+
+			dispatch(SetListContract.Intent.GamesRestored(games = vGames, game = vGame))
+			dispatch(SetListContract.Intent.LastOpenedSetRestored(vPreferences.lastSetId))
+			// Started only once the game is known, so the first request is not fired against
+			// whichever game the initial state happened to name.
+			dispatch(SetListContract.Intent.Refresh)
 		}
-		dispatch(SetListContract.Intent.Refresh)
 	}
 
 	override suspend fun handleIntent(intent: SetListContract.Intent) {
 		when (intent) {
 			SetListContract.Intent.Refresh -> startLoad()
+
 			is SetListContract.Intent.SetOpened -> {
 				mPreferences.update { it.copy(lastSetId = intent.setId) }
 			}
+
+			is SetListContract.Intent.GameChanged -> {
+				mPreferences.update { it.copy(lastGame = intent.game.name) }
+				// The reducer has already bumped the generation and cleared the list; this starts
+				// the load for the game it moved to.
+				startLoad()
+			}
+
 			else -> Unit
 		}
 	}
 
-	/** Starts a load for the generation the reducer has just moved to. */
+	/** Starts a load for the generation and game the reducer has just moved to. */
 	private fun startLoad() {
-		// Read after the reducer ran, so this is the generation this load owns.
-		val vGeneration = stateFlow.value.requestGeneration
+		// Read after the reducer ran, so these are the generation and game this load owns.
+		val vState = stateFlow.value
+		val vGeneration = vState.requestGeneration
+		val vGame = vState.game
+		val vLanguage = mPreferences.preferences.value.primaryLanguage
+
 		mLoadJob?.cancel()
 		mLoadJob = viewModelScope.launch {
 			// collectLatest rather than collect: the repository emits cache then network, and if a
 			// newer refresh supersedes this one mid-flight the collector unwinds instead of
 			// finishing work nobody is waiting for.
-			mRepository.setList(Game.RIFTBOUND).collectLatest { vSnapshot ->
+			mRepository.setList(vGame, vLanguage).collectLatest { vSnapshot ->
 				dispatch(
 					SetListContract.Intent.Loaded(
 						generation = vGeneration,
@@ -69,12 +106,23 @@ class SetListViewModel(
 						error = vSnapshot.error,
 						// Whether *this emission* settles the screen. Whether the load is over is a
 						// separate question, answered by LoadFinished below.
-						isFinal = vSnapshot.origin != com.bitsycore.cardbrowser.data.repository.DataOrigin.CACHE ||
-							vSnapshot.error != null,
+						isFinal = vSnapshot.origin != DataOrigin.CACHE || vSnapshot.error != null,
 					),
 				)
 			}
 			dispatch(SetListContract.Intent.LoadFinished(vGeneration))
+
+			// After the list settles, because it is a lookup *over* the list. Cheap -- one file
+			// existence check per set -- and guarded on the generation so a superseded load cannot
+			// mark the wrong game's sets.
+			val vSets = stateFlow.value.sets
+			if (stateFlow.value.requestGeneration == vGeneration && vSets.isNotEmpty()) {
+				dispatch(
+					SetListContract.Intent.SavedSetsResolved(
+						mRepository.savedSetIds(vGame, vSets, vLanguage),
+					),
+				)
+			}
 		}
 	}
 }

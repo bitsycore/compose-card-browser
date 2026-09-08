@@ -3,6 +3,8 @@ package com.bitsycore.cardbrowser.ui.cards
 import com.bitsycore.cardbrowser.core.filter.CardFacets
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardPrinting
+import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.model.GameVocabulary
 import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.ProviderError
@@ -30,6 +32,13 @@ object CardGridContract :
 		val setId: String = "",
 		val setName: String = "",
 		val setCode: String = "",
+		/**
+		 * Which game this set belongs to, resolved from the set id's provider.
+		 *
+		 * Drives the filter sheet's wording -- "Colour" for Magic, "Faction" for Altered -- via
+		 * [GameVocabulary], and nothing else. Riftbound until the set is selected.
+		 */
+		val game: Game = Game.RIFTBOUND,
 		val cards: List<CardPrinting> = emptyList(),
 		val facets: CardFacets = CardFacets(),
 		val query: CardQuery = CardQuery(),
@@ -136,6 +145,8 @@ object CardGridContract :
 		/** What the routed provider can filter on, so the sheet offers only what works. */
 		data class CapabilitiesResolved(
 			val supportedFilters: Set<com.bitsycore.cardbrowser.core.provider.CardFilterField>,
+			/** Which game's words the filter sheet should use. See [GameVocabulary]. */
+			val game: Game,
 		) : Intent
 	}
 
@@ -202,16 +213,26 @@ object CardGridContract :
 
 		is Intent.FacetsComputed -> state.copy(facets = intent.facets)
 
-		is Intent.CapabilitiesResolved -> state.copy(supportedFilters = intent.supportedFilters)
+		is Intent.CapabilitiesResolved -> state.copy(
+			supportedFilters = intent.supportedFilters,
+			game = intent.game,
+		)
 	}
 
-	/** Sort options offered in the UI, paired with what to show for them. */
-	val SORT_OPTIONS: List<Pair<CardSortField, String>> = listOf(
-		CardSortField.COLLECTOR_NUMBER to "Collector number",
-		CardSortField.NAME to "Name",
-		CardSortField.RARITY to "Rarity",
-		CardSortField.ENERGY_COST to "Energy cost",
-	)
+	/**
+	 * Sort options offered in the UI, paired with what to show for them.
+	 *
+	 * A function of the game rather than a constant, because the cost axis is not called the same
+	 * thing twice: it is Energy in Riftbound, Mana value in Magic, Cost in One Piece and Level in
+	 * Yu-Gi-Oh. A game with no single cost number -- Pokémon -- does not get the option at all,
+	 * rather than getting one that sorts every card equally.
+	 */
+	fun sortOptions(game: Game): List<Pair<CardSortField, String>> = buildList {
+		add(CardSortField.COLLECTOR_NUMBER to "Collector number")
+		add(CardSortField.NAME to "Name")
+		add(CardSortField.RARITY to "Rarity")
+		GameVocabulary.of(game).energy?.let { add(CardSortField.ENERGY_COST to it) }
+	}
 
 	/** Human wording for a treatment chip. */
 	fun treatmentLabel(treatment: ArtworkTreatment): String = treatment.displayName

@@ -1,6 +1,7 @@
 package com.bitsycore.cardbrowser.ui.sets
 
 import com.bitsycore.cardbrowser.core.model.CardSet
+import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.lib.pulse.container.ContainerContract
@@ -21,6 +22,21 @@ object SetListContract :
 	 */
 	data class UiState(
 		val sets: List<CardSet> = emptyList(),
+		/**
+		 * The game being browsed.
+		 *
+		 * Riftbound is the initial value rather than "whatever is first" because it is the game
+		 * this app was built for; the stored preference replaces it as soon as it loads.
+		 */
+		val game: Game = Game.RIFTBOUND,
+		/**
+		 * The games the app can actually serve, from the routing table.
+		 *
+		 * Never [Game.entries]. A game named in the enum but not routed to a registered adapter is
+		 * not a game this app offers, and putting it in the switcher would produce a menu item that
+		 * leads to an empty screen. Cyberpunk TCG is exactly that case today.
+		 */
+		val availableGames: List<Game> = listOf(Game.RIFTBOUND),
 		val search: String = "",
 		val isLoading: Boolean = true,
 		val origin: DataOrigin = DataOrigin.NONE,
@@ -28,6 +44,13 @@ object SetListContract :
 		val error: ProviderError? = null,
 		val requestGeneration: Int = 0,
 		val lastOpenedSetId: String? = null,
+		/**
+		 * Which sets are already on disk, by qualified id.
+		 *
+		 * "Saved", not "complete" -- an interrupted fetch leaves a file too -- which is why the
+		 * mark in the row says saved and promises nothing about how much of the set is there.
+		 */
+		val savedSetIds: Set<String> = emptySet(),
 	) {
 
 		/**
@@ -89,6 +112,21 @@ object SetListContract :
 
 		/** A set was tapped; remembered for next launch. */
 		data class SetOpened(val setId: String) : Intent
+
+		/**
+		 * The user picked a different game.
+		 *
+		 * Clears the list rather than keeping the old one visible under a new title: the sets of
+		 * one game are not a stale view of another game's, they are simply the wrong data, and
+		 * leaving them on screen for the length of a load would show Pokémon sets under "Magic".
+		 */
+		data class GameChanged(val game: Game) : Intent
+
+		/** The routing table, and the remembered game, arrived from the registry and preferences. */
+		data class GamesRestored(val games: List<Game>, val game: Game) : Intent
+
+		/** Which sets are on disk. Computed after a load, since it depends on the set list. */
+		data class SavedSetsResolved(val setIds: Set<String>) : Intent
 	}
 
 	sealed interface Effect
@@ -128,5 +166,29 @@ object SetListContract :
 		is Intent.LastOpenedSetRestored -> state.copy(lastOpenedSetId = intent.setId)
 
 		is Intent.SetOpened -> state.copy(lastOpenedSetId = intent.setId)
+
+		is Intent.GameChanged ->
+			if (intent.game == state.game) {
+				state
+			} else {
+				state.copy(
+					game = intent.game,
+					sets = emptyList(),
+					// Cleared with the list. Leaving them would tick rows of the new game whose
+					// ids happen to collide, and briefly claim the wrong sets are downloaded.
+					savedSetIds = emptySet(),
+					search = "",
+					isLoading = true,
+					error = null,
+					requestGeneration = state.requestGeneration + 1,
+				)
+			}
+
+		is Intent.GamesRestored -> state.copy(
+			availableGames = intent.games,
+			game = intent.game,
+		)
+
+		is Intent.SavedSetsResolved -> state.copy(savedSetIds = intent.setIds)
 	}
 }

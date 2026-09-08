@@ -63,7 +63,12 @@ class CardDetailViewModel(
 		val vCardId = SourceId.parse(intent.cardId) ?: return
 		val vSetId = intent.setId?.let(SourceId::parse)
 
-		val vCards = siblingsFor(intent.setId, vSetId, vCardId)
+		// The game comes from the card's own id. Every id here is source-qualified, so it names the
+		// provider that issued it, and the routing table turns that into a game -- which is why no
+		// game argument travels through navigation alongside the card id.
+		val vGame = mRegistry.gameFor(vCardId.provider) ?: Game.RIFTBOUND
+
+		val vCards = siblingsFor(intent.setId, vSetId, vCardId, vGame)
 		val vIndex = vCards.indexOfFirst { it.id == vCardId }
 
 		// The tapped card may be absent from the list -- a stale session, or a set that could not
@@ -73,18 +78,18 @@ class CardDetailViewModel(
 			vCards to vIndex
 		} else {
 			val vSingle = mRepository
-				.cardDetail(id = vCardId, game = Game.RIFTBOUND, setId = vSetId)
+				.cardDetail(id = vCardId, game = vGame, setId = vSetId)
 				.value
 			if (vSingle != null) listOf(vSingle) to 0 else emptyList<CardPrinting>() to 0
 		}
 
 		val vSet = if (vSetId != null) {
-			mRepository.setList(Game.RIFTBOUND).first().value?.firstOrNull { it.id == vSetId }
+			mRepository.setList(vGame).first().value?.firstOrNull { it.id == vSetId }
 		} else {
 			null
 		}
 
-		val vProvider = mRegistry.resolve(Game.RIFTBOUND)
+		val vProvider = mRegistry.resolve(vGame)
 
 		dispatch(
 			CardDetailContract.Intent.Loaded(
@@ -114,12 +119,13 @@ class CardDetailViewModel(
 		rawSetId: String?,
 		setId: SourceId?,
 		cardId: SourceId,
+		game: Game,
 	): List<CardPrinting> {
 		val vFromSession = mSession.cardsFor(rawSetId)
 		if (vFromSession.any { it.id == cardId }) return vFromSession
 		if (setId == null) return emptyList()
 		return mRepository
-			.cards(setId = setId, game = Game.RIFTBOUND, query = CardQuery())
+			.cards(setId = setId, game = game, query = CardQuery())
 			.first()
 			.value
 			?.cards

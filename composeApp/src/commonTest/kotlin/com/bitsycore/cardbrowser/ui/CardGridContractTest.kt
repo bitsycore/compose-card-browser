@@ -1,5 +1,8 @@
 package com.bitsycore.cardbrowser.ui
 
+import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.model.GameVocabulary
+import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.ProviderError
@@ -289,12 +292,41 @@ class CardGridContractTest {
 	fun `unsupported filters are recorded so the sheet can leave them out`() {
 		val vState = reduce(
 			UiState(),
-			Intent.CapabilitiesResolved(setOf(CardFilterField.TEXT, CardFilterField.RARITY)),
+			Intent.CapabilitiesResolved(
+				supportedFilters = setOf(CardFilterField.TEXT, CardFilterField.RARITY),
+				game = Game.RIFTBOUND,
+			),
 		)
 
 		assertTrue(CardFilterField.RARITY in vState.supportedFilters)
 		assertFalse(CardFilterField.FINISH in vState.supportedFilters)
 		assertFalse(CardFilterField.LANGUAGE in vState.supportedFilters)
+	}
+
+	@Test
+	fun `resolving capabilities also records the game, so the sheet speaks its vocabulary`() {
+		// The filter sheet says "Colour" for Magic and "Domain" for Riftbound, and this is where
+		// it learns which. A grid that never resolved its game would silently use Riftbound's
+		// words for every game.
+		val vState = reduce(
+			UiState(),
+			Intent.CapabilitiesResolved(supportedFilters = emptySet(), game = Game.MAGIC),
+		)
+
+		assertEquals(Game.MAGIC, vState.game)
+		assertEquals("Colour", GameVocabulary.of(vState.game).domain)
+		assertEquals("Mana value", GameVocabulary.of(vState.game).energy)
+	}
+
+	@Test
+	fun `a game with no single cost number is not offered a cost sort`() {
+		// Pokémon costs are per attack, so there is no one number to sort on. Offering the option
+		// would produce a sort that leaves every card in place and looks broken.
+		val vPokemon = CardGridContract.sortOptions(Game.POKEMON).map { it.first }
+		val vMagic = CardGridContract.sortOptions(Game.MAGIC).map { it.first }
+
+		assertFalse(CardSortField.ENERGY_COST in vPokemon)
+		assertTrue(CardSortField.ENERGY_COST in vMagic)
 	}
 
 	@Test

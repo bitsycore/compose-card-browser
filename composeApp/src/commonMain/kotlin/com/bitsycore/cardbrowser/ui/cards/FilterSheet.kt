@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.core.provider.CardQuery
+import com.bitsycore.cardbrowser.core.model.GameVocabulary
 import com.bitsycore.cardbrowser.core.provider.SortDirection
 import com.bitsycore.cardbrowser.ui.cards.CardGridContract.toggle
 
@@ -57,6 +58,8 @@ fun FilterSheet(
 			.padding(horizontal = 20.dp)
 			.padding(bottom = 32.dp),
 	) {
+		val vVocabulary = GameVocabulary.of(state.game)
+
 		Row(verticalAlignment = Alignment.CenterVertically) {
 			Text("Filters", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
 			if (state.activeFilterCount > 0) {
@@ -71,7 +74,7 @@ fun FilterSheet(
 		// tapping the already-selected field to flip it, with the arrow saying which way it is
 		// pointing, is the pattern every table header in the world uses.
 		Section("Sort by") {
-			CardGridContract.SORT_OPTIONS.forEach { (vField, vLabel) ->
+			CardGridContract.sortOptions(state.game).forEach { (vField, vLabel) ->
 				val vIsSelected = state.query.sortBy == vField
 				val vIsDescending = state.query.sortDirection == SortDirection.DESCENDING
 				FilterChip(
@@ -121,7 +124,9 @@ fun FilterSheet(
 		)
 
 		if (CardFilterField.DOMAIN in state.supportedFilters && state.facets.domains.isNotEmpty()) {
-			Section("Domain") {
+			// The word for this axis is the game's, not the app's: Riftbound has domains, Magic
+			// has colours, Altered has factions. `GameVocabulary` is the one place that decides.
+			Section(vVocabulary.domain ?: "Domain") {
 				state.facets.domains.forEach { vDomain ->
 					FilterChip(
 						selected = vDomain in state.query.domains,
@@ -133,7 +138,7 @@ fun FilterSheet(
 		}
 
 		if (CardFilterField.CARD_TYPE in state.supportedFilters && state.facets.cardTypes.isNotEmpty()) {
-			Section("Card type") {
+			Section(vVocabulary.cardType) {
 				state.facets.cardTypes.forEach { vType ->
 					FilterChip(
 						selected = vType in state.query.cardTypes,
@@ -157,7 +162,7 @@ fun FilterSheet(
 		}
 
 		if (CardFilterField.ENERGY_COST in state.supportedFilters && state.facets.energyCosts.isNotEmpty()) {
-			Section("Energy cost") {
+			Section(vVocabulary.energy ?: "Cost") {
 				state.facets.energyCosts.forEach { vCost ->
 					FilterChip(
 						selected = vCost in state.query.energyCosts,
