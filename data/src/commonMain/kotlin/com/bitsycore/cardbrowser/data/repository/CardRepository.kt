@@ -3,6 +3,7 @@ package com.bitsycore.cardbrowser.data.repository
 import com.bitsycore.cardbrowser.core.filter.CardFacets
 import com.bitsycore.cardbrowser.core.filter.CardFilterEngine
 import com.bitsycore.cardbrowser.core.model.CardLanguage
+import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.Game
@@ -248,7 +249,7 @@ class CardRepository(
 			emit(
 				DataSnapshot(
 					value = SetCards(
-						cards = CardFilterEngine.apply(cards, query),
+						cards = CardFilterEngine.apply(dedupePrintings(cards), query),
 						isCompleteSet = false,
 						knownSetSize = knownSetSize ?: total,
 						cachedCardCount = cards.size,
@@ -377,6 +378,8 @@ class CardRepository(
 		// then cached as a complete set, so the empty set was served from disk forever after.
 		if (vTotal != null && vBest.size < vTotal) vComplete = false
 
+		val vDeduped = dedupePrintings(vBest)
+
 		val vFetchedAt = mClock()
 		val vCompleteness = if (vComplete) Completeness.COMPLETE else Completeness.PARTIAL
 		mCache.write(
@@ -396,10 +399,10 @@ class CardRepository(
 		emit(
 			DataSnapshot(
 				value = SetCards(
-					cards = CardFilterEngine.apply(vBest, query),
+					cards = CardFilterEngine.apply(vDeduped, query),
 					isCompleteSet = vComplete,
 					knownSetSize = knownSetSize ?: vTotal,
-					cachedCardCount = vBest.size,
+					cachedCardCount = vDeduped.size,
 				),
 				origin = DataOrigin.NETWORK,
 				completeness = vCompleteness,
@@ -427,7 +430,7 @@ class CardRepository(
 		emit(
 			DataSnapshot.fresh(
 				value = SetCards(
-					cards = CardFilterEngine.sort(vPage.cards, query),
+					cards = CardFilterEngine.sort(dedupePrintings(vPage.cards), query),
 					// One page of a provider-filtered query covers the query completely only when
 					// the provider says there is no more.
 					isCompleteSet = !vPage.hasMore,
@@ -502,6 +505,36 @@ class CardRepository(
 		if (vCached.completeness != Completeness.COMPLETE) return CardFacets()
 		return CardFilterEngine.facetsOf(vCached.payload)
 	}
+
+	/**
+	 * Collapses records the provider has issued more than once for the same printing.
+	 *
+	 * Not a guess and not name matching: two records collapse only when they carry the same
+	 * [CardPrinting.dedupeKey], which is the provider's *own* per-printing identifier, and a
+	 * provider that declares none is never de-duplicated at all.
+	 *
+	 * It is needed because a real provider really does this. Riftcodex's Vendetta returns 358 card
+	 * records for 227 distinct `riftbound_id`s -- 37% of the set is sent twice, each copy under its
+	 * own database id, so nothing downstream could tell them apart. The grid showed every one.
+	 *
+	 * Where copies disagree, the one asserting the most wins: `alternate_art: true` is a statement
+	 * and `false` is indistinguishable from a field nobody filled in, so a copy carrying a treatment
+	 * beats a copy carrying none. Order is otherwise preserved.
+	 */
+	private fun dedupePrintings(cards: List<CardPrinting>): List<CardPrinting> {
+		val vSeen = LinkedHashMap<String, CardPrinting>(cards.size)
+		for (vCard in cards) {
+			val vExisting = vSeen[vCard.dedupeKey]
+			if (vExisting == null || vCard.saysMoreThan(vExisting)) {
+				vSeen[vCard.dedupeKey] = vCard
+			}
+		}
+		return vSeen.values.toList()
+	}
+
+	/** True when [this] carries a positive claim the other copy does not. */
+	private fun CardPrinting.saysMoreThan(other: CardPrinting): Boolean =
+		artwork.treatment != ArtworkTreatment.STANDARD && other.artwork.treatment == ArtworkTreatment.STANDARD
 
 	// ============
 	//  Keys

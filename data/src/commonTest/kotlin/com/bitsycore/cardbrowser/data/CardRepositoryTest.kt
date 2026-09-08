@@ -134,8 +134,15 @@ class CardRepositoryTest {
 			mPages.flatten().firstOrNull { it.id == id }
 	}
 
-	private fun card(number: Int, rarity: String = "Common"): CardPrinting = CardPrinting(
-		id = SourceId(mProviderId, "card-$number"),
+	private fun card(
+		number: Int,
+		rarity: String = "Common",
+		printingKey: String? = null,
+		treatment: ArtworkTreatment = ArtworkTreatment.STANDARD,
+		idSuffix: String = "",
+	): CardPrinting = CardPrinting(
+		id = SourceId(mProviderId, "card-$number$idSuffix"),
+		printingKey = printingKey,
 		game = Game.RIFTBOUND,
 		setId = mSetId,
 		setCode = "OGN",
@@ -149,7 +156,7 @@ class CardRepositoryTest {
 			imageUrl = "https://example.test/$number.png",
 			thumbnailUrl = null,
 			artist = null,
-			treatment = ArtworkTreatment.STANDARD,
+			treatment = treatment,
 			language = CardLanguage.ENGLISH,
 		),
 		attributes = CardAttributes(energy = number),
@@ -495,6 +502,77 @@ class CardRepositoryTest {
 			vProvider.requestedPageSizes.all { it == 2 },
 			"every request should use the provider's own page size, was ${vProvider.requestedPageSizes}",
 		)
+	}
+
+	// ============
+	//  Duplicate records
+
+	@Test
+	fun `records the provider sent twice for one printing collapse into one`() = runTest {
+		// Riftcodex's Vendetta really does this: 358 records for 227 distinct riftbound_ids, each
+		// copy under its own database id, so nothing downstream could tell them apart.
+		val vProvider = FakeProvider(
+			id = mProviderId,
+			mPages = listOf(
+				listOf(
+					card(1, printingKey = "ven-001", idSuffix = "-a"),
+					card(1, printingKey = "ven-001", idSuffix = "-b"),
+				),
+				listOf(card(2, printingKey = "ven-002")),
+			),
+		)
+
+		val vResult = repositoryFor(vProvider)
+			.cards(mSetId, Game.RIFTBOUND, CardQuery())
+			.toList().last()
+
+		val vCards = assertNotNull(vResult.value)
+		assertEquals(2, vCards.cards.size, "the duplicated printing should appear once")
+		assertEquals(listOf("1", "2"), vCards.cards.map { it.collectorNumber })
+	}
+
+	@Test
+	fun `a provider that declares no printing key is never de-duplicated`() = runTest {
+		// Two genuinely different printings that happen to share a name and number -- Origins 299
+		// is exactly this. Collapsing them would lose a card.
+		val vProvider = FakeProvider(
+			id = mProviderId,
+			mPages = listOf(listOf(card(299, idSuffix = "-over"), card(299, idSuffix = "-sig"))),
+		)
+
+		val vResult = repositoryFor(vProvider)
+			.cards(mSetId, Game.RIFTBOUND, CardQuery())
+			.toList().last()
+
+		assertEquals(2, assertNotNull(vResult.value).cards.size)
+	}
+
+	@Test
+	fun `when copies disagree the one asserting a treatment wins`() = runTest {
+		// Vendetta ships `ven-019a` twice: once flagged alternate art and named as such, once with
+		// the flag false and the plain name. False is indistinguishable from unset, so the copy
+		// making a positive claim is the better record.
+		val vProvider = FakeProvider(
+			id = mProviderId,
+			mPages = listOf(
+				listOf(
+					card(19, printingKey = "ven-019a", idSuffix = "-plain"),
+					card(
+						19,
+						printingKey = "ven-019a",
+						treatment = ArtworkTreatment.ALTERNATE_ART,
+						idSuffix = "-alt",
+					),
+				),
+			),
+		)
+
+		val vResult = repositoryFor(vProvider)
+			.cards(mSetId, Game.RIFTBOUND, CardQuery())
+			.toList().last()
+
+		val vCard = assertNotNull(vResult.value).cards.single()
+		assertEquals(ArtworkTreatment.ALTERNATE_ART, vCard.artwork.treatment)
 	}
 
 	// ============

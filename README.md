@@ -32,7 +32,7 @@ no deckbuilding.
 | **Android** | Debug APK builds (23 MB). **Not installed or run** — no device or emulator was available. |
 | **iOS** | Kotlin and Swift written. **Never compiled.** No Mac, no Xcode. See [`iosApp/README.md`](iosApp/README.md). |
 
-141 deterministic tests and 5 live-API smoke checks pass. See [Build, run, test](#build-run-test).
+144 deterministic tests and 6 live-API smoke checks pass. See [Build, run, test](#build-run-test).
 
 ---
 
@@ -269,6 +269,28 @@ large detail image, where there is room for it, a retry button appears if that a
 
 The full-resolution URL is untouched — it carries no resize parameter and the CDN always answers it
 with the original PNG.
+
+### The provider sends some printings twice
+
+Riftcodex's **Vendetta** returns 358 card records for 227 distinct `riftbound_id`s — 37% of the set
+is sent twice, each copy under its own database id, so nothing downstream can tell the copies apart
+by id. Origins, Unleashed, Spiritforged and Proving Grounds have none of this.
+
+The repository collapses them, but only on evidence: two records merge when they share the
+provider's *own* per-printing key, never because they share a name or a collector number. Origins
+299 is two genuinely different cards with the same number and name, and it must stay two. A provider
+that declares no printing key is never de-duplicated at all.
+
+Where two copies disagree — Vendetta ships `ven-019a` once flagged alternate art and once not — the
+copy asserting a treatment wins, because `true` is a statement and `false` is indistinguishable from
+a field nobody filled in.
+
+### There are no set or game icons
+
+The API has no icon, logo or symbol field anywhere; the only image in its whole schema is a card's
+own art. The set list therefore shows each set's real short code (`OGN`, `SFD`) in a tile rather
+than an invented symbol, and the game gets a neutral mark rather than something dressed up to look
+official.
 
 ### There is no higher-resolution card art
 

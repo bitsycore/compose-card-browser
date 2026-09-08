@@ -95,6 +95,11 @@ internal object RiftcodexMapper {
 			setName = dto.set.label,
 			collectorNumber = vCollector,
 			providerRawCollectorNumber = dto.collectorNumber?.toString() ?: vCollector,
+			// Riftcodex's own per-printing id, and the only thing that identifies a *printing*
+			// here: its record ids are per-record, and Vendetta really does ship the same printing
+			// twice under two of them -- 358 records for 227 distinct `riftbound_id`s. Without this
+			// the grid shows a third of that set twice over.
+			printingKey = dto.riftboundId.takeIf { it.isNotBlank() },
 			// Riftcodex states no relationship between printings of the same card. `riftbound_id`
 			// looked like a candidate, but it is unique per printing -- `ogn-299-298` and
 			// `ogn-299*-298` are two records for what a player would call one card, and the API's

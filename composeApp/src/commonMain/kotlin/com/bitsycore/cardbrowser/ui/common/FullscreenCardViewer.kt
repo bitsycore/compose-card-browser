@@ -12,8 +12,11 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -146,9 +149,15 @@ fun FullscreenCardViewer(
 					},
 			)
 
+			// The art stays edge to edge on purpose -- it is the whole point of the screen -- but
+			// the close button must not sit under a status bar or a camera cutout, where it is
+			// either invisible or untappable.
 			IconButton(
 				onClick = onDismiss,
-				modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+				modifier = Modifier
+					.align(Alignment.TopEnd)
+					.windowInsetsPadding(WindowInsets.safeDrawing)
+					.padding(8.dp),
 			) {
 				Icon(
 					imageVector = Icons.Outlined.Close,

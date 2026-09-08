@@ -190,6 +190,11 @@ data class CardIdentity(
  * @property collectorNumber a string, always. Collector numbers carry letters, leading zeroes and
  *   suffixes; a provider that happens to expose an integer is normalised into a string here and the
  *   original is kept in [providerRawCollectorNumber] rather than being the value the app reasons on
+ * @property printingKey the provider's own stable name for *this printing*, when it has one that is
+ *   not [id]. Set only by a provider whose key is genuinely per-printing; `null` otherwise, and then
+ *   [id] is the key. It exists because a provider's record ids can be less stable than its printing
+ *   ids -- Riftcodex issues a fresh database id per record and has been observed emitting the same
+ *   printing twice, so [id] distinguishes records while this distinguishes printings
  * @property identity `null` when the provider states no cross-printing relationship
  * @property languages what is known about printing languages -- often [LanguageCoverage.isUnstated]
  * @property finishes what is known about finishes -- often [FinishCoverage.isUnstated]
@@ -203,6 +208,7 @@ data class CardPrinting(
 	val setName: String,
 	val collectorNumber: String,
 	val providerRawCollectorNumber: String,
+	val printingKey: String? = null,
 	val identity: CardIdentity?,
 	val text: LocalizedText,
 	val artwork: Artwork,
@@ -217,6 +223,14 @@ data class CardPrinting(
 
 	/** The provider that supplied this record. */
 	val provider: ProviderId get() = id.provider
+
+	/**
+	 * What makes two records the same printing.
+	 *
+	 * The provider's own printing key where it declares one, and the record id otherwise -- which
+	 * is always unique, so a provider that declares nothing is simply never de-duplicated.
+	 */
+	val dedupeKey: String get() = printingKey?.let { "${id.provider.value}:$it" } ?: id.qualified
 
 	/** The name to show, which is the text's name rather than any identity's. */
 	val displayName: String get() = text.name

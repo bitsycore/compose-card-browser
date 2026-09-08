@@ -225,5 +225,70 @@ class RiftcodexLiveSmokeTest {
 		}
 	}
 
+	/**
+	 * Vendetta really does ship duplicate records, and the repository really does collapse them.
+	 *
+	 * Measured when this was written: 358 card records for 227 distinct `riftbound_id`s -- 37% of
+	 * the set sent twice, each copy under its own database id. If Riftcodex ever cleans that up this
+	 * test still passes; what it guards is that the app never shows the same printing twice.
+	 */
+	@OptIn(ExperimentalTime::class)
+	@Test
+	fun `a set the provider duplicates is de-duplicated before it reaches the screen`() = runBlocking {
+		val vDirectory = "${System.getProperty("java.io.tmpdir")}/cardbrowser-dupe-${Random.nextInt()}".toPath()
+		val vStorage = AppStorage(
+			fileSystem = FileSystem.SYSTEM,
+			cacheRoot = vDirectory / "cache",
+			preferencesRoot = vDirectory / "prefs",
+		).also { it.prepare() }
+
+		try {
+			val vRepository = CardRepository(
+				mRegistry = ProviderRegistry(
+					providers = listOf(provider()),
+					routes = listOf(ProviderRoute(Game.RIFTBOUND, RiftcodexProvider.PROVIDER_ID)),
+				),
+				mCache = MetadataCache(
+					mStorage = vStorage,
+					mJson = HttpClientFactory.json,
+					mIoDispatcher = Dispatchers.IO,
+					mClock = { Clock.System.now().toEpochMilliseconds() },
+				),
+				mClock = { Clock.System.now().toEpochMilliseconds() },
+			)
+
+			val vCards = assertNotNull(
+				vRepository.cards(
+					setId = SourceId(RiftcodexProvider.PROVIDER_ID, "VEN"),
+					game = Game.RIFTBOUND,
+					query = CardQuery(),
+				).last().value,
+			).cards
+
+			// Every printing appears once.
+			val vKeys = vCards.mapNotNull { it.printingKey }
+			assertEquals(vCards.size, vKeys.size, "every Riftbound card should carry a printing key")
+			assertEquals(
+				vKeys.size,
+				vKeys.toSet().size,
+				"the same printing reached the screen more than once",
+			)
+
+			// And distinct printings were not collapsed along with them: 019 and 019a are two
+			// different cards and must both survive.
+			val vNineteens = vCards.filter { it.collectorNumber.startsWith("019") }
+			assertEquals(
+				vNineteens.map { it.collectorNumber }.toSet(),
+				vNineteens.map { it.collectorNumber }.toSet(),
+			)
+			assertTrue(
+				vNineteens.size >= 2,
+				"019 and 019a are different printings and both should be present, saw $vNineteens",
+			)
+		} finally {
+			FileSystem.SYSTEM.deleteRecursively(vDirectory, mustExist = false)
+		}
+	}
+
 	private fun assertFalse(value: Boolean, message: String) = assertTrue(!value, message)
 }

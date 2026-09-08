@@ -1,6 +1,7 @@
 package com.bitsycore.cardbrowser.ui.sets
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,10 +12,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Style
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -30,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.model.CardSet
@@ -59,7 +63,21 @@ fun SetListScreen(
 	Scaffold(
 		topBar = {
 			TopAppBar(
-				title = { Text("Riftbound") },
+				title = {
+					Row(verticalAlignment = Alignment.CenterVertically) {
+						// A neutral mark, not the game's logo: the provider ships no artwork for a
+						// game either, and inventing something that looks official would be worse
+						// than a plain one.
+						Icon(
+							imageVector = Icons.Outlined.Style,
+							contentDescription = null,
+							modifier = Modifier.size(22.dp),
+							tint = MaterialTheme.colorScheme.primary,
+						)
+						Spacer(Modifier.size(10.dp))
+						Text("Riftbound")
+					}
+				},
 				actions = {
 					IconButton(onClick = onOpenSettings) {
 						Icon(Icons.Outlined.Settings, contentDescription = "Settings")
@@ -165,6 +183,45 @@ private fun SetRow(
 				)
 			}
 		}
+	}
+}
+
+/**
+ * A set's code in a tile, standing in for the set symbol the provider does not have.
+ *
+ * Riftcodex publishes no icon, logo or symbol for a set -- the only image anywhere in its schema is
+ * a card's own art. Rather than leave the row as an undifferentiated wall of text, or invent a
+ * symbol and pass it off as the game's, this shows the set's real short code, which is what players
+ * call it anyway and what is printed on the cards.
+ */
+@Composable
+private fun SetMonogram(code: String, isHighlighted: Boolean) {
+	Box(
+		modifier = Modifier
+			.size(44.dp)
+			.clip(RoundedCornerShape(10.dp))
+			.background(
+				if (isHighlighted) {
+					MaterialTheme.colorScheme.primary
+				} else {
+					MaterialTheme.colorScheme.surfaceVariant
+				},
+			),
+		contentAlignment = Alignment.Center,
+	) {
+		Text(
+			// Promo codes are two characters, expansions three; anything longer is truncated
+			// rather than shrunk to illegibility.
+			text = code.take(4),
+			style = MaterialTheme.typography.labelLarge,
+			fontWeight = FontWeight.Medium,
+			maxLines = 1,
+			color = if (isHighlighted) {
+				MaterialTheme.colorScheme.onPrimary
+			} else {
+				MaterialTheme.colorScheme.onSurfaceVariant
+			},
+		)
 	}
 }
 

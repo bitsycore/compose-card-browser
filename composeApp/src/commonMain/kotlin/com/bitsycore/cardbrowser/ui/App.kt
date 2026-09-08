@@ -1,6 +1,9 @@
 package com.bitsycore.cardbrowser.ui
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
@@ -10,6 +13,7 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.bitsycore.cardbrowser.ui.cards.CardGridScreen
 import com.bitsycore.cardbrowser.ui.common.InstallImageLoader
+import com.bitsycore.cardbrowser.ui.common.LocalSharedTransitionScope
 import com.bitsycore.cardbrowser.ui.detail.CardDetailScreen
 import com.bitsycore.cardbrowser.ui.sets.SetListScreen
 import com.bitsycore.cardbrowser.ui.settings.SettingsScreen
@@ -56,6 +60,7 @@ sealed interface Route : NavKey {
  * both be released when they go back to the set list -- neither of which a plain `AnimatedContent`
  * with a shared view model store gives you.
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun App() {
 	CardBrowserTheme {
@@ -65,6 +70,10 @@ fun App() {
 
 		val vBackStack = remember { mutableStateListOf<Route>(Route.Sets) }
 
+		// Everything navigable is drawn inside one shared-transition scope, so a card's artwork can
+		// be the same element in the grid and in detail rather than two images that cross-fade.
+		SharedTransitionLayout {
+			CompositionLocalProvider(LocalSharedTransitionScope provides this) {
 		NavDisplay(
 			backStack = vBackStack,
 			onBack = { vBackStack.removeLastOrNull() },
@@ -118,5 +127,7 @@ fun App() {
 				}
 			},
 		)
+			}
+		}
 	}
 }

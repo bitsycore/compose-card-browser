@@ -53,6 +53,7 @@ import com.bitsycore.cardbrowser.core.model.CardOrientation
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.ui.common.CardImage
 import com.bitsycore.cardbrowser.ui.common.ImageVariant
+import com.bitsycore.cardbrowser.ui.common.sharedCardArt
 import com.bitsycore.cardbrowser.ui.common.EmptyState
 import com.bitsycore.cardbrowser.ui.common.ErrorState
 import com.bitsycore.cardbrowser.ui.common.LoadingState
@@ -254,6 +255,9 @@ private fun CardTile(card: CardPrinting, onClick: () -> Unit) {
 				// Riftbound cards are 744x1039, and a landscape card is that turned over. Using the
 				// real ratio means the grid does not jump as images resolve.
 				.aspectRatio(if (card.orientation == CardOrientation.LANDSCAPE) 1039f / 744f else 744f / 1039f)
+				// The other half of this is the large image on the detail screen: tapping the tile
+				// grows this exact picture into that one.
+				.sharedCardArt(card.id.qualified)
 				.clip(RoundedCornerShape(6.dp))
 				.background(MaterialTheme.colorScheme.surfaceVariant),
 		)

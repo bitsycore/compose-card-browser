@@ -82,6 +82,7 @@ import com.bitsycore.cardbrowser.ui.common.ImageVariant
 import com.bitsycore.cardbrowser.ui.common.ErrorState
 import com.bitsycore.cardbrowser.ui.common.FullscreenCardViewer
 import com.bitsycore.cardbrowser.ui.common.LoadingState
+import com.bitsycore.cardbrowser.ui.common.sharedCardArt
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import com.bitsycore.lib.pulse.compose.collectEffect
 import kotlinx.coroutines.launch
@@ -276,7 +277,8 @@ private fun PreviewStrip(
 
 	LazyRow(
 		state = vListState,
-		modifier = Modifier.fillMaxWidth(),
+		// Pinned, so the strip is a fixed band and never resizes the screen under it.
+		modifier = Modifier.fillMaxWidth().height(PREVIEW_ROW_HEIGHT),
 		contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
 		horizontalArrangement = Arrangement.spacedBy(6.dp),
 		verticalAlignment = Alignment.CenterVertically,
@@ -290,13 +292,22 @@ private fun PreviewStrip(
 					variant = ImageVariant.THUMBNAIL,
 					contentScale = ContentScale.Crop,
 					modifier = Modifier
-						.width(if (vIsCurrent) PREVIEW_WIDTH_CURRENT else PREVIEW_WIDTH)
+						// Every thumbnail is the same *height* and takes its width from its shape,
+						// rather than the reverse. Sizing by width made the row as tall as whatever
+						// happened to be in it: a portrait card is 1.4x taller than it is wide, a
+						// landscape battlefield is shorter than it is wide, and the selected one was
+						// bigger again -- so the strip changed height on every swipe and shoved the
+						// card below it up and down.
+						.height(PREVIEW_HEIGHT)
 						.aspectRatio(
-							if (vCard.orientation == CardOrientation.LANDSCAPE) {
+							ratio = if (vCard.orientation == CardOrientation.LANDSCAPE) {
 								1039f / 744f
 							} else {
 								744f / 1039f
 							},
+							// Width follows height. Without this the ratio is satisfied against the
+							// row's very wide max width first and every thumbnail comes out huge.
+							matchHeightConstraintsFirst = true,
 						)
 						.clip(RoundedCornerShape(4.dp))
 						.background(MaterialTheme.colorScheme.surfaceVariant)
@@ -600,6 +611,8 @@ private fun ZoomableCardImage(
 			.aspectRatio(
 				if (card.orientation == CardOrientation.LANDSCAPE) 1039f / 744f else 744f / 1039f,
 			)
+			// Pairs with the grid tile of the same printing.
+			.sharedCardArt(card.id.qualified)
 			.clip(RoundedCornerShape(12.dp))
 			.background(MaterialTheme.colorScheme.surfaceVariant)
 			.pointerInput(card.id) {
@@ -761,6 +774,14 @@ private const val IMAGE_HEIGHT_FRACTION = 0.66f
  */
 private val MAX_IMAGE_WIDTH = 420.dp
 
-/** Preview thumbnails: small enough that several fit, large enough to recognise the art. */
-private val PREVIEW_WIDTH = 34.dp
-private val PREVIEW_WIDTH_CURRENT = 44.dp
+/**
+ * Preview thumbnails: small enough that several fit, large enough to recognise the art.
+ *
+ * A *height*, deliberately. Riftbound has portrait cards and landscape battlefields, and the current
+ * card used to be drawn larger than its neighbours -- all three of which changed the row's height
+ * when sized by width. The selected card is marked with a border instead, which costs no space.
+ */
+private val PREVIEW_HEIGHT = 52.dp
+
+/** The thumbnail, its collector number underneath, and the row's own padding. */
+private val PREVIEW_ROW_HEIGHT = 84.dp
