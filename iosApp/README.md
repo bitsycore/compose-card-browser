@@ -61,3 +61,13 @@ The three things most likely to differ from desktop:
 - Japanese and Korean glyphs, if a provider ever supplies them — desktop and iOS resolve fonts
   differently, and this app has never had non-Latin card text to render.
 - `IosLinkOpener` actually opening Safari from the Cardmarket button.
+
+## App icon
+
+`iosApp/Assets.xcassets/AppIcon.appiconset/` holds the icon set and its `Contents.json`, in the
+layout Xcode expects. It is already in the right place: when a project is generated here, add
+`Assets.xcassets` to the target's resources and set **App Icons Source** to `AppIcon`, and nothing
+else is needed.
+
+Like everything else under `iosApp/`, this has **not** been verified in Xcode -- there is no Mac on
+the machine this was built on. The files are the icon kit's own output, unmodified.
