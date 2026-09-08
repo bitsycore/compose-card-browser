@@ -74,6 +74,23 @@ class ProviderRegistry(
 	fun byId(id: ProviderId): CardProvider? = mProvidersById[id]
 
 	/**
+	 * The game [provider] is routed for, or `null` when that is not a single answer.
+	 *
+	 * This is what lets a screen work out which game it is looking at from an id it was handed.
+	 * Every id in this app is source-qualified, so a set id names its provider, and the routing
+	 * table names that provider's game -- which beats carrying the game through every navigation
+	 * argument and every view model as a second copy of information the id already contains.
+	 *
+	 * `null` when a provider is routed for more than one game, because then the id genuinely does
+	 * not determine the game and a caller must be told rather than given a guess. No provider in
+	 * this app is, but the routing table permits it and this must not quietly pick the first.
+	 */
+	fun gameFor(provider: ProviderId): Game? {
+		val vGames = mRoutes.filter { it.provider == provider }.map { it.game }.distinct()
+		return vGames.singleOrNull()
+	}
+
+	/**
 	 * The provider that serves [game], preferring one routed for [language] when one exists.
 	 *
 	 * A language-specific route only wins if it is present; otherwise the game-wide route answers,

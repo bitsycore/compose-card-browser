@@ -11,6 +11,7 @@ import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardProvider
 import com.bitsycore.cardbrowser.core.provider.CardQuery
+import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.cache.CacheEnvelope
@@ -105,7 +106,7 @@ class CardRepository(
 		}
 
 		try {
-			val vSets = vProvider.listSets(game).sortedWith(SET_ORDER)
+			val vSets = vProvider.listSets(game, language).sortedWith(SET_ORDER)
 			val vFetchedAt = mClock()
 			mCache.write(
 				key = vKey,
@@ -181,12 +182,7 @@ class CardRepository(
 			val vIsStale = vCachedComplete.isStale(vNow, mCardsTtlMillis)
 			emit(
 				DataSnapshot.cached(
-					value = SetCards(
-						cards = CardFilterEngine.apply(vCachedComplete.payload, query),
-						isCompleteSet = vCachedComplete.completeness == Completeness.COMPLETE,
-						knownSetSize = knownSetSize,
-						cachedCardCount = vCachedComplete.payload.size,
-					),
+					value = cachedSetCards(vCachedComplete.payload, query, knownSetSize, vCachedComplete.completeness),
 					fetchedAt = vCachedComplete.fetchedAtEpochMillis,
 					completeness = vCachedComplete.completeness,
 					isStale = vIsStale,
@@ -206,18 +202,13 @@ class CardRepository(
 			if (vNeedsCompleteSet) {
 				emitCompleteSet(vProvider, setId, language, query, knownSetSize, vCachedComplete?.payload)
 			} else {
-				emitSinglePage(vProvider, setId, query, knownSetSize)
+				emitSinglePage(vProvider, setId, language, query, knownSetSize)
 			}
 		} catch (vError: ProviderError) {
 			if (vCachedComplete != null) {
 				emit(
 					DataSnapshot(
-						value = SetCards(
-							cards = CardFilterEngine.apply(vCachedComplete.payload, query),
-							isCompleteSet = vCachedComplete.completeness == Completeness.COMPLETE,
-							knownSetSize = knownSetSize,
-							cachedCardCount = vCachedComplete.payload.size,
-						),
+						value = cachedSetCards(vCachedComplete.payload, query, knownSetSize, vCachedComplete.completeness),
 						origin = DataOrigin.CACHE,
 						completeness = vCachedComplete.completeness,
 						fetchedAtEpochMillis = vCachedComplete.fetchedAtEpochMillis,
@@ -229,6 +220,29 @@ class CardRepository(
 				emit(DataSnapshot.failed(vError))
 			}
 		}
+	}
+
+	/**
+	 * A cached set, filtered and with duplicates collapsed.
+	 *
+	 * The de-duplication is repeated on read rather than trusted from the write. Two reasons: a
+	 * cache written by an earlier build holds the raw list and is sitting on users' disks right
+	 * now, and a provider that starts issuing a card twice should not be able to crash the grid --
+	 * `LazyVerticalGrid` throws outright on a repeated key rather than degrading.
+	 */
+	private fun cachedSetCards(
+		payload: List<CardPrinting>,
+		query: CardQuery,
+		knownSetSize: Int?,
+		completeness: Completeness,
+	): SetCards {
+		val vDeduped = dedupePrintings(payload)
+		return SetCards(
+			cards = CardFilterEngine.apply(vDeduped, query),
+			isCompleteSet = completeness == Completeness.COMPLETE,
+			knownSetSize = knownSetSize,
+			cachedCardCount = vDeduped.size,
+		)
 	}
 
 	/**
@@ -287,7 +301,7 @@ class CardRepository(
 				// Deliberately unfiltered: what is cached under a complete-set key must be the whole
 				// set. Caching a filtered page there is precisely the bug that would make later
 				// filters silently wrong.
-				CardPageRequest(setId = setId, query = CardQuery(), page = 1, pageSize = FIRST_PAGE_SIZE),
+				CardPageRequest(setId = setId, query = CardQuery(), page = 1, pageSize = FIRST_PAGE_SIZE, language = language),
 			)
 			vTotal = vPreview.totalCount
 			if (!vPreview.hasMore) {
@@ -305,7 +319,7 @@ class CardRepository(
 			// preview ran, this overlaps it and supersedes it.
 			currentCoroutineContext().ensureActive()
 			val vFirst = provider.listCards(
-				CardPageRequest(setId = setId, query = CardQuery(), page = 1, pageSize = vPageSize),
+				CardPageRequest(setId = setId, query = CardQuery(), page = 1, pageSize = vPageSize, language = language),
 			)
 			vCollected += vFirst.cards
 			vTotal = vFirst.totalCount ?: vTotal
@@ -347,6 +361,7 @@ class CardRepository(
 											query = CardQuery(),
 											page = vPageNumber,
 											pageSize = vPageSize,
+											language = language,
 										),
 									)
 								}
@@ -407,7 +422,13 @@ class CardRepository(
 				scope = CacheScope.CompleteSet(setId.qualified),
 				fetchedAtEpochMillis = vFetchedAt,
 				completeness = vCompleteness,
-				payload = vBest,
+				// The de-duplicated list, not the raw one.
+				//
+				// Writing `vBest` here meant the cache held records that had been collapsed before
+				// being shown, so the next launch read them back and drew them -- undoing the
+				// de-duplication for every session after the first, which is the session that
+				// matters least. `vDeduped` is what was displayed and it is what is stored.
+				payload = vDeduped,
 			),
 			serializer = CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>())),
 		)
@@ -432,6 +453,7 @@ class CardRepository(
 	private suspend fun kotlinx.coroutines.flow.FlowCollector<DataSnapshot<SetCards>>.emitSinglePage(
 		provider: CardProvider,
 		setId: SourceId,
+		language: CardLanguage?,
 		query: CardQuery,
 		knownSetSize: Int?,
 	) {
@@ -441,6 +463,7 @@ class CardRepository(
 				query = query,
 				page = 1,
 				pageSize = provider.capabilities.maxPageSize,
+				language = language,
 			),
 		)
 		emit(
@@ -456,6 +479,141 @@ class CardRepository(
 				fetchedAt = mClock(),
 				completeness = if (vPage.hasMore) Completeness.PARTIAL else Completeness.COMPLETE,
 			),
+		)
+	}
+
+	// ============
+	//  Cross-set search
+
+	/**
+	 * Cards matching [text] anywhere in [game], cache first and then the provider.
+	 *
+	 * Emits up to twice, and the two emissions are not the same kind of answer:
+	 *
+	 * 1. Whatever the sets already on disk contain, marked [SearchScope.LOCAL_CACHED_SETS]. This is
+	 *    instant, works offline, and on a fresh install is empty.
+	 * 2. The provider's own answer, marked [SearchScope.REMOTE_ALL_SETS] -- but only when the
+	 *    provider declares it can search across sets. When it cannot, the local answer is the only
+	 *    answer and stays labelled as such, so the screen never implies a whole-game search ran.
+	 *
+	 * Nothing here is written to the cache. A search result is a slice of many sets under a query
+	 * that will never be repeated verbatim; storing it under any key would either collide with the
+	 * complete-set entries the rest of the app depends on being complete, or accumulate forever.
+	 *
+	 * @param knownSets the game's sets, which the caller already has from [setList]. Used both to
+	 *   know which cached sets to look in and to say how much of the game a local search covered
+	 */
+	fun searchAllSets(
+		game: Game,
+		text: String,
+		knownSets: List<CardSet>,
+		language: CardLanguage? = null,
+	): Flow<DataSnapshot<CardSearchResults>> = flow {
+		val vNeedle = text.trim()
+		if (vNeedle.isEmpty()) return@flow
+
+		val vProvider = mRegistry.resolve(game, language)
+			?: run {
+				emit(DataSnapshot.failed<CardSearchResults>(ProviderError.Unknown("No provider serves $game")))
+				return@flow
+			}
+
+		val vCanSearchRemotely = vProvider.capabilities.data.crossSetSearch
+
+		// 1. The sets already on disk, always, and first.
+		val vLocal = searchCachedSets(vProvider, vNeedle, knownSets, language)
+		// Skipped only when it found nothing *and* a real search is about to run: an empty local
+		// result flashed up before the network answers reads as "no matches" for a moment.
+		if (vLocal.cards.isNotEmpty() || !vCanSearchRemotely) {
+			emit(
+				DataSnapshot(
+					value = vLocal,
+					origin = DataOrigin.CACHE,
+					completeness = if (vLocal.isLimitedByCache) Completeness.PARTIAL else Completeness.COMPLETE,
+					fetchedAtEpochMillis = mClock(),
+					isStale = false,
+				),
+			)
+		}
+
+		if (!vCanSearchRemotely) return@flow
+
+		// 2. The provider's answer, which supersedes it.
+		try {
+			currentCoroutineContext().ensureActive()
+			val vPage = vProvider.searchAllSets(
+				CardSearchRequest(
+					game = game,
+					text = vNeedle,
+					language = language,
+					page = 1,
+					pageSize = SEARCH_PAGE_SIZE.coerceAtMost(vProvider.capabilities.maxPageSize),
+				),
+			)
+			val vCards = dedupePrintings(vPage.cards)
+			emit(
+				DataSnapshot.fresh(
+					value = CardSearchResults(
+						cards = vCards,
+						scope = SearchScope.REMOTE_ALL_SETS,
+						searchedSetCount = vCards.map { it.setId }.distinct().size,
+						knownSetCount = knownSets.size,
+						totalCount = vPage.totalCount,
+						hasMore = vPage.hasMore,
+					),
+					fetchedAt = mClock(),
+					// One page of a match list is not the whole match list, and the screen says so
+					// rather than letting the user assume they are looking at everything.
+					completeness = if (vPage.hasMore) Completeness.PARTIAL else Completeness.COMPLETE,
+				),
+			)
+		} catch (vError: ProviderError) {
+			emit(
+				DataSnapshot(
+					value = vLocal,
+					origin = DataOrigin.CACHE,
+					completeness = Completeness.PARTIAL,
+					fetchedAtEpochMillis = mClock(),
+					isStale = true,
+					error = vError,
+				),
+			)
+		}
+	}
+
+	/**
+	 * Searches the complete sets this device already holds.
+	 *
+	 * Reads only what is on disk and never issues a request, which is what makes it safe to run
+	 * before every remote search and what makes search work with no network at all.
+	 *
+	 * A set cached as [Completeness.PARTIAL] is still searched -- part of a set is more than none
+	 * of it -- but it does not count towards [CardSearchResults.searchedSetCount], so the coverage
+	 * the UI reports stays a count of sets genuinely searched end to end.
+	 */
+	private suspend fun searchCachedSets(
+		provider: CardProvider,
+		text: String,
+		knownSets: List<CardSet>,
+		language: CardLanguage?,
+	): CardSearchResults {
+		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>()))
+		val vQuery = CardQuery(text = text)
+		val vHits = mutableListOf<CardPrinting>()
+		var vComplete = 0
+
+		for (vSet in knownSets) {
+			currentCoroutineContext().ensureActive()
+			val vCached = mCache.read(completeSetKey(provider, vSet.id, language), vSerializer) ?: continue
+			if (vCached.completeness == Completeness.COMPLETE) vComplete++
+			vHits += CardFilterEngine.apply(vCached.payload, vQuery)
+		}
+
+		return CardSearchResults(
+			cards = dedupePrintings(vHits),
+			scope = SearchScope.LOCAL_CACHED_SETS,
+			searchedSetCount = vComplete,
+			knownSetCount = knownSets.size,
 		)
 	}
 
@@ -495,12 +653,36 @@ class CardRepository(
 		}
 
 		return try {
-			val vCard = vProvider.cardDetail(id)
+			val vCard = vProvider.cardDetail(id, language)
 				?: return DataSnapshot.failed(ProviderError.BadRequest(404))
 			DataSnapshot.fresh(vCard, mClock())
 		} catch (vError: ProviderError) {
 			DataSnapshot.failed(vError)
 		}
+	}
+
+	// ============
+	//  Offline availability
+
+	/**
+	 * Which of [sets] are saved on this device.
+	 *
+	 * A file-existence check per set, so it stays cheap even for a catalogue of several hundred.
+	 * The answer is "saved", not "complete": a set fetched partly and then interrupted has a file
+	 * too, and the set list labels the mark accordingly rather than promising the whole set.
+	 *
+	 * Returns qualified ids so the UI can match without reconstructing [SourceId] values.
+	 */
+	suspend fun savedSetIds(
+		game: Game,
+		sets: List<CardSet>,
+		language: CardLanguage? = null,
+	): Set<String> {
+		val vProvider = mRegistry.resolve(game, language) ?: return emptySet()
+		return sets
+			.filter { mCache.exists(completeSetKey(vProvider, it.id, language)) }
+			.map { it.id.qualified }
+			.toSet()
 	}
 
 	// ============
@@ -615,5 +797,15 @@ class CardRepository(
 		 * simultaneous connections to a free community API.
 		 */
 		private const val MAX_CONCURRENT_PAGE_REQUESTS = 4
+
+		/**
+		 * How many search hits to ask a provider for.
+		 *
+		 * Deliberately one page and no more. A search across Scryfall's whole catalogue can match
+		 * thousands of cards, and paging through all of them to show a count nobody scrolls to
+		 * would cost the provider dozens of requests per keystroke-settled query. The screen shows
+		 * the first page, says how many matched in total, and asks the user to narrow it.
+		 */
+		private const val SEARCH_PAGE_SIZE = 60
 	}
 }

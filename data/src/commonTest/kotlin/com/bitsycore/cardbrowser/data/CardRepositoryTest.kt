@@ -104,7 +104,7 @@ class CardRepositoryTest {
 			maxPageSize = mMaxPageSize,
 		)
 
-		override suspend fun listSets(game: Game): List<CardSet> {
+		override suspend fun listSets(game: Game, language: CardLanguage?): List<CardSet> {
 			mSetsError?.let { throw it }
 			return mSets
 		}
@@ -130,7 +130,7 @@ class CardRepositoryTest {
 			)
 		}
 
-		override suspend fun cardDetail(id: SourceId): CardPrinting? =
+		override suspend fun cardDetail(id: SourceId, language: CardLanguage?): CardPrinting? =
 			mPages.flatten().firstOrNull { it.id == id }
 	}
 
@@ -693,5 +693,67 @@ class CardRepositoryTest {
 			.facetsFor(mSetId, Game.RIFTBOUND)
 
 		assertEquals(listOf("Common", "Epic", "Legendary"), vFacets.rarities)
+	}
+
+	// ============
+	//  De-duplication across the cache boundary
+
+	@Test
+	fun `duplicates stay collapsed after a restart, not just on the first load`() = runTest {
+		// The bug this guards. The complete-set cache was written with the *raw* list while the
+		// de-duplicated one was displayed, so the collapse held for exactly one session: the next
+		// launch read the raw records straight back off disk and drew them all.
+		//
+		// For Riftbound that meant Vendetta's 358 records reappearing as 358 tiles for 227 cards.
+		// For a provider whose duplicates share an id it is worse than cosmetic -- LazyVerticalGrid
+		// throws on a repeated key rather than degrading.
+		val vFileSystem = FakeFileSystem()
+		val vProvider = FakeProvider(
+			id = mProviderId,
+			mPages = listOf(
+				listOf(
+					card(1, printingKey = "ogn-1"),
+					card(1, printingKey = "ogn-1"),
+					card(2, printingKey = "ogn-2"),
+				),
+			),
+			mMaxPageSize = 10,
+		)
+
+		val vFirst = repositoryFor(vProvider, vFileSystem)
+			.cards(mSetId, Game.RIFTBOUND, CardQuery())
+			.toList()
+			.last()
+		assertEquals(2, vFirst.value?.cards?.size, "The first load must collapse the duplicate")
+
+		// A second repository over the same disk, with a provider that refuses to answer -- so the
+		// only possible source is the cache written above.
+		val vOffline = FakeProvider(mProviderId, emptyList(), mSetsError = ProviderError.Offline())
+		val vSecond = repositoryFor(vOffline, vFileSystem)
+			.cards(mSetId, Game.RIFTBOUND, CardQuery())
+			.toList()
+			.first()
+
+		assertEquals(2, vSecond.value?.cards?.size, "The cached copy must stay collapsed")
+		val vIds = vSecond.value?.cards?.map { it.id.qualified }.orEmpty()
+		assertEquals(vIds.size, vIds.distinct().size, "Duplicate ids would crash the grid: $vIds")
+	}
+
+	@Test
+	fun `two records the provider distinguishes are never merged`() = runTest {
+		// The other half of the same rule. Collapsing is keyed on the provider's own printing key,
+		// so two genuinely different printings -- two artworks of one card, say -- must survive.
+		val vProvider = FakeProvider(
+			id = mProviderId,
+			mPages = listOf(listOf(card(1, printingKey = "ogn-1a"), card(1, printingKey = "ogn-1b"))),
+			mMaxPageSize = 10,
+		)
+
+		val vResult = repositoryFor(vProvider)
+			.cards(mSetId, Game.RIFTBOUND, CardQuery())
+			.toList()
+			.last()
+
+		assertEquals(2, vResult.value?.cards?.size, "Same number, different printings: two cards")
 	}
 }

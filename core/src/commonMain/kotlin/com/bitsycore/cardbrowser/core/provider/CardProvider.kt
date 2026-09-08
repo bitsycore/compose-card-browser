@@ -39,7 +39,7 @@ interface CardProvider {
 	 * all to sort and search over. A provider whose catalogue is large enough to need paging should
 	 * page internally and still return the whole list.
 	 */
-	suspend fun listSets(game: Game): List<CardSet>
+	suspend fun listSets(game: Game, language: CardLanguage? = null): List<CardSet>
 
 	/**
 	 * One page of the cards in [request]'s set.
@@ -51,7 +51,38 @@ interface CardProvider {
 	suspend fun listCards(request: CardPageRequest): CardPage
 
 	/** One printing by its source-qualified id, or `null` when the provider has no such record. */
-	suspend fun cardDetail(id: SourceId): CardPrinting?
+	suspend fun cardDetail(id: SourceId, language: CardLanguage? = null): CardPrinting?
+
+	/**
+	 * The language this provider will actually serve when asked for [requested].
+	 *
+	 * The gap between what a user asks for and what a source has is the whole reason this app
+	 * models languages the way it does, and this is where the gap is measured rather than papered
+	 * over. A caller can ask before making a request and tell the user "French was asked for, this
+	 * source only has English" -- which is the truth -- instead of requesting French, receiving
+	 * English, and labelling it French.
+	 *
+	 * The default walks the preference order and takes the first language the provider carries,
+	 * which is right for every adapter here. Returns `null` for a provider that states no language
+	 * at all; that is not English, it is silence, and [CardLanguage] must not be invented from it.
+	 */
+	fun resolveLanguage(requested: CardLanguage? = null): CardLanguage? {
+		val vAvailable = capabilities.data.languages
+		if (vAvailable.isEmpty()) return null
+		if (requested != null && requested in vAvailable) return requested
+		return CardLanguage.PREFERENCE_ORDER.firstOrNull { it in vAvailable } ?: vAvailable.first()
+	}
+
+	/**
+	 * One page of cards matching [request]'s text, across every set of the game.
+	 *
+	 * Only called when [DataCapabilities.crossSetSearch] is true. The default throws rather than
+	 * returning nothing, because an adapter that declares the capability and then quietly answers
+	 * with an empty page is indistinguishable from a search that genuinely found nothing -- and the
+	 * caller would report "no cards match" for a search that never ran.
+	 */
+	suspend fun searchAllSets(request: CardSearchRequest): CardPage =
+		throw UnsupportedOperationException("$displayName does not support cross-set search")
 }
 
 // ==================
@@ -123,6 +154,14 @@ data class DataCapabilities(
 	val finishes: Boolean,
 	/** True when the provider maps individual printings to Cardmarket *products*. */
 	val cardmarketProductMapping: Boolean,
+	/**
+	 * True when the provider can search text across every set in one request.
+	 *
+	 * False does not mean the app cannot search across sets for this game -- it means the *server*
+	 * cannot, so the search screen falls back to the sets already held on disk and says exactly
+	 * that. The two produce very different result sets and the user is told which one they got.
+	 */
+	val crossSetSearch: Boolean = false,
 )
 
 // ==================
@@ -199,9 +238,43 @@ data class CardPageRequest(
 	val query: CardQuery = CardQuery(),
 	val page: Int = 1,
 	val pageSize: Int = 100,
+	/**
+	 * The printing language to ask the source for.
+	 *
+	 * A *request*, not an assertion. A provider that cannot serve it answers in the closest
+	 * language it has and says so on each record's `LanguageCoverage`; it never relabels what it
+	 * returned. `null` means the caller has no preference and the provider picks.
+	 */
+	val language: CardLanguage? = null,
 ) {
 
 	init {
+		require(page >= 1) { "Pages are 1-based" }
+		require(pageSize >= 1) { "A page must hold at least one card" }
+	}
+}
+
+/**
+ * A text search over every set of one game.
+ *
+ * Separate from [CardPageRequest] rather than a nullable `setId` on it, because the two are not the
+ * same operation and conflating them is how a cross-set result ends up cached under a set key. A
+ * set page is complete-able and cacheable; a search is neither, and nothing here pretends otherwise.
+ *
+ * Only [text] is carried. The structured filters exist to narrow a set the app already holds
+ * whole, and applying them to a page of results drawn from a hundred sets would produce a list the
+ * user would read as "every Fury card in the game" when it is nothing of the sort.
+ */
+data class CardSearchRequest(
+	val game: Game,
+	val text: String,
+	val language: CardLanguage? = null,
+	val page: Int = 1,
+	val pageSize: Int = 60,
+) {
+
+	init {
+		require(text.isNotBlank()) { "A search needs something to search for" }
 		require(page >= 1) { "Pages are 1-based" }
 		require(pageSize >= 1) { "A page must hold at least one card" }
 	}

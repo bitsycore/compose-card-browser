@@ -11,16 +11,22 @@ import kotlinx.serialization.Serializable
  * A trading card game.
  *
  * Listed here rather than discovered from providers so that game-specific filter definitions and
- * presentation can be written against a closed set. Only [RIFTBOUND] has an adapter today; the
- * others exist so the routing table and the provider contract have something to name, and the UI
- * never offers a game that no registered provider serves (see `ProviderRegistry.games`).
+ * presentation can be written against a closed set. Being named here is not the same as being
+ * offered: the UI reads `ProviderRegistry.games`, so a game with no routed adapter never appears as
+ * a dead entry. See docs/PROVIDER_RESEARCH.md for what each one is served by, and why Cyberpunk TCG
+ * is deliberately absent from this list rather than present and unroutable.
+ *
+ * @property shortName for the game switcher, where "Magic: The Gathering" does not fit
  */
 @Serializable
-enum class Game(val displayName: String) {
-	RIFTBOUND("Riftbound"),
-	MAGIC("Magic: The Gathering"),
-	POKEMON("Pokémon"),
-	ONE_PIECE("One Piece"),
+enum class Game(val displayName: String, val shortName: String) {
+	RIFTBOUND("Riftbound", "Riftbound"),
+	POKEMON("Pokémon", "Pokémon"),
+	MAGIC("Magic: The Gathering", "Magic"),
+	ONE_PIECE("One Piece Card Game", "One Piece"),
+	ALTERED("Altered", "Altered"),
+	YU_GI_OH("Yu-Gi-Oh!", "Yu-Gi-Oh!"),
+	WUTHERING_WAVES("Wuthering Waves TCG", "Wuthering Waves"),
 }
 
 // ==================

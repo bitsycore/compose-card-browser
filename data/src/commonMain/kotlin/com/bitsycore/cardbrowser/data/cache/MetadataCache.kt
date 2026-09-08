@@ -126,6 +126,21 @@ class MetadataCache(
 		}
 	}
 
+	/**
+	 * Whether a record exists at [key], without reading or parsing it.
+	 *
+	 * A file-existence check and nothing more. It exists because the set list wants to mark which
+	 * sets are saved on the device, and answering that with [read] would deserialise every cached
+	 * set on every launch -- for Magic's 988 sets that is a megabyte of JSON parsed to render a
+	 * list of icons.
+	 *
+	 * "Exists" means saved, not complete: a partially fetched set has a file too. The set list says
+	 * "saved", which is exactly what this reports.
+	 */
+	suspend fun exists(key: CacheKey): Boolean = withContext(mIoDispatcher) {
+		mFileSystem.exists(pathFor(key))
+	}
+
 	/** Removes one record. Absent is success. */
 	suspend fun remove(key: CacheKey) {
 		withContext(mIoDispatcher) {

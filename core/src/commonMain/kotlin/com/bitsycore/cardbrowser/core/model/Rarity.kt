@@ -23,12 +23,67 @@ object RarityLadder {
 	 */
 	private val RIFTBOUND = listOf("Common", "Uncommon", "Rare", "Epic", "Showcase")
 
-	/** The ladder for [game], or an empty list when this app does not know one. */
+	/** Magic, as Scryfall spells it. `special` and `bonus` are Scryfall's own trailing tiers. */
+	private val MAGIC = listOf("common", "uncommon", "rare", "mythic", "special", "bonus")
+
+	/**
+	 * One Piece, expanded from the API's abbreviations by the adapter before it gets here.
+	 *
+	 * Leader and Promo are deliberately absent. They are not points on the rarity ladder -- a
+	 * Leader is a card role and a Promo is how a card was distributed -- so they sort after the
+	 * tiers rather than being given a rank they do not have.
+	 */
+	private val ONE_PIECE = listOf("Common", "Uncommon", "Rare", "Super Rare", "Secret Rare")
+
+	/**
+	 * Altered.
+	 *
+	 * Only Common and Rare occur in a printed set; Unique cards are generated per player and are
+	 * the top tier when the mirror carries any.
+	 */
+	private val ALTERED = listOf("Common", "Rare", "Unique")
+
+	/**
+	 * Yu-Gi-Oh!, the tiers that occur across most sets.
+	 *
+	 * YGOPRODeck reports dozens of set-specific rarities -- "Starlight Rare", "Quarter Century
+	 * Secret Rare", "Prismatic Ultimate Rare" and so on. Ordering those against each other would be
+	 * an opinion rather than a fact, so only the widely agreed ladder is named and everything else
+	 * sorts after it alphabetically.
+	 */
+	private val YU_GI_OH = listOf(
+		"Common",
+		"Rare",
+		"Super Rare",
+		"Ultra Rare",
+		"Ultimate Rare",
+		"Secret Rare",
+	)
+
+	/**
+	 * Wuthering Waves, whose API states rarity as a run of stars.
+	 *
+	 * Collection sits at the top: it is the premium treatment tier rather than a sixth star.
+	 */
+	private val WUTHERING_WAVES = listOf("★", "★★", "★★★", "★★★★", "★★★★★", "Collection")
+
+	/**
+	 * The ladder for [game], or an empty list when this app does not know one.
+	 *
+	 * Pokémon has none on purpose. TCGdex reports well over a hundred distinct rarity strings that
+	 * differ per era and per locale -- "Holo Rare V", "Double rare", "Illustration rare",
+	 * "ダブルレア" -- and no single ordering of them is a fact about the game. An invented ladder
+	 * would look deliberate while being wrong, which is worse than sorting them alphabetically and
+	 * saying nothing.
+	 */
 	fun forGame(game: Game): List<String> = when (game) {
 		Game.RIFTBOUND -> RIFTBOUND
-		// Not filled in for a game with no adapter: a guessed ladder is worse than no ladder,
-		// because the sort would look deliberate while being wrong.
-		Game.MAGIC, Game.POKEMON, Game.ONE_PIECE -> emptyList()
+		Game.MAGIC -> MAGIC
+		Game.ONE_PIECE -> ONE_PIECE
+		Game.ALTERED -> ALTERED
+		Game.YU_GI_OH -> YU_GI_OH
+		Game.WUTHERING_WAVES -> WUTHERING_WAVES
+		Game.POKEMON -> emptyList()
 	}
 
 	/**

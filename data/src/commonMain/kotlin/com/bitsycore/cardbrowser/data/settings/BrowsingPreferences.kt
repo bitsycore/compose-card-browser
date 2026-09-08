@@ -35,6 +35,14 @@ import okio.use
 @Serializable
 data class BrowsingPreferences(
 	val lastSetId: String? = null,
+	/**
+	 * Which game the set list opens on, as a [com.bitsycore.cardbrowser.core.model.Game] name.
+	 *
+	 * A string rather than the enum so that a preferences file written by a build that offered a
+	 * game this one does not -- or the reverse -- deserialises instead of throwing. An unrecognised
+	 * value falls back to the first routed game.
+	 */
+	val lastGame: String? = null,
 	val preferredLanguages: List<CardLanguage> = CardLanguage.PREFERENCE_ORDER,
 	val gridColumnPreference: Int? = null,
 	/** Ceiling for downloaded card art. Applied when the image loader is built, so on next launch. */

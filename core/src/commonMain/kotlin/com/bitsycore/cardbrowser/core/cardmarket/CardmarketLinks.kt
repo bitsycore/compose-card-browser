@@ -131,8 +131,21 @@ object CardmarketLinkBuilder {
 	 * the link entirely rather than shipping a dead button.
 	 */
 	fun gameSlug(game: Game): String? = when (game) {
+		// Confirmed against real pages the user supplied, including a working scoped search URL.
 		Game.RIFTBOUND -> "Riftbound"
-		Game.MAGIC, Game.POKEMON, Game.ONE_PIECE -> null
+		// Not confirmed, and deliberately not guessed.
+		//
+		// Cardmarket answers 403 to every non-browser request, including one for the Riftbound path
+		// that is known to work, so its slugs cannot be checked the way every other fact in this
+		// app was. "Pokemon", "Magic" and "YuGiOh" are all plausible and all unverified, and a
+		// plausible-looking button that lands on a 404 is exactly the kind of thing this codebase
+		// refuses to ship. Each becomes a one-line change the moment a real URL is seen.
+		//
+		// Wuthering Waves is a separate case: Cardmarket has no section for it at all, because the
+		// game is Japan-only so far.
+		Game.MAGIC, Game.POKEMON, Game.ONE_PIECE, Game.ALTERED, Game.YU_GI_OH,
+		Game.WUTHERING_WAVES,
+		-> null
 	}
 
 	/**

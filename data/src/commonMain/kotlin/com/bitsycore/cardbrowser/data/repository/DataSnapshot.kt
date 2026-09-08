@@ -88,3 +88,50 @@ data class SetCards(
 	val isPartial: Boolean
 		get() = !isCompleteSet && knownSetSize != null && cachedCardCount < knownSetSize
 }
+
+// ==================
+// MARK: Cross-set search
+// ==================
+
+/**
+ * How much of a game a search actually covered.
+ *
+ * The two are not interchangeable and the difference is not cosmetic. A remote search asks the
+ * provider about every card it has; a local one looks only at the sets this device has already
+ * downloaded, which on a fresh install is none. Presenting the second as though it were the first
+ * would tell a user that a card does not exist when what happened is that they have never opened
+ * the set it is in.
+ */
+enum class SearchScope {
+
+	/** The provider searched its whole catalogue. */
+	REMOTE_ALL_SETS,
+
+	/** Only the sets already on disk were searched, because the provider cannot search remotely. */
+	LOCAL_CACHED_SETS,
+}
+
+/**
+ * The results of a cross-set search, with an account of what was searched.
+ *
+ * @property scope which of the two kinds of search produced [cards]
+ * @property searchedSetCount how many sets were actually looked at. Meaningful for
+ *   [SearchScope.LOCAL_CACHED_SETS]; for a remote search it is the number the provider spanned,
+ *   which it does not report, so it is the count of sets the results happen to come from
+ * @property knownSetCount how many sets the game has in total, so the UI can say "12 of 87"
+ * @property totalCount the provider's own match count, when it states one
+ * @property hasMore whether the provider has further pages
+ */
+data class CardSearchResults(
+	val cards: List<com.bitsycore.cardbrowser.core.model.CardPrinting>,
+	val scope: SearchScope,
+	val searchedSetCount: Int,
+	val knownSetCount: Int,
+	val totalCount: Int? = null,
+	val hasMore: Boolean = false,
+) {
+
+	/** True when a local search could not see the whole game. */
+	val isLimitedByCache: Boolean
+		get() = scope == SearchScope.LOCAL_CACHED_SETS && searchedSetCount < knownSetCount
+}
