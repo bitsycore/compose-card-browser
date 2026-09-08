@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.ui.cards
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,9 +26,14 @@ import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Badge
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,11 +46,16 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -60,6 +71,8 @@ import com.bitsycore.cardbrowser.ui.common.LoadingState
 import com.bitsycore.cardbrowser.ui.common.NoticeBanner
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.distinctUntilChanged
+import com.bitsycore.cardbrowser.ui.browse.BrowseSession
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -92,6 +105,22 @@ fun CardGridScreen(
 
 	val vGridState = rememberLazyGridState(initialFirstVisibleItemIndex = vState.firstVisibleIndex)
 
+	// Coming back from a card that was swiped to rather than tapped, the grid may be nowhere near it.
+	// Scrolling it into view is worth doing for its own sake, and the shared-element transition needs
+	// it: a lazy grid only composes what is visible, so a tile that is not on screen is not there for
+	// the artwork to fly back to.
+	val vSession = koinInject<BrowseSession>()
+	val vFocusedCardId by vSession.focusedCardId.collectAsState()
+	LaunchedEffect(vFocusedCardId, vState.cards) {
+		val vTarget = vState.cards.indexOfFirst { it.id.qualified == vFocusedCardId }
+		val vAlreadyVisible = vGridState.layoutInfo.visibleItemsInfo.any { it.index == vTarget }
+		if (vTarget >= 0 && !vAlreadyVisible) {
+			// Not animated: this happens while the screen is off-screen or arriving, and a scroll
+			// animation racing the transition is exactly the kind of thing that looks broken.
+			vGridState.scrollToItem(vTarget)
+		}
+	}
+
 	// Scroll position is kept in the view model rather than only in the grid state, so it survives
 	// the trip into card detail and back even though this composable leaves the composition.
 	LaunchedEffect(vGridState) {
@@ -100,99 +129,140 @@ fun CardGridScreen(
 			.collect { viewModel.dispatch(CardGridContract.Intent.ScrollPositionChanged(it)) }
 	}
 
+	// Collapses as the grid scrolls down and comes back on the way up. `exitUntilCollapsed` rather
+	// than `enterAlways` so the set's name and count shrink to a compact bar instead of vanishing:
+	// which set you are in is worth a line of screen at all times.
+	val vScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+
 	Scaffold(
+		modifier = Modifier.nestedScroll(vScrollBehavior.nestedScrollConnection),
 		topBar = {
-			TopAppBar(
-				title = {
-					Column {
-						Text(vState.setName.ifBlank { setName })
-						Text(
-							text = gridSubtitle(vState),
-							style = MaterialTheme.typography.labelSmall,
-							color = MaterialTheme.colorScheme.onSurfaceVariant,
-						)
-					}
-				},
-				navigationIcon = {
-					IconButton(onClick = onBack) {
-						Icon(Icons.Outlined.ArrowBack, contentDescription = "Back to sets")
-					}
-				},
-				actions = {
-					BadgedBox(
-						badge = {
-							if (vState.activeFilterCount > 0) {
-								Badge { Text("${vState.activeFilterCount}") }
-							}
-						},
-					) {
-						IconButton(
-							onClick = { viewModel.dispatch(CardGridContract.Intent.FilterSheetToggled(true)) },
-						) {
-							Icon(Icons.Outlined.FilterList, contentDescription = "Filters")
+			Column {
+				MediumTopAppBar(
+					title = {
+						Column {
+							Text(
+								text = vState.setName.ifBlank { setName },
+								maxLines = 1,
+								overflow = TextOverflow.Ellipsis,
+							)
+							Text(
+								text = gridSubtitle(vState),
+								style = MaterialTheme.typography.labelSmall,
+								color = MaterialTheme.colorScheme.onSurfaceVariant,
+							)
 						}
-					}
-				},
-			)
-		},
-	) { vPadding ->
-		Column(Modifier.padding(vPadding).fillMaxSize()) {
-
-			OutlinedTextField(
-				value = vState.query.text.orEmpty(),
-				onValueChange = { vText ->
-					viewModel.dispatch(
-						CardGridContract.Intent.QueryChanged(
-							vState.query.copy(text = vText.takeIf { it.isNotBlank() }),
-						),
-					)
-				},
-				label = { Text("Name or collector number") },
-				leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-				singleLine = true,
-				modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-			)
-
-			ActiveFilterChips(
-				state = vState,
-				onQueryChanged = { viewModel.dispatch(CardGridContract.Intent.QueryChanged(it)) },
-				onClearAll = { viewModel.dispatch(CardGridContract.Intent.ClearFilters) },
-			)
-
-			vState.coverageNotice?.let { vNotice ->
-				NoticeBanner(
-					text = vNotice,
-					onAction = if (vState.noticeIsRetryable) {
-						{ viewModel.dispatch(CardGridContract.Intent.Load) }
-					} else {
-						null
 					},
+					navigationIcon = {
+						IconButton(onClick = onBack) {
+							Icon(Icons.Outlined.ArrowBack, contentDescription = "Back to sets")
+						}
+					},
+					actions = {
+						// Search is a button beside filters rather than a field permanently occupying a
+						// strip of a screen whose whole job is showing pictures.
+						IconButton(
+							onClick = {
+								viewModel.dispatch(
+									CardGridContract.Intent.SearchToggled(!vState.isSearchOpen),
+								)
+							},
+						) {
+							Icon(
+								imageVector = if (vState.isSearchOpen) {
+									Icons.Outlined.SearchOff
+								} else {
+									Icons.Outlined.Search
+								},
+								contentDescription = if (vState.isSearchOpen) "Hide search" else "Search",
+								// Tinted while a search is active, so a hidden field is never a hidden filter.
+								tint = if (!vState.query.text.isNullOrBlank()) {
+									MaterialTheme.colorScheme.primary
+								} else {
+									LocalContentColor.current
+								},
+							)
+						}
+						BadgedBox(
+							badge = {
+								if (vState.activeFilterCount > 0) {
+									Badge { Text("${vState.activeFilterCount}") }
+								}
+							},
+						) {
+							IconButton(
+								onClick = {
+									viewModel.dispatch(CardGridContract.Intent.FilterSheetToggled(true))
+								},
+							) {
+								Icon(Icons.Outlined.FilterList, contentDescription = "Filters")
+							}
+						}
+					},
+					scrollBehavior = vScrollBehavior,
 				)
-			}
 
-			Box(Modifier.weight(1f)) {
-				when {
-					vState.isInitialLoad -> LoadingState()
-
-					vState.cards.isEmpty() && vState.error != null -> ErrorState(
-						error = vState.error!!,
-						onRetry = { viewModel.dispatch(CardGridContract.Intent.Load) },
-					)
-
-					vState.isEmptyAfterFilter -> EmptyState(
-						message = if (vState.query.isEmpty) {
-							"This set has no cards."
-						} else {
-							"No card matches these filters."
+				AnimatedVisibility(visible = vState.isSearchOpen) {
+					SearchField(
+						text = vState.query.text.orEmpty(),
+						onTextChanged = { vText ->
+							viewModel.dispatch(
+								CardGridContract.Intent.QueryChanged(
+									vState.query.copy(text = vText.takeIf { it.isNotBlank() }),
+								),
+							)
 						},
-					)
-
-					else -> CardGrid(
-						cards = vState.cards,
-						gridState = vGridState,
-						onOpenCard = onOpenCard,
 					)
 				}
+
+				// Controls, not content: these stay put while the grid scrolls underneath.
+				ActiveFilterChips(
+					state = vState,
+					onQueryChanged = { viewModel.dispatch(CardGridContract.Intent.QueryChanged(it)) },
+					onClearAll = { viewModel.dispatch(CardGridContract.Intent.ClearFilters) },
+				)
+
+				vState.coverageNotice?.let { vNotice ->
+					NoticeBanner(
+						text = vNotice,
+						onAction = if (vState.noticeIsRetryable) {
+							{ viewModel.dispatch(CardGridContract.Intent.Load) }
+						} else {
+							null
+						},
+					)
+				}
+			}
+		},
+	) { vPadding ->
+		Box(Modifier.fillMaxSize()) {
+			when {
+				vState.isInitialLoad -> LoadingState(Modifier.padding(vPadding))
+
+				vState.cards.isEmpty() && vState.error != null -> ErrorState(
+					error = vState.error!!,
+					onRetry = { viewModel.dispatch(CardGridContract.Intent.Load) },
+					modifier = Modifier.padding(vPadding),
+				)
+
+				vState.isEmptyAfterFilter -> EmptyState(
+					message = if (vState.query.isEmpty) {
+						"This set has no cards."
+					} else {
+						"No card matches these filters."
+					},
+					modifier = Modifier.padding(vPadding),
+				)
+
+				// The scaffold's insets go to the grid as *content padding* rather than as a margin
+				// around it, which is what lets cards scroll up underneath the bar rather than
+				// stopping dead at its edge.
+				else -> CardGrid(
+					cards = vState.cards,
+					gridState = vGridState,
+					onOpenCard = onOpenCard,
+					contentPadding = vPadding,
+				)
 			}
 		}
 	}
@@ -224,11 +294,17 @@ private fun CardGrid(
 	cards: List<CardPrinting>,
 	gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
 	onOpenCard: (CardPrinting) -> Unit,
+	contentPadding: PaddingValues,
 ) {
 	LazyVerticalGrid(
 		columns = GridCells.Adaptive(minSize = MIN_TILE_WIDTH.dp),
 		state = gridState,
-		contentPadding = PaddingValues(12.dp),
+		contentPadding = PaddingValues(
+			start = TILE_GAP,
+			end = TILE_GAP,
+			top = contentPadding.calculateTopPadding() + TILE_GAP,
+			bottom = contentPadding.calculateBottomPadding() + TILE_GAP,
+		),
 		horizontalArrangement = Arrangement.spacedBy(10.dp),
 		verticalArrangement = Arrangement.spacedBy(14.dp),
 		modifier = Modifier.fillMaxSize(),
@@ -237,6 +313,37 @@ private fun CardGrid(
 			CardTile(card = vCard, onClick = { onOpenCard(vCard) })
 		}
 	}
+}
+
+/**
+ * The search field, shown only while the search button is on.
+ *
+ * Focused as it appears, because a field that opens and then waits to be tapped costs the user the
+ * gesture they already made.
+ */
+@Composable
+private fun SearchField(text: String, onTextChanged: (String) -> Unit) {
+	val vFocusRequester = remember { FocusRequester() }
+	LaunchedEffect(Unit) { vFocusRequester.requestFocus() }
+
+	OutlinedTextField(
+		value = text,
+		onValueChange = onTextChanged,
+		label = { Text("Name or collector number") },
+		leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+		trailingIcon = {
+			if (text.isNotEmpty()) {
+				IconButton(onClick = { onTextChanged("") }) {
+					Icon(Icons.Outlined.Close, contentDescription = "Clear search")
+				}
+			}
+		},
+		singleLine = true,
+		modifier = Modifier
+			.fillMaxWidth()
+			.padding(horizontal = 16.dp, vertical = 8.dp)
+			.focusRequester(vFocusRequester),
+	)
 }
 
 /** One tile: the art, then the name, collector number and whatever label distinguishes it. */
@@ -295,3 +402,6 @@ private fun gridSubtitle(state: CardGridContract.UiState): String = when {
 
 /** Wide enough that a card's name and art stay legible on a phone. */
 private const val MIN_TILE_WIDTH = 108
+
+/** The gap between tiles, and the margin around the grid. */
+private val TILE_GAP = 12.dp

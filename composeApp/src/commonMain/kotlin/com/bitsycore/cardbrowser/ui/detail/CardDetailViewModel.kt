@@ -34,6 +34,11 @@ class CardDetailViewModel(
 	override suspend fun handleIntent(intent: CardDetailContract.Intent) {
 		when (intent) {
 			is CardDetailContract.Intent.Load -> load(intent)
+
+			// Told to the session rather than kept here, because the screen that needs to know is the
+			// grid behind this one, and it needs to know after this view model is gone.
+			is CardDetailContract.Intent.PageChanged ->
+				mSession.focus(stateFlow.value.card?.id?.qualified)
 			is CardDetailContract.Intent.OpenCardmarket -> openCardmarket(intent.cardId)
 			else -> Unit
 		}
@@ -81,6 +86,7 @@ class CardDetailViewModel(
 				providerStatesFinishes = vProvider?.capabilities?.data?.finishes ?: false,
 			),
 		)
+		mSession.focus(stateFlow.value.card?.id?.qualified)
 	}
 
 	/**

@@ -43,6 +43,7 @@ object CardGridContract :
 		val error: ProviderError? = null,
 		val requestGeneration: Int = 0,
 		val isFilterSheetOpen: Boolean = false,
+		val isSearchOpen: Boolean = false,
 		/** Restored when coming back from detail, so the grid returns to where it was. */
 		val firstVisibleIndex: Int = 0,
 	) {
@@ -100,6 +101,9 @@ object CardGridContract :
 		data object ClearFilters : Intent
 
 		data class FilterSheetToggled(val isOpen: Boolean) : Intent
+
+		/** The search button. Hides the field without discarding what was typed. */
+		data class SearchToggled(val isOpen: Boolean) : Intent
 
 		data class ScrollPositionChanged(val index: Int) : Intent
 
@@ -168,6 +172,10 @@ object CardGridContract :
 		)
 
 		is Intent.FilterSheetToggled -> state.copy(isFilterSheetOpen = intent.isOpen)
+
+		// Closing keeps the query. Losing a search because the field was dismissed would be a
+		// nasty surprise, and the text stays visible either way as a removable chip.
+		is Intent.SearchToggled -> state.copy(isSearchOpen = intent.isOpen)
 
 		is Intent.ScrollPositionChanged -> state.copy(firstVisibleIndex = intent.index)
 

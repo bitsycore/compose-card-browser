@@ -1,11 +1,16 @@
 package com.bitsycore.cardbrowser.ui.common
 
+import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 
 /**
@@ -44,6 +49,26 @@ fun Modifier.sharedCardArt(cardId: String): Modifier {
 		this@sharedCardArt.sharedElement(
 			sharedContentState = rememberSharedContentState(key = "card-art:$cardId"),
 			animatedVisibilityScope = vAnimatedScope,
+			boundsTransform = CARD_BOUNDS_TRANSFORM,
 		)
 	}
+}
+
+/**
+ * How the artwork travels between the grid tile and the detail screen.
+ *
+ * A spring rather than a duration, because this has to survive being scrubbed. Predictive back
+ * drives the transition from a finger rather than a clock, and can reverse it half way; a tween has
+ * to be restarted from wherever it was and visibly stutters, while a spring simply changes target
+ * and keeps its velocity.
+ *
+ * No bounce -- a playing card is a physical object of known size, not a notification.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+private val CARD_BOUNDS_TRANSFORM = BoundsTransform { _, _ ->
+	spring(
+		dampingRatio = Spring.DampingRatioNoBouncy,
+		stiffness = Spring.StiffnessMediumLow,
+		visibilityThreshold = Rect.VisibilityThreshold,
+	)
 }

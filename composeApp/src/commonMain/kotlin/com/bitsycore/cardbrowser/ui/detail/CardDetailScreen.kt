@@ -209,14 +209,14 @@ private fun CardPager(
 	)
 	val vScope = rememberCoroutineScope()
 
-	// The page being *moved to*, not the one already arrived at.
+	// A swipe only counts once it has settled.
 	//
-	// `settledPage` waited for the animation to finish, so tapping a thumbnail left the strip
-	// highlighting the old card for the length of the scroll. `targetPage` updates the moment a
-	// destination is known -- immediately on a tap, as soon as a swipe commits -- while still not
-	// flickering through every card a fast fling passes over, which is what `currentPage` would do.
+	// `targetPage` updates the instant a drag looks like it is heading somewhere, so a half-hearted
+	// swipe that snaps back still selected the next card and then undid itself -- the strip and the
+	// title flickered to a card the user never arrived at. A tap does not need this, because a tap
+	// has no "maybe": it selects immediately in the strip's own handler and this merely confirms it.
 	LaunchedEffect(vPagerState) {
-		snapshotFlow { vPagerState.targetPage }.collect(onPageChanged)
+		snapshotFlow { vPagerState.settledPage }.collect(onPageChanged)
 	}
 
 	// The other direction: something outside the pager moved the selection, so the pager follows.
@@ -244,7 +244,12 @@ private fun CardPager(
 			PreviewStrip(
 				cards = state.cards,
 				currentIndex = state.currentIndex,
-				onSelect = { vIndex -> vScope.launch { vPagerState.animateScrollToPage(vIndex) } },
+				// Selected on the tap rather than when the scroll finishes: a tap is unambiguous, so
+				// making the strip wait out the animation just looks unresponsive.
+				onSelect = { vIndex ->
+					onPageChanged(vIndex)
+					vScope.launch { vPagerState.animateScrollToPage(vIndex) }
+				},
 			)
 			HorizontalDivider()
 		}
@@ -263,6 +268,13 @@ private fun CardPager(
 			CardDetailContent(
 				state = state,
 				card = vCard,
+				// Only the page actually on screen takes part in the shared transition.
+				//
+				// The pager keeps its neighbours composed so a swipe is instant, and each of them was
+				// claiming the shared key for its own card. Going back then matched three pairs at once
+				// and flew three cards across the screen from wherever the off-screen pages happened to
+				// be laid out -- which is the mess that made the back animation look broken.
+				isSharedElement = vPage == state.currentIndex,
 				onZoomToggle = onZoomToggle,
 				onLanguageSelected = onLanguageSelected,
 				onFinishSelected = onFinishSelected,
@@ -375,6 +387,7 @@ private fun CardDetailContent(
 	onFinishSelected: (Finish) -> Unit,
 	onOpenCardmarket: () -> Unit,
 	onOpenFullscreen: () -> Unit,
+	isSharedElement: Boolean,
 	modifier: Modifier = Modifier,
 ) {
 	// Measured outside the scroll on purpose. A vertically scrolling Column hands its children an
@@ -398,6 +411,7 @@ private fun CardDetailContent(
 				maxImageHeight = vMaxImageHeight,
 				onZoomToggle = onZoomToggle,
 				onOpenFullscreen = onOpenFullscreen,
+				isSharedElement = isSharedElement,
 			)
 
 			Spacer(Modifier.height(16.dp))
@@ -617,6 +631,7 @@ private fun ZoomableCardImage(
 	maxImageHeight: Dp,
 	onZoomToggle: (Boolean) -> Unit,
 	onOpenFullscreen: () -> Unit,
+	isSharedElement: Boolean,
 ) {
 	var vScale by remember(card.id) { mutableFloatStateOf(1f) }
 	var vOffsetX by remember(card.id) { mutableFloatStateOf(0f) }
@@ -633,8 +648,9 @@ private fun ZoomableCardImage(
 			.aspectRatio(
 				if (card.orientation == CardOrientation.LANDSCAPE) 1039f / 744f else 744f / 1039f,
 			)
-			// Pairs with the grid tile of the same printing.
-			.sharedCardArt(card.id.qualified)
+			// Pairs with the grid tile of the same printing, and only while this is the page on
+			// screen -- see `isSharedElement`.
+			.then(if (isSharedElement) Modifier.sharedCardArt(card.id.qualified) else Modifier)
 			.clip(RoundedCornerShape(12.dp))
 			.background(MaterialTheme.colorScheme.surfaceVariant)
 			.pointerInput(card.id) {

@@ -28,6 +28,22 @@ import kotlinx.coroutines.flow.asStateFlow
 class BrowseSession {
 
 	private val mState = MutableStateFlow(BrowsingList())
+	private val mFocusedCardId = MutableStateFlow<String?>(null)
+
+	/**
+	 * The card the user is looking at, or last looked at.
+	 *
+	 * Written by the detail screen as it swipes and read by the grid when it comes back, so returning
+	 * from a card you swiped to lands on that card rather than on the one you originally opened. The
+	 * shared-element transition depends on it: the tile it flies back to has to actually be composed,
+	 * and in a lazy grid that means scrolled into view.
+	 */
+	val focusedCardId: StateFlow<String?> get() = mFocusedCardId.asStateFlow()
+
+	/** Records which card is on screen in detail. */
+	fun focus(cardId: String?) {
+		mFocusedCardId.value = cardId
+	}
 
 	/** The list the grid last published. */
 	val current: StateFlow<BrowsingList> get() = mState.asStateFlow()
