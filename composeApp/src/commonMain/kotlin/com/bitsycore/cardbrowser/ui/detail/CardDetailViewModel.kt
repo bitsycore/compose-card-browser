@@ -1,26 +1,31 @@
 package com.bitsycore.cardbrowser.ui.detail
 
 import androidx.lifecycle.viewModelScope
-import com.bitsycore.cardbrowser.core.cardmarket.CardmarketLinkBuilder
+import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.SourceId
+import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.platform.LinkOpener
+import com.bitsycore.cardbrowser.ui.browse.BrowseSession
 import com.bitsycore.lib.pulse.viewmodel.PulseViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * Loads one printing and works out what may honestly be offered for it.
+ * Loads the card the user opened, plus the ones either side of it.
  *
- * The Cardmarket link is built here rather than in the screen so the screen has no opinion about
- * URLs, and opened through [LinkOpener] so building and launching stay separable.
+ * The neighbours come from [BrowseSession] -- the list the grid was showing, filters and sort
+ * included -- so swiping moves through what the user was actually looking at. When the session is
+ * empty, which happens on a cold start straight into a card, it falls back to the cached set in
+ * collector order rather than leaving the swipe dead.
  */
 class CardDetailViewModel(
 	private val mRepository: CardRepository,
 	private val mRegistry: ProviderRegistry,
 	private val mLinkOpener: LinkOpener,
+	private val mSession: BrowseSession,
 ) : PulseViewModel<CardDetailContract.UiState, CardDetailContract.Intent, CardDetailContract.Effect>(
 	initialState = CardDetailContract.UiState(),
 	containerContract = CardDetailContract,
@@ -29,7 +34,7 @@ class CardDetailViewModel(
 	override suspend fun handleIntent(intent: CardDetailContract.Intent) {
 		when (intent) {
 			is CardDetailContract.Intent.Load -> load(intent)
-			CardDetailContract.Intent.OpenCardmarket -> openCardmarket()
+			is CardDetailContract.Intent.OpenCardmarket -> openCardmarket(intent.cardId)
 			else -> Unit
 		}
 	}
@@ -38,14 +43,23 @@ class CardDetailViewModel(
 		val vCardId = SourceId.parse(intent.cardId) ?: return
 		val vSetId = intent.setId?.let(SourceId::parse)
 
-		val vSnapshot = mRepository.cardDetail(id = vCardId, game = Game.RIFTBOUND, setId = vSetId)
-		val vCard = vSnapshot.value
+		val vCards = siblingsFor(intent.setId, vSetId, vCardId)
+		val vIndex = vCards.indexOfFirst { it.id == vCardId }
 
-		// The set is needed for the Cardmarket expansion id, and comes from the same cached set
-		// list the previous screen drew from, so this is not an extra request in practice.
-		val vSet = if (vCard != null && vSetId != null) {
-			mRepository.setList(Game.RIFTBOUND).first().value
-				?.firstOrNull { it.id == vSetId || it.code == vCard.setCode }
+		// The tapped card may be absent from the list -- a stale session, or a set that could not
+		// be loaded. Fetching it on its own is better than an error screen, and it simply cannot be
+		// swiped away from.
+		val vResolved = if (vIndex >= 0) {
+			vCards to vIndex
+		} else {
+			val vSingle = mRepository
+				.cardDetail(id = vCardId, game = Game.RIFTBOUND, setId = vSetId)
+				.value
+			if (vSingle != null) listOf(vSingle) to 0 else emptyList<CardPrinting>() to 0
+		}
+
+		val vSet = if (vSetId != null) {
+			mRepository.setList(Game.RIFTBOUND).first().value?.firstOrNull { it.id == vSetId }
 		} else {
 			null
 		}
@@ -54,10 +68,14 @@ class CardDetailViewModel(
 
 		dispatch(
 			CardDetailContract.Intent.Loaded(
-				card = vCard,
+				cards = vResolved.first,
+				currentIndex = vResolved.second,
 				set = vSet,
-				error = vSnapshot.error,
-				cardmarketLink = vCard?.let { CardmarketLinkBuilder.linkFor(it, vSet) },
+				error = if (vResolved.first.isEmpty()) {
+					com.bitsycore.cardbrowser.core.provider.ProviderError.BadRequest(404)
+				} else {
+					null
+				},
 				attribution = vProvider?.capabilities?.attribution?.text,
 				providerStatesIdentity = vProvider?.capabilities?.data?.cardIdentity ?: false,
 				providerStatesFinishes = vProvider?.capabilities?.data?.finishes ?: false,
@@ -66,13 +84,37 @@ class CardDetailViewModel(
 	}
 
 	/**
-	 * Opens the Cardmarket page.
+	 * The list to swipe through: the grid's, or the cached set as a fallback.
 	 *
-	 * Outbound navigation only. Nothing here can place an order, and a refusal from the platform is
-	 * surfaced as an effect rather than swallowed.
+	 * The fallback reads the repository with an empty query, which for a set already browsed is a
+	 * cache hit and costs nothing.
 	 */
-	private fun openCardmarket() {
-		val vLink = stateFlow.value.cardmarketLink ?: return
+	private suspend fun siblingsFor(
+		rawSetId: String?,
+		setId: SourceId?,
+		cardId: SourceId,
+	): List<CardPrinting> {
+		val vFromSession = mSession.cardsFor(rawSetId)
+		if (vFromSession.any { it.id == cardId }) return vFromSession
+		if (setId == null) return emptyList()
+		return mRepository
+			.cards(setId = setId, game = Game.RIFTBOUND, query = CardQuery())
+			.first()
+			.value
+			?.cards
+			.orEmpty()
+	}
+
+	/**
+	 * Opens a card's Cardmarket page.
+	 *
+	 * Takes the card id rather than reading the current one from state, because the tap belongs to
+	 * a specific page and a swipe may have moved on by the time this runs.
+	 */
+	private fun openCardmarket(cardId: String) {
+		val vState = stateFlow.value
+		val vCard = vState.cards.firstOrNull { it.id.qualified == cardId } ?: return
+		val vLink = vState.cardmarketLinkFor(vCard) ?: return
 		viewModelScope.launch {
 			if (!mLinkOpener.open(vLink.url)) {
 				emitEffect(CardDetailContract.Effect.LinkFailed(vLink.url))

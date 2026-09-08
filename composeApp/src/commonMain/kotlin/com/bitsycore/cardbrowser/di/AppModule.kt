@@ -10,6 +10,7 @@ import com.bitsycore.cardbrowser.data.net.HttpClientFactory
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.providers.riftcodex.RiftcodexProvider
+import com.bitsycore.cardbrowser.ui.browse.BrowseSession
 import com.bitsycore.cardbrowser.ui.cards.CardGridViewModel
 import com.bitsycore.cardbrowser.ui.detail.CardDetailViewModel
 import com.bitsycore.cardbrowser.ui.sets.SetListViewModel
@@ -65,9 +66,14 @@ val appModule = module {
 	// ============
 	//  Presentation
 
+	// What the grid is showing, so the detail screen can swipe through the same list. A single
+	// rather than a view-model field because it outlives both screens' view models, which are
+	// scoped to their own back-stack entries.
+	single { BrowseSession() }
+
 	viewModel { SetListViewModel(get(), get()) }
-	viewModel { CardGridViewModel(get(), get(), get()) }
-	viewModel { CardDetailViewModel(get(), get(), get()) }
+	viewModel { CardGridViewModel(get(), get(), get(), get()) }
+	viewModel { CardDetailViewModel(get(), get(), get(), get()) }
 	viewModel { SettingsViewModel(get(), get(), get()) }
 }
 

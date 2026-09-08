@@ -1,6 +1,7 @@
 package com.bitsycore.cardbrowser.ui.detail
 
 import com.bitsycore.cardbrowser.core.cardmarket.CardmarketLink
+import com.bitsycore.cardbrowser.core.cardmarket.CardmarketLinkBuilder
 import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
@@ -13,19 +14,25 @@ import com.bitsycore.lib.pulse.container.ContainerContract
 /**
  * The card detail state machine.
  *
- * Most of the interesting logic on this screen is about what *not* to claim, and it lives in
- * [UiState.languageOptions], [UiState.finishOptions] and [UiState.artworkNote].
+ * The screen shows one card at a time but holds the whole list it can swipe through, so
+ * [UiState.cards] is the list and [UiState.currentIndex] is where in it we are. Everything a page
+ * needs is derived from *its own* card rather than read from state, which is what lets a pager
+ * render the page either side of the current one correctly.
+ *
+ * Most of the interesting logic is about what *not* to claim -- see [languageOptionsFor],
+ * [finishOptionsFor] and [artworkNote].
  */
 object CardDetailContract :
 	ContainerContract<CardDetailContract.UiState, CardDetailContract.Intent, CardDetailContract.Effect>() {
 
 	/**
-	 * @property requestedLanguage what the user's preference order asks for, which may not be what
-	 *   the provider has
-	 * @property providerStatesIdentity whether the routed provider links printings of the same card
+	 * @property cards every card the user can swipe to, in the order the grid showed them
+	 * @property currentIndex where in [cards] we are. Always in bounds when [cards] is non-empty
+	 * @property requestedLanguage what the preference order asks for, which may not be on offer
 	 */
 	data class UiState(
-		val card: CardPrinting? = null,
+		val cards: List<CardPrinting> = emptyList(),
+		val currentIndex: Int = 0,
 		val set: CardSet? = null,
 		val isLoading: Boolean = true,
 		val error: ProviderError? = null,
@@ -34,43 +41,45 @@ object CardDetailContract :
 		val isZoomed: Boolean = false,
 		val providerStatesIdentity: Boolean = false,
 		val providerStatesFinishes: Boolean = false,
-		val cardmarketLink: CardmarketLink? = null,
 		val attribution: String? = null,
 	) {
 
+		/** The card on screen, or `null` while loading or after a failure. */
+		val card: CardPrinting? get() = cards.getOrNull(currentIndex)
+
+		/** True when there is more than one card to move between, so the strip is worth showing. */
+		val canSwipe: Boolean get() = cards.size > 1
+
+		/** "12 of 352", for the top bar. */
+		val positionLabel: String?
+			get() = if (canSwipe) "${currentIndex + 1} of ${cards.size}" else null
+
 		/**
-		 * Which language is actually on screen versus which was asked for.
+		 * Which language is actually shown for [card] versus which was asked for.
 		 *
-		 * This is what stops the app labelling an English-only record as a French printing. When
-		 * the user prefers French and the provider has only English, [LanguageResolution.isFallback]
-		 * is true and the screen says "showing English" rather than pretending.
+		 * This is what stops the app labelling an English-only record as a French printing.
 		 */
-		val languageResolution: LanguageResolution?
-			get() = card?.let {
-				LanguageResolution(
-					requested = requestedLanguage,
-					shown = it.languages.resolve(listOf(requestedLanguage) + CardLanguage.PREFERENCE_ORDER),
-				)
-			}
+		fun languageResolutionFor(card: CardPrinting): LanguageResolution = LanguageResolution(
+			requested = requestedLanguage,
+			shown = card.languages.resolve(listOf(requestedLanguage) + CardLanguage.PREFERENCE_ORDER),
+		)
 
 		/**
 		 * Every language, each with its real standing.
 		 *
 		 * All four are listed rather than only the confirmed one, because "we have no information
-		 * about Korean" is itself information the user wants. Only [Availability.AVAILABLE] entries
-		 * are selectable.
+		 * about Korean" is itself information. Only [Availability.AVAILABLE] entries are selectable.
 		 */
-		val languageOptions: List<LanguageOption>
-			get() {
-				val vCard = card ?: return emptyList()
-				return CardLanguage.PREFERENCE_ORDER.map { vLanguage ->
-					LanguageOption(
-						language = vLanguage,
-						availability = vCard.languages.availabilityOf(vLanguage),
-						isSelected = vLanguage == languageResolution?.shown,
-					)
-				}
+		fun languageOptionsFor(card: CardPrinting): List<LanguageOption> {
+			val vShown = languageResolutionFor(card).shown
+			return CardLanguage.PREFERENCE_ORDER.map { vLanguage ->
+				LanguageOption(
+					language = vLanguage,
+					availability = card.languages.availabilityOf(vLanguage),
+					isSelected = vLanguage == vShown,
+				)
 			}
+		}
 
 		/**
 		 * Every finish and its standing, or an empty list when the provider records none at all.
@@ -78,34 +87,38 @@ object CardDetailContract :
 		 * Empty is deliberate and different from "no finishes exist": [providerStatesFinishes] is
 		 * what the screen uses to say which of the two it is.
 		 */
-		val finishOptions: List<FinishOption>
-			get() {
-				val vCard = card ?: return emptyList()
-				if (vCard.finishes.isUnstated) return emptyList()
-				return Finish.entries.map { vFinish ->
-					FinishOption(
-						finish = vFinish,
-						availability = vCard.finishes.availabilityOf(vFinish),
-						isSelected = vFinish == selectedFinish,
-					)
-				}
+		fun finishOptionsFor(card: CardPrinting): List<FinishOption> {
+			if (card.finishes.isUnstated) return emptyList()
+			return Finish.entries.map { vFinish ->
+				FinishOption(
+					finish = vFinish,
+					availability = card.finishes.availabilityOf(vFinish),
+					isSelected = vFinish == selectedFinish,
+				)
+			}
+		}
+
+		/**
+		 * What to say about other artworks, or `null` when the provider states card identity and a
+		 * real list could be shown.
+		 */
+		val artworkNote: String?
+			get() = if (providerStatesIdentity) {
+				null
+			} else {
+				"This card database lists each printing separately and does not link printings of " +
+					"the same card, so other artworks cannot be listed here. They appear as their " +
+					"own tiles in the set, and you can swipe to them."
 			}
 
 		/**
-		 * What to say about other artworks of this card.
+		 * The Cardmarket link for one card.
 		 *
-		 * `null` when the provider states card identity and the artwork list can be trusted. When it
-		 * does not, this explains why no list is shown instead of leaving an empty section that
-		 * reads as "there are no others".
+		 * Derived per card rather than stored, because the screen renders several cards at once
+		 * while a swipe is in flight and each needs its own.
 		 */
-		val artworkNote: String?
-			get() = when {
-				card == null -> null
-				providerStatesIdentity -> null
-				else -> "This card database lists each printing separately and does not link " +
-					"printings of the same card, so other artworks cannot be listed here. " +
-					"They appear as their own tiles in the set."
-			}
+		fun cardmarketLinkFor(card: CardPrinting): CardmarketLink? =
+			CardmarketLinkBuilder.linkFor(card, set)
 	}
 
 	/** One language row: what it is, whether it is offered, and whether it is showing. */
@@ -134,14 +147,17 @@ object CardDetailContract :
 		data class Load(val cardId: String, val setId: String?) : Intent
 
 		data class Loaded(
-			val card: CardPrinting?,
+			val cards: List<CardPrinting>,
+			val currentIndex: Int,
 			val set: CardSet?,
 			val error: ProviderError?,
-			val cardmarketLink: CardmarketLink?,
 			val attribution: String?,
 			val providerStatesIdentity: Boolean,
 			val providerStatesFinishes: Boolean,
 		) : Intent
+
+		/** The pager settled on another card, or the preview strip was tapped. */
+		data class PageChanged(val index: Int) : Intent
 
 		data class LanguageSelected(val language: CardLanguage) : Intent
 
@@ -149,8 +165,8 @@ object CardDetailContract :
 
 		data class ZoomToggled(val isZoomed: Boolean) : Intent
 
-		/** The Cardmarket button. Opening a link never places an order. */
-		data object OpenCardmarket : Intent
+		/** Opening a link never places an order. */
+		data class OpenCardmarket(val cardId: String) : Intent
 	}
 
 	sealed interface Effect {
@@ -164,15 +180,30 @@ object CardDetailContract :
 		is Intent.Load -> state.copy(isLoading = true, error = null)
 
 		is Intent.Loaded -> state.copy(
-			card = intent.card,
+			cards = intent.cards,
+			// Clamped rather than trusted: a card that is no longer in the list -- because the
+			// filter changed underneath, or the session held a stale list -- must not leave the
+			// screen pointing past the end of it.
+			currentIndex = intent.currentIndex.coerceIn(0, (intent.cards.size - 1).coerceAtLeast(0)),
 			set = intent.set,
 			error = intent.error,
-			cardmarketLink = intent.cardmarketLink,
 			attribution = intent.attribution,
 			providerStatesIdentity = intent.providerStatesIdentity,
 			providerStatesFinishes = intent.providerStatesFinishes,
 			isLoading = false,
 		)
+
+		is Intent.PageChanged -> if (state.cards.isEmpty()) {
+			state
+		} else {
+			state.copy(
+				currentIndex = intent.index.coerceIn(0, state.cards.size - 1),
+				// A new card is not the card that was zoomed in on.
+				isZoomed = false,
+				// Finish is a property of the printing, so a selection does not carry across.
+				selectedFinish = null,
+			)
+		}
 
 		is Intent.LanguageSelected -> state.copy(requestedLanguage = intent.language)
 
@@ -180,6 +211,6 @@ object CardDetailContract :
 
 		is Intent.ZoomToggled -> state.copy(isZoomed = intent.isZoomed)
 
-		Intent.OpenCardmarket -> state
+		is Intent.OpenCardmarket -> state
 	}
 }

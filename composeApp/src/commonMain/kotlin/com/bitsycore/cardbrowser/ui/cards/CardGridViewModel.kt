@@ -8,6 +8,7 @@ import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
+import com.bitsycore.cardbrowser.ui.browse.BrowseSession
 import com.bitsycore.lib.pulse.viewmodel.PulseViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -33,6 +34,7 @@ class CardGridViewModel(
 	private val mRepository: CardRepository,
 	private val mRegistry: ProviderRegistry,
 	private val mPreferences: PreferencesStore,
+	private val mSession: BrowseSession,
 ) : PulseViewModel<CardGridContract.UiState, CardGridContract.Intent, CardGridContract.Effect>(
 	initialState = CardGridContract.UiState(),
 	containerContract = CardGridContract,
@@ -109,6 +111,13 @@ class CardGridViewModel(
 						isFinal = vResult.origin != DataOrigin.CACHE || vResult.error != null,
 					),
 				)
+
+				// Published so card detail can swipe through exactly this list -- filtered and
+				// sorted as the user left it -- rather than the raw set. Guarded on the generation
+				// so a superseded response cannot hand the detail screen a list the grid rejected.
+				if (stateFlow.value.requestGeneration == vGeneration) {
+					mSession.publish(vSnapshot.setId, vCards?.cards.orEmpty())
+				}
 
 				// Facets come from the complete set only, so they are recomputed after a load that
 				// completed one. Offering a rarity that only appears on an unfetched page would
