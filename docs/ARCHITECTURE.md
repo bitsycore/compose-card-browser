@@ -290,6 +290,42 @@ Each screen is a `ContainerContract` object plus a `PulseViewModel`.
 Because the reducer is a pure function, the awkward cases are tested directly rather than by
 orchestrating coroutines and hoping a race reproduces — see `CardGridContractTest`.
 
+### Every screen is a Screen and a Content
+
+```kotlin
+@Composable fun XScreen(..., viewModel: XViewModel = koinViewModel()) {
+    val state by viewModel.collectAsStateWithLifecycle()
+    XContent(state, viewModel::dispatch, ...)
+}
+
+@Composable fun XContent(state: X.UiState, dispatch: (X.Intent) -> Unit, ...)
+```
+
+`XScreen` is the only half allowed to touch Koin, view models or effects. `XContent` takes
+everything as arguments and is therefore previewable — and `@Preview` is unforgiving about this: a
+preview has no Koin graph, so a stray `koinInject` inside a Content throws
+`KoinApplication has not been started` and the preview shows a stack trace instead of a screen.
+
+That is why the grid's focused-card id and the detail screen's prefetch radius are *parameters*
+rather than injections, even though both are read from a singleton one function up.
+
+Navigation stays as callbacks rather than intents. Where the app goes next is the caller's business,
+and folding it into the contract would have every reducer knowing about routes.
+
+### Two effects that drive each other need a tiebreaker
+
+The card pager reports its settled page to the state, and the state drives the pager when something
+else moves the selection. Those two are a loop, and the state alone cannot say which direction a
+change came from.
+
+Without a tiebreaker the failure is specific and confusing: a settled swipe reports its page, that
+becomes `currentIndex`, and that lands back in the follow effect — by which time the user may have
+started the *next* swipe, so `currentIndex` no longer matches `targetPage` and the pager animates
+back to the page just left. Quick successive swipes appear to cancel each other at random.
+
+`vLastReportedByPager` records what the pager itself last said, and the follow effect ignores an
+echo of it. A tap on the preview strip is not an echo, so it still moves the pager.
+
 ### Stale responses cannot overwrite a newer selection
 
 Three mechanisms, because none alone is enough:

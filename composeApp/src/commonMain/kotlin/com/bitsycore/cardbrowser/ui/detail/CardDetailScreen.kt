@@ -58,6 +58,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -129,9 +130,13 @@ fun CardDetailScreen(
 		}
 	}
 
+	// Read here, not in the content: a preview has no Koin graph and `koinInject` throws.
+	val vPreferences by koinInject<PreferencesStore>().preferences.collectAsState()
+
 	CardDetailContent(
 		state = vState,
 		dispatch = viewModel::dispatch,
+		prefetchRadius = vPreferences.prefetchRadius,
 		onBack = onBack,
 		snackbarHostState = vSnackbarHost,
 	)
@@ -148,6 +153,8 @@ fun CardDetailScreen(
 fun CardDetailContent(
 	state: CardDetailContract.UiState,
 	dispatch: (CardDetailContract.Intent) -> Unit,
+	/** Cards either side of the open one to fetch ahead. Zero, as in a preview, fetches nothing. */
+	prefetchRadius: Int = 0,
 	onBack: () -> Unit = {},
 	snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
@@ -200,7 +207,12 @@ fun CardDetailContent(
 				modifier = Modifier.padding(vPadding),
 			)
 
+			// The insets go *into* the scrolling card rather than around the pager, so the card
+			// travels under the bar and the strip instead of stopping at them. Which is the point of
+			// having a bar that collapses.
 			else -> CardPager(
+				contentPadding = vPadding,
+				prefetchRadius = prefetchRadius,
 				state = vState,
 				onPageChanged = { dispatch(CardDetailContract.Intent.PageChanged(it)) },
 				onZoomToggle = { dispatch(CardDetailContract.Intent.ZoomToggled(it)) },
@@ -208,7 +220,6 @@ fun CardDetailContent(
 				onFinishSelected = { dispatch(CardDetailContract.Intent.FinishSelected(it)) },
 				onOpenCardmarket = { dispatch(CardDetailContract.Intent.OpenCardmarket(it)) },
 				onOpenFullscreen = { dispatch(CardDetailContract.Intent.FullscreenToggled(true)) },
-				modifier = Modifier.padding(vPadding),
 			)
 		}
 	}
@@ -237,6 +248,8 @@ fun CardDetailContent(
  */
 @Composable
 private fun CardPager(
+	contentPadding: PaddingValues,
+	prefetchRadius: Int,
 	state: CardDetailContract.UiState,
 	onPageChanged: (Int) -> Unit,
 	onZoomToggle: (Boolean) -> Unit,
@@ -252,6 +265,13 @@ private fun CardPager(
 	)
 	val vScope = rememberCoroutineScope()
 
+	// The last page the pager itself reported.
+	//
+	// This is what tells the effect below whether a change to `currentIndex` came from the pager or
+	// from somewhere else, which the state alone cannot say -- and without it the two effects form a
+	// loop. See the comment on that effect.
+	var vLastReportedByPager by remember { mutableIntStateOf(-1) }
+
 	// A swipe only counts once it has settled.
 	//
 	// `targetPage` updates the instant a drag looks like it is heading somewhere, so a half-hearted
@@ -259,61 +279,60 @@ private fun CardPager(
 	// title flickered to a card the user never arrived at. A tap does not need this, because a tap
 	// has no "maybe": it selects immediately in the strip's own handler and this merely confirms it.
 	LaunchedEffect(vPagerState) {
-		snapshotFlow { vPagerState.settledPage }.collect(onPageChanged)
+		snapshotFlow { vPagerState.settledPage }.collect { vPage ->
+			vLastReportedByPager = vPage
+			onPageChanged(vPage)
+		}
 	}
 
 	// The other direction: something outside the pager moved the selection, so the pager follows.
 	//
+	// The guard against `vLastReportedByPager` is what stops the two effects fighting. A settled
+	// swipe reports its page, which becomes `currentIndex`, which lands back here -- and if the user
+	// has already begun the next swipe by then, `currentIndex` no longer matches `targetPage` and
+	// this would animate *back* to the page just left, cancelling the swipe in progress. Which is
+	// exactly what a run of quick swipes felt like. An echo of what the pager itself just said is
+	// not a request to move.
+	//
 	// The first move is a *jump*, not an animation. Cards load after the screen opens, so the pager
 	// starts at page 0 and only then learns it should be on, say, 297 -- and animating there scrolls
 	// through every page between, composing and discarding them as fast as the device can manage.
-	// That is the stutter on opening a card from deep in a set. Afterwards, moves are real navigation
-	// between neighbours and are worth animating.
+	// Afterwards, moves are real navigation between neighbours and are worth animating.
 	var vHasPositioned by remember { mutableStateOf(false) }
 	LaunchedEffect(state.currentIndex, state.cards.size) {
 		if (state.cards.isEmpty()) return@LaunchedEffect
 		if (!vHasPositioned) {
 			vPagerState.scrollToPage(state.currentIndex)
+			vLastReportedByPager = state.currentIndex
 			vHasPositioned = true
-		} else if (state.currentIndex != vPagerState.targetPage) {
+			return@LaunchedEffect
+		}
+		if (state.currentIndex == vLastReportedByPager) return@LaunchedEffect
+		if (state.currentIndex != vPagerState.targetPage) {
 			vPagerState.animateScrollToPage(state.currentIndex)
 		}
 	}
 
 	// The cards either side, fetched before they are asked for. Combined with the thumbnail showing
 	// underneath a loading image, a swipe lands on finished art rather than on a spinner.
-	val vPrefetchRadius = koinInject<PreferencesStore>().preferences.collectAsState().value.prefetchRadius
 	PrefetchCardArt(
-		artworks = if (vPrefetchRadius <= 0) {
+		artworks = if (prefetchRadius <= 0) {
 			emptyList()
 		} else {
 			state.cards
 				.slice(
-					(state.currentIndex - vPrefetchRadius).coerceAtLeast(0)..
-						(state.currentIndex + vPrefetchRadius).coerceAtMost(state.cards.lastIndex),
+					(state.currentIndex - prefetchRadius).coerceAtLeast(0)..
+						(state.currentIndex + prefetchRadius).coerceAtMost(state.cards.lastIndex),
 				)
 				.map { it.artwork }
 		},
 	)
 
-	Column(modifier.fillMaxSize()) {
-		if (state.canSwipe) {
-			PreviewStrip(
-				cards = state.cards,
-				currentIndex = state.currentIndex,
-				// Selected on the tap rather than when the scroll finishes: a tap is unambiguous, so
-				// making the strip wait out the animation just looks unresponsive.
-				onSelect = { vIndex ->
-					onPageChanged(vIndex)
-					vScope.launch { vPagerState.animateScrollToPage(vIndex) }
-				},
-			)
-			HorizontalDivider()
-			// Material's smallest meaningful gap. Without it the card's top edge sits flush against
-			// the divider and the strip reads as part of the card rather than as a separate control.
-			Spacer(Modifier.height(STRIP_TO_CARD_GAP))
-		}
+	val vTopInset = contentPadding.calculateTopPadding()
+	// What the card has to clear at rest: the app bar, then the strip if there is one.
+	val vHeaderHeight = vTopInset + if (state.canSwipe) PREVIEW_ROW_HEIGHT + STRIP_TO_CARD_GAP else 0.dp
 
+	Box(modifier.fillMaxSize()) {
 		HorizontalPager(
 			state = vPagerState,
 			// One page either side stays composed, so the neighbour is already laid out and drawn
@@ -340,7 +359,32 @@ private fun CardPager(
 				onFinishSelected = onFinishSelected,
 				onOpenCardmarket = { onOpenCardmarket(vCard.id.qualified) },
 				onOpenFullscreen = onOpenFullscreen,
+				headerHeight = vHeaderHeight,
+				bottomPadding = contentPadding.calculateBottomPadding(),
 			)
+		}
+
+		// Drawn over the pager rather than above it, on an opaque surface, so the card slides
+		// underneath instead of being clipped by a layout boundary.
+		if (state.canSwipe) {
+			Surface(
+				color = MaterialTheme.colorScheme.surface,
+				modifier = Modifier.align(Alignment.TopStart).padding(top = vTopInset),
+			) {
+				Column {
+					PreviewStrip(
+						cards = state.cards,
+						currentIndex = state.currentIndex,
+						// Selected on the tap rather than when the scroll finishes: a tap is
+						// unambiguous, so making the strip wait out the animation looks unresponsive.
+						onSelect = { vIndex ->
+							onPageChanged(vIndex)
+							vScope.launch { vPagerState.animateScrollToPage(vIndex) }
+						},
+					)
+					HorizontalDivider()
+				}
+			}
 		}
 	}
 }
@@ -454,6 +498,8 @@ private fun CardDetailPage(
 	onOpenCardmarket: () -> Unit,
 	onOpenFullscreen: () -> Unit,
 	isSharedElement: Boolean,
+	headerHeight: Dp = 0.dp,
+	bottomPadding: Dp = 0.dp,
 	modifier: Modifier = Modifier,
 ) {
 	// Measured outside the scroll on purpose. A vertically scrolling Column hands its children an
@@ -462,16 +508,22 @@ private fun CardDetailPage(
 	// the window with its own name scrolled off the bottom. This is the last place that still knows
 	// how much room there actually is.
 	BoxWithConstraints(modifier.fillMaxSize()) {
-		val vMaxImageHeight = maxHeight * IMAGE_HEIGHT_FRACTION
+		// Measured against what is actually free below the header, or the card would be sized for a
+		// screen it does not get all of and hang past the bottom.
+		val vMaxImageHeight = (maxHeight - headerHeight) * IMAGE_HEIGHT_FRACTION
 
 		Column(
 			modifier = Modifier
 				.fillMaxSize()
 				.verticalScroll(rememberScrollState())
-				.padding(horizontal = 20.dp)
-				.padding(bottom = 32.dp),
+				.padding(horizontal = 20.dp),
 			horizontalAlignment = Alignment.CenterHorizontally,
 		) {
+			// Inside the scroll, not on it: padding on a scrolling container clips at its edge, while
+			// a spacer within simply moves with the content -- which is what lets the card disappear
+			// under the bar rather than stop at it.
+			Spacer(Modifier.height(headerHeight))
+
 			ZoomableCardImage(
 				card = card,
 				maxImageHeight = vMaxImageHeight,
@@ -646,6 +698,8 @@ private fun CardDetailPage(
 				SectionDivider()
 				Note(vAttribution)
 			}
+
+			Spacer(Modifier.height(bottomPadding + 32.dp))
 		}
 
 		// Hints, on the edges, only while there is somewhere to go and nothing is magnified.

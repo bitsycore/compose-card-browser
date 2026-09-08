@@ -23,9 +23,9 @@ android {
 
 	buildTypes {
 		release {
-			isMinifyEnabled = false
-			// Signing for distribution is out of scope; the debug key keeps `assembleRelease`
-			// producing something installable for a manual check.
+			isMinifyEnabled = true
+   			isShrinkResources = true
+			proguardFile(getDefaultProguardFile("proguard-android-optimize.txt"))
 			signingConfig = signingConfigs.getByName("debug")
 		}
 	}

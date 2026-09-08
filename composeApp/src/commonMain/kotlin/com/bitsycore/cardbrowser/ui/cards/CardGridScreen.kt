@@ -110,10 +110,15 @@ fun CardGridScreen(
 		}
 	}
 
+	// Read here rather than inside the content, which has to stay free of Koin so it can be
+	// previewed. A preview has no Koin graph at all and `koinInject` throws outright.
+	val vFocusedCardId by koinInject<BrowseSession>().focusedCardId.collectAsState()
+
 	CardGridContent(
 		state = vState,
 		dispatch = viewModel::dispatch,
 		fallbackSetName = setName,
+		focusedCardId = vFocusedCardId,
 		onBack = onBack,
 		onOpenCard = onOpenCard,
 	)
@@ -131,6 +136,8 @@ fun CardGridContent(
 	state: CardGridContract.UiState,
 	dispatch: (CardGridContract.Intent) -> Unit,
 	fallbackSetName: String = "",
+	/** The card the detail screen last showed, so returning scrolls it back into view. */
+	focusedCardId: String? = null,
 	onBack: () -> Unit = {},
 	onOpenCard: (CardPrinting) -> Unit = {},
 ) {
@@ -143,10 +150,8 @@ fun CardGridContent(
 	// Scrolling it into view is worth doing for its own sake, and the shared-element transition needs
 	// it: a lazy grid only composes what is visible, so a tile that is not on screen is not there for
 	// the artwork to fly back to.
-	val vSession = koinInject<BrowseSession>()
-	val vFocusedCardId by vSession.focusedCardId.collectAsState()
-	LaunchedEffect(vFocusedCardId, vState.cards) {
-		val vTarget = vState.cards.indexOfFirst { it.id.qualified == vFocusedCardId }
+	LaunchedEffect(focusedCardId, vState.cards) {
+		val vTarget = vState.cards.indexOfFirst { it.id.qualified == focusedCardId }
 		val vAlreadyVisible = vGridState.layoutInfo.visibleItemsInfo.any { it.index == vTarget }
 		if (vTarget >= 0 && !vAlreadyVisible) {
 			// Not animated: this happens while the screen is off-screen or arriving, and a scroll
