@@ -20,9 +20,7 @@ class SettingsViewModel(
 
 	init {
 		dispatch(SettingsContract.Intent.Refresh)
-		dispatch(
-			SettingsContract.Intent.PreferencesRead(mPreferences.preferences.value.preferredLanguages),
-		)
+		dispatch(SettingsContract.Intent.PreferencesRead(mPreferences.preferences.value))
 		dispatch(
 			SettingsContract.Intent.AttributionRead(
 				mRegistry.resolve(Game.RIFTBOUND)?.capabilities?.attribution?.text,
@@ -42,6 +40,27 @@ class SettingsViewModel(
 			SettingsContract.Intent.ClearImages -> {
 				mCacheManager.clearImages()
 				readUsage()
+			}
+
+			is SettingsContract.Intent.ImageCacheLimitChosen -> {
+				mPreferences.update { it.copy(imageCacheLimitBytes = intent.bytes) }
+				readUsage()
+			}
+
+			is SettingsContract.Intent.MetadataCacheLimitChosen -> {
+				mPreferences.update { it.copy(metadataCacheLimitBytes = intent.bytes) }
+				// The new ceiling applies to the next write, so evict down to it now rather than
+				// leaving the reported usage above a limit the user has just lowered.
+				mCacheManager.trimMetadata()
+				readUsage()
+			}
+
+			is SettingsContract.Intent.PrefetchRadiusChosen -> {
+				mPreferences.update { it.copy(prefetchRadius = intent.radius) }
+			}
+
+			is SettingsContract.Intent.RevalidateOnLaunchChanged -> {
+				mPreferences.update { it.copy(revalidateSetsOnLaunch = intent.isEnabled) }
 			}
 
 			is SettingsContract.Intent.PromoteLanguage -> {

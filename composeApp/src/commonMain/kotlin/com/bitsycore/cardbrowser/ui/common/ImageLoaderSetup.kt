@@ -11,6 +11,7 @@ import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.crossfade
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.cache.CacheManager
+import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import io.ktor.client.HttpClient
 import org.koin.compose.koinInject
 
@@ -34,9 +35,15 @@ import org.koin.compose.koinInject
 fun InstallImageLoader() {
 	val vStorage = koinInject<AppStorage>()
 	val vClient = koinInject<HttpClient>()
+	val vPreferences = koinInject<PreferencesStore>()
+
+	// Read once, when the loader is built. Coil fixes a disk cache's ceiling at construction, so a
+	// change in settings applies on the next launch -- which the settings screen says plainly rather
+	// than pretending otherwise.
+	val vLimit = vPreferences.preferences.value.imageCacheLimitBytes
 
 	setSingletonImageLoaderFactory { vContext ->
-		newImageLoader(vContext, vStorage, vClient)
+		newImageLoader(vContext, vStorage, vClient, vLimit)
 	}
 }
 
@@ -45,6 +52,7 @@ internal fun newImageLoader(
 	context: PlatformContext,
 	storage: AppStorage,
 	client: HttpClient,
+	diskCacheMaxBytes: Long = CacheManager.DEFAULT_IMAGE_CACHE_MAX_BYTES,
 ): ImageLoader = ImageLoader.Builder(context)
 	.components {
 		add(KtorNetworkFetcherFactory(httpClient = { client }))
@@ -60,7 +68,7 @@ internal fun newImageLoader(
 	.diskCache {
 		DiskCache.Builder()
 			.directory(storage.imageCacheDir)
-			.maxSizeBytes(CacheManager.DEFAULT_IMAGE_CACHE_MAX_BYTES)
+			.maxSizeBytes(diskCacheMaxBytes)
 			.build()
 	}
 	.crossfade(true)

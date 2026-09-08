@@ -37,11 +37,51 @@ data class BrowsingPreferences(
 	val lastSetId: String? = null,
 	val preferredLanguages: List<CardLanguage> = CardLanguage.PREFERENCE_ORDER,
 	val gridColumnPreference: Int? = null,
+	/** Ceiling for downloaded card art. Applied when the image loader is built, so on next launch. */
+	val imageCacheLimitBytes: Long = DEFAULT_IMAGE_CACHE_LIMIT_BYTES,
+	/** Ceiling for cached card and set records. Applied on the next write. */
+	val metadataCacheLimitBytes: Long = DEFAULT_METADATA_CACHE_LIMIT_BYTES,
+	/** How many cards either side of the open one have their art fetched in advance. */
+	val prefetchRadius: Int = DEFAULT_PREFETCH_RADIUS,
+	/** Whether the set list is checked for new sets in the background on launch. */
+	val revalidateSetsOnLaunch: Boolean = true,
 ) {
 
 	/** The highest-priority language, used as the default request language. */
 	val primaryLanguage: CardLanguage
 		get() = preferredLanguages.firstOrNull() ?: CardLanguage.ENGLISH
+
+	companion object {
+
+		/** Matches `CacheManager.DEFAULT_IMAGE_CACHE_MAX_BYTES`, restated to avoid a cycle. */
+		const val DEFAULT_IMAGE_CACHE_LIMIT_BYTES: Long = 1024L * 1024 * 1024
+
+		/** Matches `MetadataCache.DEFAULT_MAX_BYTES`, restated to avoid a cycle. */
+		const val DEFAULT_METADATA_CACHE_LIMIT_BYTES: Long = 256L * 1024 * 1024
+
+		const val DEFAULT_PREFETCH_RADIUS: Int = 3
+
+		/** What the settings screen offers for the image cache. */
+		val IMAGE_CACHE_CHOICES: List<Long> = listOf(
+			128L * 1024 * 1024,
+			256L * 1024 * 1024,
+			512L * 1024 * 1024,
+			1024L * 1024 * 1024,
+			4096L * 1024 * 1024,
+		)
+
+		/** What the settings screen offers for card data. */
+		val METADATA_CACHE_CHOICES: List<Long> = listOf(
+			32L * 1024 * 1024,
+			64L * 1024 * 1024,
+			128L * 1024 * 1024,
+			256L * 1024 * 1024,
+			1024L * 1024 * 1024,
+		)
+
+		/** How far ahead the detail screen may prefetch. Zero switches prefetching off. */
+		val PREFETCH_CHOICES: List<Int> = listOf(0, 1, 3, 5, 10)
+	}
 }
 
 // ==================

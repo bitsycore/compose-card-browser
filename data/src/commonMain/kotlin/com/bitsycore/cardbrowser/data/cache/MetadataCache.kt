@@ -34,13 +34,14 @@ import okio.use
  *
  * All file work happens on [mIoDispatcher]; nothing here touches the UI thread.
  *
- * @param mMaxBytes the ceiling. Modest and easy to change -- see [DEFAULT_MAX_BYTES]
+ * @param mMaxBytes the ceiling, read afresh on every trim rather than captured once, so changing
+ *   it in settings takes effect on the next write instead of on the next launch
  */
 class MetadataCache(
 	private val mStorage: AppStorage,
 	private val mJson: Json,
 	private val mIoDispatcher: CoroutineDispatcher,
-	private val mMaxBytes: Long = DEFAULT_MAX_BYTES,
+	private val mMaxBytes: () -> Long = { DEFAULT_MAX_BYTES },
 	private val mClock: () -> Long,
 ) {
 
@@ -181,14 +182,15 @@ class MetadataCache(
 			}
 		}
 
+		val vCeiling = mMaxBytes()
 		var vTotal = vEntries.sumOf { it.sizeBytes }
-		if (vTotal <= mMaxBytes) return
+		if (vTotal <= vCeiling) return
 
 		// Least recently used first. An entry the cache has never recorded an access for sorts
 		// oldest, which is correct: it was written before this process started tracking.
 		vEntries.sortBy { mAccessTimes[it.path.name] ?: 0L }
 		for (vEntry in vEntries) {
-			if (vTotal <= mMaxBytes) break
+			if (vTotal <= vCeiling) break
 			deleteQuietly(vEntry.path)
 			mAccessTimes.remove(vEntry.path.name)
 			vTotal -= vEntry.sizeBytes

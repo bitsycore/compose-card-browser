@@ -130,10 +130,13 @@ fun CardGridScreen(
 			.collect { viewModel.dispatch(CardGridContract.Intent.ScrollPositionChanged(it)) }
 	}
 
-	// Collapses as the grid scrolls down and comes back on the way up. `exitUntilCollapsed` rather
-	// than `enterAlways` so the set's name and count shrink to a compact bar instead of vanishing:
-	// which set you are in is worth a line of screen at all times.
-	val vScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+	// `enterAlways`, not `exitUntilCollapsed`.
+	//
+	// Both collapse on the way down, but `exitUntilCollapsed` only expands again once the list is
+	// scrolled back to the very top -- so after a long scroll the bar stays shrunk however far up
+	// you swipe, which does not feel like Material and does not feel responsive. `enterAlways`
+	// brings it back on any upward scroll, which is the behaviour every Material app has.
+	val vScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
 
 	Scaffold(
 		modifier = Modifier.nestedScroll(vScrollBehavior.nestedScrollConnection),

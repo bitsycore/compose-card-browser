@@ -19,7 +19,8 @@ class CacheManager(
 	private val mStorage: AppStorage,
 	private val mMetadataCache: MetadataCache,
 	private val mIoDispatcher: CoroutineDispatcher,
-	private val mImageCacheMaxBytes: Long = DEFAULT_IMAGE_CACHE_MAX_BYTES,
+	private val mMetadataLimitBytes: () -> Long = { MetadataCache.DEFAULT_MAX_BYTES },
+	private val mImageCacheMaxBytes: () -> Long = { DEFAULT_IMAGE_CACHE_MAX_BYTES },
 ) {
 
 	/** Current usage of both caches, and their ceilings. */
@@ -27,9 +28,9 @@ class CacheManager(
 		CacheUsage(
 			metadataBytes = mMetadataCache.sizeInBytes(),
 			metadataEntries = mMetadataCache.entryCount(),
-			metadataLimitBytes = MetadataCache.DEFAULT_MAX_BYTES,
+			metadataLimitBytes = mMetadataLimitBytes(),
 			imageBytes = directorySize(mStorage.imageCacheDir),
-			imageLimitBytes = mImageCacheMaxBytes,
+			imageLimitBytes = mImageCacheMaxBytes(),
 		)
 	}
 
@@ -64,6 +65,16 @@ class CacheManager(
 				// A cache that will not clear is not worth crashing over.
 			}
 		}
+	}
+
+	/**
+	 * Evicts metadata down to the current ceiling.
+	 *
+	 * Called when the ceiling is lowered, so the reported usage matches the limit immediately rather
+	 * than drifting under it over the next few writes.
+	 */
+	suspend fun trimMetadata() {
+		mMetadataCache.trim()
 	}
 
 	/** Empties both. */

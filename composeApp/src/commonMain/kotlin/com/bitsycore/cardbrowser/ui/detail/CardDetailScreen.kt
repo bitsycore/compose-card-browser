@@ -55,6 +55,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -86,11 +87,13 @@ import com.bitsycore.cardbrowser.ui.common.ImageVariant
 import com.bitsycore.cardbrowser.ui.common.ErrorState
 import com.bitsycore.cardbrowser.ui.common.FullscreenCardViewer
 import com.bitsycore.cardbrowser.ui.common.LoadingState
+import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.ui.common.PrefetchCardArt
 import com.bitsycore.cardbrowser.ui.common.sharedCardArt
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import com.bitsycore.lib.pulse.compose.collectEffect
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -250,13 +253,18 @@ private fun CardPager(
 
 	// The cards either side, fetched before they are asked for. Combined with the thumbnail showing
 	// underneath a loading image, a swipe lands on finished art rather than on a spinner.
+	val vPrefetchRadius = koinInject<PreferencesStore>().preferences.collectAsState().value.prefetchRadius
 	PrefetchCardArt(
-		artworks = state.cards
-			.slice(
-				(state.currentIndex - PREFETCH_RADIUS).coerceAtLeast(0)..
-					(state.currentIndex + PREFETCH_RADIUS).coerceAtMost(state.cards.lastIndex),
-			)
-			.map { it.artwork },
+		artworks = if (vPrefetchRadius <= 0) {
+			emptyList()
+		} else {
+			state.cards
+				.slice(
+					(state.currentIndex - vPrefetchRadius).coerceAtLeast(0)..
+						(state.currentIndex + vPrefetchRadius).coerceAtMost(state.cards.lastIndex),
+				)
+				.map { it.artwork }
+		},
 	)
 
 	Column(modifier.fillMaxSize()) {
@@ -856,10 +864,3 @@ private val PREVIEW_ROW_HEIGHT = 84.dp
 /** Breathing room between the preview strip and the card it is describing. */
 private val STRIP_TO_CARD_GAP = 8.dp
 
-/**
- * How many cards either side of the current one have their art fetched in advance.
- *
- * Three covers a fast flick in either direction. At ~180 KB a full-size WebP card that is about a
- * megabyte of speculative traffic per card opened, against a cache ceiling of a gigabyte.
- */
-private const val PREFETCH_RADIUS = 3

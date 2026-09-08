@@ -10,12 +10,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -23,12 +25,15 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.bitsycore.cardbrowser.data.settings.BrowsingPreferences
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -121,6 +126,27 @@ fun SettingsScreen(
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
 			)
 
+			Spacer(Modifier.height(16.dp))
+			ChoiceRow(
+				label = "Image cache limit",
+				note = "Applies the next time the app starts: the image loader fixes its ceiling " +
+					"when it is built.",
+				options = BrowsingPreferences.IMAGE_CACHE_CHOICES,
+				selected = vState.imageLimitBytes,
+				render = ::formatBytes,
+				onSelect = { viewModel.dispatch(SettingsContract.Intent.ImageCacheLimitChosen(it)) },
+			)
+
+			ChoiceRow(
+				label = "Card data limit",
+				note = "Applies immediately. Card data is what makes the app work offline and is " +
+					"tiny next to images -- a whole Riftbound set is a few megabytes.",
+				options = BrowsingPreferences.METADATA_CACHE_CHOICES,
+				selected = vState.metadataLimitBytes,
+				render = ::formatBytes,
+				onSelect = { viewModel.dispatch(SettingsContract.Intent.MetadataCacheLimitChosen(it)) },
+			)
+
 			Spacer(Modifier.height(12.dp))
 			Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
 				OutlinedButton(
@@ -131,6 +157,42 @@ fun SettingsScreen(
 					onClick = { viewModel.dispatch(SettingsContract.Intent.ClearImages) },
 					modifier = Modifier.weight(1f),
 				) { Text("Clear images") }
+			}
+
+			Spacer(Modifier.height(20.dp))
+			HorizontalDivider()
+			Spacer(Modifier.height(16.dp))
+
+			Text("Browsing", style = MaterialTheme.typography.titleSmall)
+
+			ChoiceRow(
+				label = "Cards fetched ahead",
+				note = "How many cards either side of the open one have their art downloaded " +
+					"before you swipe to them. Zero switches it off; each one is roughly 180 KB.",
+				options = BrowsingPreferences.PREFETCH_CHOICES,
+				selected = vState.prefetchRadius,
+				render = { if (it == 0) "Off" else "$it" },
+				onSelect = { viewModel.dispatch(SettingsContract.Intent.PrefetchRadiusChosen(it)) },
+			)
+
+			Spacer(Modifier.height(12.dp))
+			Row(verticalAlignment = Alignment.CenterVertically) {
+				Column(Modifier.weight(1f)) {
+					Text("Check for new sets on launch", style = MaterialTheme.typography.bodyMedium)
+					Text(
+						text = "One small request in the background. The cached list is always " +
+							"shown first either way.",
+						style = MaterialTheme.typography.bodySmall,
+						color = MaterialTheme.colorScheme.onSurfaceVariant,
+					)
+				}
+				Spacer(Modifier.size(12.dp))
+				Switch(
+					checked = vState.revalidateSetsOnLaunch,
+					onCheckedChange = {
+						viewModel.dispatch(SettingsContract.Intent.RevalidateOnLaunchChanged(it))
+					},
+				)
 			}
 
 			vState.providerAttribution?.let { vAttribution ->
@@ -145,6 +207,44 @@ fun SettingsScreen(
 					color = MaterialTheme.colorScheme.onSurfaceVariant,
 				)
 			}
+		}
+	}
+}
+
+/**
+ * A labelled row of mutually exclusive choices.
+ *
+ * Preset chips rather than a slider: every one of these is a value the user might want to state
+ * exactly, and none of them is worth the imprecision of dragging. The note underneath says when the
+ * choice takes effect, because for one of them the answer is "next launch" and hiding that would be
+ * the sort of small dishonesty that makes a settings screen untrustworthy.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun <T> ChoiceRow(
+	label: String,
+	note: String,
+	options: List<T>,
+	selected: T,
+	render: (T) -> String,
+	onSelect: (T) -> Unit,
+) {
+	Spacer(Modifier.height(16.dp))
+	Text(label, style = MaterialTheme.typography.bodyMedium)
+	Spacer(Modifier.height(2.dp))
+	Text(
+		text = note,
+		style = MaterialTheme.typography.bodySmall,
+		color = MaterialTheme.colorScheme.onSurfaceVariant,
+	)
+	Spacer(Modifier.height(8.dp))
+	FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+		options.forEach { vOption ->
+			FilterChip(
+				selected = vOption == selected,
+				onClick = { onSelect(vOption) },
+				label = { Text(render(vOption)) },
+			)
 		}
 	}
 }

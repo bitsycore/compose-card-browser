@@ -3,6 +3,7 @@ package com.bitsycore.cardbrowser.ui.settings
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.data.cache.CacheManager
 import com.bitsycore.cardbrowser.data.cache.CacheUsage
+import com.bitsycore.cardbrowser.data.settings.BrowsingPreferences
 import com.bitsycore.lib.pulse.container.ContainerContract
 
 /** Settings state: cache readings and the card-language preference order. */
@@ -17,6 +18,8 @@ object SettingsContract :
 		val imageLimitBytes: Long = CacheManager.DEFAULT_IMAGE_CACHE_MAX_BYTES,
 		val preferredLanguages: List<CardLanguage> = CardLanguage.PREFERENCE_ORDER,
 		val providerAttribution: String? = null,
+		val prefetchRadius: Int = BrowsingPreferences.DEFAULT_PREFETCH_RADIUS,
+		val revalidateSetsOnLaunch: Boolean = true,
 	)
 
 	sealed interface Intent {
@@ -25,7 +28,18 @@ object SettingsContract :
 
 		data class UsageRead(val usage: CacheUsage) : Intent
 
-		data class PreferencesRead(val languages: List<CardLanguage>) : Intent
+		data class PreferencesRead(val preferences: BrowsingPreferences) : Intent
+
+		/** A new ceiling for downloaded card art. Takes effect on the next launch. */
+		data class ImageCacheLimitChosen(val bytes: Long) : Intent
+
+		/** A new ceiling for cached card records. Takes effect on the next write. */
+		data class MetadataCacheLimitChosen(val bytes: Long) : Intent
+
+		/** How many cards either side of the open one to fetch ahead. Zero switches it off. */
+		data class PrefetchRadiusChosen(val radius: Int) : Intent
+
+		data class RevalidateOnLaunchChanged(val isEnabled: Boolean) : Intent
 
 		data class AttributionRead(val text: String?) : Intent
 
@@ -51,7 +65,21 @@ object SettingsContract :
 			imageLimitBytes = intent.usage.imageLimitBytes,
 		)
 
-		is Intent.PreferencesRead -> state.copy(preferredLanguages = intent.languages)
+		is Intent.PreferencesRead -> state.copy(
+			preferredLanguages = intent.preferences.preferredLanguages,
+			metadataLimitBytes = intent.preferences.metadataCacheLimitBytes,
+			imageLimitBytes = intent.preferences.imageCacheLimitBytes,
+			prefetchRadius = intent.preferences.prefetchRadius,
+			revalidateSetsOnLaunch = intent.preferences.revalidateSetsOnLaunch,
+		)
+
+		is Intent.ImageCacheLimitChosen -> state.copy(imageLimitBytes = intent.bytes)
+
+		is Intent.MetadataCacheLimitChosen -> state.copy(metadataLimitBytes = intent.bytes)
+
+		is Intent.PrefetchRadiusChosen -> state.copy(prefetchRadius = intent.radius)
+
+		is Intent.RevalidateOnLaunchChanged -> state.copy(revalidateSetsOnLaunch = intent.isEnabled)
 
 		is Intent.AttributionRead -> state.copy(providerAttribution = intent.text)
 

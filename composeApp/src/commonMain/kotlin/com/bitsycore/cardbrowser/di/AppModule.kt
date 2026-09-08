@@ -33,18 +33,31 @@ val appModule = module {
 	single { HttpClientFactory.json }
 	single { HttpClientFactory.create() }
 
+	single { PreferencesStore(get(), get(), Dispatchers.Default) }
+
 	single {
+		val vPreferences: PreferencesStore = get()
 		MetadataCache(
 			mStorage = get(),
 			mJson = get(),
 			mIoDispatcher = Dispatchers.Default,
+			// Read through a function rather than captured, so changing the limit in settings takes
+			// effect on the next write instead of the next launch.
+			mMaxBytes = { vPreferences.preferences.value.metadataCacheLimitBytes },
 			mClock = { nowEpochMillis() },
 		)
 	}
 
-	single { CacheManager(get(), get(), Dispatchers.Default) }
-
-	single { PreferencesStore(get(), get(), Dispatchers.Default) }
+	single {
+		val vPreferences: PreferencesStore = get()
+		CacheManager(
+			mStorage = get(),
+			mMetadataCache = get(),
+			mIoDispatcher = Dispatchers.Default,
+			mMetadataLimitBytes = { vPreferences.preferences.value.metadataCacheLimitBytes },
+			mImageCacheMaxBytes = { vPreferences.preferences.value.imageCacheLimitBytes },
+		)
+	}
 
 	// ============
 	//  Providers
@@ -62,7 +75,22 @@ val appModule = module {
 		)
 	}
 
-	single { CardRepository(mRegistry = get(), mCache = get(), mClock = { nowEpochMillis() }) }
+	single {
+		val vPreferences: PreferencesStore = get()
+		CardRepository(
+			mRegistry = get(),
+			mCache = get(),
+			mClock = { nowEpochMillis() },
+			mSetListRevalidateAfterMillis = {
+				// Switching the check off makes every cached list "recent enough" forever.
+				if (vPreferences.preferences.value.revalidateSetsOnLaunch) {
+					CardRepository.DEFAULT_SET_LIST_REVALIDATE_MILLIS
+				} else {
+					Long.MAX_VALUE
+				}
+			},
+		)
+	}
 
 	// ============
 	//  Presentation

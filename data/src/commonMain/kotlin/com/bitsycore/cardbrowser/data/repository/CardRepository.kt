@@ -54,7 +54,13 @@ class CardRepository(
 	private val mClock: () -> Long,
 	private val mSetListTtlMillis: Long = DEFAULT_SET_LIST_TTL_MILLIS,
 	private val mCardsTtlMillis: Long = DEFAULT_CARDS_TTL_MILLIS,
-	private val mSetListRevalidateAfterMillis: Long = DEFAULT_SET_LIST_REVALIDATE_MILLIS,
+	/**
+	 * How old a set list may be before it is checked again, read afresh each time.
+	 *
+	 * A function so the settings toggle takes effect immediately: switching background checks off
+	 * returns [Long.MAX_VALUE], which no cache entry is ever older than.
+	 */
+	private val mSetListRevalidateAfterMillis: () -> Long = { DEFAULT_SET_LIST_REVALIDATE_MILLIS },
 ) {
 
 	// ============
@@ -95,7 +101,7 @@ class CardRepository(
 			// is one small request, and "is there a new set?" is a question worth asking on
 			// launch rather than once a day.
 			val vAge = vNow - vCached.fetchedAtEpochMillis
-			if (vAge < mSetListRevalidateAfterMillis) return@flow
+			if (vAge < mSetListRevalidateAfterMillis()) return@flow
 		}
 
 		try {
