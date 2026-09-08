@@ -47,9 +47,21 @@ import io.ktor.http.appendPathSegments
  * - **Artwork variants**: three booleans -- `alternate_art`, `overnumbered`, `signature`.
  * - **Card identity**: none. Every record is one printing and nothing links two of them.
  * - **Cardmarket**: expansion ids on sets only; no per-card product ids.
- * - **Remote filtering**: set, free text and a "new cards" flag, and that is all. Domain, type,
- *   rarity and energy have no query parameter, so they are [FilterSupport.localOnly] and the
- *   repository must hold a complete set before it can honour them.
+ * - **Remote filtering**: none that can be relied on. `set_id` scopes a listing, but every actual
+ *   *filter* is applied locally. Domain, type, rarity and energy have no query parameter at all,
+ *   and `/cards/search` -- which does exist and does take a `query` -- was re-checked on 2026-09-08
+ *   and is not a name search: `query=Cull` matches nothing while `query=Cull the Weak` returns
+ *   "Aspirant's Climb", a card sharing neither name nor text with it. A search box wired to that
+ *   returns "no results" for most of what a user types and something irrelevant for the rest.
+ *
+ *   So TEXT is declared [FilterSupport.localOnly] with the others and matched by the app's own
+ *   filter engine against the complete set. That is not a downgrade in practice: the repository
+ *   already fetches and caches every set whole, so the local match costs no extra request and is
+ *   an accent-folded name-and-collector-number match rather than whatever the server is doing.
+ * - **Cross-set search**: not offered, for the same reason. `/cards/search` without a `set_id` is
+ *   accepted and answers, but it answers with the same unusable matching, so
+ *   [DataCapabilities.crossSetSearch] is false and the search screen falls back to the sets already
+ *   on disk and says so.
  * - **Paging**: 1-based `page` plus `size`, capped at 100 by the server (a `size` of 200 is
  *   rejected with 422). A 352-card set is four requests.
  * - **Rate limits**: none documented and none observed in the response headers. The shared HTTP
@@ -69,12 +81,15 @@ class RiftcodexProvider(
 	override val capabilities: ProviderCapabilities = ProviderCapabilities(
 		games = setOf(Game.RIFTBOUND),
 		filtering = FilterSupport(
-			// `query` is a full-text search the server runs, and `set_id` scopes it.
-			remote = setOf(CardFilterField.TEXT),
+			// Nothing is filtered remotely, including text -- see the note on `/cards/search` in
+			// the class doc. Every filter is honoured locally against the complete set, which the
+			// repository already holds for every other filter anyway.
+			remote = emptySet(),
 			// No query parameter exists for any of these. Honouring one means fetching every page
 			// of the set and filtering in the app, which the repository is told to do by this very
 			// declaration rather than by a hardcoded assumption about Riftcodex.
 			localOnly = setOf(
+				CardFilterField.TEXT,
 				CardFilterField.DOMAIN,
 				CardFilterField.CARD_TYPE,
 				CardFilterField.RARITY,
@@ -99,6 +114,7 @@ class RiftcodexProvider(
 			artworkVariants = true,
 			finishes = false,
 			cardmarketProductMapping = false,
+			crossSetSearch = false,
 		),
 		attribution = Attribution(
 			text = "Card data from Riftcodex, an unofficial fan project not affiliated with Riot Games.",
@@ -110,8 +126,10 @@ class RiftcodexProvider(
 	// ============
 	//  Sets
 
-	override suspend fun listSets(game: Game): List<CardSet> {
+	override suspend fun listSets(game: Game, language: CardLanguage?): List<CardSet> {
 		require(game == Game.RIFTBOUND) { "Riftcodex serves Riftbound only, not $game" }
+		// `language` is accepted and ignored on purpose: Riftcodex has no language dimension, so
+		// there is no per-language catalogue to ask for. Every record it returns says English.
 		return mapProviderErrors("Riftcodex.listSets") {
 			val vResponse: PageDto<SetDto> = mClient
 				.get(mBaseUrl) {
@@ -127,11 +145,10 @@ class RiftcodexProvider(
 	//  Cards
 
 	override suspend fun listCards(request: CardPageRequest): CardPage {
-		val vText = request.query.text?.takeIf { it.isNotBlank() }
-		// The two endpoints differ only in whether a `query` is present. `/cards/search` with an
-		// empty query is not the same as `/cards`, so the choice is made on the text rather than
-		// always using the search route.
-		val vPath = if (vText != null) listOf("cards", "search") else listOf("cards")
+		// Always the plain listing. `/cards/search` is deliberately unused -- see the class doc --
+		// so a query carrying text still fetches the unfiltered page and the caller, which has
+		// already been told TEXT is local-only, matches it itself.
+		val vPath = listOf("cards")
 		val vSize = request.pageSize.coerceAtMost(MAX_PAGE_SIZE)
 
 		return mapProviderErrors("Riftcodex.listCards") {
@@ -142,7 +159,6 @@ class RiftcodexProvider(
 					parameter("set_id", request.setId.local)
 					parameter("page", request.page)
 					parameter("size", vSize)
-					vText?.let { parameter("query", it) }
 					sortParameterFor(request.query.sortBy)?.let { parameter("sort", it) }
 					parameter(
 						"dir",
@@ -164,7 +180,7 @@ class RiftcodexProvider(
 		}
 	}
 
-	override suspend fun cardDetail(id: SourceId): CardPrinting? =
+	override suspend fun cardDetail(id: SourceId, language: CardLanguage?): CardPrinting? =
 		mapProviderErrors("Riftcodex.cardDetail") {
 			try {
 				val vCard: CardDto = mClient

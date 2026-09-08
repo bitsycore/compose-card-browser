@@ -46,6 +46,17 @@ include(":data")
 // and changes nothing above it. See docs/ARCHITECTURE.md.
 include(":providers:riftcodex")
 
+// The other six, in the order they were asked for. Each is one `CardProvider`, one Koin `single`
+// and one `ProviderRoute`; none of them changed a line of :core, :data or a screen.
+//
+// Cyberpunk TCG is absent on purpose and not because it was skipped -- see docs/PROVIDER_RESEARCH.md.
+include(":providers:tcgdex")
+include(":providers:scryfall")
+include(":providers:optcg")
+include(":providers:altered")
+include(":providers:ygoprodeck")
+include(":providers:wuwa")
+
 // Compose UI and Pulse presentation logic, plus the Android/iOS/desktop targets it compiles to.
 // The desktop entry point lives in its `desktopMain`; iOS is the framework `iosApp/` links against.
 include(":composeApp")

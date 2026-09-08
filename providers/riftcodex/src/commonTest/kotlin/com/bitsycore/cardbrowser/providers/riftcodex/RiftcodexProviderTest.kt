@@ -345,9 +345,13 @@ class RiftcodexProviderTest {
 
 		assertEquals(setOf(Game.RIFTBOUND), vCapabilities.games)
 		assertEquals(100, vCapabilities.maxPageSize)
-		// Text is the only remote filter; the rest need the whole set.
-		assertEquals(setOf(CardFilterField.TEXT), vCapabilities.filtering.remote)
+		// Nothing is filtered remotely, text included: `/cards/search` is not a name search --
+		// see the class doc -- so every filter is honoured locally against the complete set.
+		assertEquals(emptySet(), vCapabilities.filtering.remote)
+		assertTrue(CardFilterField.TEXT in vCapabilities.filtering.localOnly)
 		assertTrue(CardFilterField.RARITY in vCapabilities.filtering.localOnly)
+		// And no cross-set search, for the same reason.
+		assertFalse(vCapabilities.data.crossSetSearch)
 		// Neither is offered at all, which is what keeps them off the filter sheet.
 		assertFalse(CardFilterField.FINISH in vCapabilities.filtering.supported)
 		assertFalse(CardFilterField.LANGUAGE in vCapabilities.filtering.supported)
@@ -364,8 +368,9 @@ class RiftcodexProviderTest {
 		assertTrue(
 			vCapabilities.filtering.requiresCompleteSet(CardQuery(rarities = setOf("Epic"))),
 		)
-		// Text alone does not: the server can do that one.
-		assertFalse(vCapabilities.filtering.requiresCompleteSet(CardQuery(text = "annie")))
+		// Text needs it too. The server's search endpoint answers, but not with name matches, so
+		// the app matches names itself against the set it already holds.
+		assertTrue(vCapabilities.filtering.requiresCompleteSet(CardQuery(text = "annie")))
 	}
 
 	// ============
@@ -403,10 +408,18 @@ class RiftcodexProviderTest {
 	}
 
 	@Test
-	fun `a text query goes to the search endpoint and an empty one does not`() = runTest {
+	fun `the search endpoint is never used, whatever the query says`() = runTest {
+		// A regression guard on a deliberate decision. `/cards/search` exists, takes a `query` and
+		// answers 200 -- and its matching is unusable: re-checked 2026-09-08, `query=Cull` returns
+		// nothing while `query=Cull the Weak` returns "Aspirant's Climb". Wiring the search box to
+		// it produced "no results" for most of what a user typed.
+		//
+		// So text is matched locally, and the adapter must not quietly go back to the endpoint.
 		val vPaths = mutableListOf<String>()
+		val vQueryParameters: MutableList<String?> = mutableListOf()
 		val vClient = clientOf { vRequest ->
 			vPaths += vRequest.url.encodedPath
+			vQueryParameters += vRequest.url.parameters["query"]
 			respond(
 				RiftcodexFixtures.PAGE_TWO_OF_TWO,
 				HttpStatusCode.OK,
@@ -419,10 +432,9 @@ class RiftcodexProviderTest {
 		vProvider.listCards(request(query = CardQuery()))
 		vProvider.listCards(request(query = CardQuery(text = "   ")))
 
-		assertEquals("/cards/search", vPaths[0])
-		assertEquals("/cards", vPaths[1])
-		// Blank is not a search.
-		assertEquals("/cards", vPaths[2])
+		assertEquals(listOf("/cards", "/cards", "/cards"), vPaths)
+		// And the text is not smuggled through as a parameter either.
+		assertEquals(listOf<String?>(null, null, null), vQueryParameters)
 	}
 
 	@Test
