@@ -1,11 +1,11 @@
 # CardBrowser
 
-A Kotlin Multiplatform card-set browser for **Riftbound**, sharing Compose Multiplatform UI and all
-application logic between Android, iOS and JVM desktop.
+A Kotlin Multiplatform card browser for **seven trading card games**, sharing Compose Multiplatform
+UI and all application logic between Android, iOS and JVM desktop.
 
-Browse Riftbound's sets, open one, filter its cards, and read a card in detail. No backend: the apps
-talk to a card database directly over Ktor. Browsing only — no accounts, no collection, no prices,
-no deckbuilding.
+Pick a game, browse its sets, open one, filter its cards, search across every set, and read a card
+in detail. No backend: the apps talk to each game's card database directly over Ktor. Browsing only
+— no accounts, no collection, no prices, no deckbuilding.
 
 `CardBrowser` is a temporary name.
 
@@ -17,7 +17,7 @@ no deckbuilding.
 - [Prerequisites](#prerequisites)
 - [Build, run, test](#build-run-test)
 - [Verified dependency versions](#verified-dependency-versions)
-- [Provider coverage](#provider-coverage-riftcodex)
+- [Games and providers](#games-and-providers)
 - [Chosen defaults](#chosen-defaults)
 - [Known limitations](#known-limitations)
 - [Architecture](docs/ARCHITECTURE.md)
@@ -29,10 +29,11 @@ no deckbuilding.
 | Target | State |
 |---|---|
 | **JVM desktop** | Built, launched, browsed. Real sets and real cards on screen. |
-| **Android** | Debug APK builds (23 MB). **Not installed or run** — no device or emulator was available. |
+| **Android** | Debug APK builds and runs on a real device. Game picker, set lists and card grids verified on screen. |
 | **iOS** | Kotlin and Swift written. **Never compiled.** No Mac, no Xcode. See [`iosApp/README.md`](iosApp/README.md). |
 
-146 deterministic tests and 6 live-API smoke checks pass. See [Build, run, test](#build-run-test).
+216 deterministic tests pass, plus 48 live-API smoke checks across the seven providers. See
+[Build, run, test](#build-run-test).
 
 ---
 
@@ -103,14 +104,24 @@ Or, more briefly, every check on every buildable target:
 ### Live provider smoke checks
 
 Deliberately separate: they need a network and depend on somebody else's server, so they are
-excluded from the ordinary run and cannot fail a build because Riftcodex is down.
+excluded from the ordinary run and cannot fail a build because one provider is down.
+
+Each adapter has its own task:
 
 ```bash
 ./gradlew :providers:riftcodex:liveProviderTest
+./gradlew :providers:tcgdex:liveProviderTest
+./gradlew :providers:scryfall:liveProviderTest
+./gradlew :providers:optcg:liveProviderTest
+./gradlew :providers:altered:liveProviderTest
+./gradlew :providers:ygoprodeck:liveProviderTest
+./gradlew :providers:wuwa:liveProviderTest
 ```
 
-These are the checks that catch the provider changing shape underneath us — including a full
-round trip through the real API, the real disk cache, a local filter, and an offline replay.
+48 checks in total, all passing as of 2026-09-09. These are what catch a provider changing shape
+underneath us — including a full round trip through the real API, the real disk cache, a local
+filter and an offline replay, and, for the two sources whose images are mirrored or undocumented, a
+direct check that the card art still loads.
 
 ---
 
@@ -166,48 +177,66 @@ anyway — they end up in the binary.)
 
 ---
 
-## Provider coverage: Riftcodex
+## Games and providers
 
-Riftbound data comes from [Riftcodex](https://riftcodex.com), an unofficial community database with
-no affiliation to Riot Games. Verified against its OpenAPI document (version 0.2.0, self-described
-as "an active work in progress") and against live responses for every set it serves.
+Seven games, seven adapters, one authoritative source each. Every one was verified by hitting the
+live endpoint and reading the real response — [`docs/PROVIDER_RESEARCH.md`](docs/PROVIDER_RESEARCH.md)
+records what each check found, including the two that changed the design.
 
-**What it gives.** 8 sets with names, codes, card counts, publication dates and Cardmarket
-*expansion* ids. Cards with name, collector number, energy/might/power, type, supertype, rarity,
-domains, tags, rules text, flavour text, artist, orientation and an image URL. No auth needed.
+| Game | Source | Languages served | Notes |
+|---|---|---|---|
+| Riftbound | [Riftcodex](https://riftcodex.com) | en | Unofficial community database. |
+| Pokémon | [TCGdex](https://tcgdex.dev) | **fr, ja, en, ko** | The only source here with all four. Real Cardmarket product ids and two-sided finish data. |
+| Magic: The Gathering | [Scryfall](https://scryfall.com) | **fr, ja, en, ko** | The only source with a real cross-printing identity (`oracle_id`). |
+| One Piece | [OPTCG API](https://optcgapi.com) | none stated | Data is plainly English; the source never says so, so nothing is claimed. |
+| Altered | [Altered TCG Card Database](https://github.com/PolluxTroy0/Altered-TCG-Card-Database) | fr, en | A community mirror. The official API is gone — see below. |
+| Yu-Gi-Oh! | [YGOPRODeck](https://ygoprodeck.com) | **fr, ja, en, ko** | Sets are addressed by name; rarity is per printing. |
+| Wuthering Waves TCG | UCP `mc-api.ucp-jp.com` | ja | Undocumented internal endpoint. No stability promise. |
 
-**What it does not give**, and what this app does about it:
+**Cyberpunk TCG is deliberately absent.** It was asked for, and there is nothing to adapt: the game
+does not reach retail until 6 November 2026, there is no official API, and the community databases
+publish no JSON. Scraping a rendered page for an unreleased game would be exactly the fabricated
+data this project refuses to ship. It becomes one module and one routing entry the day a real source
+appears. Because `ProviderRegistry.games` is derived from the routing table, a game with no adapter
+cannot appear in the picker at all — there is no greyed-out row.
 
-| The brief asks for | Riftcodex reality | What the app does |
+### What each source cannot do, and what the app does about it
+
+The point of the model is that these gaps stay visible rather than being smoothed over.
+
+| The brief asks for | Where reality falls short | What the app does |
 |---|---|---|
-| French / Japanese / English / Korean printings | **No language field exists anywhere in the schema.** The data is English. | English is reported *confirmed*; FR, JA and KO are reported **unknown, never unavailable**. The detail screen says so in words. Selecting French shows English and labels it as English. |
-| Finish options | **No finish field exists.** | Finish coverage is *unstated* for every card. The detail screen explains that foils may exist and the provider simply does not record them. No finish filter is offered. |
-| Card identity across printings | **None.** Every record is one printing; `riftbound_id` is unique per printing and the lookup by it returns a single record. | `identity` is null. The detail screen says other artworks cannot be listed, rather than showing an empty section. No identity is inferred from names. |
-| Card → Cardmarket product | **Expansion ids on sets only.** | The Cardmarket button is a scoped *search*, not a product page — see below. |
-| Filtering | Remote: set, free text, a "new" flag. **Domain, type, rarity and energy have no query parameter.** Page size capped at 100. | Those four are declared `localOnly`, so the repository fetches every page of the set before filtering and marks results partial if it could not finish. |
+| French / Japanese / English / Korean printings | Riftcodex, OPTCG and Altered have no Japanese or Korean at all; Wuthering Waves has only Japanese. | The requested language is *confirmed* only when the source served it. Everything else is **unknown, never unavailable** — a source not carrying Korean is not evidence that no Korean printing exists. Asking Scryfall for a language a set was never printed in falls back to English and **labels the records English**. |
+| Finish options | Only TCGdex and Scryfall state finishes. | Both sides of `FinishCoverage` are populated for those two, because their data genuinely distinguishes "not printed" from "not mentioned". For the other five, finish is *unstated* and no finish filter is offered. |
+| Card identity across printings | Only Scryfall states one. | `identity` is null everywhere else, and no identity is ever inferred from a shared name. |
+| Card → Cardmarket product | Only TCGdex maps printings to products. | See [Cardmarket](#cardmarket) — links are suppressed entirely for games whose Cardmarket path has not been seen on a real page. |
+| Filtering | No source here can filter reliably on domain, type, rarity and cost together. | Every filter is declared `localOnly` and applied to the complete set the repository already caches. That makes filters instant and offline, and it is why the completeness rule matters. |
 
-Two things worth knowing about the real data, both of which shaped the model:
+### Two findings that changed the design
 
-- **Collector numbers are not unique within a set.** Origins 299 is both "Kai'Sa (Overnumbered)" and
-  "Kai'Sa (Signature)"; the integer `collector_number` is 299 for both. Only `riftbound_id`
-  distinguishes them, as `299` and `299*`. The app therefore treats collector numbers as strings,
-  takes them from `riftbound_id`, and sorts them naturally so `299*` follows `299` and `10` follows
-  `2`.
-- **Card art is on Riot's Sanity CDN, which resizes.** Appending `w=320` turns a 1.1 MB image into
-  310 KB, which is the difference between a 352-card grid being usable on a phone and not. The grid
-  uses thumbnails; only the detail screen loads full resolution.
+**Altered's official API no longer exists.** `api.altered.gg` has no DNS A record at all — confirmed
+against Cloudflare's resolver, not just this machine's — and the official art bucket
+`altered-prod-eu.s3.amazonaws.com` answers `403` for every card image its own data links to. The
+adapter therefore reads a community mirror that stores the real API's JSON unmodified, plus a copy
+of the images, served through jsDelivr. That is a snapshot maintained by a volunteer rather than a
+live API, and the adapter's own documentation says so.
 
-### Later provider candidates — documented only, not implemented
+**Riftcodex's search endpoint is not a name search.** `/cards/search` exists, takes a `query` and
+answers `200` — and re-checking it on 2026-09-08 found `query=Cull` matching nothing while
+`query=Cull the Weak` returns "Aspirant's Climb", a card sharing neither name nor text with it. The
+app had text declared as a *remote* filter, so the search box was wired to that endpoint and
+returned "no results" for most of what anyone typed. Text is now matched locally against the
+complete set the app already holds, which costs no extra request and actually works.
 
-Not verified beyond knowing they exist, and Korean coverage is unknown for all three:
+### Cross-set search
 
-- **Scryfall** for Magic: The Gathering
-- **TCGdex** for Pokémon
-- **OPTCG API** for One Piece
+Search every set of a game by card name. Five of the seven sources can search their whole catalogue;
+Riftbound and Altered cannot, so for those the app searches **only the sets already downloaded** and
+says exactly that, with a count of how many of the game's sets that was.
 
-`Game.MAGIC`, `Game.POKEMON` and `Game.ONE_PIECE` exist as enum entries so the routing table has
-something to name. They have no adapter and no route, so **the UI never shows them** — the set list
-is Riftbound because that is the only game with a registered provider.
+The distinction is not cosmetic. A whole-catalogue search finding nothing means the card does not
+exist; a cache-scoped search finding nothing usually means you have never opened the set it is in.
+Presenting the second as the first would be the app lying about what it knows.
 
 ---
 
@@ -286,11 +315,19 @@ Where two copies disagree — Vendetta ships `ven-019a` once flagged alternate a
 copy asserting a treatment wins, because `true` is a statement and `false` is indistinguishable from
 a field nobody filled in.
 
-### There are no set or game icons
+### There are no set symbols, and the game marks are not logos
 
-The API has no icon, logo or symbol field anywhere; the only image in its whole schema is a card's
-own art. The set list therefore shows each set's real short code (`OGN`, `SFD`) in a tile rather
-than an invented symbol, and the game gets a neutral mark rather than something dressed up to look
+**Sets.** Not one of the seven sources publishes a set symbol — the only image in any of their
+schemas is a card's own art. The set list therefore shows each set's real short code (`OGN`, `SFD`)
+in a tile, tinted with a colour derived from that code so a catalogue of several hundred Magic sets
+is not a column of identical grey squares. The colour is a hash, not a symbol: it is derived rather
+than random, so a set looks the same on every launch and on every device, but it carries no meaning
+and is placeholder work until a source publishes real artwork.
+
+**Games.** The game picker uses Material symbols, not publisher logos. Every game here is somebody's
+trademark and this app is affiliated with none of them; shipping their brand assets would be both a
+licensing problem and the same category of dishonesty as inventing card data. Each game gets a
+distinct icon and colour, which is enough to tell seven rows apart without implying any of them is
 official.
 
 ### There is no higher-resolution card art
@@ -335,6 +372,15 @@ the inline image and the fullscreen viewer now decode at source resolution.
 - An expansion slug is only derived when the set name is a single word. "Origins: Proving Grounds"
   could be hyphenated, truncated or abbreviated on Cardmarket's side, so those sets fall back to the
   game page rather than guessing.
+- **The button appears for Riftbound only.** Cardmarket's per-game path segment could not be
+  verified for the other six, because 403 applies to every scripted request — including one for the
+  Riftbound path that is known to work. "Pokemon", "Magic" and "YuGiOh" are all plausible and all
+  unverified, and a plausible-looking button that lands on a 404 is worse than no button. Each is a
+  one-line change in `CardmarketLinkBuilder.gameSlug` the moment a real URL is seen. Wuthering Waves
+  is a separate case: Cardmarket has no section for it, because the game is Japan-only so far.
+- Scryfall and TCGdex both publish Cardmarket *product ids*, and TCGdex's are per printing. They are
+  stored on the card for provenance and no URL is built from them, because this app only constructs
+  Cardmarket links from path shapes it has actually seen.
 - Opening a link never places an order. Cardmarket is outbound navigation, not an API dependency.
 
 ### Scope
@@ -343,8 +389,19 @@ the inline image and the fullscreen viewer now decode at source resolution.
   deckbuilding.
 - Desktop packaging is configured as an app image but distribution, signing and store publication
   are out of scope.
-- Only one provider exists, so the routing table's language-specific route slot is exercised by
-  tests but not by a real second source.
+- Every game is served by exactly one provider, so the routing table's language-specific route slot
+  — a second source filling another's language gap — is exercised by tests but not by a real
+  deployment.
+- **Altered's grid tiles are expensive.** Its mirror has no resized variant, so a grid tile loads
+  the same 200–300 KB JPEG the detail screen does. Every other provider serves a small variant. The
+  artwork records this by leaving `thumbnailUrl` null rather than pointing it at the full image.
+- **Wuthering Waves grids are sparse.** Its list endpoint carries six fields per card; rarity,
+  attribute, cost and rules text exist only on the per-card detail endpoint. Filling the grid would
+  cost 123 requests per set against somebody's unpublished endpoint, so the data appears when a card
+  is opened and the filter sheet hides the facets that are empty until then.
+- **Cardmarket links exist for Riftbound only.** Cardmarket answers 403 to every scripted request,
+  including one for the Riftbound path that is known to work, so the other six games' path segments
+  could not be verified. Plausible guesses are not shipped; see [Cardmarket](#cardmarket).
 - The LRU ordering of the metadata cache restarts with the process. The size ceiling always holds;
   what resets is which entry is considered least recently used. Tracking access times in memory is
   deliberate — several platforms do not update file access time on read, which would silently turn
@@ -354,5 +411,15 @@ the inline image and the fullscreen viewer now decode at source resolution.
 
 ## Attribution
 
-Card data from **Riftcodex**, an unofficial fan project not affiliated with Riot Games. The
-attribution is shown in the app, on card detail and in settings.
+Every provider's notice is shown in the app — on the game picker, on card detail and in settings.
+This app is not affiliated with any game's publisher.
+
+| Game | Data from |
+|---|---|
+| Riftbound | **Riftcodex**, an unofficial fan project not affiliated with Riot Games |
+| Pokémon | **TCGdex**, not affiliated with Nintendo, Creatures or GAME FREAK |
+| Magic: The Gathering | **Scryfall**, not affiliated with or endorsed by Wizards of the Coast |
+| One Piece | **OPTCG API**, not affiliated with Bandai or Eiichiro Oda |
+| Altered | the community **Altered TCG Card Database**; Altered is a trademark of Equinox |
+| Yu-Gi-Oh! | **YGOPRODeck**, not affiliated with Konami |
+| Wuthering Waves TCG | **UCP**'s official card list; not affiliated with UCP or Kuro Games |

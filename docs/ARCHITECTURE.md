@@ -14,8 +14,9 @@ Five, chosen so that each boundary stops something specific from leaking. Not on
    ↑
 :data                    HTTP stack, the two caches, preferences, repositories.
    ↑                     No Compose.
-:providers:riftcodex     one adapter: endpoints, DTOs, mapping, its own quirks.
-   ↑
+:providers:*             one module per adapter: endpoints, DTOs, mapping, its own quirks.
+   ↑                     riftcodex, tcgdex, scryfall, optcg, altered, ygoprodeck, wuwa.
+                         None of them knows another exists.
 :composeApp              Compose screens, Pulse view models, Koin wiring.
    ↑                     Targets android + desktop + iosArm64/iosSimulatorArm64.
 :androidApp              an Activity and an Application. Nothing else.
@@ -138,10 +139,18 @@ printing gets `FinishCoverage()`. Do not invent a non-foil default.
 One line in [`AppModule.kt`](../composeApp/src/commonMain/kotlin/com/bitsycore/cardbrowser/di/AppModule.kt):
 
 ```kotlin
-single<CardProvider> { ScryfallProvider(mClient = get()) }
+single { ScryfallProvider(mClient = get()) } bind CardProvider::class
 ```
 
 `ProviderRegistry` is built from `getAll<CardProvider>()`, so it picks the new one up.
+
+**Use `bind`, not `single<CardProvider> { … }`.** The latter gives every adapter the same primary
+type and no qualifier, so Koin keeps only the last one registered — `getAll` then returns a single
+provider and the registry throws at startup with *"routing table names providers that are not
+registered"*. This is not hypothetical: it is how the seven-provider build first crashed. It
+compiles, every unit test passes, and every adapter works in isolation, because nothing about it is
+visible until the graph is assembled. `AppModuleTest` assembles the real graph and asserts the
+wiring for exactly this reason.
 
 ### 3. A routing entry
 
@@ -176,6 +185,16 @@ matching what the provider actually sends, pagination, and the error mapping. Ad
 `*LiveSmokeTest` under `desktopTest` plus a `liveProviderTest` task; the ordinary test run excludes
 them by name.
 
+Two assertions have earned their place in every adapter's tests, because each caught a real bug:
+
+- **Ids must be unique across a page.** `LazyVerticalGrid` throws outright on a repeated key rather
+  than degrading, so a provider that issues one is a crash rather than a cosmetic problem. Wuthering
+  Waves does: 36 of its 87 card codes are carried by two records with different artwork, which is
+  why that adapter keys on the numeric id and not the printed code.
+- **Omitting a language gets the app's *first preference*, not English.** `resolveLanguage(null)`
+  walks `CardLanguage.PREFERENCE_ORDER`, so a source carrying all four answers in French. A test
+  written without an explicit language gets French names back and looks broken when it is not.
+
 ### What you do *not* have to touch
 
 `SetListScreen`, `CardGridScreen`, `CardDetailScreen`, `FilterSheet`, `CardRepository`,
@@ -183,9 +202,42 @@ them by name.
 `CardPrinting` and the same capabilities, and the filter sheet redraws itself from what the new
 provider declares.
 
-A **new game** is more than this: it will usually need game-specific filter definitions (Riftbound's
-"domain" and "energy" are not Magic's "color" and "mana value") and some presentation of its own.
-That is expected, and is why `CardFilterField` is an enum rather than a free-form string.
+A **new game** needs three more small things, and no new screens:
+
+1. An entry in the `Game` enum. Several `when` blocks over it are exhaustive on purpose —
+   `RarityLadder.forGame`, `GameVocabulary.of`, `CardmarketLinkBuilder.gameSlug`, `GameVisual.of` —
+   so the compiler lists exactly what a new game has to decide.
+2. A `RarityLadder` entry, or an explicit empty one. Empty is a real answer: Pokémon has no ladder
+   because TCGdex reports over a hundred rarity strings that vary by era and locale, and inventing
+   an order for those would look deliberate while being wrong.
+3. A `GameVocabulary` entry. Riftbound's "domain" and "energy" are Magic's "colour" and "mana
+   value", and the filter sheet reads the word from here. The *field* stays shared —
+   `CardFilterField` is an enum with one `DOMAIN`, not seven — because only the label differs, and a
+   per-game field would have to be threaded through the query type, the cache format and the filter
+   engine for no gain. A game with no such axis returns `null` and the sheet omits the section.
+
+That is the whole cost. Six games were added this way without a line changing in `SetListScreen`,
+`CardGridScreen`, `CardDetailScreen` or `CardRepository`.
+
+---
+
+## Cross-set search, and why its scope is part of the answer
+
+`CardRepository.searchAllSets` returns a `CardSearchResults` carrying a `SearchScope`, and the
+screen shows which one it got. There are two:
+
+- `REMOTE_ALL_SETS` — the provider searched its whole catalogue.
+- `LOCAL_CACHED_SETS` — only the sets already on this device were searched, because the provider
+  declares `crossSetSearch = false`.
+
+Collapsing these into one "results" list would be the app's most quietly damaging lie. An empty
+remote search means the card does not exist. An empty local search almost always means the user has
+never opened the set it is in — and on a fresh install, *every* local search is empty. The screen
+says which happened, and how many of the game's sets were actually looked at.
+
+Nothing about a search is cached. A search result is a slice of many sets under a query that will
+never be repeated verbatim; storing it under any key would either collide with the complete-set
+entries the rest of the app depends on being complete, or accumulate for ever.
 
 ---
 

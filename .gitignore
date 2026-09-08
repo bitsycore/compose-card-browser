@@ -61,3 +61,6 @@ trace.txt
 # asking a public API the same very large question again. Regenerable, 17 MB, and
 # nine polite requests to somebody else's server
 tools/mapdata/data/overpass_raw.json
+
+# Scratch space for provider research: captured API responses and device screenshots.
+.research/
