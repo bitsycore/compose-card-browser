@@ -25,11 +25,26 @@ class CardDetailViewModel(
 	private val mRepository: CardRepository,
 	private val mRegistry: ProviderRegistry,
 	private val mLinkOpener: LinkOpener,
-	private val mSession: BrowseSession,
+	mSession: BrowseSession,
+	private val mArgs: CardDetailArgs,
 ) : PulseViewModel<CardDetailContract.UiState, CardDetailContract.Intent, CardDetailContract.Effect>(
-	initialState = CardDetailContract.UiState(),
+	// Seeded before the first frame, not loaded into afterwards.
+	//
+	// The card being opened is nearly always already in hand: the grid just drew it, and it
+	// published its list to the session. Starting empty and filling in a moment later meant the
+	// screen opened on a spinner and then snapped to content -- one frame of placeholder that reads
+	// as a stutter precisely because everything else about the transition is smooth.
+	initialState = seedFrom(mSession, mArgs),
 	containerContract = CardDetailContract,
 ) {
+
+	private val mSession: BrowseSession = mSession
+
+	init {
+		// Fills in what the seed could not know synchronously: the set behind the Cardmarket link,
+		// the provider's capabilities, and the card itself when the session had nothing.
+		dispatch(CardDetailContract.Intent.Load(mArgs.cardId, mArgs.setId))
+	}
 
 	override suspend fun handleIntent(intent: CardDetailContract.Intent) {
 		when (intent) {
@@ -126,5 +141,25 @@ class CardDetailViewModel(
 				emitEffect(CardDetailContract.Effect.LinkFailed(vLink.url))
 			}
 		}
+	}
+}
+
+/** What the detail screen was opened for. Passed to the view model so it can seed itself. */
+data class CardDetailArgs(val cardId: String, val setId: String?)
+
+/**
+ * The state to open with, from what the browse session already holds.
+ *
+ * Falls back to an empty loading state when the session has nothing -- a cold start straight into a
+ * card, or a process death -- and the asynchronous load then does the work with a spinner, which is
+ * the honest thing to show when there genuinely is nothing yet.
+ */
+private fun seedFrom(session: BrowseSession, args: CardDetailArgs): CardDetailContract.UiState {
+	val vCards = session.cardsFor(args.setId)
+	val vIndex = vCards.indexOfFirst { it.id.qualified == args.cardId }
+	return if (vIndex >= 0) {
+		CardDetailContract.UiState(cards = vCards, currentIndex = vIndex, isLoading = false)
+	} else {
+		CardDetailContract.UiState()
 	}
 }

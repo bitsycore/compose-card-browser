@@ -181,7 +181,9 @@ object CardDetailContract :
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
 
-		is Intent.Load -> state.copy(isLoading = true, error = null)
+		// Only a screen with nothing to show waits. A seeded one is already drawing the card and
+		// must not be thrown back to a spinner while the rest is fetched.
+		is Intent.Load -> state.copy(isLoading = state.cards.isEmpty(), error = null)
 
 		is Intent.Loaded -> state.copy(
 			cards = intent.cards,

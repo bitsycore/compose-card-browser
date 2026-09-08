@@ -51,6 +51,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
@@ -88,6 +91,7 @@ import com.bitsycore.cardbrowser.ui.common.sharedCardArt
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import com.bitsycore.lib.pulse.compose.collectEffect
 import kotlinx.coroutines.launch
+import org.koin.core.parameter.parametersOf
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -104,14 +108,12 @@ fun CardDetailScreen(
 	cardId: String,
 	setId: String?,
 	onBack: () -> Unit,
-	viewModel: CardDetailViewModel = koinViewModel(),
+	// The arguments go in at construction so the view model can seed its state from the browse
+	// session before the first frame, rather than being told to load after one has already been drawn.
+	viewModel: CardDetailViewModel = koinViewModel { parametersOf(CardDetailArgs(cardId, setId)) },
 ) {
 	val vState by viewModel.collectAsStateWithLifecycle()
 	val vSnackbarHost = remember { SnackbarHostState() }
-
-	LaunchedEffect(cardId) {
-		viewModel.dispatch(CardDetailContract.Intent.Load(cardId, setId))
-	}
 
 	viewModel.collectEffect { vEffect ->
 		when (vEffect) {
@@ -121,7 +123,14 @@ fun CardDetailScreen(
 	}
 
 	Box(Modifier.fillMaxSize()) {
+	// `enterAlways` rather than `exitUntilCollapsed`: this bar is one line of title and a position
+	// counter, so there is no larger form to shrink from -- it either takes the space or it does not.
+	// Reading a card's rules is the one thing this screen is for, so scrolling down gives that space
+	// back and the smallest scroll up returns the bar.
+	val vScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
+
 	Scaffold(
+		modifier = Modifier.nestedScroll(vScrollBehavior.nestedScrollConnection),
 		topBar = {
 			TopAppBar(
 				title = {
@@ -145,12 +154,13 @@ fun CardDetailScreen(
 						Icon(Icons.Outlined.ArrowBack, contentDescription = "Back to cards")
 					}
 				},
+				scrollBehavior = vScrollBehavior,
 			)
 		},
 		snackbarHost = { SnackbarHost(vSnackbarHost) },
 	) { vPadding ->
 		when {
-			vState.isLoading -> LoadingState(Modifier.padding(vPadding))
+			vState.cards.isEmpty() && vState.isLoading -> LoadingState(Modifier.padding(vPadding))
 
 			vState.cards.isEmpty() -> ErrorState(
 				error = vState.error ?: ProviderError.Unknown("Card not found"),
@@ -262,6 +272,9 @@ private fun CardPager(
 				},
 			)
 			HorizontalDivider()
+			// Material's smallest meaningful gap. Without it the card's top edge sits flush against
+			// the divider and the strip reads as part of the card rather than as a separate control.
+			Spacer(Modifier.height(STRIP_TO_CARD_GAP))
 		}
 
 		HorizontalPager(
@@ -839,6 +852,9 @@ private val PREVIEW_HEIGHT = 52.dp
 
 /** The thumbnail, its collector number underneath, and the row's own padding. */
 private val PREVIEW_ROW_HEIGHT = 84.dp
+
+/** Breathing room between the preview strip and the card it is describing. */
+private val STRIP_TO_CARD_GAP = 8.dp
 
 /**
  * How many cards either side of the current one have their art fetched in advance.

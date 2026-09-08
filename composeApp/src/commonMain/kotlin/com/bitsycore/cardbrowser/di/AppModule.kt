@@ -12,6 +12,7 @@ import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.providers.riftcodex.RiftcodexProvider
 import com.bitsycore.cardbrowser.ui.browse.BrowseSession
 import com.bitsycore.cardbrowser.ui.cards.CardGridViewModel
+import com.bitsycore.cardbrowser.ui.detail.CardDetailArgs
 import com.bitsycore.cardbrowser.ui.detail.CardDetailViewModel
 import com.bitsycore.cardbrowser.ui.sets.SetListViewModel
 import com.bitsycore.cardbrowser.ui.settings.SettingsViewModel
@@ -73,7 +74,7 @@ val appModule = module {
 
 	viewModel { SetListViewModel(get(), get()) }
 	viewModel { CardGridViewModel(get(), get(), get(), get()) }
-	viewModel { CardDetailViewModel(get(), get(), get(), get()) }
+	viewModel { (vArgs: CardDetailArgs) -> CardDetailViewModel(get(), get(), get(), get(), vArgs) }
 	viewModel { SettingsViewModel(get(), get(), get()) }
 }
 

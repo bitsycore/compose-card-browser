@@ -161,6 +161,8 @@ private fun SetRow(
 			modifier = Modifier.padding(16.dp).fillMaxWidth(),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
+			SetMonogram(set.code, isHighlighted = isLastOpened)
+			Spacer(Modifier.size(12.dp))
 			Column(Modifier.weight(1f)) {
 				Text(
 					text = set.name,

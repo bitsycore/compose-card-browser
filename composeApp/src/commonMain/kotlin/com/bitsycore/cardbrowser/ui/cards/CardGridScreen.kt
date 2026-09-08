@@ -207,7 +207,13 @@ fun CardGridScreen(
 					scrollBehavior = vScrollBehavior,
 				)
 
-				AnimatedVisibility(visible = vState.isSearchOpen) {
+				// Folds away with the bar. Scrolling down is a request for more grid, and a search
+				// field that stays behind while the bar it belongs to collapses reads as a leftover.
+				// The query itself is untouched -- it survives as a chip and the field returns on the
+				// way back up.
+				AnimatedVisibility(
+					visible = vState.isSearchOpen && vScrollBehavior.state.collapsedFraction < 0.5f,
+				) {
 					SearchField(
 						text = vState.query.text.orEmpty(),
 						onTextChanged = { vText ->
