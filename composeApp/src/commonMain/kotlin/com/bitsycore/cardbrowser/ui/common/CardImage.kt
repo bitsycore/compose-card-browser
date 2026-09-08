@@ -1,31 +1,69 @@
 package com.bitsycore.cardbrowser.ui.common
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BrokenImage
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
+import coil3.memory.MemoryCache
 import com.bitsycore.cardbrowser.core.model.Artwork
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
- * A card image, with the three states a network image really has.
+ * A card image, with the three states a network image really has, and a way out of the third.
  *
  * Loading draws a placeholder block the same shape as the card, so a grid does not reflow as images
- * arrive. A failure draws a broken-image mark rather than empty space, because a blank tile reads
- * as "no such card" instead of "the picture did not load".
+ * arrive. A failure draws a broken-image mark rather than empty space, because a blank tile reads as
+ * "no such card" instead of "the picture did not load".
+ *
+ * ## Why a failure has to be recoverable
+ *
+ * A failed image is not always a failed *request*. A provider CDN can answer `200 OK` with a
+ * perfectly intact file in a format the platform cannot decode -- Riot's CDN really does serve AVIF
+ * for a minority of Riftbound cards, and Skia decodes none of it. Coil quite reasonably caches a
+ * `200`, so without recovery that card is broken on every launch forever, and no amount of HTTP
+ * retrying helps because the request never failed.
+ *
+ * So the first failure triggers one automatic attempt that **evicts the memory and disk entries
+ * first**, which is what distinguishes it from a plain retry and what actually cures a poisoned
+ * cache. If that also fails the mark stays, and where there is room for it the user gets a retry
+ * button.
  *
  * @param useThumbnail true in the grid. The provider's thumbnail URL is a fraction of the full
  *   image's bytes, and loading full-resolution art for a scrolling grid is the single easiest way
  *   to make a card browser unusable on a phone
+ * @param filterQuality how the bitmap is resampled when it does not land on screen at its native
+ *   size. Compose defaults to [FilterQuality.Low], plain bilinear, which visibly aliases card art
+ *   shrunk into a grid tile -- fine lines in card borders and text crawl and shimmer. [FilterQuality.High]
+ *   costs a little GPU per frame and is worth it on a screen whose entire content is downscaled art
+ * @param allowManualRetry adds a retry button to the failure state. Off by default: on a grid tile
+ *   or a preview thumbnail the tap belongs to opening or selecting the card, and a button competing
+ *   for it would be worse than the automatic attempt alone
  */
 @Composable
 fun CardImage(
@@ -34,32 +72,98 @@ fun CardImage(
 	modifier: Modifier = Modifier,
 	useThumbnail: Boolean = true,
 	contentScale: ContentScale = ContentScale.Fit,
+	filterQuality: FilterQuality = FilterQuality.High,
+	allowManualRetry: Boolean = false,
 ) {
 	val vUrl = if (useThumbnail) artwork.thumbnailUrl ?: artwork.imageUrl else artwork.imageUrl
 
 	if (vUrl.isBlank()) {
-		ImagePlaceholder(modifier, isError = true)
+		// Nothing to retry: the provider supplied no image at all.
+		ImagePlaceholder(modifier, isError = true, onRetry = null)
 		return
 	}
 
-	SubcomposeAsyncImage(
-		model = vUrl,
-		contentDescription = contentDescription ?: artwork.accessibilityText,
-		modifier = modifier,
-		contentScale = contentScale,
-		loading = { ImagePlaceholder(Modifier.fillMaxSize(), isError = false) },
-		error = { ImagePlaceholder(Modifier.fillMaxSize(), isError = true) },
-	)
+	val vContext = LocalPlatformContext.current
+	val vScope = rememberCoroutineScope()
+
+	// Both keyed on the URL, so a recycled tile showing a different card starts fresh rather than
+	// inheriting the previous card's failure.
+	var vAttempt by remember(vUrl) { mutableIntStateOf(0) }
+	var vHasAutoRetried by remember(vUrl) { mutableStateOf(false) }
+
+	val vRetry: () -> Unit = {
+		vScope.launch {
+			withContext(Dispatchers.Default) { evictCachedImage(vContext, vUrl) }
+			vAttempt++
+		}
+		Unit
+	}
+
+	// Changing the key rebuilds the painter, which is what issues a genuinely new request. Reusing
+	// the same model string would let Coil hand back the cached failure.
+	key(vAttempt) {
+		SubcomposeAsyncImage(
+			model = vUrl,
+			contentDescription = contentDescription ?: artwork.accessibilityText,
+			modifier = modifier,
+			contentScale = contentScale,
+			filterQuality = filterQuality,
+			loading = { ImagePlaceholder(Modifier.fillMaxSize(), isError = false, onRetry = null) },
+			error = {
+				LaunchedEffect(vUrl) {
+					// Once, and only once. A CDN that is genuinely down should not be hammered by
+					// every visible tile in a grid retrying in a loop.
+					if (!vHasAutoRetried) {
+						vHasAutoRetried = true
+						vRetry()
+					}
+				}
+				ImagePlaceholder(
+					modifier = Modifier.fillMaxSize(),
+					isError = true,
+					// Offered only after the automatic attempt has been spent, so the button is
+					// never a no-op.
+					onRetry = if (allowManualRetry && vHasAutoRetried) vRetry else null,
+				)
+			},
+		)
+	}
+}
+
+/**
+ * Forgets everything cached for [url], in memory and on disk.
+ *
+ * The disk key is the URL itself; Coil hashes it to produce the filename. Removing both is the
+ * whole point of the retry -- leaving either in place would re-serve the response that could not be
+ * decoded.
+ */
+private fun evictCachedImage(context: PlatformContext, url: String) {
+	val vLoader = SingletonImageLoader.get(context)
+	vLoader.memoryCache?.remove(MemoryCache.Key(url))
+	vLoader.diskCache?.remove(url)
 }
 
 /** A flat block the shape of the tile it fills. */
 @Composable
-private fun ImagePlaceholder(modifier: Modifier, isError: Boolean) {
+private fun ImagePlaceholder(
+	modifier: Modifier,
+	isError: Boolean,
+	onRetry: (() -> Unit)?,
+) {
 	Box(
 		modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
 		contentAlignment = Alignment.Center,
 	) {
-		if (isError) {
+		if (!isError) return@Box
+
+		if (onRetry != null) {
+			Icon(
+				imageVector = Icons.Outlined.Refresh,
+				contentDescription = "Image unavailable. Tap to try again.",
+				modifier = Modifier.size(32.dp).clickable(onClick = onRetry),
+				tint = MaterialTheme.colorScheme.onSurfaceVariant,
+			)
+		} else {
 			Icon(
 				imageVector = Icons.Outlined.BrokenImage,
 				contentDescription = "Image unavailable",

@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowDownward
+import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -63,30 +65,60 @@ fun FilterSheet(
 		}
 
 		// Sorting is always available: it is applied locally over whatever is on screen.
+		//
+		// Direction is folded into the field chips rather than sitting beside them as its own
+		// "Descending" toggle. As a separate chip it read as a fifth sort field and went unnoticed;
+		// tapping the already-selected field to flip it, with the arrow saying which way it is
+		// pointing, is the pattern every table header in the world uses.
 		Section("Sort by") {
 			CardGridContract.SORT_OPTIONS.forEach { (vField, vLabel) ->
+				val vIsSelected = state.query.sortBy == vField
+				val vIsDescending = state.query.sortDirection == SortDirection.DESCENDING
 				FilterChip(
-					selected = state.query.sortBy == vField,
-					onClick = { onQueryChanged(state.query.copy(sortBy = vField)) },
+					selected = vIsSelected,
+					onClick = {
+						onQueryChanged(
+							if (vIsSelected) {
+								// Already sorting by this: the tap means "the other way round".
+								state.query.copy(
+									sortDirection = if (vIsDescending) {
+										SortDirection.ASCENDING
+									} else {
+										SortDirection.DESCENDING
+									},
+								)
+							} else {
+								// A new field starts ascending, which is the reading order for
+								// collector numbers, names and the rarity ladder alike.
+								state.query.copy(sortBy = vField, sortDirection = SortDirection.ASCENDING)
+							},
+						)
+					},
 					label = { Text(vLabel) },
+					trailingIcon = if (vIsSelected) {
+						{
+							Icon(
+								imageVector = if (vIsDescending) {
+									Icons.Outlined.ArrowDownward
+								} else {
+									Icons.Outlined.ArrowUpward
+								},
+								contentDescription = if (vIsDescending) "Descending" else "Ascending",
+								modifier = Modifier.size(16.dp),
+							)
+						}
+					} else {
+						null
+					},
 				)
 			}
-			FilterChip(
-				selected = state.query.sortDirection == SortDirection.DESCENDING,
-				onClick = {
-					onQueryChanged(
-						state.query.copy(
-							sortDirection = if (state.query.sortDirection == SortDirection.DESCENDING) {
-								SortDirection.ASCENDING
-							} else {
-								SortDirection.DESCENDING
-							},
-						),
-					)
-				},
-				label = { Text("Descending") },
-			)
 		}
+		Spacer(Modifier.height(4.dp))
+		Text(
+			text = "Tap the selected sort again to reverse it.",
+			style = MaterialTheme.typography.labelSmall,
+			color = MaterialTheme.colorScheme.onSurfaceVariant,
+		)
 
 		if (CardFilterField.DOMAIN in state.supportedFilters && state.facets.domains.isNotEmpty()) {
 			Section("Domain") {

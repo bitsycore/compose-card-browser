@@ -32,7 +32,7 @@ no deckbuilding.
 | **Android** | Debug APK builds (23 MB). **Not installed or run** — no device or emulator was available. |
 | **iOS** | Kotlin and Swift written. **Never compiled.** No Mac, no Xcode. See [`iosApp/README.md`](iosApp/README.md). |
 
-116 deterministic tests and 5 live-API smoke checks pass. See [Build, run, test](#build-run-test).
+136 deterministic tests and 5 live-API smoke checks pass. See [Build, run, test](#build-run-test).
 
 ---
 
@@ -218,13 +218,26 @@ Where the brief left a choice, these were taken. All are one edit to change.
 | Choice | Value | Why |
 |---|---|---|
 | Metadata cache ceiling | 32 MB | The largest set is 358 cards ≈ 460 KB of JSON, so this holds every Riftbound set several times over. |
-| Image cache ceiling | 128 MB | A thumbnail is ~300 KB and a full card ~1.1 MB. Holds a few sets browsed plus the cards actually opened. A real run of Origins used 82 MB for 352 thumbnails. |
+| Image cache ceiling | 128 MB | A WebP thumbnail is ~22 KB and a full card ~1.1 MB, so this holds every Riftbound set as thumbnails several times over plus the cards actually opened. |
+| Thumbnail format | WebP at `w=320` | Pinned, not negotiated — see [Known limitations](#known-limitations). ~22 KB against ~260 KB for the same image as PNG. |
+| Pages fetched at once | 4 | Page one is drawn before the rest are even requested; the remainder go out together. Four covers every Riftbound set in one batch while staying polite to a free API. |
 | Set list freshness | 24 hours | Set catalogues change when a set is announced. |
 | Card data freshness | 24 hours | Stale data still displays immediately; this only governs when a refresh is attempted. |
+
+**What "freshness" means in practice.** Within the window, opening a cached set makes **no network
+request at all** — it is served from disk and that is the end of it. Past the window, the cached
+copy is still drawn immediately and a refresh runs behind it, with the screen saying "Saved copy,
+refreshing…". A refresh that fails leaves the cached data in place and adds a retry, so going
+offline never costs you what you already had.
+
+The refresh re-fetches the whole set rather than asking what changed, because it cannot do better:
+the API sends no `ETag`, no `Last-Modified` and no `Cache-Control`, so there is nothing to make a
+conditional request against.
 | Grid tile minimum width | 108 dp | Columns adapt to the window; this keeps art legible on a phone. |
 | Search debounce | 300 ms | |
 | Retries | 2 extra attempts, exponential, transient failures only | A 4xx is never retried. |
-| Default sort | Natural collector number | |
+| Default sort | Natural collector number, ascending. Tapping the selected sort again reverses it |
+| Rarity order | Common → Uncommon → Rare → Epic → Showcase | Riftbound's own ladder. Providers supply rarity as a bare string with no ordering, and sorting those alphabetically puts Common between Uncommon and Epic. Unrecognised rarities sort last rather than being ranked. | |
 | Card language preference | French → Japanese → English → Korean | As specified. A preference, not a claim. |
 | Seller country, minimum condition | **Unset** | Buying preferences, deliberately not chosen. |
 
@@ -233,6 +246,22 @@ Where the brief left a choice, these were taken. All are one edit to change.
 ## Known limitations
 
 Things that are genuinely not done or not proven, stated plainly.
+
+### The provider CDN serves AVIF, and that broke images
+
+Riot's image CDN picks an output format per asset and **ignores the `Accept` header**. For a
+minority of Riftbound cards it answers the resized thumbnail URL with AVIF, which Skia cannot decode
+— so those cards showed a broken-image mark on desktop and iOS while every other card worked, and
+would also fail on Android below API 31. Because the response is a valid `200`, it was cached, and
+no amount of HTTP retrying helps: the request never failed.
+
+Two changes: thumbnails now pin `fm=webp`, which removes the negotiation entirely and happens to be
+about ten times smaller than PNG; and a failed image makes one automatic attempt that **evicts the
+memory and disk entries first**, which is what actually cures an undecodable cached response. On the
+large detail image, where there is room for it, a retry button appears if that also fails.
+
+The full-resolution URL is untouched — it carries no resize parameter and the CDN always answers it
+with the original PNG.
 
 ### Not verified
 

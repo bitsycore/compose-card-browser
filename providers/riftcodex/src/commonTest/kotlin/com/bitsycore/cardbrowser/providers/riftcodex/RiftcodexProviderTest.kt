@@ -176,7 +176,10 @@ class RiftcodexProviderTest {
 		val vCard = vProvider.listCards(request()).cards.single()
 
 		assertTrue(vCard.artwork.imageUrl.contains("cmsassets.rgpub.io"))
-		assertTrue(vCard.artwork.thumbnailUrl!!.endsWith("&w=320"))
+		assertTrue(vCard.artwork.thumbnailUrl!!.contains("w=320"))
+		// The format is pinned rather than negotiated. Left to itself the CDN answers some assets
+		// with AVIF, which Skia cannot decode -- a valid 200 that caches and then fails forever.
+		assertTrue(vCard.artwork.thumbnailUrl!!.contains("fm=webp"))
 		// The original must keep its own query string rather than being rebuilt.
 		assertTrue(vCard.artwork.thumbnailUrl!!.contains("accountingTag=RB"))
 	}

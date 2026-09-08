@@ -188,19 +188,38 @@ internal object RiftcodexMapper {
 	/**
 	 * A grid-sized variant of a card image.
 	 *
-	 * Riftbound art is served from Riot's Sanity CDN, which resizes from a `w` query parameter.
-	 * Verified against a real asset: the full image is ~1.1 MB and `w=320` is ~310 KB, which is the
-	 * difference between a set of 352 cards being browsable on a phone and not. Any URL that is not
-	 * on that CDN is left alone and the grid uses the full image.
+	 * Riftbound art is served from Riot's Sanity CDN, which resizes from a `w` parameter and picks
+	 * an output format from `fm`. Any URL not on that CDN is left alone and the grid falls back to
+	 * the full image.
+	 *
+	 * ## Why the format is pinned rather than negotiated
+	 *
+	 * Left to itself the CDN chooses the format per asset, and for a minority of Riftbound cards it
+	 * chooses **AVIF** -- regardless of the `Accept` header, which it ignores. Skia decodes no AVIF,
+	 * so those thumbnails failed to decode on desktop and iOS while every other card worked, and
+	 * because the response was a perfectly valid `200` it was cached and failed forever after. It
+	 * would also break Android below API 31.
+	 *
+	 * `fm=webp` removes the negotiation entirely. WebP decodes on Skia and on Android from API 14,
+	 * comfortably below this app's minimum of 24.
+	 *
+	 * It is also far smaller. Measured on real assets at `w=320`: PNG ~310 KB, WebP ~25 KB. Across a
+	 * 352-card set that is the difference between roughly 100 MB of thumbnails and roughly 9 MB.
+	 *
+	 * The full-resolution URL is deliberately left untouched -- it carries no `w`, and the CDN
+	 * always answers it with the original PNG.
 	 */
 	fun thumbnailUrl(imageUrl: String): String? {
 		if (!imageUrl.contains(SANITY_CDN_HOST)) return null
 		val vSeparator = if (imageUrl.contains('?')) '&' else '?'
-		return "$imageUrl${vSeparator}w=$THUMBNAIL_WIDTH"
+		return "$imageUrl${vSeparator}w=$THUMBNAIL_WIDTH&fm=$THUMBNAIL_FORMAT"
 	}
 
 	private const val SANITY_CDN_HOST = "cmsassets.rgpub.io"
 
 	/** Wide enough for a two-to-four column grid on a phone at 3x density. */
 	private const val THUMBNAIL_WIDTH = 320
+
+	/** Decodable everywhere this app runs, unlike the CDN's own default. See [thumbnailUrl]. */
+	private const val THUMBNAIL_FORMAT = "webp"
 }

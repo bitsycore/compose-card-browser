@@ -233,6 +233,21 @@ A page is cached under `CacheScope.CardPage` with a query fingerprint, and a com
 expected is exactly the bug that would make every later filter silently wrong, so the scopes are a
 sealed type rather than a string.
 
+### Progressive loading
+
+Fetching every page before drawing anything is correct and was also unusable: Origins is four pages,
+and four sequential round trips measured between 7 and 16 seconds of spinner over cards that had
+arrived in the first second.
+
+So page one is emitted on its own, marked partial, before the remaining pages are even requested;
+those then go out together, bounded to four at a time, and a second emission carries the complete
+set. Measured against the live API: first cards at ~0.9 s, complete at ~2.1 s, against ~16 s before.
+
+This does not weaken the completeness rule — the first emission is `isCompleteSet = false` and the
+grid labels it, exactly as a genuinely partial set is labelled. Concurrent pages are reassembled in
+page order rather than completion order, so what lands in the cache does not depend on which request
+happened to answer first.
+
 There is one further guard, added after a real failure: if the provider reports a total and the
 collected cards fall short of it, the result is marked partial no matter how cleanly the paging
 ended. A wrong `set_id` once produced `200 OK` with zero cards and `hasMore = false`, which paged

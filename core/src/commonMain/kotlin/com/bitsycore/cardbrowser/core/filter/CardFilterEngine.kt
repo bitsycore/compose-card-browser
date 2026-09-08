@@ -3,6 +3,8 @@ package com.bitsycore.cardbrowser.core.filter
 import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CollectorNumberComparator
+import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.model.RarityLadder
 import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.SortDirection
@@ -111,11 +113,12 @@ object CardFilterEngine {
 			CardSortField.COLLECTOR_NUMBER -> CollectorNumberComparator
 			CardSortField.NAME -> compareBy<CardPrinting> { fold(it.displayName) }
 				.then(CollectorNumberComparator)
-			// Rarity has no inherent order the provider states, so it is alphabetical and
-			// deliberately so -- inventing a Common-to-Mythic ranking would be a guess about a game
-			// whose rarity ladder the provider never describes.
-			CardSortField.RARITY -> compareBy<CardPrinting> { it.classification.rarity ?: "" }
-				.then(CollectorNumberComparator)
+			// The game's own ladder, not alphabetical: sorting the strings would put Common
+			// between Uncommon and Epic. The ladder is knowledge about the game rather than about
+			// the provider, so it lives in `RarityLadder` and any provider for that game gets it.
+			CardSortField.RARITY -> RarityLadder.comparatorFor(
+				cards.firstOrNull()?.game ?: Game.RIFTBOUND,
+			)
 			// Cards with no energy cost sort last rather than as zero: a spell with no cost is not
 			// a zero-cost card.
 			CardSortField.ENERGY_COST -> compareBy<CardPrinting>(
@@ -140,7 +143,11 @@ object CardFilterEngine {
 	fun facetsOf(cards: List<CardPrinting>): CardFacets = CardFacets(
 		domains = cards.flatMap { it.classification.domains }.distinct().sorted(),
 		cardTypes = cards.mapNotNull { it.classification.type }.distinct().sorted(),
-		rarities = cards.mapNotNull { it.classification.rarity }.distinct().sorted(),
+		// Ladder order, so the chips read Common → Showcase rather than alphabetically.
+		rarities = RarityLadder.sorted(
+			game = cards.firstOrNull()?.game ?: Game.RIFTBOUND,
+			rarities = cards.mapNotNull { it.classification.rarity }.distinct(),
+		),
 		energyCosts = cards.mapNotNull { it.attributes.energy }.distinct().sorted(),
 		treatments = cards.map { it.artwork.treatment }.distinct().sortedBy { it.ordinal },
 	)

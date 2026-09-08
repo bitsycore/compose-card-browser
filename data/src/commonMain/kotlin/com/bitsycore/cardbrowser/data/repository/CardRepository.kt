@@ -17,6 +17,10 @@ import com.bitsycore.cardbrowser.data.cache.CacheKey
 import com.bitsycore.cardbrowser.data.cache.CacheScope
 import com.bitsycore.cardbrowser.data.cache.Completeness
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
@@ -233,40 +237,89 @@ class CardRepository(
 		previouslyCached: List<CardPrinting>?,
 	) {
 		val vPageSize = provider.capabilities.maxPageSize
-		val vCollected = mutableListOf<CardPrinting>()
-		var vPage = 1
 		var vComplete = true
-		var vTotal: Int? = null
 
-		while (true) {
-			// Checked every iteration so a superseded set selection stops paging immediately rather
-			// than finishing four requests nobody is waiting for.
-			currentCoroutineContext().ensureActive()
+		// Page one on its own, because nothing can be planned until it answers: it carries the
+		// total and therefore how many more pages there are.
+		currentCoroutineContext().ensureActive()
+		val vFirst = provider.listCards(
+			// Deliberately unfiltered: this is the *whole set*, and it is cached as such. Caching a
+			// filtered page under a complete-set key is precisely the bug that would make later
+			// filters silently wrong.
+			CardPageRequest(setId = setId, query = CardQuery(), page = 1, pageSize = vPageSize),
+		)
+		val vCollected = vFirst.cards.toMutableList()
+		var vTotal: Int? = vFirst.totalCount
 
-			val vResult = try {
-				provider.listCards(
-					// Deliberately unfiltered: this is the *whole set*, and it is cached as such.
-					// Caching a filtered page under a complete-set key is precisely the bug that
-					// would make later filters silently wrong.
-					CardPageRequest(setId = setId, query = CardQuery(), page = vPage, pageSize = vPageSize),
-				)
-			} catch (vError: ProviderError) {
-				if (vPage == 1) throw vError
-				// Partial progress is worth keeping.
-				vComplete = false
-				break
+		// Straight to the screen, before the rest is even requested. Origins is four pages and
+		// roughly seven seconds of round trips; waiting for all of it before drawing anything meant
+		// seven seconds of spinner over cards that were already in hand after the first second.
+		// This is marked partial, so it is not a claim to be the whole set.
+		if (vFirst.hasMore && vFirst.cards.isNotEmpty()) {
+			emit(
+				DataSnapshot(
+					value = SetCards(
+						cards = CardFilterEngine.apply(vCollected, query),
+						isCompleteSet = false,
+						knownSetSize = knownSetSize ?: vTotal,
+						cachedCardCount = vCollected.size,
+					),
+					origin = DataOrigin.NETWORK,
+					completeness = Completeness.PARTIAL,
+					fetchedAtEpochMillis = mClock(),
+					isStale = false,
+				),
+			)
+		}
+
+		if (vFirst.hasMore && vFirst.cards.isNotEmpty()) {
+			// How many pages are left. Derived from the provider's own total where it gives one, so
+			// the remaining requests can go out together rather than one after another: four
+			// sequential pages of Origins cost about seven seconds, four concurrent ones about two.
+			val vLastPage = when {
+				vTotal != null -> ((vTotal + vPageSize - 1) / vPageSize).coerceAtMost(MAX_PAGES_PER_SET)
+				else -> MAX_PAGES_PER_SET
 			}
 
-			vCollected += vResult.cards
-			vTotal = vResult.totalCount ?: vTotal
-			if (!vResult.hasMore || vResult.cards.isEmpty()) break
-			vPage++
+			// Bounded, and small. These are volunteer-run APIs; "as fast as possible" is not a
+			// licence to open a hundred sockets at a stranger's server.
+			val vRemaining = (2..vLastPage).toList()
+			val vBatches = vRemaining.chunked(MAX_CONCURRENT_PAGE_REQUESTS)
 
-			if (vPage > MAX_PAGES_PER_SET) {
-				// A guard against a provider whose `hasMore` never goes false. Better to stop and
-				// say the set is partial than to loop against someone else's server forever.
-				vComplete = false
-				break
+			outer@ for (vBatch in vBatches) {
+				currentCoroutineContext().ensureActive()
+				val vResults = coroutineScope {
+					vBatch.map { vPageNumber ->
+						async {
+							vPageNumber to runCatching {
+								provider.listCards(
+									CardPageRequest(
+										setId = setId,
+										query = CardQuery(),
+										page = vPageNumber,
+										pageSize = vPageSize,
+									),
+								)
+							}
+						}
+					}.awaitAll()
+				}
+
+				// Reassembled in page order, never in completion order, so the cached set does not
+				// depend on which request happened to come back first.
+				for ((_, vOutcome) in vResults.sortedBy { it.first }) {
+					val vPage = vOutcome.getOrElse {
+						// Cancellation is not a failed page; it must unwind rather than be recorded
+						// as an incomplete set.
+						if (it is CancellationException) throw it
+						vComplete = false
+						break@outer
+					}
+					vCollected += vPage.cards
+					vTotal = vPage.totalCount ?: vTotal
+				}
+
+				if (vTotal != null && vCollected.size >= vTotal) break
 			}
 		}
 
@@ -442,5 +495,13 @@ class CardRepository(
 
 		/** A stop against a provider whose paging never terminates. 100 pages is 10,000 cards. */
 		private const val MAX_PAGES_PER_SET = 100
+
+		/**
+		 * How many pages of a set may be in flight at once.
+		 *
+		 * Four covers every Riftbound set in a single batch while staying a polite number of
+		 * simultaneous connections to a free community API.
+		 */
+		private const val MAX_CONCURRENT_PAGE_REQUESTS = 4
 	}
 }

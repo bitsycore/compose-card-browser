@@ -189,6 +189,58 @@ class CardFilterEngineTest {
 		assertEquals(listOf("11", "10", "2", "1"), vResult.map { it.collectorNumber })
 	}
 
+	@Test
+	fun `rarity sorts by the game ladder, not alphabetically`() {
+		// Alphabetically this is Common, Epic, Rare, Showcase, Uncommon -- which puts Common between
+		// nothing sensible and reads as noise. Riftbound's ladder is Common to Showcase.
+		val vCards = listOf("Showcase", "Common", "Epic", "Uncommon", "Rare")
+			.mapIndexed { vIndex, vRarity -> TestCards.printing(id = "r$vIndex", rarity = vRarity) }
+
+		val vSorted = CardFilterEngine.apply(vCards, CardQuery(sortBy = CardSortField.RARITY))
+
+		assertEquals(
+			listOf("Common", "Uncommon", "Rare", "Epic", "Showcase"),
+			vSorted.map { it.classification.rarity },
+		)
+	}
+
+	@Test
+	fun `a rarity outside the ladder sorts last rather than being ranked`() {
+		val vCards = listOf("Epic", "Mythic Ultra", "Common")
+			.mapIndexed { vIndex, vRarity -> TestCards.printing(id = "r$vIndex", rarity = vRarity) }
+
+		val vSorted = CardFilterEngine.apply(vCards, CardQuery(sortBy = CardSortField.RARITY))
+
+		assertEquals(
+			listOf("Common", "Epic", "Mythic Ultra"),
+			vSorted.map { it.classification.rarity },
+		)
+	}
+
+	@Test
+	fun `descending rarity is the ladder reversed`() {
+		val vCards = listOf("Common", "Showcase", "Rare")
+			.mapIndexed { vIndex, vRarity -> TestCards.printing(id = "r$vIndex", rarity = vRarity) }
+
+		val vSorted = CardFilterEngine.apply(
+			vCards,
+			CardQuery(sortBy = CardSortField.RARITY, sortDirection = SortDirection.DESCENDING),
+		)
+
+		assertEquals(listOf("Showcase", "Rare", "Common"), vSorted.map { it.classification.rarity })
+	}
+
+	@Test
+	fun `rarity facets come back in ladder order so the chips read Common to Showcase`() {
+		val vCards = listOf("Showcase", "Common", "Epic")
+			.mapIndexed { vIndex, vRarity -> TestCards.printing(id = "r$vIndex", rarity = vRarity) }
+
+		assertEquals(
+			listOf("Common", "Epic", "Showcase"),
+			CardFilterEngine.facetsOf(vCards).rarities,
+		)
+	}
+
 	// ============
 	//  Facets
 
@@ -198,7 +250,8 @@ class CardFilterEngineTest {
 
 		assertEquals(listOf("Fury", "Order"), vFacets.domains)
 		assertEquals(listOf("Gear", "Spell", "Unit"), vFacets.cardTypes)
-		assertEquals(listOf("Common", "Epic", "Rare"), vFacets.rarities)
+		// Ladder order: Common, Uncommon, Rare, Epic, Showcase -- so Rare precedes Epic.
+		assertEquals(listOf("Common", "Rare", "Epic"), vFacets.rarities)
 		assertEquals(listOf(3, 5), vFacets.energyCosts)
 		assertEquals(
 			listOf(ArtworkTreatment.STANDARD, ArtworkTreatment.ALTERNATE_ART),

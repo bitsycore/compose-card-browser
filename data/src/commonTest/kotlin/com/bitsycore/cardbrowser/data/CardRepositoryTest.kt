@@ -72,6 +72,7 @@ class CardRepositoryTest {
 		private val mSets: List<CardSet> = emptyList(),
 		private val mSetsError: ProviderError? = null,
 		private val mRemoteFilters: Set<CardFilterField> = setOf(CardFilterField.TEXT),
+		private val mDelayByPage: Map<Int, Long> = emptyMap(),
 	) : CardProvider {
 
 		var listCardsCallCount = 0
@@ -106,6 +107,7 @@ class CardRepositoryTest {
 
 		override suspend fun listCards(request: CardPageRequest): CardPage {
 			listCardsCallCount++
+			mDelayByPage[request.page]?.let { kotlinx.coroutines.delay(it) }
 			if (mFailFromPage != null && request.page >= mFailFromPage) {
 				throw ProviderError.Offline()
 			}
@@ -381,6 +383,65 @@ class CardRepositoryTest {
 		val vCards = assertNotNull(vResult.value)
 		assertTrue(vCards.cards.isEmpty())
 		assertFalse(vCards.isCompleteSet, "zero cards against a total of 352 is not a complete set")
+	}
+
+	@Test
+	fun `the first page is emitted before the rest are fetched`() = runTest {
+		// The whole point of the change: Origins is four pages and roughly seven seconds of round
+		// trips, and the user should not watch a spinner for all of it. The first emission carries
+		// page one, marked partial; the last carries everything, marked complete.
+		val vProvider = FakeProvider(
+			id = mProviderId,
+			mPages = listOf(listOf(card(1), card(2)), listOf(card(3), card(4)), listOf(card(5))),
+		)
+
+		val vEmissions = repositoryFor(vProvider)
+			.cards(mSetId, Game.RIFTBOUND, CardQuery(), knownSetSize = 5)
+			.toList()
+
+		assertEquals(2, vEmissions.size, "expected a partial first page then the complete set")
+
+		val vFirst = assertNotNull(vEmissions.first().value)
+		assertEquals(2, vFirst.cards.size)
+		assertFalse(vFirst.isCompleteSet, "page one must not claim to be the set")
+		assertEquals(5, vFirst.knownSetSize)
+
+		val vLast = assertNotNull(vEmissions.last().value)
+		assertEquals(5, vLast.cards.size)
+		assertTrue(vLast.isCompleteSet)
+	}
+
+	@Test
+	fun `a single-page set emits once and is complete`() = runTest {
+		// Nothing to be progressive about, so no partial emission to flicker through.
+		val vProvider = FakeProvider(mProviderId, mPages = listOf(listOf(card(1), card(2))))
+
+		val vEmissions = repositoryFor(vProvider)
+			.cards(mSetId, Game.RIFTBOUND, CardQuery(), knownSetSize = 2)
+			.toList()
+
+		assertEquals(1, vEmissions.size)
+		assertTrue(assertNotNull(vEmissions.single().value).isCompleteSet)
+	}
+
+	@Test
+	fun `pages are reassembled in page order, not in the order they answer`() = runTest {
+		// They are now fetched concurrently, so completion order is not request order. Collector
+		// numbers must still come back 1..5 or the cached set depends on network timing.
+		val vProvider = FakeProvider(
+			id = mProviderId,
+			mPages = listOf(listOf(card(1), card(2)), listOf(card(3), card(4)), listOf(card(5))),
+			mDelayByPage = mapOf(2 to 50L, 3 to 1L),
+		)
+
+		val vResult = repositoryFor(vProvider)
+			.cards(mSetId, Game.RIFTBOUND, CardQuery())
+			.toList().last()
+
+		assertEquals(
+			listOf("1", "2", "3", "4", "5"),
+			assertNotNull(vResult.value).cards.map { it.collectorNumber },
+		)
 	}
 
 	// ============
