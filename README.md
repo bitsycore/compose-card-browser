@@ -288,6 +288,12 @@ Three different transitions, and the differences are deliberate rather than deco
   into the row on the way out, via `sharedBounds` keyed on the set's id. It scales rather than
   remeasures — the two ends are a 72 dp row and a full screen, and remeasuring would lay a lazy grid
   out afresh at every intermediate size, a hundred times during a 300 ms animation.
+
+  The **corner radius travels with the bounds**, from the row's 12 dp to the screen's zero. Without
+  that the container is square from the first frame and the row's corners simply vanish, which reads
+  as the row being replaced rather than becoming the screen — the shape is most of what sells it.
+  Only the growing side animates: the row keeps its own corners, because it is not becoming square,
+  it is being grown out of.
 - **Opening a card is a shared element**, and predates both: the artwork itself is the same element
   in the tile and on the detail screen, so the picture flies rather than the screen changing.
 - **Everything else cross-fades**, with no size transform. Predictive back is a separate parameter
@@ -296,6 +302,14 @@ Three different transitions, and the differences are deliberate rather than deco
 
 The shared-element work all hangs off two composition locals and is null-safe: with no navigation
 host in scope the modifiers do nothing, so previews and tests render normally rather than throwing.
+
+**The app had no background of its own** until these animations went in, and every screen painting
+one through its `Scaffold` hid it completely. The moment something did not cover the whole window —
+the uncovered strip during a slide, the area around a container growing out of a row — what showed
+through was the *platform's* window background, which is white on both Android and desktop. So the
+dark theme flashed white during precisely the transitions added to make it feel modern. One
+`Surface` at the theme root fixes all of it, and `ThemeBackgroundTest` renders the theme wrapping
+nothing to check the floor is the theme's own colour and differs between light and dark.
 
 ### Light, dark, or the system's choice
 

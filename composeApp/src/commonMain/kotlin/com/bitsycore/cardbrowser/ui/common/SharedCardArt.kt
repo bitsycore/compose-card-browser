@@ -2,9 +2,12 @@ package com.bitsycore.cardbrowser.ui.common
 
 import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.SharedTransitionScope.OverlayClip
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -13,9 +16,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 
 /**
@@ -97,9 +104,28 @@ private val CARD_BOUNDS_TRANSFORM = BoundsTransform { _, _ ->
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun Modifier.sharedSetContainer(setId: String): Modifier {
+fun Modifier.sharedSetContainer(setId: String, expandsFromCorner: Dp? = null): Modifier {
 	val vSharedScope = LocalSharedTransitionScope.current ?: return this
 	val vAnimatedScope = LocalNavAnimatedContentScope.current
+
+	// The corner radius travels with the bounds. A row is a rounded card and a screen is not, so
+	// without this the container is square from the first frame and the row's corners simply vanish
+	// -- which reads as the row being replaced rather than becoming the screen. Material animates
+	// the shape along with the size, and it is the shape that sells it.
+	//
+	// Only the growing side animates. The row keeps its own corners throughout, which is correct:
+	// it is not becoming square, it is being grown *out of*.
+	val vCorner = expandsFromCorner?.let { vStart ->
+		vAnimatedScope.transition.animateDp(
+			transitionSpec = { CONTAINER_CORNER_SPRING },
+			label = "set-container-corner",
+		) { vState ->
+			when (vState) {
+				EnterExitState.Visible -> 0.dp
+				EnterExitState.PreEnter, EnterExitState.PostExit -> vStart
+			}
+		}
+	}
 
 	return with(vSharedScope) {
 		this@sharedSetContainer.sharedBounds(
@@ -114,9 +140,29 @@ fun Modifier.sharedSetContainer(setId: String): Modifier {
 			// legible at row size for the first frames, which reads as a glitch rather than a grow.
 			enter = fadeIn(tween(CONTAINER_FADE_MILLIS)),
 			exit = fadeOut(tween(CONTAINER_FADE_MILLIS)),
+			// The overlay is where the element is actually drawn mid-flight, so the rounding has to
+			// be stated there as well as clipped below -- otherwise the content is rounded while
+			// the container it flies inside stays square, and the corners show through.
+			clipInOverlayDuringTransition = OverlayClip(
+				RoundedCornerShape(vCorner?.value ?: 0.dp),
+			),
+		).then(
+			if (vCorner == null) Modifier else Modifier.clip(RoundedCornerShape(vCorner.value)),
 		)
 	}
 }
+
+/**
+ * How the corner radius travels. The same spring as the bounds, so the two cannot drift apart.
+ *
+ * A shape lagging a frame behind its own container is more noticeable than either being slightly
+ * wrong, because the mismatch shows as a sliver of the wrong colour at each corner.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+private val CONTAINER_CORNER_SPRING = spring<Dp>(
+	dampingRatio = Spring.DampingRatioNoBouncy,
+	stiffness = Spring.StiffnessMediumLow,
+)
 
 /** Short: the fade is there to hide the size change, not to be seen in its own right. */
 private const val CONTAINER_FADE_MILLIS = 120

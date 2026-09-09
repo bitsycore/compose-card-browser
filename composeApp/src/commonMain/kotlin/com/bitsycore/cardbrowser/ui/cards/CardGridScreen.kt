@@ -140,7 +140,10 @@ fun CardGridScreen(
 	// applied inside `CardGridContent`, so the content stays a pure function of its arguments and
 	// keeps previewing -- the modifier reads navigation composition locals that a preview has not
 	// got, and this screen is the layer that already knows about navigation.
-	Box(Modifier.fillMaxSize().sharedSetContainer(setId)) {
+	// `expandsFromCorner` is the set row's own radius -- `MaterialTheme.shapes.medium`, which is what
+	// a Material 3 `Card` uses. The container starts that round and squares off as it fills the
+	// screen, so the row visibly becomes the screen rather than being swapped for it.
+	Box(Modifier.fillMaxSize().sharedSetContainer(setId, expandsFromCorner = SET_ROW_CORNER)) {
 		CardGridContent(
 			snackbarHostState = vSnackbarHost,
 			state = vState,
@@ -641,3 +644,6 @@ private fun LanguageMenu(
 		}
 	}
 }
+
+/** The corner radius a set row is drawn with, which the container transform grows out of. */
+private val SET_ROW_CORNER = 12.dp

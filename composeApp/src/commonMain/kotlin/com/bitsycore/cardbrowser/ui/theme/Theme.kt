@@ -1,10 +1,13 @@
 package com.bitsycore.cardbrowser.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 
@@ -43,10 +46,24 @@ fun CardBrowserTheme(
 	useDarkTheme: Boolean = isSystemInDarkTheme(),
 	content: @Composable () -> Unit,
 ) {
-	MaterialTheme(
-		colorScheme = if (useDarkTheme) DARK_COLORS else LIGHT_COLORS,
-		content = content,
-	)
+	MaterialTheme(colorScheme = if (useDarkTheme) DARK_COLORS else LIGHT_COLORS) {
+		// The app's floor, and it was missing.
+		//
+		// Every screen paints its own background through its `Scaffold`, which looks complete right
+		// up until something does not cover the whole window -- and then whatever is behind shows
+		// through, which is the platform's window background rather than anything this theme chose.
+		// It is white on both Android and desktop, so the dark theme flashed white in three places
+		// at once: the uncovered strip while a screen slides in, the area around a container
+		// transform growing out of a row, and the corners of any transition that scales.
+		//
+		// One `Surface` at the root fixes all of them, because none of those gaps was ever a
+		// transition bug -- they were the absence of a background to see.
+		Surface(
+			modifier = Modifier.fillMaxSize(),
+			color = MaterialTheme.colorScheme.background,
+			content = content,
+		)
+	}
 }
 
 /**
