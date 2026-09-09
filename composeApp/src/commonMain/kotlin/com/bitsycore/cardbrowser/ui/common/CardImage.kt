@@ -17,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -56,10 +57,22 @@ import kotlinx.coroutines.withContext
  * `200`, so without recovery that card is broken on every launch forever, and no amount of HTTP
  * retrying helps because the request never failed.
  *
- * So the first failure triggers one automatic attempt that **evicts the memory and disk entries
- * first**, which is what distinguishes it from a plain retry and what actually cures a poisoned
- * cache. If that also fails the mark stays, and where there is room for it the user gets a retry
- * button.
+ * So a failure is answered in two ways, in order:
+ *
+ * 1. **One retry that evicts the memory and disk entries first.** This is what distinguishes it
+ *    from a plain retry and what cures a poisoned cache -- the response was a `200`, so Coil is
+ *    quite right to have kept it, and it has to be thrown away explicitly.
+ * 2. **The next rendition up.** A file that cannot be decoded says nothing about the card, and the
+ *    larger rendition of the same art is a *different file*, often in a different format: for
+ *    Riftbound, 23 KB of WebP, then 132 KB of WebP, then 744 KB of PNG. Retrying the same URL
+ *    cannot fix a format the platform does not support; asking for another one can. See
+ *    [ImageVariant.chainFor].
+ *
+ * Only when every rendition is spent does the mark stay, and where there is room for it the user
+ * gets a retry button that starts again from the cheapest.
+ *
+ * Nothing here changes what is fetched *first*. A grid still asks for thumbnails, and only a tile
+ * whose thumbnail is genuinely broken ever pays for full art.
  *
  * @param variant which of the provider's image sizes to ask for. [ImageVariant.THUMBNAIL] in the
  *   grid and the preview strip: loading full-resolution art for a scrolling grid is the single
@@ -88,14 +101,10 @@ fun CardImage(
 	filterQuality: FilterQuality = FilterQuality.High,
 	allowManualRetry: Boolean = false,
 ) {
-	val vUrl = variant.urlFor(artwork)
+	// Every rendition of this art, best first. See [ImageVariant.chainFor].
+	val vChain = remember(artwork, variant) { variant.chainFor(artwork) }
 
-	// The same art, smaller, and almost certainly already in the cache because the grid drew it.
-	// Shown underneath while the full-size one is still coming down, so opening a card lands on the
-	// card rather than on a grey rectangle. `null` when this *is* the small one.
-	val vPlaceholderUrl = artwork.thumbnailUrl?.takeIf { it != vUrl }
-
-	if (vUrl.isBlank()) {
+	if (vChain.isEmpty()) {
 		// Nothing to retry: the provider supplied no image at all.
 		ImagePlaceholder(modifier, isError = true, onRetry = null)
 		return
@@ -104,14 +113,35 @@ fun CardImage(
 	val vContext = LocalPlatformContext.current
 	val vScope = rememberCoroutineScope()
 
-	// Both keyed on the URL, so a recycled tile showing a different card starts fresh rather than
+	// All keyed on the chain, so a recycled tile showing a different card starts fresh rather than
 	// inheriting the previous card's failure.
-	var vAttempt by remember(vUrl) { mutableIntStateOf(0) }
-	var vHasAutoRetried by remember(vUrl) { mutableStateOf(false) }
+	var vIndex by remember(vChain) { mutableIntStateOf(0) }
+	var vAttempt by remember(vChain) { mutableIntStateOf(0) }
+	// Which URLs have been retried once, and which have given up entirely. Per URL rather than per
+	// composable, because each rendition gets its own single automatic attempt.
+	val vRetried = remember(vChain) { mutableStateListOf<String>() }
+	val vFailed = remember(vChain) { mutableStateListOf<String>() }
+
+	val vUrl = vChain[vIndex]
+
+	// The same art, smaller, and almost certainly already in the cache because the grid drew it.
+	// Shown underneath while the full-size one is still coming down, so opening a card lands on the
+	// card rather than on a grey rectangle. `null` when this *is* the small one -- or when it is
+	// the rendition that just failed, in which case putting it back would be showing the user the
+	// broken thing they escalated away from.
+	val vPlaceholderUrl = artwork.thumbnailUrl
+		?.ifBlank { null }
+		?.takeIf { it != vUrl && it !in vFailed }
 
 	val vRetry: () -> Unit = {
 		vScope.launch {
-			withContext(Dispatchers.Default) { evictCachedImage(vContext, vUrl) }
+			// Start again from the best rendition, forgetting everything: a manual retry is the
+			// user saying the conditions have changed, so a cheaper rendition that failed before
+			// deserves another go before an expensive one is fetched.
+			withContext(Dispatchers.Default) { vChain.forEach { evictCachedImage(vContext, it) } }
+			vRetried.clear()
+			vFailed.clear()
+			vIndex = 0
 			vAttempt++
 		}
 		Unit
@@ -159,19 +189,31 @@ fun CardImage(
 			},
 			error = {
 				LaunchedEffect(vUrl) {
-					// Once, and only once. A CDN that is genuinely down should not be hammered by
-					// every visible tile in a grid retrying in a loop.
-					if (!vHasAutoRetried) {
-						vHasAutoRetried = true
-						vRetry()
+					when {
+						// One automatic attempt per rendition, evicting first, which is what cures
+						// a cached-but-undecodable response. Once only: a CDN that is genuinely
+						// down should not be hammered by every visible tile in a grid.
+						vUrl !in vRetried -> {
+							vRetried.add(vUrl)
+							withContext(Dispatchers.Default) { evictCachedImage(vContext, vUrl) }
+							vAttempt++
+						}
+						// This rendition is beyond help. Try the next one up -- a different file,
+						// so there is nothing to evict and no reason to expect the same result.
+						vIndex < vChain.lastIndex -> {
+							vFailed.add(vUrl)
+							vIndex++
+						}
+						// Out of renditions.
+						else -> vFailed.add(vUrl)
 					}
 				}
 				ImagePlaceholder(
 					modifier = Modifier.fillMaxSize(),
 					isError = true,
-					// Offered only after the automatic attempt has been spent, so the button is
-					// never a no-op.
-					onRetry = if (allowManualRetry && vHasAutoRetried) vRetry else null,
+					// Offered only once every rendition has been spent, so the button is never a
+					// no-op and never pre-empts an escalation that is still coming.
+					onRetry = if (allowManualRetry && vUrl in vFailed) vRetry else null,
 				)
 			},
 		)
@@ -273,11 +315,32 @@ enum class ImageVariant {
 	;
 
 	/** The URL for this variant, falling back through the ones a provider did supply. */
-	fun urlFor(artwork: Artwork): String = when (this) {
-		THUMBNAIL -> artwork.thumbnailUrl ?: artwork.displayUrl ?: artwork.imageUrl
-		DISPLAY -> artwork.displayUrl ?: artwork.imageUrl
-		ORIGINAL -> artwork.imageUrl
-	}
+	fun urlFor(artwork: Artwork): String = chainFor(artwork).firstOrNull().orEmpty()
+
+	/**
+	 * Every rendition worth trying for this variant, best first.
+	 *
+	 * A chain rather than one URL because a rendition failing to load is a fact about *that file*,
+	 * not about the card. A CDN answering `200 OK` with an intact image the platform cannot decode
+	 * is the case that motivates all of this -- Riot's CDN serves AVIF for a minority of Riftbound
+	 * cards and Skia decodes none of it -- and the larger rendition of the same art is a different
+	 * file, often in a different format. Retrying the same URL cannot fix that; asking for the
+	 * other one can.
+	 *
+	 * Ordered by cost, so nothing here changes what is fetched first. A grid still asks for
+	 * thumbnails, and only a tile whose thumbnail is genuinely broken ever pays for full art --
+	 * which is the trade being made: a few hundred kilobytes on the rare broken tile instead of a
+	 * permanently broken tile.
+	 *
+	 * Blanks and duplicates are dropped, so a provider that publishes one image for all three
+	 * renditions yields a chain of one and behaves exactly as before.
+	 */
+	fun chainFor(artwork: Artwork): List<String> = when (this) {
+		THUMBNAIL -> listOf(artwork.thumbnailUrl, artwork.displayUrl, artwork.imageUrl)
+		DISPLAY -> listOf(artwork.displayUrl, artwork.imageUrl)
+		// Nothing to escalate to: this *is* what the provider published.
+		ORIGINAL -> listOf(artwork.imageUrl)
+	}.mapNotNull { it?.ifBlank { null } }.distinct()
 }
 
 /**
