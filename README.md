@@ -276,6 +276,31 @@ the Japan line — so Korean is a *language of* the Japan region rather than a r
 lines a game has is declared by the game (`GameProfile.regions`); which line a set belongs to is
 tagged by the adapter, because that is a fact about how the source keys its data.
 
+### Reordering and hiding games
+
+The picker's tune button turns the list into an editor: up/down arrows on each row, an eye to hide a
+game, and hidden games listed below a divider so they can be brought back. Both settings persist.
+
+Three decisions worth knowing:
+
+- **Hiding is a display choice, not an uninstall.** The adapter stays registered, the routing table
+  is untouched, and any set already downloaded stays on disk. The one thing it genuinely changes is
+  that `SetCatalogueWarmer` stops prefetching that game's set list on launch — which is the only
+  place hiding saves anything real, and the reason it is worth having.
+- **The stored order is a hint, not the list.** It is a list of `GameId` values applied over
+  whatever games the build actually offers: a game the order does not name goes after the ones it
+  does, and an id naming no game is ignored. That is what stops a game added in a later release from
+  being invisible because the user reordered the picker before it existed. `GameOrder` holds those
+  rules and is tested against exactly those disagreements.
+- **The last visible game cannot be hidden.** Every route into the app goes through this screen, and
+  the control that would undo an empty picker is on the screen that just emptied. The eye is
+  disabled rather than failing silently, and the reducer refuses it too, so the button cannot
+  promise something that will not happen.
+
+Buttons rather than drag-and-drop, deliberately: a drag handle in a `LazyColumn` needs its own
+gesture plumbing and item animation to feel right, and on a ten-row list that barely scrolls two
+taps beat a drag you can drop in the wrong place.
+
 ### Changing the language of a set you are looking at
 
 The language preference picks a default; a set can also be switched in place, and only to languages

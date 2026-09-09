@@ -15,13 +15,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Style
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,12 +45,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.games.api.GameArt
+import com.bitsycore.cardbrowser.games.lorcana.LorcanaGame
 import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesGame
 import com.bitsycore.cardbrowser.games.yugioh.YuGiOhGame
 import com.bitsycore.cardbrowser.games.altered.AlteredGame
@@ -61,10 +72,22 @@ import org.koin.compose.viewmodel.koinViewModel
  *
  * Every game shown here has a working, verified adapter behind it. There is no "coming soon" row
  * and no greyed-out entry -- the list is derived from the routing table, so a game the app cannot
- * actually serve is not in it at all. Cyberpunk TCG is absent for exactly that reason.
+ * actually serve is not in it at all. Duel Masters is absent for exactly that reason.
  *
  * Each row names the source its data comes from, which is both the attribution those sources ask
  * for and useful information: a community mirror and an official API are not the same promise.
+ *
+ * ## Reordering and hiding
+ *
+ * The tune button turns the list into an editor: each row grows up/down arrows and an eye, and the
+ * games the user has hidden appear below a divider so they can be brought back. Both are display
+ * choices layered over the routing table, which is untouched -- hiding a game does not unregister
+ * its adapter or delete anything it downloaded. The one real cost it carries is that
+ * `SetCatalogueWarmer` stops prefetching hidden games, which is rather the point of hiding one.
+ *
+ * Deliberately buttons rather than drag-and-drop. A drag handle in a `LazyColumn` needs its own
+ * gesture plumbing and item-level animation to look right, and it is the worse control on a
+ * ten-row list that barely scrolls -- two taps beat a drag you can drop in the wrong place.
  */
 @Composable
 fun GameListScreen(
@@ -98,10 +121,28 @@ fun GameListContent(
 	Scaffold(
 		topBar = {
 			TopAppBar(
-				title = { Text("Card Browser") },
+				title = { Text(if (state.isEditing) "Customise list" else "Card Browser") },
 				actions = {
-					IconButton(onClick = onOpenSettings) {
-						Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+					IconButton(onClick = { dispatch(GameListContract.Intent.EditingToggled) }) {
+						Icon(
+							imageVector = if (state.isEditing) {
+								Icons.Outlined.Check
+							} else {
+								Icons.Outlined.Tune
+							},
+							contentDescription = if (state.isEditing) {
+								"Done customising"
+							} else {
+								"Reorder or hide games"
+							},
+						)
+					}
+					// Hidden while editing. Settings is a different screen, and leaving mid-edit is
+					// a good way to forget the list is in a mode at all.
+					if (!state.isEditing) {
+						IconButton(onClick = onOpenSettings) {
+							Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+						}
 					}
 				},
 			)
@@ -115,27 +156,67 @@ fun GameListContent(
 					contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
 					verticalArrangement = Arrangement.spacedBy(8.dp),
 				) {
-					items(state.games, key = { it.id.value }) { vGame ->
+					val vVisible = state.games
+					itemsIndexed(vVisible, key = { _, vGame -> vGame.id.value }) { vIndex, vGame ->
 						GameRow(
 							game = vGame,
 							source = state.sources[vGame],
 							isLastOpened = vGame == state.lastGame,
+							isEditing = state.isEditing,
+							isHidden = false,
+							// Judged against the *visible* list, so an arrow greys out exactly when
+							// the row cannot move on screen. `GameOrder.moved` still steps over any
+							// hidden game underneath, so one press moves it one visible place.
+							canMoveUp = vIndex > 0,
+							canMoveDown = vIndex < vVisible.lastIndex,
+							canHide = state.canHideMore,
 							onClick = {
 								dispatch(GameListContract.Intent.GameOpened(vGame))
 								onOpenGame(vGame)
 							},
+							dispatch = dispatch,
 						)
 					}
 
-					item {
-						Text(
-							text = "Every game listed has a working data source. Card data is " +
-								"supplied by the projects named above; this app is not affiliated " +
-								"with any game's publisher. " + GameArt.LOGO_ATTRIBUTION,
-							style = MaterialTheme.typography.bodySmall,
-							color = MaterialTheme.colorScheme.onSurfaceVariant,
-							modifier = Modifier.padding(horizontal = 4.dp, vertical = 16.dp),
-						)
+					if (state.isEditing && state.hiddenGames.isNotEmpty()) {
+						item { HiddenHeading(count = state.hiddenGames.size) }
+						items(state.hiddenGames, key = { "hidden-" + it.id.value }) { vGame ->
+							GameRow(
+								game = vGame,
+								source = state.sources[vGame],
+								isLastOpened = false,
+								isEditing = true,
+								isHidden = true,
+								// A hidden row has no position to move: it is out of the list the
+								// arrows act on, and bringing it back is all there is to do with it.
+								canMoveUp = false,
+								canMoveDown = false,
+								canHide = true,
+								onClick = {},
+								dispatch = dispatch,
+							)
+						}
+					}
+
+					if (state.isEditing) {
+						item {
+							ResetRow(
+								isEnabled = state.isCustomised,
+								onReset = { dispatch(GameListContract.Intent.CustomisationReset) },
+							)
+						}
+					} else {
+						item {
+							Text(
+								text = "Every game listed has a working data source. Card data is " +
+									"supplied by the projects named above; this app is not " +
+									"affiliated with any game's publisher. " +
+									GameArt.LOGO_ATTRIBUTION,
+								style = MaterialTheme.typography.bodySmall,
+								color = MaterialTheme.colorScheme.onSurfaceVariant,
+								modifier = Modifier.padding(horizontal = 4.dp, vertical = 16.dp),
+							)
+						}
 					}
 				}
 			}
@@ -143,29 +224,53 @@ fun GameListContent(
 	}
 }
 
-/** One game: its mark, its name, and the source behind it. */
+/**
+ * One game: its mark, its name, and the source behind it.
+ *
+ * While editing, the row stops being a button and grows controls instead. Deliberately the same
+ * composable rather than a second one -- a separate editor row is how the two drift apart until the
+ * list you are editing no longer looks like the list you edited.
+ */
 @Composable
 private fun GameRow(
 	game: GameProfile,
 	source: String?,
 	isLastOpened: Boolean,
+	isEditing: Boolean,
+	isHidden: Boolean,
+	canMoveUp: Boolean,
+	canMoveDown: Boolean,
+	canHide: Boolean,
 	onClick: () -> Unit,
+	dispatch: (GameListContract.Intent) -> Unit,
 ) {
 	val vArt = koinInject<GameArtRegistry>().forGame(game)
+	val vColors = if (isLastOpened) {
+		CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+	} else {
+		CardDefaults.cardColors()
+	}
+	// A hidden row is dimmed as a whole rather than greyed piece by piece, so its logo reads as
+	// "off" along with its text.
+	val vModifier = Modifier
+		.fillMaxWidth()
+		.graphicsLayer { alpha = if (isHidden) HIDDEN_ROW_ALPHA else 1f }
 
-	Card(
-		onClick = onClick,
-		modifier = Modifier.fillMaxWidth(),
-		colors = if (isLastOpened) {
-			CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-		} else {
-			CardDefaults.cardColors()
-		},
-	) {
+	val vContent: @Composable () -> Unit = {
 		Row(
-			modifier = Modifier.padding(16.dp).fillMaxWidth(),
+			// Tighter while editing: a mark plus three controls is a lot for one phone-width row.
+			modifier = Modifier
+				.padding(horizontal = if (isEditing) 8.dp else 16.dp, vertical = 12.dp)
+				.fillMaxWidth(),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
+			if (isEditing) {
+				MoveButtons(
+					canMoveUp = canMoveUp,
+					canMoveDown = canMoveDown,
+					onMove = { vDelta -> dispatch(GameListContract.Intent.GameMoved(game, vDelta)) },
+				)
+			}
 			GameMark(vArt)
 			Spacer(Modifier.size(14.dp))
 			Column(Modifier.weight(1f)) {
@@ -183,12 +288,99 @@ private fun GameRow(
 					)
 				}
 			}
-			Icon(
-				imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-				contentDescription = null,
-				tint = MaterialTheme.colorScheme.onSurfaceVariant,
-			)
+			if (isEditing) {
+				IconButton(
+					onClick = { dispatch(GameListContract.Intent.GameVisibilityToggled(game)) },
+					// Disabled only for the last visible game. `GameOrder` refuses that case as
+					// well, so the button cannot promise something the reducer would decline.
+					enabled = isHidden || canHide,
+				) {
+					Icon(
+						imageVector = if (isHidden) {
+							Icons.Outlined.VisibilityOff
+						} else {
+							Icons.Outlined.Visibility
+						},
+						contentDescription = if (isHidden) {
+							"Show ${game.displayName}"
+						} else {
+							"Hide ${game.displayName}"
+						},
+					)
+				}
+			} else {
+				Icon(
+					imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+					contentDescription = null,
+					tint = MaterialTheme.colorScheme.onSurfaceVariant,
+				)
+			}
 		}
+	}
+
+	if (isEditing) {
+		// Not clickable while editing: the row's job is to be rearranged, and opening a game from
+		// under a press aimed at an arrow is the obvious way to get that wrong.
+		Card(modifier = vModifier, colors = vColors) { vContent() }
+	} else {
+		Card(onClick = onClick, modifier = vModifier, colors = vColors) { vContent() }
+	}
+}
+
+/** How far a hidden row is faded. Enough to read as off, not so far it cannot be read. */
+private const val HIDDEN_ROW_ALPHA = 0.45f
+
+/** The up/down pair, greyed at the ends of the list rather than wrapping around it. */
+@Composable
+private fun MoveButtons(
+	canMoveUp: Boolean,
+	canMoveDown: Boolean,
+	onMove: (Int) -> Unit,
+) {
+	Column {
+		IconButton(onClick = { onMove(-1) }, enabled = canMoveUp, modifier = Modifier.size(30.dp)) {
+			Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Move up")
+		}
+		IconButton(onClick = { onMove(1) }, enabled = canMoveDown, modifier = Modifier.size(30.dp)) {
+			Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "Move down")
+		}
+	}
+}
+
+/** Separates the hidden games from the listed ones, and says how many there are. */
+@Composable
+private fun HiddenHeading(count: Int) {
+	Column(Modifier.padding(top = 16.dp, bottom = 4.dp)) {
+		HorizontalDivider()
+		Text(
+			text = if (count == 1) "1 hidden game" else "$count hidden games",
+			style = MaterialTheme.typography.labelLarge,
+			color = MaterialTheme.colorScheme.onSurfaceVariant,
+			modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp),
+		)
+	}
+}
+
+/**
+ * Puts the list back to the routing table's own order, and says what hiding actually costs.
+ *
+ * The note matters: "hidden" could reasonably be read as uninstalled, and it is not. Saying so here
+ * is cheaper than a user wondering whether hiding a game threw away the sets they downloaded.
+ */
+@Composable
+private fun ResetRow(isEnabled: Boolean, onReset: () -> Unit) {
+	Column(Modifier.padding(vertical = 8.dp)) {
+		TextButton(onClick = onReset, enabled = isEnabled) {
+			Text("Reset to default order")
+		}
+		Text(
+			text = "Hiding a game only takes it off this list. Its data source stays registered " +
+				"and anything already downloaded stays on your device — but its set list is no " +
+				"longer fetched in the background.",
+			style = MaterialTheme.typography.bodySmall,
+			color = MaterialTheme.colorScheme.onSurfaceVariant,
+			modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+		)
 	}
 }
 
@@ -282,6 +474,7 @@ private val PREVIEW_SOURCES: Map<GameProfile, String> = mapOf(
 	AlteredGame to "Altered TCG Card Database",
 	YuGiOhGame to "YGOPRODeck",
 	WutheringWavesGame to "UCP Wuthering Waves TCG",
+	LorcanaGame to "TCGCSV",
 )
 
 @Preview
@@ -289,7 +482,7 @@ private val PREVIEW_SOURCES: Map<GameProfile, String> = mapOf(
 private fun GameListPreview() = PreviewFrame {
 	GameListContent(
 		state = GameListContract.UiState(
-			games = PREVIEW_SOURCES.keys.toList().toList(),
+			allGames = PREVIEW_SOURCES.keys.toList(),
 			sources = PREVIEW_SOURCES,
 			lastGame = RiftboundGame,
 			isLoading = false,
@@ -303,7 +496,7 @@ private fun GameListPreview() = PreviewFrame {
 private fun GameListLightPreview() = PreviewFrame(isDark = false) {
 	GameListContent(
 		state = GameListContract.UiState(
-			games = PREVIEW_SOURCES.keys.toList().toList(),
+			allGames = PREVIEW_SOURCES.keys.toList(),
 			sources = PREVIEW_SOURCES,
 			lastGame = WutheringWavesGame,
 			isLoading = false,
@@ -325,8 +518,43 @@ private fun GameListSingleGamePreview() = PreviewFrame {
 	// again if the routing table were cut back to one.
 	GameListContent(
 		state = GameListContract.UiState(
-			games = listOf(RiftboundGame),
+			allGames = listOf(RiftboundGame),
 			sources = mapOf(RiftboundGame to "Riftcodex"),
+			isLoading = false,
+		),
+		dispatch = {},
+	)
+}
+
+@Preview
+@Composable
+private fun GameListEditingPreview() = PreviewFrame {
+	// The editor with a reordered list and two games hidden, which is the state the arrows, the eye
+	// and the hidden divider all have to look right in at once.
+	GameListContent(
+		state = GameListContract.UiState(
+			allGames = PREVIEW_SOURCES.keys.toList(),
+			sources = PREVIEW_SOURCES,
+			order = listOf("lorcana", "magic", "riftbound"),
+			hiddenIds = setOf("yugioh", "wuwa"),
+			isEditing = true,
+			isLoading = false,
+		),
+		dispatch = {},
+	)
+}
+
+@Preview
+@Composable
+private fun GameListLastVisibleGamePreview() = PreviewFrame {
+	// Everything but one hidden: the eye on the survivor is disabled, because emptying the picker
+	// would strand the user on the one screen every route into the app goes through.
+	GameListContent(
+		state = GameListContract.UiState(
+			allGames = PREVIEW_SOURCES.keys.toList(),
+			sources = PREVIEW_SOURCES,
+			hiddenIds = PREVIEW_SOURCES.keys.drop(1).map { it.id.value }.toSet(),
+			isEditing = true,
 			isLoading = false,
 		),
 		dispatch = {},

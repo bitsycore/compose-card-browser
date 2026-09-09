@@ -73,6 +73,26 @@ data class BrowsingPreferences(
 	 */
 	val lastGame: String? = null,
 	val preferredLanguages: List<CardLanguage> = CardLanguage.PREFERENCE_ORDER,
+	/**
+	 * The user's own order for the game picker, as `GameId` values. Empty means the routing order.
+	 *
+	 * Ids rather than an index or an enum, for the same reason [lastGame] is: the list of games a
+	 * build offers changes between releases, and a stored order that disagreed with it would have to
+	 * either lose a game or throw. It is a *hint* applied over the real list -- see `GameOrder`,
+	 * which is where the rules for a partial or stale order live.
+	 */
+	val gameOrder: List<String> = emptyList(),
+	/**
+	 * Games the user has hidden from the picker, as `GameId` values.
+	 *
+	 * Hidden is a display choice and nothing more: the adapter stays registered, the routing table
+	 * is untouched, and anything already downloaded stays on disk. It does stop the background set
+	 * catalogue sweep from fetching them, which is the one place where hiding saves anything real.
+	 *
+	 * An id naming no game this build offers is inert rather than an error, so hiding a game and
+	 * later installing a build without it does not corrupt the setting.
+	 */
+	val hiddenGames: Set<String> = emptySet(),
 	val gridColumnPreference: Int? = null,
 	/** Ceiling for downloaded card art. Applied when the image loader is built, so on next launch. */
 	val imageCacheLimitBytes: Long = DEFAULT_IMAGE_CACHE_LIMIT_BYTES,

@@ -53,9 +53,14 @@ class SetCatalogueWarmer(
 		if (mJob?.isActive == true) return
 		mJob = mScope.launch {
 			mPreferences.load()
-			val vLanguage = mPreferences.preferences.value.primaryLanguage
+			val vPreferences = mPreferences.preferences.value
+			val vLanguage = vPreferences.primaryLanguage
+			// Hidden games are skipped. Hiding one is a display choice everywhere else in the app,
+			// but this is a *prefetch* -- spending someone's bandwidth on a catalogue they have said
+			// they do not want on screen is the one place the choice should cost something.
+			val vGames = mRegistry.games.filterNot { it.id.value in vPreferences.hiddenGames }
 
-			for (vGame in mRegistry.games) {
+			for (vGame in vGames) {
 				try {
 					// Collected to completion rather than sampled: the flow emits cache and then
 					// network, and it is the network pass that leaves a fresh catalogue on disk.
