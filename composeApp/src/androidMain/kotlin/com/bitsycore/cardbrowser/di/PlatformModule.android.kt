@@ -2,7 +2,6 @@ package com.bitsycore.cardbrowser.di
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.platform.LinkOpener
 import okio.FileSystem
@@ -10,6 +9,7 @@ import okio.Path.Companion.toOkioPath
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
 import org.koin.dsl.module
+import androidx.core.net.toUri
 
 /**
  * Android bindings.
@@ -35,14 +35,14 @@ actual fun platformModule(): Module = module {
 private class AndroidLinkOpener(private val mContext: Context) : LinkOpener {
 
 	override fun open(url: String): Boolean = try {
-		val vIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+		val vIntent = Intent(Intent.ACTION_VIEW, url.toUri()).apply {
 			// Launched from an application context rather than an activity, so the new task flag
 			// is required or Android refuses it outright.
 			addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 		}
 		mContext.startActivity(vIntent)
 		true
-	} catch (vError: Exception) {
+	} catch (_: Exception) {
 		// No browser installed, or the intent was blocked. Not worth a crash.
 		false
 	}

@@ -54,6 +54,7 @@ import org.koin.compose.koinInject
 import androidx.compose.foundation.Image
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import com.bitsycore.cardbrowser.games.api.GameArt
 import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
 import org.jetbrains.compose.resources.painterResource
@@ -213,7 +214,12 @@ fun SetListContent(
 							// rather than being decorative.
 							contentDescription = vState.game?.displayName,
 							contentScale = ContentScale.Fit,
-							modifier = Modifier.heightIn(max = 30.dp),
+							// Bounded both ways. Height is what normally binds, but these are
+							// wordmarks of wildly different aspect -- One Piece is 149 dp wide at
+							// 30 dp tall against Pokémon's 59 -- and without a width cap the
+							// widest of them crowds the three action buttons on a narrow phone.
+							// `Fit` then scales by whichever limit binds first.
+							modifier = Modifier.heightIn(max = 30.dp).widthIn(max = 132.dp),
 							// Same rule as the picker: a single-colour wordmark is drawn in the
 							// theme's foreground, colour artwork is never recoloured.
 							colorFilter = if (gameArt.tintLogo) {
