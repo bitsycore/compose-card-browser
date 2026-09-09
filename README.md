@@ -442,6 +442,17 @@ the inline image and the fullscreen viewer now decode at source resolution.
 
 - Cardmarket serves 403 to non-browser clients, so nothing could be verified by fetching it. The URL
   shapes used were confirmed by inspecting live pages in a real browser.
+- **The anatomy, from two real card URLs.** Riftbound's
+  `…/Riftbound/Products/Singles/Origins/KaiSa-Survivor-V1-Epic` and Pokémon's
+  `…/Pokemon/Products/Singles/Explosive-Flame-Walker/Butterfree-V-V1-S2A1`. So the expansion segment
+  is the set name with spaces hyphenated, and the card segment is name + variant ordinal + a
+  trailing token — but that trailing token is the *rarity* for Riftbound and the *set code plus
+  collector number* for Pokémon. It is not one rule.
+
+  The Pokémon example also shows the expansion is named as **Cardmarket** names it: "Explosive Flame
+  Walker" is that set's Japanese name translated, where TCGdex's English catalogue does not carry
+  the set at all and its Japanese one calls it 爆炎ウォーカー. So even the expansion segment cannot
+  be derived from a provider's set name with confidence.
 - **Card-level slugs are not generated.** A real one looks like `KaiSa-Survivor-V1-Epic` — it folds
   in an apostrophe-stripped name, an abbreviated subtitle, a variant ordinal and the rarity.
   Riftcodex publishes no variant ordinal at all, so synthesising a slug would 404 for every card
