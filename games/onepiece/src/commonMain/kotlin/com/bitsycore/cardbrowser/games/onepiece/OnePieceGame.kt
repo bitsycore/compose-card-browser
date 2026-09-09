@@ -38,18 +38,21 @@ object OnePieceGame : GameProfile {
 		listOf("Common", "Uncommon", "Rare", "Super Rare", "Secret Rare")
 
 	/**
-	 * Cardmarket's path segment. **Not verified against a live page.**
+	 * Cardmarket's path segment for this game.
 	 *
-	 * Every other fact in this project was measured. This one could not be: Cardmarket answers 403
-	 * to every scripted request, including one for the Riftbound path that is known to work, and
-	 * the 403/404 split is not an existence oracle either -- a nonsense path answered 403 on one
-	 * attempt and 404 on the next.
-	 *
-	 * So this follows Cardmarket's observable convention -- the game's name, PascalCase, no
-	 * separators -- at the project owner's request, having been told it is a guess. If it is wrong
-	 * the button lands on a 404, and the fix is this one line.
+	 * Confirmed against a real Cardmarket URL supplied by the project owner. It was a guess before
+	 * that -- the site answers 403 to every scripted request, so a browser is the only oracle.
 	 */
 	override val cardmarketSlug: String = "OnePiece"
+
+	/** Read off a real search URL for this game. See [GameProfile.cardmarketCategoryId]. */
+	override val cardmarketCategoryId: Int = 1621
+
+	/**
+	 * One Piece reprints the same character across sets, so the name alone is not a card.
+	 * See [GameProfile.cardmarketSearchIncludesCode].
+	 */
+	override val cardmarketSearchIncludesCode: Boolean = true
 
 	/**
 	 * The six colours.

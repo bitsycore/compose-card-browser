@@ -49,10 +49,11 @@ object TestGameWithoutMarketplace : GameProfile {
 }
 
 /**
- * A game with a Cardmarket section but no known category id.
+ * A game with a Cardmarket section but no category id.
  *
- * Four of the seven are in this state: the slug is confirmed, the category id is not, and a search
- * filtered by another game's category returns nothing at all.
+ * Magic and Yu-Gi-Oh are both in this state, and for different reasons: Magic's own search URL
+ * carries no category at all, Yu-Gi-Oh's sends `0`, which means any. Either way the search is still
+ * built -- it is a *wrong* id, not a missing one, that returns nothing.
  */
 object TestGameWithoutCategory : GameProfile {
 
@@ -63,4 +64,18 @@ object TestGameWithoutCategory : GameProfile {
 	override val vocabulary: GameVocabulary = GameVocabulary()
 
 	override val cardmarketSlug: String = "Uncategorised"
+}
+
+/** A game that puts the printed code in the Cardmarket search box, the way One Piece does. */
+object TestGameSearchingByCode : GameProfile {
+
+	override val id: GameId = GameId("test-game-code-search")
+
+	override val displayName: String = "Coded Game"
+
+	override val vocabulary: GameVocabulary = GameVocabulary()
+
+	override val cardmarketSlug: String = "Coded"
+
+	override val cardmarketSearchIncludesCode: Boolean = true
 }

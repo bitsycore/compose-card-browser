@@ -131,6 +131,36 @@ class AppModuleTest {
 	}
 
 	@Test
+	fun `each game either has a confirmed Cardmarket section or declares it has none`() {
+		// Every slug here has been read off a real Cardmarket URL, because the site answers 403 to
+		// scripted requests and a browser is the only oracle. Two games declare `null`, and mean
+		// different things by it that both come out as no button: Altered is not sold on Cardmarket
+		// at all, and Wuthering Waves is too new to have a section yet.
+		val vRegistry = graph().get<ProviderRegistry>()
+		val vExpected = mapOf(
+			"riftbound" to "Riftbound",
+			"pokemon" to "Pokemon",
+			"magic" to "Magic",
+			"onepiece" to "OnePiece",
+			"yugioh" to "YuGiOh",
+			"altered" to null,
+			"wuwa" to null,
+		)
+
+		for (vGame in vRegistry.games) {
+			assertTrue(
+				vExpected.containsKey(vGame.id.value),
+				"${vGame.id} is offered but its Cardmarket status has never been checked",
+			)
+			assertEquals(
+				vExpected[vGame.id.value],
+				vGame.cardmarketSlug,
+				"${vGame.id}'s Cardmarket slug changed -- confirm the new one against a real page",
+			)
+		}
+	}
+
+	@Test
 	fun `every offered game ships a mark`() {
 		// This is the check that replaced compile-time exhaustiveness. `GameVisual.of` was a total
 		// `when` over a closed enum, so a new game could not skip it; art now lives in the game

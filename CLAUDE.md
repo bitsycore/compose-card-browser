@@ -130,8 +130,13 @@ browser, so a `cardmarketSlug` that has not been seen on a real page stays `null
 
 Two results already bought with someone's time — do not spend it again:
 
-- Per-game slugs `Magic`, `Pokemon`, `YuGiOh`, `OnePiece` are corroborated against real URLs.
-  `Altered` is declared but never confirmed.
+- Per-game slugs `Riftbound`, `Magic`, `Pokemon`, `YuGiOh`, `OnePiece` are all corroborated against
+  real URLs. **Altered has no Cardmarket section at all** — that is checked, not unknown, so its
+  `cardmarketSlug` is `null` permanently and is not a gap to go and fill. Wuthering Waves has none
+  yet, which is. `AppModuleTest` pins the whole table.
+- **`idCategory` is optional.** Known for Riftbound (1655), Pokémon (51) and One Piece (1621); Magic
+  and Yu-Gi-Oh's real URLs send none and `0` respectively, so they declare none and the parameter is
+  omitted. A missing id costs the refinement, not the search — only a *wrong* one returns nothing.
 - **`?idProduct=<n>` alone does not work.** It is ignored and yields an unfiltered singles listing.
   The numeric id both TCGdex and Scryfall publish is therefore *not* enough to build a card link;
   the slug path is what identifies the product.

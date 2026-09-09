@@ -190,18 +190,17 @@ object CardmarketLinkBuilder {
 		//    survives without it; every parameter still comes from the observed URL and none is
 		//    invented to replace it.
 		val vExpansionId = set?.externalIds?.get(ExternalIdKey.CARDMARKET_EXPANSION)?.firstOrNull()
-		val vTerms = searchTermsFor(printing)
-		// No category id means no search that filters correctly -- sending another game's category
-		// would return nothing at all -- so those games fall through to a plain listing instead.
-		val vCategory = game.cardmarketCategoryId
-		if (vCategory != null && vTerms.isNotBlank()) {
+		val vTerms = searchTermsFor(printing, game)
+		if (vTerms.isNotBlank()) {
 			val vQuery = buildList {
 				// Cardmarket's current search implementation. Sending v1 parameters to a v2 page
 				// silently returns the unfiltered listing.
 				add("searchMode=v2")
-				// The "Cards" product category, as opposed to sealed product or accessories. Per
-				// game -- see `GameProfile.cardmarketCategoryId`.
-				add("idCategory=$vCategory")
+				// The "Cards" category, as opposed to sealed product or accessories -- narrowing an
+				// already-Singles listing, so it is a refinement rather than a requirement. Omitted
+				// where the id is unknown, which a real Magic search URL confirms is accepted:
+				// sending a *wrong* id is what returns nothing, sending none is not.
+				game.cardmarketCategoryId?.let { add("idCategory=$it") }
 				// 0 is "every expansion", and is what the form submits when none is chosen. Sent
 				// explicitly rather than omitted, which is what a real unscoped search URL does.
 				add("idExpansion=${vExpansionId ?: 0}")
@@ -242,12 +241,21 @@ object CardmarketLinkBuilder {
 	 * is dropped too -- it is this provider's own annotation, not part of the printed name, and
 	 * including it returns nothing. The apostrophe is kept and percent-encoded, which the verified
 	 * URL shows Cardmarket accepting as `%27`.
+	 *
+	 * Games that declare [GameProfile.cardmarketSearchIncludesCode] get the printed code appended,
+	 * which is the difference between a page of Yamatos and the Yamato in front of you.
 	 */
-	internal fun searchTermsFor(printing: CardPrinting): String =
-		printing.displayName
+	internal fun searchTermsFor(printing: CardPrinting, game: GameProfile): String {
+		val vName = printing.displayName
 			.substringBefore('(')
 			.replace(" - ", " ")
 			.trim()
+		if (!game.cardmarketSearchIncludesCode) return vName
+		// The raw code, `OP16-098`, not the bare `098` the model splits out of it -- the split half
+		// is a number that matches everything and scopes nothing.
+		val vCode = printing.providerRawCollectorNumber.trim()
+		return if (vCode.isEmpty() || vName.isEmpty()) vName else "$vName $vCode"
+	}
 
 	/**
 	 * Percent-encodes [value] the way an HTML form does, with `+` for spaces.

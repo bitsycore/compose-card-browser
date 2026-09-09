@@ -114,14 +114,28 @@ interface GameProfile {
 	/**
 	 * Cardmarket's numeric id for this game's "Cards" category, or `null` when it is not known.
 	 *
-	 * Per game, not global. Riftbound is 1655 and Pokémon is 51, both read off real search URLs --
-	 * so the single hardcoded constant this replaced was silently wrong for every game but the one
-	 * it came from, sending a Pokémon search to Riftbound's category.
+	 * Per game, not global: Riftbound is 1655, Pokémon 51, One Piece 1621, each read off a real
+	 * search URL -- so the single hardcoded constant this replaced was silently wrong for every game
+	 * but the one it came from, sending a Pokémon search to Riftbound's category.
 	 *
-	 * Without it there is no scoped search to build, and the link degrades to the game's section
-	 * rather than to a search filtered by the wrong category.
+	 * It narrows an already-Singles listing to cards rather than sealed product, which makes it a
+	 * refinement and not a requirement: a real Magic search URL carries no category at all, and a
+	 * real Yu-Gi-Oh one sends `0`, meaning any. So `null` here still produces a working search --
+	 * it is only a *wrong* id that would return nothing.
 	 */
 	val cardmarketCategoryId: Int? get() = null
+
+	/**
+	 * Whether to put the card's printed code in the Cardmarket search box alongside its name.
+	 *
+	 * Off by default, because for most games the name alone is the better query and an extra term
+	 * the site does not index turns a good search into an empty one.
+	 *
+	 * One Piece is the case that needs it: the game reprints the same character across sets, so
+	 * "Yamato" matches a page of them and "Yamato OP16-098" matches the one card. Cardmarket indexes
+	 * the code for that game, confirmed against a real search URL.
+	 */
+	val cardmarketSearchIncludesCode: Boolean get() = false
 }
 
 /**

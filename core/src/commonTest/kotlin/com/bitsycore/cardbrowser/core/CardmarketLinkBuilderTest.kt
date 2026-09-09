@@ -122,17 +122,50 @@ class CardmarketLinkBuilderTest {
 	}
 
 	@Test
-	fun `a game with no category id gets no search -- because a wrong category returns nothing`() {
-		// The category is per game -- Riftbound 1655, Pokemon 51 -- and was once a single hardcoded
-		// constant, which silently sent every other game's search to Riftbound's category. A game
-		// that has not had its id read off a real URL declines rather than filters wrongly.
+	fun `a game with no category id still gets a search -- the parameter is simply left out`() {
+		// The category is per game -- Riftbound 1655, Pokemon 51, One Piece 1621 -- and was once a
+		// single hardcoded constant, which silently sent every other game's search to Riftbound's
+		// category. Sending the wrong one returns nothing; sending none does not, which a real Magic
+		// search URL confirms. So an unknown id costs the refinement, not the search.
 		val vLink = CardmarketLinkBuilder.linkFor(
 			game = TestGameWithoutCategory,
-			printing = TestCards.printing(),
+			printing = TestCards.printing(name = "Black Lotus"),
 			set = TestCards.ORIGINS,
 		)
 
-		assertIs<CardmarketLink.ExpansionSingles>(vLink)
+		val vSearch = assertIs<CardmarketLink.CardSearch>(vLink)
+		assertFalse(vSearch.url.contains("idCategory"), vSearch.url)
+		assertTrue(vSearch.url.contains("searchString=Black+Lotus"), vSearch.url)
+	}
+
+	@Test
+	fun `One Piece searches on the name and the printed code -- one Yamato not a page of them`() {
+		// The game reprints the same character across sets, so "Yamato" alone matches many cards.
+		// The raw code is the one that scopes it: `OP16-098`, not the bare `098` the model splits out
+		// of it, which would match a hundred cards in every set.
+		val vTerms = CardmarketLinkBuilder.searchTermsFor(
+			printing = TestCards.printing(name = "Yamato").copy(
+				collectorNumber = "098",
+				providerRawCollectorNumber = "OP16-098",
+			),
+			game = TestGameSearchingByCode,
+		)
+
+		assertEquals("Yamato OP16-098", vTerms)
+	}
+
+	@Test
+	fun `every other game searches on the name alone`() {
+		// Off by default: an extra term the site does not index turns a good search into an empty
+		// one, so this is opted into per game rather than applied to all seven.
+		val vTerms = CardmarketLinkBuilder.searchTermsFor(
+			printing = TestCards.printing(name = "Black Lotus").copy(
+				providerRawCollectorNumber = "ZNR-001",
+			),
+			game = TestGame,
+		)
+
+		assertEquals("Black Lotus", vTerms)
 	}
 
 	@Test
