@@ -210,6 +210,20 @@ fun CardGridContent(
 	// brings it back on any upward scroll, which is the behaviour every Material app has.
 	val vScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
 
+	// Opening the search expands the bar it lives in.
+	//
+	// The field is drawn under the app bar and hidden once the bar has collapsed past halfway --
+	// otherwise it would overlap the grid. That is right while scrolling and wrong the moment the
+	// search button is pressed: after a long scroll the bar is collapsed, so tapping search set the
+	// state and showed nothing at all, which reads as a dead button. Expanding the bar puts the
+	// field where the press was asking for it.
+	LaunchedEffect(vState.isSearchOpen) {
+		if (vState.isSearchOpen) {
+			vScrollBehavior.state.heightOffset = 0f
+			vScrollBehavior.state.contentOffset = 0f
+		}
+	}
+
 	Scaffold(
 		modifier = Modifier.nestedScroll(vScrollBehavior.nestedScrollConnection),
 		snackbarHost = { SnackbarHost(snackbarHostState) },

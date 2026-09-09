@@ -10,6 +10,7 @@ import com.bitsycore.cardbrowser.data.repository.SearchScope
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.lib.pulse.viewmodel.PulseViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -43,6 +44,18 @@ class SearchViewModel(
 
 	private var mSearchJob: Job? = null
 
+	/** Debounces live search. Cancelled and restarted on every keystroke. */
+	private var mLiveSearchJob: Job? = null
+
+	/**
+	 * Whether this game's source can search its whole catalogue over the network.
+	 *
+	 * The one fact that decides whether typing searches. Read once from the registry rather than off
+	 * the state, so it cannot be affected by a reducer.
+	 */
+	private val mIsProviderSearchable: Boolean =
+		mRegistry.resolve(mArgs.game)?.capabilities?.data?.crossSetSearch == true
+
 	init {
 		viewModelScope.launch {
 			mPreferences.load()
@@ -52,8 +65,39 @@ class SearchViewModel(
 
 	override suspend fun handleIntent(intent: SearchContract.Intent) {
 		when (intent) {
-			SearchContract.Intent.Submit -> startSearch()
-			SearchContract.Intent.Clear -> mSearchJob?.cancel()
+			SearchContract.Intent.Submit -> {
+				mLiveSearchJob?.cancel()
+				startSearch()
+			}
+
+			/**
+			 * Typing searches, but only where searching is free.
+			 *
+			 * A cache-scoped search reads sets already on disk, so there is no one to be rude to and
+			 * no reason to make the user press a key to see results. A *provider* search is a
+			 * request per keystroke against someone else's server, which several of these sources
+			 * explicitly ask callers not to do -- those keep waiting for the keyboard's action.
+			 *
+			 * So the same screen behaves differently per game, and it is the provider's declared
+			 * `crossSetSearch` that decides, not a guess about how fast the source feels.
+			 */
+			is SearchContract.Intent.QueryChanged -> {
+				mLiveSearchJob?.cancel()
+				if (!mIsProviderSearchable && intent.text.isNotBlank()) {
+					mLiveSearchJob = viewModelScope.launch {
+						// Short, and not about rate limiting: it is there so a set of 350 cards is
+						// not filtered five times while a five-letter word is typed.
+						delay(LIVE_SEARCH_DEBOUNCE_MILLIS)
+						dispatch(SearchContract.Intent.Submit)
+					}
+				}
+			}
+
+			SearchContract.Intent.Clear -> {
+				mLiveSearchJob?.cancel()
+				mSearchJob?.cancel()
+			}
+
 			else -> Unit
 		}
 	}
@@ -115,4 +159,11 @@ class SearchViewModel(
 			dispatch(SearchContract.Intent.LoadFinished(vGeneration))
 		}
 	}
+
+	private companion object {
+
+		/** Long enough to swallow a fast typist's keystrokes, short enough to feel immediate. */
+		const val LIVE_SEARCH_DEBOUNCE_MILLIS = 180L
+	}
+
 }

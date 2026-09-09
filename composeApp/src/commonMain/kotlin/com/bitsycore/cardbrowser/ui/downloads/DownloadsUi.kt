@@ -18,6 +18,8 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.DownloadDone
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -62,6 +64,30 @@ import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
  * Card info is pre-selected and images are not: the cheap, useful half is the default, and the
  * expensive half is opted into.
  */
+/**
+ * A dialog width that does not depend on what is inside it.
+ *
+ * Left to itself an `AlertDialog` is measured from its content, so the window it lives in is sized
+ * after the content has composed -- and on the first frames that content is still settling, most
+ * visibly where a `LazyColumn` is measuring its items. The dialog is laid out small, positioned,
+ * then re-measured larger, which is seen as it growing out of its top-left corner.
+ *
+ * Stating the width removes the dependency: the dialog is the same size on the first frame as the
+ * last, so there is nothing to animate. Capped rather than fixed, so it still looks right on a
+ * phone and does not stretch across a desktop window.
+ */
+@Composable
+private fun dialogWidth(): Modifier = Modifier
+	.fillMaxWidth()
+	.padding(horizontal = 24.dp)
+	.widthIn(max = MAX_DIALOG_WIDTH)
+
+/** Paired with [dialogWidth]: the platform's own width would override it. */
+private val STABLE_DIALOG = DialogProperties(usePlatformDefaultWidth = false)
+
+/** Wide enough for the longest of the three download descriptions, narrow enough to read. */
+private val MAX_DIALOG_WIDTH = 420.dp
+
 @Composable
 fun DownloadKindDialog(
 	setName: String,
@@ -102,6 +128,8 @@ fun DownloadKindDialog(
 
 	AlertDialog(
 		onDismissRequest = onDismiss,
+		modifier = dialogWidth(),
+		properties = STABLE_DIALOG,
 		title = { Text(if (setCount > 1) "Download $setCount sets" else "Download $setName") },
 		text = {
 			Column {
@@ -293,6 +321,8 @@ fun DownloadsDialog(
 ) {
 	AlertDialog(
 		onDismissRequest = onDismiss,
+		modifier = dialogWidth(),
+		properties = STABLE_DIALOG,
 		title = { Text("Downloads") },
 		text = {
 			if (jobs.isEmpty()) {

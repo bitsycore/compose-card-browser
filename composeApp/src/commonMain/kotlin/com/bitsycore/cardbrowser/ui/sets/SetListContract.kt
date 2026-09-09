@@ -78,6 +78,17 @@ object SetListContract :
 		/** Pinned sets in the user's order, by qualified id, across every game. See `SetFavourites`. */
 		val favouriteIds: List<String> = emptyList(),
 		/**
+		 * The set whose position last changed, so the row can be drawn above the ones it passes.
+		 *
+		 * A `LazyColumn` draws its items in index order, so a row promoted to the top is drawn
+		 * *first* and therefore behind everything below it -- which on the way up looks like it is
+		 * sliding underneath the other rows. Lifting it needs to know which row it is.
+		 *
+		 * Never cleared, and it does not need to be: raising a row that is already settled changes
+		 * nothing, because nothing overlaps it.
+		 */
+		val recentlyMovedId: String? = null,
+		/**
 		 * What an image download fetched, per set id, for the language being browsed.
 		 *
 		 * Absent means no download was ever recorded -- **not** that no images are cached. Art
@@ -245,10 +256,12 @@ object SetListContract :
 
 		is Intent.FavouriteToggled -> state.copy(
 			favouriteIds = SetFavourites.toggled(state.favouriteIds, intent.setId),
+			recentlyMovedId = intent.setId,
 		)
 
 		is Intent.FavouriteMovedTo -> state.copy(
 			favouriteIds = SetFavourites.movedTo(state.favouriteIds, intent.setId, intent.toIndex),
+			recentlyMovedId = intent.setId,
 		)
 
 		Intent.Refresh -> state.copy(

@@ -570,6 +570,12 @@ private fun LazyListScope.setRows(
 			// The dragged row follows the finger, so it must not also be animated into place.
 			itemModifier = if (vIsDragging) Modifier else Modifier.animateItem(),
 			isDragging = vIsDragging,
+			// Drawn above its neighbours while it travels, whether by finger or by being starred.
+			// Without this a row promoted into the favourites slides up *behind* the rows it
+			// passes, because a `LazyColumn` draws in index order and its new index is above
+			// theirs. Separate from `isDragging`, which also raises the card off the page: the
+			// last-starred row should not keep a drag shadow once it has landed.
+			isLifted = vIsDragging || vId == state.recentlyMovedId,
 			dragOffsetY = if (vIsDragging) reorder.offsetY else 0f,
 			handleModifier = reorder?.let { Modifier.reorderHandle(it, vId, reorderKeys, onMove) },
 		)
@@ -610,6 +616,7 @@ private fun SetRow(
 	onToggleFavourite: () -> Unit = {},
 	itemModifier: Modifier = Modifier,
 	isDragging: Boolean = false,
+	isLifted: Boolean = false,
 	dragOffsetY: Float = 0f,
 	handleModifier: Modifier? = null,
 ) {
@@ -617,8 +624,8 @@ private fun SetRow(
 		onClick = onClick,
 		modifier = itemModifier
 			.fillMaxWidth()
-			// The lifted row rides above its neighbours while they slide underneath it.
-			.zIndex(if (isDragging) 1f else 0f)
+			// Rides above its neighbours while they slide underneath it.
+			.zIndex(if (isLifted) 1f else 0f)
 			.graphicsLayer { translationY = dragOffsetY }
 			// The row is one half of the container transform into the card grid; the grid screen's
 			// root is the other. See `Modifier.sharedSetContainer`.

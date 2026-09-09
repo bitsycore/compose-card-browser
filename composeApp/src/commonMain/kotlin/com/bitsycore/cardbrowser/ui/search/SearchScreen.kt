@@ -34,6 +34,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import com.bitsycore.cardbrowser.ui.common.sharedCardArt
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -106,8 +110,19 @@ fun SearchContent(
 	val vState = state
 	val vFocus = remember { FocusRequester() }
 
-	// The user came here by tapping a search button; the keyboard should already be up.
-	LaunchedEffect(Unit) { runCatching { vFocus.requestFocus() } }
+	// Focused once, on the way in, and never again.
+	//
+	// The user got here by tapping a search button, so the keyboard should already be up. But this
+	// screen is recomposed from scratch when they come back from a card, and a plain
+	// `LaunchedEffect(Unit)` fires again then -- throwing the keyboard back over the results they
+	// returned to look at. `rememberSaveable` survives the trip, so the second arrival is quiet.
+	var vHasFocused by rememberSaveable { mutableStateOf(false) }
+	LaunchedEffect(Unit) {
+		if (!vHasFocused) {
+			vHasFocused = true
+			runCatching { vFocus.requestFocus() }
+		}
+	}
 
 	Scaffold(
 		topBar = {
@@ -136,8 +151,10 @@ fun SearchContent(
 					}
 				},
 				singleLine = true,
-				// Submitted on the keyboard's action rather than per keystroke. Several of these
-				// providers ask callers to go easy, and a request per character would be rude.
+				// The keyboard's action still submits, which matters for the sources that go to the
+				// network -- several ask callers to go easy, and a request per character would be
+				// rude. A cache-scoped search has no such cost and runs as you type; the view model
+				// decides which of the two applies. See `SearchViewModel.handleIntent`.
 				keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
 				keyboardActions = KeyboardActions(onSearch = { dispatch(SearchContract.Intent.Submit) }),
 				modifier = Modifier
@@ -266,7 +283,11 @@ private fun SearchResultRow(card: CardPrinting, onClick: () -> Unit) {
 					artwork = card.artwork,
 					contentDescription = null,
 					variant = ImageVariant.THUMBNAIL,
-					modifier = Modifier.fillMaxSize(),
+					// The same element as the large image on the detail screen, so opening a result
+					// grows its art out of this row rather than cross-fading two pictures. Keyed on
+					// the printing's id exactly as the grid's tiles are, which is what lets a card
+					// reached by search animate like one reached by browsing.
+					modifier = Modifier.fillMaxSize().sharedCardArt(card.id.qualified),
 				)
 			}
 			Spacer(Modifier.size(12.dp))
