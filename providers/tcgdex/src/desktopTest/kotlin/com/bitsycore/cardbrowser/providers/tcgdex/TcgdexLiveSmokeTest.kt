@@ -77,18 +77,17 @@ class TcgdexLiveSmokeTest {
 	}
 
 	@Test
-	fun `all four preferred languages return their own catalogue`() = runBlocking {
+	fun `every language the adapter declares returns a catalogue of its own`() = runBlocking {
 		val vProvider = provider()
-		// The claim that makes TCGdex the best source in this app. If a locale silently emptied,
-		// the app would show a Pokémon game with no sets rather than an error.
-		for (vLanguage in listOf(
-			CardLanguage.FRENCH,
-			CardLanguage.JAPANESE,
-			CardLanguage.ENGLISH,
-			CardLanguage.KOREAN,
-		)) {
+		// The claim that makes TCGdex the best source in this app, and the test the capability list
+		// is based on rather than merely described by. A locale it does not serve answers 404 and a
+		// locale that silently emptied would show a Pokémon game with no sets at all.
+		//
+		// The threshold is deliberately low. `ko` carries 95 sets and the Chinese catalogues fewer
+		// still, so this asks whether the locale is real, not whether it is complete.
+		for (vLanguage in vProvider.capabilities.data.languages) {
 			val vSets = vProvider.listSets(Game.POKEMON, vLanguage)
-			assertTrue(vSets.size > 50, "${vLanguage.code} returned only ${vSets.size} sets")
+			assertTrue(vSets.size > 3, "${vLanguage.code} returned only ${vSets.size} sets")
 		}
 	}
 

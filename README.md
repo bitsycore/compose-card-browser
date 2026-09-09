@@ -191,12 +191,12 @@ records what each check found, including the two that changed the design.
 | Game | Source | Languages served | Notes |
 |---|---|---|---|
 | Riftbound | [Riftcodex](https://riftcodex.com) | en | Unofficial community database. |
-| Pokémon | [TCGdex](https://tcgdex.dev) | **fr, ja, en, ko** | The only source here with all four. Real Cardmarket product ids and two-sided finish data. |
-| Magic: The Gathering | [Scryfall](https://scryfall.com) | **fr, ja, en, ko** | The only source with a real cross-printing identity (`oracle_id`). |
+| Pokémon | [TCGdex](https://tcgdex.dev) | **all 11** | The widest coverage here: every language the app knows is a separate catalogue. Real Cardmarket product ids and two-sided finish data. |
+| Magic: The Gathering | [Scryfall](https://scryfall.com) | **all 11** | The only source with a real cross-printing identity (`oracle_id`). Spells Chinese `zhs`/`zht`, which the adapter maps. |
 | One Piece | [OPTCG API](https://optcgapi.com) | none stated | Data is plainly English; the source never says so, so nothing is claimed. |
 | Altered | [Altered TCG Card Database](https://github.com/PolluxTroy0/Altered-TCG-Card-Database) | fr, en | A community mirror. The official API is gone — see below. |
-| Yu-Gi-Oh! | [YGOPRODeck](https://ygoprodeck.com) | **fr, ja, en, ko** | Sets are addressed by name; rarity is per printing. |
-| Wuthering Waves TCG | UCP `mc-api.ucp-jp.com` | ja | Undocumented internal endpoint. No stability promise. |
+| Yu-Gi-Oh! | [YGOPRODeck](https://ygoprodeck.com) | fr, ja, en, ko, de, it, pt | Sets are addressed by name; rarity is per printing. |
+| Wuthering Waves TCG | UCP `mc-api.ucp-jp.com` (bundled snapshot) | ja, zh-cn, ko | Undocumented internal endpoint with no stability promise, so the whole 128-card game is scraped and shipped. The only adapter that makes no requests for card data. |
 
 **Cyberpunk TCG is deliberately absent.** It was asked for, and there is nothing to adapt: the game
 does not reach retail until 6 November 2026, there is no official API, and the community databases
@@ -211,7 +211,7 @@ The point of the model is that these gaps stay visible rather than being smoothe
 
 | The brief asks for | Where reality falls short | What the app does |
 |---|---|---|
-| French / Japanese / English / Korean printings | Riftcodex, OPTCG and Altered have no Japanese or Korean at all; Wuthering Waves has only Japanese. | The requested language is *confirmed* only when the source served it. Everything else is **unknown, never unavailable** — a source not carrying Korean is not evidence that no Korean printing exists. Asking Scryfall for a language a set was never printed in falls back to English and **labels the records English**. |
+| Printings in eleven languages | Riftcodex, OPTCG and Altered have no Japanese or Korean at all; Wuthering Waves has Japanese, Simplified Chinese and Korean and nothing else. | The requested language is *confirmed* only when the source served it. Everything else is **unknown, never unavailable** — a source not carrying Korean is not evidence that no Korean printing exists. Asking Scryfall for a language a set was never printed in falls back to English and **labels the records English**. |
 | Finish options | Only TCGdex and Scryfall state finishes. | Both sides of `FinishCoverage` are populated for those two, because their data genuinely distinguishes "not printed" from "not mentioned". For the other five, finish is *unstated* and no finish filter is offered. |
 | Card identity across printings | Only Scryfall states one. | `identity` is null everywhere else, and no identity is ever inferred from a shared name. |
 | Card → Cardmarket product | Only TCGdex maps printings to products. | See [Cardmarket](#cardmarket) — links are suppressed entirely for games whose Cardmarket path has not been seen on a real page. |
@@ -414,12 +414,15 @@ the inline image and the fullscreen viewer now decode at source resolution.
 - **Altered's grid tiles are expensive.** Its mirror has no resized variant, so a grid tile loads
   the same 200–300 KB JPEG the detail screen does. Every other provider serves a small variant. The
   artwork records this by leaving `thumbnailUrl` null rather than pointing it at the full image.
-- **Wuthering Waves sets cost extra requests to open.** Its list endpoint carries six fields per
-  card, so rarity, attribute, cost and rules text are fetched per card and merged in — about 4
-  seconds for a 25-card starter deck and 13 for the 74-card booster set, at four requests in
-  flight, once per day. Using the provider's own filters to tag cards in bulk would be far cheaper
-  and does not work: `rarity_id` is silently ignored, and `fee=0` means "no filter" rather than
-  "costs zero", which would misreport the 31 cards that genuinely cost 0.
+- **Wuthering Waves is a snapshot, not a live source.** Its list endpoint carries six fields per
+  card, so rarity, attribute, cost and rules text had to be fetched one card at a time — 357
+  requests to describe a game that ships 128 printings across three languages. That catalogue is now
+  scraped once, aligned across the locales, and committed as
+  [`wuwa-cards.json`](providers/wuwa/src/commonMain/composeResources/files/wuwa-cards.json) — a Compose Multiplatform resource, so it ships on every
+  target including iOS. The adapter makes no
+  requests for card data at all and works offline from a cold start. The cost is that a new set needs
+  `python providers/wuwa/tools/scrape_wuwa.py --refresh` and a rebuild. The game gets one perhaps
+  twice a year, and `./gradlew :providers:wuwa:liveProviderTest` asks UCP whether the file is stale.
 - **Cardmarket links exist for Riftbound only.** Cardmarket answers 403 to every scripted request,
   including one for the Riftbound path that is known to work, so the other six games' path segments
   could not be verified. Plausible guesses are not shipped; see [Cardmarket](#cardmarket).

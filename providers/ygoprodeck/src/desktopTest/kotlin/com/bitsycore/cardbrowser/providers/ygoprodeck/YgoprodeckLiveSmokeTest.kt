@@ -82,13 +82,16 @@ class YgoprodeckLiveSmokeTest {
 	}
 
 	@Test
-	fun `all three non-English languages return translated text`() = runBlocking<Unit> {
+	fun `every non-English language the adapter declares returns translated text`() = runBlocking<Unit> {
+		// Worth measuring rather than reading off the docs: the endpoint's own error message lists
+		// only `fr`, `de`, `it` and `pt`, and yet `ja` and `ko` both answer with translated names.
+		// The message is out of date, and this test is what the capability list actually rests on.
 		val vProvider = provider()
 		val vEnglish = vProvider.listCards(
 			CardPageRequest(setId = mMetalRaiders, pageSize = 5, language = CardLanguage.ENGLISH),
 		)
 
-		for (vLanguage in listOf(CardLanguage.FRENCH, CardLanguage.JAPANESE, CardLanguage.KOREAN)) {
+		for (vLanguage in vProvider.capabilities.data.languages - CardLanguage.ENGLISH) {
 			val vPage = vProvider.listCards(
 				CardPageRequest(setId = mMetalRaiders, pageSize = 5, language = vLanguage),
 			)

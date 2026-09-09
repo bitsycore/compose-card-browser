@@ -34,8 +34,11 @@ import io.ktor.http.appendPathSegments
  *
  * ## Coverage, as verified against the live API on 2026-09-08
  *
- * - **Languages**: `language=fr`, `ja` and `ko` all return translated names and text, and English
- *   is the default and takes no parameter. All four of the app's preferences.
+ * - **Languages**: `language=fr`, `ja`, `ko`, `de`, `it` and `pt` all return translated names and
+ *   text, and English is the default and takes no parameter. Seven in all. The endpoint's own error
+ *   message lists only `fr`, `de`, `it` and `pt` and is out of date -- `ja` and `ko` were requested
+ *   and answered with Japanese and Korean names -- so what is declared here is what was measured.
+ *   `es`, `ru` and either Chinese are genuinely rejected.
  * - **Sets**: every set in one 175 KB request, with card counts and TCG release dates.
  * - **Cards**: `cardinfo.php?cardset={name}`, with real offset paging and a `meta` block carrying
  *   `total_rows` -- so, unlike most sources here, completeness is checkable against the provider's
@@ -95,6 +98,9 @@ class YgoprodeckProvider(
 				CardLanguage.JAPANESE,
 				CardLanguage.ENGLISH,
 				CardLanguage.KOREAN,
+				CardLanguage.GERMAN,
+				CardLanguage.ITALIAN,
+				CardLanguage.PORTUGUESE,
 			),
 			localizedText = true,
 			// One image per card, in English, whatever language the text is requested in.

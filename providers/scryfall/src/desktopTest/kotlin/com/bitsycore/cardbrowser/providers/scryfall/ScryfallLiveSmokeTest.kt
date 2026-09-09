@@ -94,6 +94,42 @@ class ScryfallLiveSmokeTest {
 	}
 
 	@Test
+	fun `Chinese comes back Chinese, under Scryfall's own spelling of it`() = runBlocking {
+		// The one language where Scryfall's tag and the app's disagree: `zhs` against `zh-cn`. Asking
+		// for `lang:zh-cn` matches nothing, and Scryfall answers nothing with a 404 -- so a broken
+		// mapping here does not fail loudly, it silently falls back to English.
+		val vPage = provider().searchAllSets(
+			CardSearchRequest(
+				game = Game.MAGIC,
+				text = "Lightning Bolt",
+				language = CardLanguage.SIMPLIFIED_CHINESE,
+			),
+		)
+
+		assertTrue(vPage.cards.isNotEmpty(), "Lightning Bolt has Simplified Chinese printings")
+		assertTrue(
+			vPage.cards.any { it.text.language == CardLanguage.SIMPLIFIED_CHINESE },
+			"A zhs record must be read back as Simplified Chinese, not left unmapped",
+		)
+	}
+
+	@Test
+	fun `every language the adapter declares is one Scryfall answers`() = runBlocking {
+		// The capability list is a promise. This is the test that keeps it a measurement: each
+		// language is asked for by itself, and a tag Scryfall rejects returns nothing at all.
+		val vProvider = provider()
+		for (vLanguage in vProvider.capabilities.data.languages) {
+			val vPage = vProvider.searchAllSets(
+				CardSearchRequest(game = Game.MAGIC, text = "Forest", language = vLanguage),
+			)
+			assertTrue(
+				vPage.cards.any { it.text.language == vLanguage },
+				"Scryfall returned no ${vLanguage.displayName} printings of Forest",
+			)
+		}
+	}
+
+	@Test
 	fun `a language with no printings falls back to English rather than erroring`() = runBlocking {
 		// Scryfall answers a search that matches nothing with 404, not an empty list. Without the
 		// fallback in `listCards`, asking for a language a set was never printed in would show an

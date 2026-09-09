@@ -39,8 +39,10 @@ import kotlinx.serialization.Serializable
  *
  * ## Coverage, as verified against the live API on 2026-09-08
  *
- * - **Languages**: all four the app prefers, which no other source in this project manages. Set
- *   counts per locale were measured rather than assumed: `en` 218, `fr` 200, `ja` 184, `ko` 95.
+ * - **Languages**: every one the app knows, which no other source in this project manages. Set
+ *   counts per locale were measured rather than assumed: `en` 218, `fr` 200, `ja` 184, `ko` 95, and
+ *   `de`, `es`, `it`, `pt`, `ru`, `zh-cn` and `zh-tw` each return a catalogue of their own.
+ *   TCGdex's locale tags are this app's own tags unchanged, so no mapping is needed here.
  *   Each locale is a genuinely separate catalogue -- a card returned by `/fr/` is a French printing
  *   with a French scan, not an English record with translated text bolted on -- so the requested
  *   language is [com.bitsycore.cardbrowser.core.model.LanguageCoverage.confirmed] on each record.
@@ -96,12 +98,7 @@ class TcgdexProvider(
 			CardSortField.RARITY,
 		),
 		data = DataCapabilities(
-			languages = setOf(
-				CardLanguage.FRENCH,
-				CardLanguage.JAPANESE,
-				CardLanguage.ENGLISH,
-				CardLanguage.KOREAN,
-			),
+			languages = CardLanguage.entries.toSet(),
 			localizedText = true,
 			localizedImages = true,
 			cardIdentity = false,
@@ -290,7 +287,7 @@ class TcgdexProvider(
 	 */
 	private fun localeFor(language: CardLanguage?): String = languageFor(language).code
 
-	/** The language this adapter will really answer in. Never null: all four locales exist. */
+	/** The language this adapter will really answer in. Never null: every locale exists. */
 	private fun languageFor(language: CardLanguage?): CardLanguage =
 		resolveLanguage(language) ?: CardLanguage.ENGLISH
 

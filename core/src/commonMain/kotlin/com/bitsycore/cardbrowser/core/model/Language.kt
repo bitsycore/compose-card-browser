@@ -12,30 +12,69 @@ import kotlinx.serialization.Serializable
  * The app UI is English throughout. This type is about the physical printing and about the text and
  * image a provider can supply for it.
  *
- * @property code the BCP 47 primary subtag, used when talking to providers and in cache keys
+ * Every entry here is served by at least one provider in this app, verified against the live APIs.
+ * A language no source can answer for would be a promise the app cannot keep, so it is not offered.
+ *
+ * @property code this app's own tag for the language, used in cache keys and as the default value to
+ *   send a provider. It is not universal: sources disagree about Chinese in particular -- Scryfall
+ *   says `zhs`, TCGdex says `zh-cn` -- so an adapter whose API differs maps it and the mismatch
+ *   stays inside that adapter rather than leaking into this enum
  * @property displayName the English name shown in the UI, because the UI is English
+ * @property aliases other tags a provider may use for the same language, matched by [fromCode]
  */
 @Serializable
-enum class CardLanguage(val code: String, val displayName: String) {
+enum class CardLanguage(
+	val code: String,
+	val displayName: String,
+	val aliases: List<String> = emptyList(),
+) {
 	FRENCH("fr", "French"),
 	JAPANESE("ja", "Japanese"),
 	ENGLISH("en", "English"),
 	KOREAN("ko", "Korean"),
+	SIMPLIFIED_CHINESE("zh-cn", "Simplified Chinese", aliases = listOf("zhs", "zh-hans", "zh")),
+	TRADITIONAL_CHINESE("zh-tw", "Traditional Chinese", aliases = listOf("zht", "zh-hant", "zh-hk")),
+	GERMAN("de", "German"),
+	SPANISH("es", "Spanish", aliases = listOf("es-mx")),
+	ITALIAN("it", "Italian"),
+	PORTUGUESE("pt", "Portuguese", aliases = listOf("pt-br", "pt-pt")),
+	RUSSIAN("ru", "Russian"),
 	;
 
 	companion object {
 
 		/**
-		 * The user's preference order: French, then Japanese, then English, then Korean.
+		 * The user's preference order, most wanted first.
 		 *
-		 * A preference, not a claim. Nothing here asserts that any game or provider offers all
-		 * four; [LanguageCoverage] is what says what is actually on offer.
+		 * A preference, not a claim. Nothing here asserts that any game or provider offers all of
+		 * them; [LanguageCoverage] is what says what is actually on offer for one printing, and
+		 * `DataCapabilities.languages` what a whole source can be asked for.
 		 */
-		val PREFERENCE_ORDER: List<CardLanguage> = listOf(FRENCH, JAPANESE, ENGLISH, KOREAN)
+		val PREFERENCE_ORDER: List<CardLanguage> = listOf(
+			FRENCH,
+			JAPANESE,
+			ENGLISH,
+			KOREAN,
+			SIMPLIFIED_CHINESE,
+			TRADITIONAL_CHINESE,
+			GERMAN,
+			SPANISH,
+			ITALIAN,
+			PORTUGUESE,
+			RUSSIAN,
+		)
 
-		/** Looks a language up by [code], case-insensitively. `null` if it is not one of the four. */
-		fun fromCode(code: String): CardLanguage? =
-			entries.firstOrNull { it.code.equals(code, ignoreCase = true) }
+		/**
+		 * Looks a language up by [code] or by any of its [aliases], case-insensitively.
+		 *
+		 * `null` when no entry claims the tag, which is the honest answer: a provider that reports
+		 * Hebrew is reporting something this app has no entry for, and inventing one from the tag
+		 * would put a language on screen that nothing here can actually fetch.
+		 */
+		fun fromCode(code: String): CardLanguage? = entries.firstOrNull { vLanguage ->
+			vLanguage.code.equals(code, ignoreCase = true) ||
+				vLanguage.aliases.any { it.equals(code, ignoreCase = true) }
+		}
 	}
 }
 

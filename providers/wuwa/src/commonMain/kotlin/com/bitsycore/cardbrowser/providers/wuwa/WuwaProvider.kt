@@ -16,62 +16,49 @@ import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
 import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
-import com.bitsycore.cardbrowser.core.provider.ProviderError
-import com.bitsycore.cardbrowser.data.net.mapProviderErrors
-import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.request.get
-import io.ktor.client.request.header
-import io.ktor.client.request.parameter
-import io.ktor.http.appendPathSegments
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 
 /**
- * The UCP adapter, serving [Game.WUTHERING_WAVES].
+ * The Wuthering Waves TCG adapter, serving [Game.WUTHERING_WAVES] from a bundled snapshot.
  *
- * ## How this was found
+ * ## Why there is no HTTP here
  *
- * There is no published API and no documentation. `https://wwcg.ucp-jp.com/jp/card` is a Vue
- * application; its bundle declares an axios instance with
- * `baseURL: "https://mc-api.ucp-jp.com/api/"` and a request interceptor that sets an **`x-lang`**
- * header, and names three card endpoints: `/web/card/list`, `/web/card/info` and
+ * There is no published API. What this adapter used to call is the undocumented backend of the
+ * game's own card page: `https://wwcg.ucp-jp.com/jp/card` is a Vue application whose bundle declares
+ * an axios instance with `baseURL: "https://mc-api.ucp-jp.com/api/"`, a request interceptor setting
+ * an **`x-lang`** header, and three endpoints -- `/web/card/list`, `/web/card/info` and
  * `/web/card/search-options`.
  *
- * So this is an undocumented internal endpoint belonging to a game that launched recently. Unlike
- * every other source in this app there is no stability promise behind it, and it may change or
- * close without notice. That is a real risk and it is stated rather than glossed over.
+ * Assembling a set from those cost 120-odd requests per language, because the list endpoint returns
+ * six fields per card and everything else -- rarity, cost, attribute, rules text -- had to be
+ * fetched one card at a time. For a game that ships **128 printings in total**, across three
+ * locales, that is 357 requests to describe something that fits in a 170 KB file.
  *
- * ## Coverage, as verified on 2026-09-08
+ * So the catalogue is scraped once and shipped. [WuwaCatalogue] is the reader,
+ * `src/commonMain/composeResources/files/wuwa-cards.json` is the data, and `tools/scrape_wuwa.py` is
+ * the committed script that regenerates it. The endpoints above are still documented here because
+ * that script is what talks to them, and because it is the only record of how any of this was found.
  *
- * - **Languages**: Japanese, which is the app's second preference. Measured, not assumed --
- *   `x-lang: ja-jp` and `zh-cn` each return 123 cards while `en-us` and `zh-tw` return **200 OK
- *   with an empty list**. That last shape is exactly what the repository's completeness guard
- *   exists to catch, and it is why this adapter only ever asks for `ja-jp`.
- * - **Sets**: **none.** The API has no set entity and no endpoint that lists one. Sets here are
- *   derived from the prefix of each card's printed code -- `SD01`, `SD02`, `BP01` -- and are named
- *   after that code. See `WuwaMapper.toSet` for why the product names from `/web/goods/list` are
- *   not used.
- * - **Cards**: 123 in total, all of which arrive in a single `size=200` request, so a set costs one
- *   request and completeness is definite.
+ * The honest cost: this is a **snapshot**, so a new set means re-running the script and rebuilding.
+ * The game gets one perhaps twice a year. `WuwaSnapshotFreshnessTest` is an opt-in live check that
+ * compares the file against UCP's current catalogue, so a stale snapshot is something the build can
+ * be asked about rather than something a user discovers.
  *
- *   The list carries only six fields per card, so each set's cards are then enriched one request
- *   each from `/web/card/info` -- see [detailsFor] for what that costs and why the provider's own
- *   filters cannot do the job more cheaply.
- * - **Filters**: complete, because of that enrichment. Rarity, attribute, cost, level, weapon and
- *   faction all reach the grid, where before only card type did.
- * - **Images**: already WebP and already compressed, on a Tencent COS bucket. One size only.
- * - **Finishes, artwork variants, card identity, Cardmarket**: no fields, all unstated. Cardmarket
- *   has no section for this game at all -- it is Japan-only so far.
- * - **Cross-set search**: `?keyword=` on the same list endpoint.
+ * ## Coverage
+ *
+ * - **Languages**: Japanese, Simplified Chinese and Korean -- `ja-jp`, `zh-cn`, `ko-kr`. Measured:
+ *   `en-us` and `zh-tw` are accepted by the API and answer 200 with an *empty list*, and so do bare
+ *   `ko` and `kr`. The three catalogues are different sizes (123, 127 and 107 records), so per-card
+ *   language coverage is a real fact here and is recorded per printing.
+ * - **Sets**: three, derived from the prefix of each card's printed code -- `SD01`, `SD02`, `BP01`.
+ *   The API has no set entity and no endpoint that lists one.
+ * - **Card identity**: stated. Two printings sharing a code are one card at two rarity tiers, and
+ *   they carry genuinely different illustrations rather than one being a foil of the other.
+ * - **Filters**: everything, applied locally against a catalogue that is always complete.
+ * - **Images**: WebP, one size, from UCP's own Tencent COS bucket. The only thing still fetched.
+ * - **Finishes, artist, Cardmarket**: no fields anywhere. Unstated, not absent -- Cardmarket has no
+ *   section for this game at all, it being Japan-only so far.
  */
-class WuwaProvider(
-	private val mClient: HttpClient,
-	private val mBaseUrl: String = DEFAULT_BASE_URL,
-) : CardProvider {
+class WuwaProvider : CardProvider {
 
 	override val id: ProviderId = PROVIDER_ID
 
@@ -80,261 +67,129 @@ class WuwaProvider(
 	override val capabilities: ProviderCapabilities = ProviderCapabilities(
 		games = setOf(Game.WUTHERING_WAVES),
 		filtering = FilterSupport(
-			// The endpoint does accept `type_id`, `rarity_id` and the rest, but they take numeric
-			// ids from `/web/card/search-options` rather than the names the rest of the app filters
-			// on. Mapping a display name back to an id would be a guess at a table the app does not
-			// own, and the whole catalogue is 123 cards held in memory anyway.
+			// Nothing is remote because nothing is a request. The whole catalogue is in memory and
+			// complete, which is the one filtering situation with no trade-offs in it.
 			remote = emptySet(),
 			localOnly = setOf(
 				CardFilterField.TEXT,
 				CardFilterField.CARD_TYPE,
 				CardFilterField.DOMAIN,
 				CardFilterField.RARITY,
+				CardFilterField.ENERGY_COST,
+				CardFilterField.ARTWORK_TREATMENT,
+				CardFilterField.LANGUAGE,
 			),
 		),
-		sorting = setOf(CardSortField.COLLECTOR_NUMBER, CardSortField.NAME),
+		sorting = setOf(
+			CardSortField.COLLECTOR_NUMBER,
+			CardSortField.NAME,
+			CardSortField.RARITY,
+			CardSortField.ENERGY_COST,
+		),
 		data = DataCapabilities(
-			// Japanese only. Not "Japanese is all that exists" -- Simplified Chinese is served too
-			// and is simply not one of this app's four -- but Japanese is all this app can ask for.
-			languages = setOf(CardLanguage.JAPANESE),
+			// Restated rather than read from the snapshot, because `capabilities` is a plain `val`
+			// and reading a bundled asset suspends. `WuwaCatalogueTest` asserts this set equals the
+			// one the asset actually holds, which is what stops the two drifting.
+			languages = setOf(
+				CardLanguage.JAPANESE,
+				CardLanguage.SIMPLIFIED_CHINESE,
+				CardLanguage.KOREAN,
+			),
 			localizedText = true,
 			localizedImages = true,
-			cardIdentity = false,
-			artworkVariants = false,
+			// Two rarity tiers of one code are one card, which UCP states by giving them one code.
+			cardIdentity = true,
+			artworkVariants = true,
+			// No finish field exists. False means unknown here, not "no foil".
 			finishes = false,
 			cardmarketProductMapping = false,
 			crossSetSearch = true,
 		),
 		attribution = Attribution(
-			text = "Wuthering Waves TCG card data from UCP's official card list. Not affiliated " +
-				"with UCP or Kuro Games.",
+			text = "Wuthering Waves TCG card data and images from UCP's official card list. " +
+				"Not affiliated with UCP or Kuro Games.",
 			url = "https://wwcg.ucp-jp.com/jp/card",
 		),
+		// One page holds the game.
 		maxPageSize = MAX_PAGE_SIZE,
 	)
 
 	// ============
 	//  Sets
 
-	/**
-	 * Sets, derived from the codes of every card.
-	 *
-	 * One request. There is no set endpoint to call, so the whole catalogue is fetched and grouped
-	 * by code prefix -- which is cheap here precisely because the catalogue is 123 cards, and would
-	 * be the wrong approach for any of the other providers in this app.
-	 */
 	override suspend fun listSets(game: Game, language: CardLanguage?): List<CardSet> {
 		require(game == Game.WUTHERING_WAVES) {
 			"This adapter serves Wuthering Waves TCG only, not $game"
 		}
-		return mapProviderErrors("Wuwa.listSets") {
-			allCards()
-				.groupBy { WuwaMapper.setCodeOf(it.code) }
-				.mapNotNull { (vCode, vCards) ->
-					vCode?.let { WuwaMapper.toSet(it, vCards.size, id) }
-				}
-				.sortedBy { it.code }
-		}
+		return WuwaCatalogue.sets(languageFor(language), id)
 	}
 
 	// ============
 	//  Cards
 
 	/**
-	 * The cards of one set.
+	 * The cards of one set, complete, in one page.
 	 *
-	 * The endpoint has no set parameter -- there are no sets on its side -- so the full catalogue
-	 * is fetched and filtered by code prefix here. 123 records in one request makes that the
-	 * cheaper option by a wide margin over anything per-card.
+	 * Complete is worth naming: the repository's completeness guard exists because a provider that
+	 * quietly returns a partial set is indistinguishable from a short one, and here there is nothing
+	 * to be partial about. The largest set is 79 printings.
 	 */
 	override suspend fun listCards(request: CardPageRequest): CardPage {
-		if (request.page > 1) {
-			return CardPage(emptyList(), request.page, request.pageSize, totalCount = null, hasMore = false)
-		}
-		val vSetCode = request.setId.local
-		return mapProviderErrors("Wuwa.listCards") {
-			val vSetCards = allCards().filter { WuwaMapper.setCodeOf(it.code) == vSetCode }
-			val vSet = WuwaMapper.toSet(vSetCode, vSetCards.size, id)
-			val vDetails = detailsFor(vSetCards)
-
-			val vMapped = vSetCards.mapNotNull { vBrief ->
-				// The detail record where it arrived, the six-field brief where it did not. A card
-				// whose detail request failed is still shown, just with less on it -- losing it
-				// entirely would make the set look short for no reason the user could see.
-				vDetails[vBrief.id]?.let { WuwaMapper.toPrinting(it, id, vSet, LANGUAGE) }
-					?: WuwaMapper.toPrinting(vBrief, id, vSet, LANGUAGE)
-			}
-			CardPage(
-				cards = vMapped,
-				page = 1,
-				pageSize = vMapped.size.coerceAtLeast(1),
-				totalCount = vMapped.size,
-				hasMore = false,
-			)
-		}
+		val vCards = WuwaCatalogue
+			.printings(languageFor(request.language), id)
+			.filter { it.setId == request.setId }
+		return page(vCards, request.page, request.pageSize)
 	}
 
-	/**
-	 * Full records for a set's cards, fetched one request each.
-	 *
-	 * ## Why this is worth 25 to 74 extra requests
-	 *
-	 * `/web/card/list` returns six fields. Rarity, attribute, cost, level, weapon, faction and the
-	 * rules text exist **only** on `/web/card/info`, one card at a time -- so without this the grid
-	 * has names and pictures, the filter sheet has almost no facets to offer, and sorting by cost
-	 * does nothing.
-	 *
-	 * The obvious alternative was to use the provider's own filters to tag cards in bulk, which
-	 * would have been far cheaper. It does not work, and this was established by crawling the whole
-	 * catalogue and comparing: `rarity_id` is accepted and silently ignored under every spelling
-	 * tried, and `fee=0` and `level=0` mean "no filter" rather than "costs zero" -- so the 31 cards
-	 * that genuinely cost 0 would be indistinguishable from the 67 that have no cost at all.
-	 *
-	 * ## Why the cost is acceptable
-	 *
-	 * Per *set*, not per catalogue, because that is the unit the repository caches. The largest set
-	 * is 74 cards and the two starter decks are about 25 each, against 123 for everything. At
-	 * [MAX_CONCURRENT_DETAILS] in flight that is roughly 4 seconds for a starter deck and 13 for the
-	 * booster set, once, and then the complete set is on disk for a day and every later open is
-	 * instant and works offline.
-	 *
-	 * Four at a time rather than as fast as possible: this is an undocumented endpoint belonging to
-	 * someone else, and a burst of 74 simultaneous connections is not a reasonable way to treat it.
-	 */
-	private suspend fun detailsFor(cards: List<WuwaCardBriefDto>): Map<Long, WuwaCardDetailDto> {
-		if (cards.isEmpty()) return emptyMap()
-		val vResults = mutableMapOf<Long, WuwaCardDetailDto>()
-
-		for (vBatch in cards.chunked(MAX_CONCURRENT_DETAILS)) {
-			currentCoroutineContext().ensureActive()
-			coroutineScope {
-				val vPending = vBatch.map { vCard ->
-					vCard.id to async {
-						runCatching {
-							unwrap(
-								mClient
-									.get(mBaseUrl) {
-										url { appendPathSegments("api", "web", "card", "info") }
-										parameter("id", vCard.id)
-										localise()
-									}
-									.body<WuwaEnvelopeDto<WuwaCardDetailDto>>(),
-							)
-						}
-					}
-				}
-				for ((vId, vDeferred) in vPending) {
-					val vDetail = vDeferred.await().getOrElse {
-						// Cancellation must unwind rather than be recorded as a missing card.
-						if (it is CancellationException) throw it
-						null
-					}
-					if (vDetail != null) vResults[vId] = vDetail
-				}
-			}
-		}
-		return vResults
-	}
-
-	/**
-	 * One card, with everything the list does not carry.
-	 *
-	 * A direct lookup: [SourceId.local] *is* the API's numeric id, which is what `/web/card/info`
-	 * takes, so no catalogue scan is needed to translate one into the other.
-	 */
 	override suspend fun cardDetail(id: SourceId, language: CardLanguage?): CardPrinting? =
-		mapProviderErrors("Wuwa.cardDetail") {
-			val vNumericId = id.local.toLongOrNull() ?: return@mapProviderErrors null
-			val vDetail: WuwaCardDetailDto = unwrap(
-				mClient
-					.get(mBaseUrl) {
-						url { appendPathSegments("api", "web", "card", "info") }
-						parameter("id", vNumericId)
-						localise()
-					}
-					.body<WuwaEnvelopeDto<WuwaCardDetailDto>>(),
-			) ?: return@mapProviderErrors null
-			WuwaMapper.toPrinting(vDetail, this.id, set = null, language = LANGUAGE)
-		}
+		WuwaCatalogue.printing(id.local, languageFor(language), this.id)
 
+	/**
+	 * Text search across every set.
+	 *
+	 * Matches the name and the printed code, which is what the search box means. Local, like
+	 * everything else here, so it is exhaustive rather than a page of whatever a server ranked
+	 * first.
+	 */
 	override suspend fun searchAllSets(request: CardSearchRequest): CardPage {
 		require(request.game == Game.WUTHERING_WAVES) {
 			"This adapter serves Wuthering Waves TCG only, not ${request.game}"
 		}
-		return mapProviderErrors("Wuwa.searchAllSets") {
-			val vPage = fetchPage(page = request.page, size = request.pageSize) {
-				parameter("keyword", request.text)
+		val vNeedle = request.text.trim()
+		val vCards = WuwaCatalogue
+			.printings(languageFor(request.language), id)
+			.filter {
+				it.displayName.contains(vNeedle, ignoreCase = true) ||
+					it.providerRawCollectorNumber.contains(vNeedle, ignoreCase = true)
 			}
-			val vCards = vPage.list.mapNotNull { vBrief ->
-				val vSetCode = WuwaMapper.setCodeOf(vBrief.code) ?: return@mapNotNull null
-				WuwaMapper.toPrinting(vBrief, id, WuwaMapper.toSet(vSetCode, 0, id), LANGUAGE)
-			}
-			CardPage(
-				cards = vCards,
-				page = vPage.currentPage,
-				pageSize = request.pageSize,
-				totalCount = vPage.total,
-				hasMore = vPage.hasMore,
-			)
-		}
+		return page(vCards, request.page, request.pageSize)
 	}
 
 	// ============
-	//  Transport
-
-	/** Every card, in one request. The catalogue is small enough that this is the cheap path. */
-	private suspend fun allCards(): List<WuwaCardBriefDto> =
-		fetchPage(page = 1, size = MAX_PAGE_SIZE) {}.list
+	//  Internals
 
 	/**
-	 * One page of `/web/card/list`.
+	 * The language the snapshot will really answer in.
 	 *
-	 * `size` is the page-size parameter, established by trying the plausible names against the live
-	 * endpoint: `limit`, `page_size`, `pageSize`, `per_page` and `num` are all accepted and all
-	 * silently ignored, leaving `per_page` at 20. Only `size` changes it.
+	 * Japanese unless another language it holds was asked for. Japanese rather than English because
+	 * English is not one of the three: UCP has never published an English catalogue, and defaulting
+	 * to a language that does not exist would answer every request with nothing.
 	 */
-	private suspend fun fetchPage(
-		page: Int,
-		size: Int,
-		selector: io.ktor.client.request.HttpRequestBuilder.() -> Unit,
-	): WuwaCardListDto {
-		val vEnvelope: WuwaEnvelopeDto<WuwaCardListDto> = mClient
-			.get(mBaseUrl) {
-				url { appendPathSegments("api", "web", "card", "list") }
-				parameter("page", page)
-				parameter("size", size)
-				selector()
-				localise()
-			}
-			.body()
-		return unwrap(vEnvelope) ?: WuwaCardListDto()
-	}
+	private fun languageFor(language: CardLanguage?): CardLanguage =
+		language?.takeIf { it in capabilities.data.languages } ?: CardLanguage.JAPANESE
 
-	/**
-	 * Reads the payload out of the envelope, failing loudly when the API says it failed.
-	 *
-	 * The transport status is not the whole story here: this API answers `200 OK` with `code` set
-	 * to something other than 1. Trusting the HTTP status alone would turn an application-level
-	 * error into a silently empty card list.
-	 */
-	private fun <T> unwrap(envelope: WuwaEnvelopeDto<T>): T? {
-		if (envelope.code != SUCCESS_CODE) {
-			throw ProviderError.MalformedResponse(
-				"UCP answered code ${envelope.code}: ${envelope.msg ?: "no message"}",
-			)
-		}
-		return envelope.data
-	}
-
-	/**
-	 * Sets the locale header the site's own client sets.
-	 *
-	 * Always `ja-jp`. `en-us` is accepted and answers with an empty list rather than an error,
-	 * which would look exactly like a game with no cards in it.
-	 */
-	private fun io.ktor.client.request.HttpRequestBuilder.localise() {
-		header("x-lang", LOCALE)
-		header("Accept", "application/json")
+	/** One page of an in-memory list, with the paging metadata a caller expects. */
+	private fun page(cards: List<CardPrinting>, page: Int, pageSize: Int): CardPage {
+		val vSize = pageSize.coerceAtLeast(1)
+		val vFrom = (page - 1) * vSize
+		val vWindow = if (vFrom >= cards.size) emptyList() else cards.subList(vFrom, minOf(vFrom + vSize, cards.size))
+		return CardPage(
+			cards = vWindow,
+			page = page,
+			pageSize = vSize,
+			totalCount = cards.size,
+			hasMore = vFrom + vWindow.size < cards.size,
+		)
 	}
 
 	companion object {
@@ -342,31 +197,15 @@ class WuwaProvider(
 		/** Never changed: it is written into every id and every cache file this adapter produces. */
 		val PROVIDER_ID: ProviderId = ProviderId("ucp-wuwa")
 
-		const val DEFAULT_BASE_URL: String = "https://mc-api.ucp-jp.com"
-
-		/** The only locale that returns cards. See [localise]. */
-		private const val LOCALE = "ja-jp"
-
-		/** The only language this provider can be asked for, so it is a constant rather than a lookup. */
-		private val LANGUAGE = CardLanguage.JAPANESE
-
-		/** The envelope's success value. Not an HTTP status. */
-		private const val SUCCESS_CODE = 1
-
 		/**
-		 * How many card-detail requests may be in flight at once.
+		 * The base URL of the endpoints the *scraper* uses. Nothing in the app calls them.
 		 *
-		 * Matches the repository's own page concurrency. This is an undocumented endpoint on
-		 * somebody else's server and a burst of 74 connections is not a polite way to use it.
+		 * Kept here because it is the one place this project records where the data came from, and
+		 * because the freshness check reads it.
 		 */
-		private const val MAX_CONCURRENT_DETAILS = 4
+		const val API_BASE_URL: String = "https://mc-api.ucp-jp.com"
 
-		/**
-		 * Comfortably above the 123 cards that exist, so the whole catalogue is one request.
-		 *
-		 * `size=200` was confirmed to be honoured -- `per_page` came back as 200 -- where every
-		 * other spelling of the parameter was ignored.
-		 */
+		/** Larger than the biggest set, so a set is always one page. */
 		const val MAX_PAGE_SIZE: Int = 200
 	}
 }

@@ -90,7 +90,7 @@ val appModule = module {
 	single { OptcgProvider(mClient = get()) } bind CardProvider::class
 	single { AlteredProvider(mClient = get()) } bind CardProvider::class
 	single { YgoprodeckProvider(mClient = get()) } bind CardProvider::class
-	single { WuwaProvider(mClient = get()) } bind CardProvider::class
+	single { WuwaProvider() } bind CardProvider::class
 
 	single {
 		ProviderRegistry(

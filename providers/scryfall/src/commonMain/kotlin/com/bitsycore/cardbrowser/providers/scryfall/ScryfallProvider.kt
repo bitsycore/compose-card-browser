@@ -35,9 +35,13 @@ import io.ktor.http.appendPathSegments
  *
  * ## Coverage, as verified against the live API on 2026-09-08
  *
- * - **Languages**: `lang:fr`, `lang:ja` and `lang:ko` all return real printings with
- *   `printed_name` and `printed_type_line`, alongside English. The record states its own `lang`,
- *   so the printing language here is a fact rather than an inference from which URL was called.
+ * - **Languages**: eleven, all measured. `fr`, `ja`, `ko`, `de`, `es`, `it`, `pt`, `ru`, `zhs` and
+ *   `zht` all return real printings with `printed_name` and `printed_type_line`, alongside English
+ *   -- `lang:zhs` alone matches 20,592 creature printings. The record states its own `lang`, so the
+ *   printing language here is a fact rather than an inference from which URL was called.
+ *
+ *   Scryfall spells Chinese `zhs`/`zht` where this app spells it `zh-cn`/`zh-tw`; [scryfallTag] is
+ *   the whole of that translation, and `CardLanguage.fromCode` reads Scryfall's spelling back.
  *
  *   Not every set exists in every language, and Scryfall answers a language with no printings with
  *   **404**, not an empty list. That is handled explicitly -- see [listCards] -- and it falls back
@@ -97,6 +101,13 @@ class ScryfallProvider(
 				CardLanguage.JAPANESE,
 				CardLanguage.ENGLISH,
 				CardLanguage.KOREAN,
+				CardLanguage.SIMPLIFIED_CHINESE,
+				CardLanguage.TRADITIONAL_CHINESE,
+				CardLanguage.GERMAN,
+				CardLanguage.SPANISH,
+				CardLanguage.ITALIAN,
+				CardLanguage.PORTUGUESE,
+				CardLanguage.RUSSIAN,
 			),
 			localizedText = true,
 			localizedImages = true,
@@ -216,7 +227,7 @@ class ScryfallProvider(
 		val vResponse: ScryfallListDto<ScryfallCardDto> = mClient
 			.get(mBaseUrl) {
 				url { appendPathSegments("cards", "search") }
-				parameter("q", "$term lang:${language.code}")
+				parameter("q", "$term lang:${scryfallTag(language)}")
 				// One entry per printing rather than per card, which is what a set browser shows:
 				// two artworks of the same card in a set are two tiles.
 				parameter("unique", "prints")
@@ -248,6 +259,20 @@ class ScryfallProvider(
 	 * into a parse error rather than a miss.
 	 */
 	private fun quote(text: String): String = "\"" + text.replace("\"", "\\\"") + "\""
+
+	/**
+	 * The tag Scryfall's `lang:` filter wants for [language].
+	 *
+	 * Only Chinese differs. Scryfall predates BCP 47 script subtags and writes the two variants
+	 * `zhs` and `zht`; asking it for `lang:zh-cn` is a query that matches nothing, which -- given
+	 * Scryfall answers an empty match with a 404 -- would look exactly like a set that has no
+	 * Chinese printings.
+	 */
+	private fun scryfallTag(language: CardLanguage): String = when (language) {
+		CardLanguage.SIMPLIFIED_CHINESE -> "zhs"
+		CardLanguage.TRADITIONAL_CHINESE -> "zht"
+		else -> language.code
+	}
 
 	/** Scryfall asks every client to identify itself, and this is the only place that is done. */
 	private fun io.ktor.client.request.HttpRequestBuilder.identify() {

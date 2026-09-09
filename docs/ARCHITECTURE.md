@@ -189,11 +189,16 @@ Two assertions have earned their place in every adapter's tests, because each ca
 
 - **Ids must be unique across a page.** `LazyVerticalGrid` throws outright on a repeated key rather
   than degrading, so a provider that issues one is a crash rather than a cosmetic problem. Wuthering
-  Waves does: 36 of its 87 card codes are carried by two records with different artwork, which is
-  why that adapter keys on the numeric id and not the printed code.
+  Waves nearly does: 36 of its 87 card codes carry two records each, so that adapter keys on the
+  code *and the rarity tier* -- the two records are one card printed at two rarities, with a
+  different illustration for each.
 - **Omitting a language gets the app's *first preference*, not English.** `resolveLanguage(null)`
-  walks `CardLanguage.PREFERENCE_ORDER`, so a source carrying all four answers in French. A test
+  walks `CardLanguage.PREFERENCE_ORDER`, so a source that carries French answers in French. A test
   written without an explicit language gets French names back and looks broken when it is not.
+- **A provider's own tag for a language is the provider's business.** `CardLanguage.code` is this
+  app's tag; where a source disagrees — Scryfall writes Chinese `zhs`/`zht` — the adapter maps it and
+  `CardLanguage.fromCode` reads the source's spelling back through `aliases`. Nothing about one
+  source's spelling reaches the enum.
 
 ### What you do *not* have to touch
 
