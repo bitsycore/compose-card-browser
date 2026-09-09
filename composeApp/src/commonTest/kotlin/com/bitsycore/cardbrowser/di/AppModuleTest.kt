@@ -10,6 +10,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import okio.Path.Companion.toPath
 import okio.fakefilesystem.FakeFileSystem
@@ -145,6 +146,9 @@ class AppModuleTest {
 			"yugioh" to "YuGiOh",
 			"altered" to null,
 			"wuwa" to null,
+			"lorcana" to null,
+			"cyberpunk" to null,
+			"wowtcg" to null,
 		)
 
 		for (vGame in vRegistry.games) {
@@ -161,17 +165,31 @@ class AppModuleTest {
 	}
 
 	@Test
-	fun `every offered game ships a mark`() {
+	fun `every offered game ships a mark -- or is on the list of the ones that cannot`() {
 		// This is the check that replaced compile-time exhaustiveness. `GameVisual.of` was a total
 		// `when` over a closed enum, so a new game could not skip it; art now lives in the game
 		// modules and is gathered into a list in the Koin graph, which a new module *can* be left
 		// out of. So it is asserted instead.
+		//
+		// The exceptions are named rather than allowed in general, which is the difference between
+		// "we could not find a free logo for these two" and "a logo is optional". Neither Lorcana
+		// nor the WoW TCG has a freely-licensed wordmark on Wikimedia Commons, and this project does
+		// not bundle a non-free one; both draw the generic mark until one is supplied.
+		val vNoLogoYet = setOf("lorcana", "wowtcg")
+
 		// One `graph()` call: it starts Koin, and starting it twice throws.
 		val vGraph = graph()
 		val vRegistry = vGraph.get<ProviderRegistry>()
 		val vArt = vGraph.get<GameArtRegistry>()
 
 		for (vGame in vRegistry.games) {
+			if (vGame.id.value in vNoLogoYet) {
+				assertNull(
+					vArt.forGame(vGame),
+					"${vGame.id} now ships art -- take it off the no-logo list",
+				)
+				continue
+			}
 			val vVisual = assertNotNull(vArt.forGame(vGame), "${vGame.id} ships no art")
 			assertTrue(vVisual.accentArgb != 0L, "${vGame.id} has no accent colour")
 			assertTrue(

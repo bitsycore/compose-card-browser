@@ -305,7 +305,7 @@ written without inheriting the app's UI stack. `:composeApp` reaches the art thr
 `GameArtRegistry`, and never enumerates games itself.
 
 **A set's symbol belongs to the provider**, because it is part of the set record. `CardSet.symbol`
-is populated by whichever mapper has one to give, and three of the seven do. That field carries an
+is populated by whichever mapper has one to give, and three of the eight do. That field carries an
 `isMonochrome` flag alongside the URL, because whether an asset has a colour of its own is a fact
 about the asset that only the provider knows: Scryfall's SVGs have no `fill` and default to black,
 while TCGdex's logos are full-colour wordmarks that must never be recoloured.

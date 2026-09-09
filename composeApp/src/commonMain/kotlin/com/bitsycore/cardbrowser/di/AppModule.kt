@@ -25,6 +25,10 @@ import com.bitsycore.cardbrowser.games.altered.AlteredGame
 import com.bitsycore.cardbrowser.games.altered.AlteredArt
 import com.bitsycore.cardbrowser.games.yugioh.YuGiOhGame
 import com.bitsycore.cardbrowser.games.yugioh.YuGiOhArt
+import com.bitsycore.cardbrowser.games.cyberpunk.CyberpunkArt
+import com.bitsycore.cardbrowser.games.cyberpunk.CyberpunkGame
+import com.bitsycore.cardbrowser.games.lorcana.LorcanaGame
+import com.bitsycore.cardbrowser.games.wowtcg.WowTcgGame
 import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesGame
 import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesArt
 import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
@@ -33,6 +37,9 @@ import com.bitsycore.cardbrowser.providers.optcg.OptcgProvider
 import com.bitsycore.cardbrowser.providers.riftcodex.RiftcodexProvider
 import com.bitsycore.cardbrowser.providers.scryfall.ScryfallProvider
 import com.bitsycore.cardbrowser.providers.tcgdex.TcgdexProvider
+import com.bitsycore.cardbrowser.providers.tcgcsv.CyberpunkTcgCsvProvider
+import com.bitsycore.cardbrowser.providers.tcgcsv.LorcanaTcgCsvProvider
+import com.bitsycore.cardbrowser.providers.tcgcsv.WowTcgCsvProvider
 import com.bitsycore.cardbrowser.providers.wuwa.WuwaProvider
 import com.bitsycore.cardbrowser.providers.ygoprodeck.YgoprodeckProvider
 import com.bitsycore.cardbrowser.ui.browse.BrowseSession
@@ -152,6 +159,11 @@ val appModule = module {
 		)
 	} bind CardProvider::class
 	single { WuwaProvider() } bind CardProvider::class
+	// Three games from one adapter. Each is a distinct class with its own primary type, which is
+	// what lets all three sit in the graph beside each other under the same `bind`.
+	single { LorcanaTcgCsvProvider(mClient = get(named(PROVIDER_CLIENT))) } bind CardProvider::class
+	single { CyberpunkTcgCsvProvider(mClient = get(named(PROVIDER_CLIENT))) } bind CardProvider::class
+	single { WowTcgCsvProvider(mClient = get(named(PROVIDER_CLIENT))) } bind CardProvider::class
 
 	// Every game's mark, gathered from the game modules themselves.
 	//
@@ -168,6 +180,11 @@ val appModule = module {
 				AlteredArt,
 				YuGiOhArt,
 				WutheringWavesArt,
+				CyberpunkArt,
+				// Lorcana and the WoW TCG ship no art yet: neither has a freely-licensed wordmark
+				// on Wikimedia Commons, and this project does not bundle a non-free one. They draw
+				// the generic mark until a logo is supplied, which is the fallback this list's
+				// being optional exists for.
 			),
 		)
 	}
@@ -261,10 +278,13 @@ val providerRoutes: List<ProviderRoute> = listOf(
 	ProviderRoute(game = AlteredGame.id, provider = AlteredProvider.PROVIDER_ID),
 	ProviderRoute(game = YuGiOhGame.id, provider = YgoprodeckProvider.PROVIDER_ID),
 	ProviderRoute(game = WutheringWavesGame.id, provider = WuwaProvider.PROVIDER_ID),
-	// Cyberpunk TCG has no entry, and that is the mechanism working rather than an omission: the
-	// game does not reach retail until November 2026 and no data source for it exists. Because
-	// `ProviderRegistry.games` is derived from this table, it simply does not appear in the game
-	// switcher. See docs/PROVIDER_RESEARCH.md.
+	ProviderRoute(game = LorcanaGame.id, provider = LorcanaTcgCsvProvider.PROVIDER_ID),
+	ProviderRoute(game = CyberpunkGame.id, provider = CyberpunkTcgCsvProvider.PROVIDER_ID),
+	ProviderRoute(game = WowTcgGame.id, provider = WowTcgCsvProvider.PROVIDER_ID),
+	// Duel Masters has no entry, and that is the mechanism working rather than an omission: no
+	// source was found that carries card images, and a browser with no pictures is not one. Because
+	// `ProviderRegistry.games` is derived from this table, it simply does not appear in the picker
+	// -- there is no half-built game to hide. See docs/PROVIDER_RESEARCH.md for what was measured.
 )
 
 /**

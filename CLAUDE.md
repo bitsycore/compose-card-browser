@@ -9,7 +9,7 @@ and the traps that have already cost a debugging session once.
 
 ## What this project is
 
-A Kotlin Multiplatform card browser for seven trading card games, sharing Compose Multiplatform UI
+A Kotlin Multiplatform card browser for ten trading card games, sharing Compose Multiplatform UI
 and all logic across Android, iOS and JVM desktop. No backend — Ktor talks to each game's public
 database directly. Browsing only: no accounts, no collection, no prices, no deckbuilding.
 
@@ -92,7 +92,7 @@ Follow the user's global conventions (Spirtech prefixes, tabs, KDoc). Specifical
 
 ```bash
 ./gradlew build -x lint          # everything, all four targets, including both iOS ones
-./gradlew desktopTest            # the deterministic suite (291 tests)
+./gradlew desktopTest            # the deterministic suite (609 tests)
 ./gradlew :androidApp:assembleDebug
 ./gradlew :composeApp:run        # desktop
 ```
@@ -112,7 +112,7 @@ They need a network and hit someone else's server. Do not add them to CI-style r
 Each of these was a real debugging session. They are listed because none is discoverable by reading
 the code that fails.
 
-**Koin: register providers with `bind`, never `single<CardProvider> { … }`.** Seven definitions
+**Koin: register providers with `bind`, never `single<CardProvider> { … }`.** Ten definitions
 sharing one primary type and no qualifier means Koin keeps only the last, `getAll` returns one
 adapter, and the registry throws at startup. It compiles, every unit test passes, and every provider
 works in isolation. `AppModuleTest` assembles the real graph specifically to catch this.
@@ -144,6 +144,13 @@ Two results already bought with someone's time — do not spend it again:
 **Scryfall's live suite trips its own rate limit.** 12 checks in one run exceeds what the host
 accepts, and re-running alone after a pause did not clear it. Three failures there are expected
 today; anything else is not.
+
+**TCGCSV answers with two different content types.** `text/json` for some responses and
+`application/json` for others, within the same category -- category 13's products are the first and
+its groups the second. Ktor's `ContentNegotiation` is registered for `application/json` only, so
+`body<T>()` worked for two of the three games it serves and threw *"Expected response body of the
+type ... but was SourceByteReadChannel"* for the third, which reads like a broken DTO and is not.
+That adapter reads the body as text and parses it itself; do not "fix" it back.
 
 **`LazyVerticalGrid` throws on a duplicate key** rather than degrading, so a provider that issues
 two records with the same id is a crash rather than a cosmetic bug. Wuthering Waves shipped exactly
@@ -180,8 +187,15 @@ sites and carry no verified licence — that distinction is documented and shoul
 
 Do not "fix" these without asking; each is a decision with a reason recorded nearby.
 
-- **Cyberpunk TCG is absent.** The game is unreleased and no data source exists. A stub would be
-  fabricated data.
+- **Duel Masters is absent**, and it was asked for. TCGplayer has no category for it; the community
+  `duel-masters-json` dataset has good text but **no images at all** and covers 12 of 100+ sets; the
+  publisher's own site has art but no JSON and is Japanese-only. A picture-less card browser is not
+  one, so this is a decision for the project owner rather than a gap to fill quietly. Measured in
+  `docs/PROVIDER_RESEARCH.md`.
+- **Cyberpunk TCG used to be absent and no longer is.** The recorded reason was "no data source
+  exists", which was true when checked and stopped being true when TCGplayer opened category 92.
+  Worth remembering as a pattern: a "deliberately not done" entry is a statement about a date, and
+  re-checking one is cheap.
 - **No provider merging or failover.** One route wins and its answer is the answer. Failing over
   would silently change what every id on screen means.
 - **`CardPage` is never cached.** Every provider declares `remote = emptySet()`, so a page is only

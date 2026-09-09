@@ -59,6 +59,7 @@ kotlin {
 			implementation(project(":providers:altered"))
 			implementation(project(":providers:ygoprodeck"))
 			implementation(project(":providers:wuwa"))
+			implementation(project(":providers:tcgcsv"))
 
 			implementation(libs.jetbrains.compose.runtime)
 			implementation(libs.jetbrains.compose.foundation)

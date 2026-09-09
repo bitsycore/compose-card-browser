@@ -15,9 +15,12 @@ is not shipped and the reason is recorded here rather than papered over with a s
 | Magic: The Gathering | Scryfall | 2026-09-08 | fr, ja, en, ko | yes |
 | One Piece | OPTCG API | 2026-09-08 | en | yes |
 | Altered | Altered TCG Card Database (community mirror) | 2026-09-08 | fr, en | yes |
-| Cyberpunk TCG | — | 2026-09-08 | — | **no** |
+| Cyberpunk TCG | TCGCSV category 92 | 2026-09-09 | none stated | yes |
 | Yu-Gi-Oh! | YGOPRODeck | 2026-09-08 | fr, ja, en, ko | yes |
 | Wuthering Waves TCG | UCP `mc-api.ucp-jp.com` | 2026-09-09 | ja, zh-cn, ko | yes, bundled |
+| Disney Lorcana | TCGCSV category 71 | 2026-09-09 | none stated | yes |
+| World of Warcraft TCG | TCGCSV category 13 | 2026-09-09 | none stated | yes |
+| Duel Masters | — | 2026-09-09 | — | **no** |
 
 ## Pokémon — TCGdex
 
@@ -106,20 +109,105 @@ the one game where the top preference is genuinely honoured.
 so a grid tile loads the same 200–300 KB JPEG the detail screen does. Every other provider here
 serves a small variant. This is stated in the UI rather than hidden.
 
-## Cyberpunk TCG — not shipped
+## TCGCSV — Lorcana, Cyberpunk and the WoW TCG
 
-No data source exists to adapt.
+Checked 2026-09-09. https://tcgcsv.com is a public JSON mirror of TCGplayer's product catalogue. No
+key, no auth, no published rate limit. Two endpoints matter:
 
-- The game does not reach retail until **6 November 2026**.
-- There is no official API. `cyberpunktcg.com/cards` is server-rendered HTML with no JSON endpoint
-  behind it, and the community databases (`choomdex.com`, `ripperdeck.gg`) publish neither.
-- Sources disagree on whether the first set holds 150 or 151 cards, which is a fair signal that the
-  data itself is not settled.
+```
+/tcgplayer/{category}/groups            every set in a game
+/tcgplayer/{category}/{group}/products  every product in one set
+```
 
-Scraping a rendered page for an unreleased game would produce exactly the "fake production data to
-make the app appear complete" the brief rules out, so Cyberpunk has no route and does not appear in
-the game switcher. It can be added later as one module and one routing entry once WeirdCo publishes
-something stable.
+A category is a game and a group is a set, which is why one adapter serves three games. Of the 93
+categories it publishes, three are games this app wanted — 71 Lorcana, 92 Cyberpunk TCG, 13 WoW TCG
+— and there is **no Duel Masters category**, which is where that game's search started.
+
+### What is the same for all three
+
+- **No search endpoint of any kind.** `crossSetSearch = false`; every filter is `localOnly`, so a
+  text search covers the sets already downloaded and the app labels it with a count.
+- **No per-product endpoint.** Products are only served a group at a time, so a card's id carries
+  its group: `{groupId}-{productId}`. Without that, a cold deep link could not be served at all.
+- **Sealed product shares the catalogue.** A booster box is a product with a UPC and no game fields,
+  so cards are identified by the fields they *do* carry.
+- **No language is stated anywhere.** It is plainly the English storefront and never says so, so
+  `languages` is empty and every record carries `isProviderStated = false`.
+- **Prices are published and not mapped.** This is the source where taking them would be easiest.
+- **Two content types.** `text/json` for some responses and `application/json` for others, within
+  one category. This broke the adapter for exactly one of the three games; see CLAUDE.md.
+- **Three image renditions**, derived from the `_200w.jpg` each record states:
+
+  | Suffix | Lorcana | Cyberpunk | WoW |
+  | --- | --- | --- | --- |
+  | `_200w` | 200x280, 14 KB | 200x279, 11 KB | 200x280, 27 KB |
+  | `_400w` | 400x559, 43 KB | 400x559, 37 KB | 200x280, 16 KB |
+  | `_in_1000x1000` | 500x699, 61 KB | 716x1000, 91 KB | 200x280, 16 KB |
+
+  `in_` inscribes rather than upscaling, so it returns the original and is genuinely the largest.
+
+### Lorcana — category 71
+
+20 groups, 3654 products, 3309 of them cards, product ids unique throughout. The richest of the
+three: ink, cost, Strength, Willpower, type, classification, rules and flavour text. 21 distinct
+`InkType` values, being six inks and fifteen pairs — a dual-ink card is split so filtering by one
+ink matches it. 11 rarities, of which six form the ladder the game has always used; Epic and Iconic
+arrived later and are left unplaced rather than guessed at. `Lore Value` and `Move Cost` are real
+and unmapped: the shared model holds three numbers and Lorcana prints four.
+
+**A better API exists and was rejected.** [Lorcast](https://api.lorcast.com/v0/) is Scryfall-shaped,
+with a real `/cards/search`, collector numbers, a stated `lang` and full set metadata — everything
+TCGCSV lacks. It serves card images as **AVIF only**: the `.avif` path returns 200 and the same path
+with `.webp`, `.jpg` or `.png` returns 404. Coil decodes AVIF on Android 12+ but not through Skia on
+desktop or iOS, so three of the four targets would render a grid of blank tiles. Worth revisiting if
+that changes; it would be a second adapter, not a change to the first.
+
+### Cyberpunk TCG — category 92
+
+**This overturns an earlier finding in this file.** The previous entry read "no data source exists
+to adapt", which was accurate on 2026-09-08 and false a day later — TCGplayer opened a category for
+the game ahead of its 6 November 2026 release.
+
+9 groups, all dated 2026-11-06, 422 products of which 408 are cards. Four of the nine groups are
+Beta printings of the other four, so the same card is listed twice with two product ids and one
+collector number: 408 cards over 314 distinct numbers. Ids stay unique because they are product
+ids, which matters because `LazyVerticalGrid` throws on a repeated key.
+
+Fields: colour (four), cost, Power, type (Unit/Legend/Program/Gear), tags, rules text. Rarity is on
+267 of the 408 and the rest state none. `RAM` is written `x1` — a multiplier, not a number — and
+`Eddies` is a `TRUE`/`FALSE` flag; neither is mapped into a numeric slot.
+
+### World of Warcraft TCG — category 13
+
+The thinnest source in the app, and the honest ceiling of what is knowable: the game was
+discontinued in 2013 and no publisher database outlived it.
+
+54 groups. Measured over 1549 products in 12 of them: **the only game field any WoW product carries
+is `Rarity`**, as a single letter (`C`/`U`/`R`/`E`/`L`, expanded by the adapter). There is no
+collector number, no card text, no cost, no type, no class and no faction anywhere in the category.
+Images are 200x280 and that is the original — all three renditions return the same pixels, `_200w`
+merely being a worse re-encode — so the adapter states one URL and no thumbnail.
+
+A fuller source exists if the thinness is ever unacceptable: `wowcards.info` and the
+`wowtcg-decktools` dataset both hold real card text. Either would be a second adapter.
+
+## Duel Masters — not shipped
+
+Checked 2026-09-09. Asked for; no source found that a card *browser* can use.
+
+- **TCGplayer has no category for it**, so the TCGCSV route that served the other three is closed.
+- [`duel-masters-json`](https://github.com/Latepate64/duel-masters-json) is a real, well-formed
+  community dataset: 1152 cards, 797 KB, with civilizations, costs, types, rules text, flavour text,
+  illustrators and per-printing set/rarity. It carries **no image field at all**, and covers DM-01
+  to DM-12 — roughly a tenth of what the game has printed.
+- The publisher's own database at `dm.takaratomy.co.jp/card/` *does* have art, on a predictable
+  path (`/wp-content/card/cardthumb/dm26ex3-SEC001a.jpg`), but publishes no JSON: the page is
+  server-rendered and would need a Wuthering-Waves-style scraper against a Japanese-only site, over
+  a catalogue orders of magnitude larger than Wuthering Waves' 123 cards.
+
+Shipping the text-only dataset would give a card browser with no pictures covering a tenth of the
+game. That is a trade for the project owner to make rather than one to make quietly, so Duel Masters
+has no route and does not appear in the picker.
 
 ## Yu-Gi-Oh! — YGOPRODeck
 

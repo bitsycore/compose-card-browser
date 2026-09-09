@@ -1,6 +1,6 @@
 # CardBrowser
 
-A Kotlin Multiplatform card browser for **seven trading card games**, sharing Compose Multiplatform
+A Kotlin Multiplatform card browser for **ten trading card games**, sharing Compose Multiplatform
 UI and all application logic between Android, iOS and JVM desktop.
 
 Pick a game, browse its sets, open one, filter its cards, search across every set, and read a card
@@ -188,7 +188,7 @@ anyway — they end up in the binary.)
 
 ## Games and providers
 
-Seven games, seven adapters, one authoritative source each. A game and a provider are separate
+Ten games, eight adapters, one authoritative source each. A game and a provider are separate
 modules: `:games:riftbound` declares what Riftbound *is* — its vocabulary, its rarity ladder, its
 Cardmarket segment, its logo — and `:providers:riftcodex` declares where the data comes from, naming
 the game in its own type as `CardProvider<RiftboundGame>`. `:core` names no game at all. Every one was verified by hitting the
@@ -204,13 +204,33 @@ records what each check found, including the two that changed the design.
 | Altered | [Altered TCG Card Database](https://github.com/PolluxTroy0/Altered-TCG-Card-Database) | fr, en | A community mirror. The official API is gone — see below. |
 | Yu-Gi-Oh! | [YGOPRODeck](https://ygoprodeck.com) | fr, ja, en, ko, de, it, pt | Sets are addressed by name; rarity is per printing. |
 | Wuthering Waves TCG | UCP `mc-api.ucp-jp.com` (bundled snapshot) | ja, zh-cn, ko | Undocumented internal endpoint with no stability promise, so the whole 128-card game is scraped and shipped. The only adapter that makes no requests for card data. |
+| Disney Lorcana | [TCGCSV](https://tcgcsv.com) (category 71) | none stated | Ink, cost, Strength, Willpower, type and rules text. A better API exists and was rejected over its image format — see below. |
+| Cyberpunk TCG | [TCGCSV](https://tcgcsv.com) (category 92) | none stated | Pre-release: nine groups, all dated 6 November 2026. Colour, cost, Power, tags and rules text. |
+| World of Warcraft TCG | [TCGCSV](https://tcgcsv.com) (category 13) | none stated | **A name, a rarity and a 200x280 picture.** The thinnest source here, because the game died in 2013 and only a marketplace catalogue outlived it. |
 
-**Cyberpunk TCG is deliberately absent.** It was asked for, and there is nothing to adapt: the game
-does not reach retail until 6 November 2026, there is no official API, and the community databases
-publish no JSON. Scraping a rendered page for an unreleased game would be exactly the fabricated
-data this project refuses to ship. It becomes one module and one routing entry the day a real source
-appears. Because `ProviderRegistry.games` is derived from the routing table, a game with no adapter
-cannot appear in the picker at all — there is no greyed-out row.
+**Three games share one adapter.** TCGCSV is a public JSON mirror of TCGplayer's product catalogue,
+keyed by a numeric category, so Lorcana, Cyberpunk and the WoW TCG differ in a category number and a
+field map and in nothing else. `:providers:tcgcsv` is one HTTP engine with three `CardProvider`
+classes over it, each still naming its game in its own type so the registry's route check works
+exactly as for every other adapter. Its prices — the thing TCGCSV mainly exists to publish — are not
+mapped, same as everywhere else.
+
+**Cyberpunk TCG stopped being absent.** It was left out on the recorded grounds that no data source
+existed, which was true when it was checked and is no longer: TCGplayer opened category 92 ahead of
+the 6 November 2026 release, and a pre-order catalogue of 408 cards with real colours, costs, rules
+text and art is a thing a source published rather than a thing this app invented. The set list will
+grow as the release approaches.
+
+**Duel Masters is absent, and this is what was measured.** It was asked for and no source was found
+that a card *browser* can use. TCGplayer has no category for it. The community dataset
+[`duel-masters-json`](https://github.com/Latepate64/duel-masters-json) is real and good — 1152 cards
+with civilizations, costs, types and rules text — but carries **no images at all**, and covers
+DM-01 to DM-12 out of the hundred-plus sets the game has printed. The publisher's own database at
+`dm.takaratomy.co.jp` does have art, on a predictable path, but publishes no JSON and would need a
+Wuthering-Waves-style scraper against a Japanese-only site. Shipping the text-only dataset would
+give a browser with no pictures and a tenth of the game; that is a decision for the project owner
+rather than a gap to quietly fill. Because `ProviderRegistry.games` is derived from the routing
+table, a game with no adapter cannot appear in the picker at all — there is no greyed-out row.
 
 ### What each source cannot do, and what the app does about it
 
@@ -290,7 +310,7 @@ records of a *download*, not proof of *presence* — the image cache is an LRU a
 
 ### Cross-set search
 
-Search every set of a game by card name. Five of the seven sources can search their whole catalogue;
+Search every set of a game by card name. Five of the eight sources can search their whole catalogue;
 Riftbound and Altered cannot, so for those the app searches **only the sets already downloaded** and
 says exactly that, with a count of how many of the game's sets that was.
 
@@ -385,7 +405,7 @@ a field nobody filled in.
 
 ### Set symbols exist for three games, and the game marks are not logos
 
-**Sets.** Three of the seven sources publish artwork for a set, and the set list uses it:
+**Sets.** Three of the eight sources publish artwork for a set, and the set list uses it:
 
 | Source | What it publishes | Coverage |
 |---|---|---|
@@ -409,7 +429,7 @@ device, but it carries no meaning.
 **Games.** The game picker uses Material symbols, not publisher logos. Every game here is somebody's
 trademark and this app is affiliated with none of them; shipping their brand assets would be both a
 licensing problem and the same category of dishonesty as inventing card data. Each game gets a
-distinct icon and colour, which is enough to tell seven rows apart without implying any of them is
+distinct icon and colour, which is enough to tell the rows apart without implying any of them is
 official.
 
 ### There is no higher-resolution card art
@@ -496,11 +516,15 @@ the inline image and the fullscreen viewer now decode at source resolution.
   by default: for most games the name alone is the better query, and an extra term the site does not
   index turns a good search into an empty one. Note it uses the *raw* provider collector number —
   `OP16-098`, not the bare `098` the model splits out of it.
-- **Five games have a Cardmarket section; two do not.** `Riftbound`, `Magic`, `Pokemon`, `YuGiOh`
+- **Five games have a Cardmarket section; five do not.** `Riftbound`, `Magic`, `Pokemon`, `YuGiOh`
   and `OnePiece` are all confirmed against real URLs. The two nulls mean different things that come
   out the same way: **Altered is not sold on Cardmarket at all** — the site has no section for it —
   and Wuthering Waves has none yet, the game being Japan-only so far. Both suppress the button, and
   only the second is worth re-checking later.
+
+  Lorcana, Cyberpunk and the WoW TCG likewise declare none, for a third reason again: nobody has
+  looked. Cardmarket certainly sells Lorcana, but a slug is only shipped once it has been seen on a
+  real page in a browser, and one line on each game's profile is all it would take.
 
   `AppModuleTest` asserts this table against the real Koin graph, so a new game cannot quietly ship
   without someone having checked.
@@ -557,10 +581,10 @@ This app is not affiliated with any game's publisher.
 
 ### Game logos
 
-All seven games show their real logo in the picker, but they do not all come from the same place
-and the difference matters.
+Eight of the ten games show their real logo in the picker, and they do not all come from the same
+place — the difference matters.
 
-**Five from Wikimedia Commons**, which is what makes bundling them possible: Commons accepts only
+**Six from Wikimedia Commons**, which is what makes bundling them possible: Commons accepts only
 freely-licensed media, whereas a logo merely *shown* on Wikipedia normally lives there under a
 non-free fair-use rationale that does not permit redistribution. Each licence was checked
 individually through the Commons API:
@@ -572,6 +596,7 @@ individually through the Commons API:
 | Yu-Gi-Oh! | CC BY 3.0 | **required** — Kazuki Takahashi, credited in the app |
 | One Piece | Public domain (trademarked) | not required |
 | Wuthering Waves | Public domain (trademarked) | not required |
+| Cyberpunk TCG | Public domain (trademarked) | not required |
 
 "Public domain, trademarked" is the normal state of a wordmark: nobody holds a copyright in it, so
 the file may be redistributed, while the trademark still belongs to its owner. Using it to identify
@@ -586,7 +611,13 @@ card shop's CDN and a retailer's blog) and downloaded on request.
 **No licence was verified for those two, because there is none to verify.** They are publishers'
 trademarks used to identify the publishers' own games — the ordinary nominative use every card
 database relies on — but anyone redistributing this app should form their own view rather than
-assume they carry the clearance the five Commons files do.
+assume they carry the clearance the six Commons files do.
+
+**Two games have no logo at all.** Lorcana and the WoW TCG have no freely-licensed wordmark on
+Commons, and this project does not bundle a non-free one on its own initiative. Both draw the
+generic mark in the picker until one is supplied — a game with no art is a missing logo rather than
+a missing game, which is why `GameArtRegistry` returns null instead of the list being exhaustive.
+`AppModuleTest` names those two explicitly, so the exception cannot silently spread to a third.
 
 Two presentation rules, both driven by the artwork rather than by taste:
 
@@ -599,3 +630,6 @@ Two presentation rules, both driven by the artwork rather than by taste:
   pale tile, and Riftbound's are concentrated entirely in its "League of Legends" subtitle, which
   vanishes. Those three keep a dark tile on both themes. Magic, Pokémon and Yu-Gi-Oh are not
   flagged despite similar raw figures, because their dark outlines carry the shape.
+- The Cyberpunk mark is the *franchise* wordmark rather than the card game's own lockup, the TCG
+  having no freely-licensed mark of its own. Commons serves it as a monochrome glyph, so it is
+  tinted to the theme foreground like the Wuthering Waves one.

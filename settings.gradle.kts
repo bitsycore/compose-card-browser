@@ -60,6 +60,12 @@ include(":games:altered")
 include(":games:yugioh")
 include(":games:wutheringwaves")
 
+// Three more, added once a source for each was measured. Cyberpunk is here because the reason it
+// was absent -- no data source existed -- stopped being true; see docs/PROVIDER_RESEARCH.md.
+include(":games:lorcana")
+include(":games:cyberpunk")
+include(":games:wowtcg")
+
 // One module per provider. A second source for an existing game adds a sibling here and changes
 // nothing above it. See docs/ARCHITECTURE.md.
 include(":providers:riftcodex")
@@ -67,13 +73,17 @@ include(":providers:riftcodex")
 // The other six, in the order they were asked for. Each is one `CardProvider`, one Koin `single`
 // and one `ProviderRoute`; none of them changed a line of :core, :data or a screen.
 //
-// Cyberpunk TCG is absent on purpose and not because it was skipped -- see docs/PROVIDER_RESEARCH.md.
 include(":providers:tcgdex")
 include(":providers:scryfall")
 include(":providers:optcg")
 include(":providers:altered")
 include(":providers:ygoprodeck")
 include(":providers:wuwa")
+
+// The one adapter serving three games. TCGCSV is a single catalogue keyed by a category number, so
+// Lorcana, Cyberpunk and the WoW TCG share its HTTP code and differ only in a number and a field
+// map. Each still gets its own `CardProvider` naming its game in its type.
+include(":providers:tcgcsv")
 
 // Compose UI and Pulse presentation logic, plus the Android/iOS/desktop targets it compiles to.
 // The desktop entry point lives in its `desktopMain`; iOS is the framework `iosApp/` links against.
