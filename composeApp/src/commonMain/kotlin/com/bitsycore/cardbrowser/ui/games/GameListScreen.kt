@@ -32,7 +32,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import coil3.compose.SubcomposeAsyncImage
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -194,13 +196,40 @@ private fun GameMark(visual: GameVisual) {
 			.background(visual.accent.copy(alpha = 0.18f)),
 		contentAlignment = Alignment.Center,
 	) {
-		Icon(
-			imageVector = visual.icon,
-			contentDescription = null,
-			tint = visual.accent,
-			modifier = Modifier.size(26.dp),
-		)
+		val vLogo = visual.logoUrl
+		if (vLogo == null) {
+			Icon(
+				imageVector = visual.icon,
+				contentDescription = null,
+				tint = visual.accent,
+				modifier = Modifier.size(26.dp),
+			)
+		} else {
+			// A real logo, when one has been supplied. `Fit` rather than `Crop` because logos are
+			// wordmarks of every aspect ratio and cropping one is worse than letterboxing it.
+			SubcomposeAsyncImage(
+				model = vLogo,
+				contentDescription = null,
+				contentScale = ContentScale.Fit,
+				modifier = Modifier.fillMaxSize().padding(6.dp),
+				// A logo that has not arrived yet, or will never arrive, shows the mark rather
+				// than an empty tile -- so a bad URL degrades instead of breaking the row.
+				loading = { GameMarkIcon(visual) },
+				error = { GameMarkIcon(visual) },
+			)
+		}
 	}
+}
+
+/** The Material fallback, shared by the null case and by a logo that fails to load. */
+@Composable
+private fun GameMarkIcon(visual: GameVisual) {
+	Icon(
+		imageVector = visual.icon,
+		contentDescription = null,
+		tint = visual.accent,
+		modifier = Modifier.size(26.dp),
+	)
 }
 
 // ==================

@@ -26,12 +26,29 @@ import com.bitsycore.cardbrowser.core.model.Game
  *
  * Colours are picked for separation from one another rather than to match a brand.
  *
- * @property icon a Material symbol, never a logo
- * @property accent used for the icon tile, so the rows are distinguishable at a glance
+ * ## Supplying real logos
+ *
+ * [logoUrl] is the slot for them, and it is empty in this repository on purpose.
+ *
+ * No provider publishes one. All seven were checked: TCGdex, Scryfall and YGOPRODeck publish *set*
+ * and *series* artwork, which is a different thing, and the publishers' own sites either serve no
+ * logo as a static asset or serve one in a style that matches none of the others. Committing brand
+ * artwork scraped from fan wikis would mean shipping files of unknown provenance and hotlinking
+ * somebody's CDN, so nothing is committed here.
+ *
+ * Filling a slot in is one line each. Point it at a bundled asset or a URL you are happy to use,
+ * and the picker shows it instead of the Material mark; a slot left null, or an image that fails to
+ * load, falls back to the mark automatically, so a broken or missing logo can never leave an empty
+ * row.
+ *
+ * @property icon a Material symbol, never a logo. The fallback, and today the default
+ * @property accent used for the tile, so the rows are distinguishable at a glance
+ * @property logoUrl the game's real logo, when one has been supplied. `null` uses [icon]
  */
 data class GameVisual(
 	val icon: ImageVector,
 	val accent: Color,
+	val logoUrl: String? = null,
 ) {
 
 	companion object {

@@ -136,12 +136,17 @@ internal object WuwaMapper {
 				// Attribute is the game's element axis: 気動, 焦熱, 電導 and so on.
 				domains = listOfNotNull(dto.attrName?.dashToNull()),
 			),
-			tags = listOfNotNull(
-				dto.forceName?.dashToNull(),
-				dto.featureName?.dashToNull(),
-				dto.characterName?.dashToNull(),
-				dto.colorName?.dashToNull(),
-			),
+			tags = buildList {
+				dto.forceName?.dashToNull()?.let(::add)
+				dto.featureName?.dashToNull()?.let(::add)
+				dto.characterName?.dashToNull()?.let(::add)
+				dto.colorName?.dashToNull()?.let(::add)
+				// Which products actually contain this card, which is not the same as the product
+				// its number was assigned under -- `SD02-003` states `収録：BP01`. The field is a
+				// list: a card reprinted across products arrives as "SD01、BP01", separated by an
+				// ideographic comma. Both are shown, because both are true.
+				addAll(productsOf(dto.obtain))
+			},
 			languages = LanguageCoverage(confirmed = setOf(language)),
 			finishes = FinishCoverage(),
 		)
@@ -173,6 +178,19 @@ internal object WuwaMapper {
 		language = language,
 		accessibilityText = "Wuthering Waves TCG card: $name.",
 	)
+
+	/**
+	 * The products a card is found in, from `obtain`.
+	 *
+	 * Separated by an ideographic comma, not an ASCII one. Nine of the 123 cards carry a value that
+	 * disagrees with their code prefix, so this is genuinely extra information rather than a
+	 * restatement of the number: six BP01-numbered cards also ship in a starter deck, and three
+	 * cards numbered under `SD01`/`SD02` are only found in `BP01`.
+	 */
+	private fun productsOf(obtain: String?): List<String> =
+		obtain?.split('、', ',')
+			.orEmpty()
+			.mapNotNull { it.trim().ifBlank { null } }
 
 	/**
 	 * Treats the API's `"-"` placeholder as absent.

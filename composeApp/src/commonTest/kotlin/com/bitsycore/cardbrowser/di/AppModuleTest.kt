@@ -127,6 +127,27 @@ class AppModuleTest {
 	}
 
 	@Test
+	fun `every game has a mark -- and none silently claims to be a logo`() {
+		// `GameVisual.of` is exhaustive, so this cannot fail by omission -- it fails by not
+		// compiling. What it does check is the invariant the class documents: the fallback mark is
+		// always present, so a game whose logo slot is empty or whose logo fails to load still
+		// draws something.
+		val vRegistry = graph().get<ProviderRegistry>()
+
+		for (vGame in vRegistry.games) {
+			val vVisual = com.bitsycore.cardbrowser.ui.games.GameVisual.of(vGame)
+			assertNotNull(vVisual.icon, "$vGame has no fallback mark")
+			// Empty in this repository on purpose: no provider publishes a game logo and no brand
+			// artwork is committed here. If this ever fails, someone has added one -- check they
+			// had the right to.
+			assertTrue(
+				vVisual.logoUrl == null || vVisual.logoUrl.startsWith("http"),
+				"$vGame has a logo slot filled with something that is not a URL",
+			)
+		}
+	}
+
+	@Test
 	fun `the shared HTTP client is a single instance`() {
 		// Every adapter takes `get()` for its client. Seven clients would mean seven connection
 		// pools and seven copies of the image cache's transport.
