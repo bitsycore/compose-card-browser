@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.DownloadDone
@@ -74,12 +75,30 @@ fun DownloadKindDialog(
 	 * all" on Magic is 988 sets and tens of thousands of images.
 	 */
 	setCount: Int = 1,
+	/**
+	 * Kinds already on disk for this set.
+	 *
+	 * Offered as done rather than as a choice: re-downloading what you already have is almost never
+	 * what the tap meant. A "Download again" button unlocks them, because a re-download is
+	 * occasionally exactly what is wanted -- the image cache is an LRU and can be evicted from
+	 * underneath a record that still says the art came down.
+	 *
+	 * Only *complete* kinds belong here. A part-finished art download is still worth offering.
+	 */
+	alreadyHave: Set<DownloadKind> = emptySet(),
 ) {
-	var vInfo by remember { mutableStateOf(true) }
+	// Ticking is a fresh decision each time the dialog opens, so it is keyed on what is already
+	// held: reopening after a download must not restore a tick for something now on disk.
+	var vRedownload by remember(alreadyHave) { mutableStateOf(false) }
+	val vLocked: (DownloadKind) -> Boolean = { it in alreadyHave && !vRedownload }
+
+	var vInfo by remember(alreadyHave) {
+		mutableStateOf(DownloadKind.CARD_INFO !in alreadyHave)
+	}
 	// Thumbnails are the cheap useful half -- about a quarter of the image bytes, and enough to
 	// browse a set's grid offline -- so they sit above full art. Neither is pre-ticked.
-	var vThumbnails by remember { mutableStateOf(false) }
-	var vArt by remember { mutableStateOf(false) }
+	var vThumbnails by remember(alreadyHave) { mutableStateOf(false) }
+	var vArt by remember(alreadyHave) { mutableStateOf(false) }
 
 	AlertDialog(
 		onDismissRequest = onDismiss,
@@ -87,8 +106,10 @@ fun DownloadKindDialog(
 		text = {
 			Column {
 				KindRow(
-					checked = vInfo,
+					checked = vInfo && !vLocked(DownloadKind.CARD_INFO),
 					onCheckedChange = { vInfo = it },
+					enabled = !vLocked(DownloadKind.CARD_INFO),
+					done = DownloadKind.CARD_INFO in alreadyHave,
 					title = "Card info",
 					// Deliberately not "small": the honest thing is to say what it is, since a set
 					// with an unknown card count cannot be sized at all.
@@ -102,8 +123,10 @@ fun DownloadKindDialog(
 				)
 				Spacer(Modifier.height(8.dp))
 				KindRow(
-					checked = vThumbnails,
+					checked = vThumbnails && !vLocked(DownloadKind.GRID_THUMBNAILS),
 					onCheckedChange = { vThumbnails = it },
+					enabled = !vLocked(DownloadKind.GRID_THUMBNAILS),
+					done = DownloadKind.GRID_THUMBNAILS in alreadyHave,
 					title = "Grid thumbnails",
 					detail = cardCount
 						?.let { "About ${megabytes(it, THUMBNAIL_BYTES)} MB. Enough to browse the grid offline." }
@@ -111,8 +134,10 @@ fun DownloadKindDialog(
 				)
 				Spacer(Modifier.height(8.dp))
 				KindRow(
-					checked = vArt,
+					checked = vArt && !vLocked(DownloadKind.FULL_ART),
 					onCheckedChange = { vArt = it },
+					enabled = !vLocked(DownloadKind.FULL_ART),
+					done = DownloadKind.FULL_ART in alreadyHave,
 					title = "Full card art",
 					detail = cardCount
 						?.let { "About ${megabytes(it, FULL_ART_BYTES)} MB. Needed to read a card offline." }
@@ -151,7 +176,17 @@ fun DownloadKindDialog(
 				},
 			) { Text("Download") }
 		},
-		dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+		dismissButton = {
+			Row {
+				// Only where it can do something. The image cache is an LRU and can be evicted
+				// from under a record that still says the art came down, so re-downloading is a
+				// real need rather than a theoretical one.
+				if (alreadyHave.isNotEmpty() && !vRedownload) {
+					TextButton(onClick = { vRedownload = true }) { Text("Download again") }
+				}
+				TextButton(onClick = onDismiss) { Text("Cancel") }
+			}
+		},
 	)
 }
 
@@ -161,14 +196,38 @@ private fun KindRow(
 	onCheckedChange: (Boolean) -> Unit,
 	title: String,
 	detail: String,
+	enabled: Boolean = true,
+	done: Boolean = false,
 ) {
 	Row(verticalAlignment = Alignment.CenterVertically) {
-		Checkbox(checked = checked, onCheckedChange = onCheckedChange)
-		Spacer(Modifier.width(4.dp))
+		if (done && !enabled) {
+			// A tick rather than a ticked checkbox: this is a statement about what is already
+			// there, not a control that happens to be on.
+			Icon(
+				imageVector = Icons.Outlined.CheckCircle,
+				contentDescription = null,
+				tint = MaterialTheme.colorScheme.primary,
+				modifier = Modifier.size(24.dp).padding(2.dp),
+			)
+			Spacer(Modifier.width(18.dp))
+		} else {
+			Checkbox(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+			Spacer(Modifier.width(4.dp))
+		}
 		Column {
-			Text(title, style = MaterialTheme.typography.bodyLarge)
 			Text(
-				text = detail,
+				text = title,
+				style = MaterialTheme.typography.bodyLarge,
+				color = if (enabled) {
+					MaterialTheme.colorScheme.onSurface
+				} else {
+					MaterialTheme.colorScheme.onSurfaceVariant
+				},
+			)
+			Text(
+				// What is already held says so instead of quoting a size again -- the cost of a
+				// thing you already have is not the useful fact about it.
+				text = if (done && !enabled) "Already downloaded" else detail,
 				style = MaterialTheme.typography.bodySmall,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
 			)
@@ -403,6 +462,20 @@ private fun DownloadAllDialogPreview() = PreviewFrame {
 		setName = "",
 		cardCount = 21_450,
 		setCount = 88,
+		onDismiss = {},
+		onConfirm = {},
+	)
+}
+
+@Preview
+@Composable
+private fun DownloadKindDialogPartlyHeldPreview() = PreviewFrame {
+	// The state the `alreadyHave` parameter exists for: records and thumbnails are on disk, so
+	// they are shown as done rather than offered again, and only full art is still a choice.
+	DownloadKindDialog(
+		setName = "Origins",
+		cardCount = 352,
+		alreadyHave = setOf(DownloadKind.CARD_INFO, DownloadKind.GRID_THUMBNAILS),
 		onDismiss = {},
 		onConfirm = {},
 	)

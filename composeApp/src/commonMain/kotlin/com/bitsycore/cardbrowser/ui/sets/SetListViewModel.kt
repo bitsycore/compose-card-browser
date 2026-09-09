@@ -2,6 +2,7 @@ package com.bitsycore.cardbrowser.ui.sets
 
 import androidx.lifecycle.viewModelScope
 import com.bitsycore.cardbrowser.core.game.GameProfile
+import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.data.download.DownloadKind
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
@@ -11,6 +12,10 @@ import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.lib.pulse.viewmodel.PulseViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
+import com.bitsycore.cardbrowser.data.download.DownloadManager
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /** Which game this set list is for. Passed at construction so the first frame already knows. */
@@ -26,6 +31,7 @@ class SetListViewModel(
 	private val mRepository: CardRepository,
 	private val mPreferences: PreferencesStore,
 	private val mRegistry: ProviderRegistry,
+	private val mDownloads: DownloadManager,
 	private val mArgs: SetListArgs,
 ) : PulseViewModel<SetListContract.UiState, SetListContract.Intent, SetListContract.Effect>(
 	// Seeded at construction from the route, so the first frame already names the right game
@@ -62,6 +68,25 @@ class SetListViewModel(
 			// Started only once the game is known, so the first request is not fired against
 			// whichever game the initial state happened to name.
 			dispatch(SetListContract.Intent.Refresh)
+		}
+
+		// Re-check what is on disk whenever a download stops running.
+		//
+		// The saved marks are a snapshot taken after a load, not a flow over the cache, so without
+		// this a set downloaded while looking at the list only showed its marks after leaving the
+		// screen and coming back. Keyed on how many jobs are *finished* rather than on the job list
+		// itself, so a progress tick -- which changes the list several times a second -- does not
+		// re-run a file-existence check over every row.
+		viewModelScope.launch {
+			mDownloads.jobs
+				.map { vJobs -> vJobs.count { !it.isActive } }
+				.distinctUntilChanged()
+				.drop(1)
+				.collect {
+					val vState = stateFlow.value
+					val vGame = vState.game ?: return@collect
+					resolveSavedSets(vGame.id, mPreferences.preferences.value.primaryLanguage)
+				}
 		}
 	}
 
@@ -115,37 +140,47 @@ class SetListViewModel(
 			}
 			dispatch(SetListContract.Intent.LoadFinished(vGeneration))
 
-			// After the list settles, because it is a lookup *over* the list. Cheap -- one file
-			// existence check per set -- and guarded on the generation so a superseded load cannot
-			// mark the wrong game's sets.
-			val vSets = stateFlow.value.sets
-			if (stateFlow.value.requestGeneration == vGeneration && vSets.isNotEmpty()) {
-				dispatch(
-					SetListContract.Intent.SavedSetsResolved(
-						setIds = mRepository.savedSetIds(vGame.id, vSets, vLanguage),
-						// Read straight from preferences rather than measured: see
-						// `BrowsingPreferences.imageDownloads` for why the image side cannot be
-						// checked cheaply, and what the record therefore does and does not mean.
-						imageDownloads = mPreferences.preferences.value.let { vPreferences ->
-							vSets.mapNotNull { vSet ->
-								val vStatus = SetImageStatus(
-									thumbnails = vPreferences.imageDownloadFor(
-										vSet.id.qualified,
-										vLanguage,
-										DownloadKind.GRID_THUMBNAILS.name,
-									),
-									art = vPreferences.imageDownloadFor(
-										vSet.id.qualified,
-										vLanguage,
-										DownloadKind.FULL_ART.name,
-									),
-								)
-								if (vStatus.isEmpty) null else vSet.id.qualified to vStatus
-							}.toMap()
-						},
-					),
-				)
-			}
+			// After the list settles, because it is a lookup *over* the list.
+			if (stateFlow.value.requestGeneration == vGeneration) resolveSavedSets(vGame.id, vLanguage)
 		}
+	}
+
+	/**
+	 * Works out which sets are on disk, and re-dispatches it.
+	 *
+	 * Called after a load *and* whenever a download finishes. Without the second trigger the marks
+	 * only appeared after leaving the screen and coming back, because this is a snapshot taken once
+	 * rather than a flow that watches the cache.
+	 *
+	 * Cheap enough to repeat: one file-existence check per set for the records, and a map lookup
+	 * for the images.
+	 */
+	private suspend fun resolveSavedSets(game: GameId, language: CardLanguage) {
+		val vSets = stateFlow.value.sets
+		if (vSets.isEmpty()) return
+		val vPreferences = mPreferences.preferences.value
+		dispatch(
+			SetListContract.Intent.SavedSetsResolved(
+				setIds = mRepository.savedSetIds(game, vSets, language),
+				// Read straight from preferences rather than measured: see
+				// `BrowsingPreferences.imageDownloads` for why the image side cannot be checked
+				// cheaply, and what the record therefore does and does not mean.
+				imageDownloads = vSets.mapNotNull { vSet ->
+					val vStatus = SetImageStatus(
+						thumbnails = vPreferences.imageDownloadFor(
+							vSet.id.qualified,
+							language,
+							DownloadKind.GRID_THUMBNAILS.name,
+						),
+						art = vPreferences.imageDownloadFor(
+							vSet.id.qualified,
+							language,
+							DownloadKind.FULL_ART.name,
+						),
+					)
+					if (vStatus.isEmpty) null else vSet.id.qualified to vStatus
+				}.toMap(),
+			),
+		)
 	}
 }

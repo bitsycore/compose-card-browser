@@ -217,7 +217,7 @@ val appModule = module {
 		)
 	}
 
-	viewModel { (vArgs: SetListArgs) -> SetListViewModel(get(), get(), get(), vArgs) }
+	viewModel { (vArgs: SetListArgs) -> SetListViewModel(get(), get(), get(), get(), vArgs) }
 	viewModel { GameListViewModel(get(), get()) }
 	viewModel { CardGridViewModel(get(), get(), get(), get()) }
 	viewModel { (vArgs: CardDetailArgs) ->

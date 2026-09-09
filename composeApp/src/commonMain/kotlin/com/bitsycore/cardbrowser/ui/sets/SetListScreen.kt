@@ -337,6 +337,10 @@ fun SetListContent(
 		DownloadKindDialog(
 			setName = vSet.name,
 			cardCount = vSet.cardCount,
+			alreadyHave = alreadyDownloaded(
+				isSaved = vSet.id.qualified in vState.savedSetIds,
+				images = vState.imageDownloads[vSet.id.qualified],
+			),
 			onDismiss = { vPendingSet = null },
 			onConfirm = { vKinds ->
 				onDownload(vSet, vKinds)
@@ -358,6 +362,17 @@ fun SetListContent(
 			cardCount = vSets.mapNotNull { it.cardCount }
 				.takeIf { it.size == vSets.size }
 				?.sum(),
+			// Only what *every* shown set already has. Offering a kind as done when half the
+			// list is missing it would stop the user downloading the half that needs it.
+			alreadyHave = vSets
+				.map { vSet ->
+					alreadyDownloaded(
+						isSaved = vSet.id.qualified in vState.savedSetIds,
+						images = vState.imageDownloads[vSet.id.qualified],
+					)
+				}
+				.reduceOrNull { vAcc, vNext -> vAcc intersect vNext }
+				.orEmpty(),
 			onDismiss = { vPendingAll = false },
 			onConfirm = { vKinds ->
 				vSets.forEach { vSet -> onDownload(vSet, vKinds) }
@@ -579,6 +594,19 @@ private fun RegionBadge(region: GameRegion) {
 			.padding(horizontal = 6.dp, vertical = 2.dp),
 	)
 }
+
+/**
+ * Which download kinds a set already holds.
+ *
+ * Complete ones only. A part-finished art download is still worth offering, and a record of
+ * 206 of 288 images is precisely the case where re-running it is the right thing to do.
+ */
+private fun alreadyDownloaded(isSaved: Boolean, images: SetImageStatus?): Set<DownloadKind> =
+	buildSet {
+		if (isSaved) add(DownloadKind.CARD_INFO)
+		if (images?.thumbnails?.isComplete == true) add(DownloadKind.GRID_THUMBNAILS)
+		if (images?.art?.isComplete == true) add(DownloadKind.FULL_ART)
+	}
 
 /**
  * One rendition's mark, with a percentage when the download did not finish.
