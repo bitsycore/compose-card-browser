@@ -298,6 +298,13 @@ Three different transitions, and the differences are deliberate rather than deco
   as the row being replaced rather than becoming the screen — the shape is most of what sells it.
   Only the growing side animates: the row keeps its own corners, because it is not becoming square,
   it is being grown out of.
+- The two sides of that transform **cross-fade over each other**, across the whole journey. They
+  were briefly short and sequential — outgoing faded out in 120 ms, incoming waited 120 ms before
+  starting — which left an empty container travelling between the screens for the middle third of
+  the animation. Going back, that reads as the grid disappearing and *then* the row appearing.
+  `ContainerTransformProbe` advances `ImageComposeScene`'s clock frame by frame and measures both
+  the broken timing and the fixed one, because an animation cannot be checked from a single frame
+  and this one was guessed at twice before it was measured.
 - **Opening a card is a shared element**, and predates both: the artwork itself is the same element
   in the tile and on the detail screen, so the picture flies rather than the screen changing.
 - **Everything else cross-fades**, with no size transform. Predictive back is a separate parameter

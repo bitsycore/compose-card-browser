@@ -143,10 +143,15 @@ fun Modifier.sharedSetContainer(setId: String, expandsFromCorner: Dp? = null): M
 			animatedVisibilityScope = vAnimatedScope,
 			boundsTransform = CARD_BOUNDS_TRANSFORM,
 			resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
-			// The contents cross-fade while the container travels, and the outgoing side goes
-			// first. Both are short: the fade is there to cover the moment when one layout is
-			// replaced by a different one at the same size, not to be seen in its own right.
-			enter = fadeIn(tween(CONTAINER_FADE_MILLIS, delayMillis = CONTAINER_FADE_MILLIS)),
+			// The two sides cross-fade *over each other*, across the whole journey.
+			//
+			// They used to be short and sequential -- the outgoing faded out in 120 ms and the
+			// incoming waited 120 ms before starting -- which left a stretch in the middle of a
+			// ~350 ms bounds animation where neither side was drawn. An empty box travelled between
+			// the two screens, and on the way back that reads exactly as it was reported: the grid
+			// disappears, and then the row appears. `ContainerTransformProbe` measures both the
+			// broken timing and this one.
+			enter = fadeIn(tween(CONTAINER_FADE_MILLIS)),
 			exit = fadeOut(tween(CONTAINER_FADE_MILLIS)),
 			// Clipped in the *overlay*, which is the only place it can be done correctly here.
 			//
@@ -205,5 +210,11 @@ private val CONTAINER_CORNER_SPRING = spring<Dp>(
 	stiffness = Spring.StiffnessMediumLow,
 )
 
-/** Short: the fade is there to hide the size change, not to be seen in its own right. */
-private const val CONTAINER_FADE_MILLIS = 120
+/**
+ * Long enough to span the bounds animation, so the container is never empty.
+ *
+ * Matched by eye to `CARD_BOUNDS_TRANSFORM`'s spring rather than derived from it -- a spring has no
+ * duration to read. Erring long is the safe direction: two overlapping contents is a cross-fade,
+ * and neither is a hole.
+ */
+private const val CONTAINER_FADE_MILLIS = 320
