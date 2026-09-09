@@ -4,9 +4,12 @@ import com.bitsycore.cardbrowser.core.cardmarket.CardmarketLink
 import com.bitsycore.cardbrowser.core.cardmarket.CardmarketLinkBuilder
 import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardLanguage
+import com.bitsycore.cardbrowser.core.model.CardOrientation
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
+import com.bitsycore.cardbrowser.core.model.ExternalIdKey
 import com.bitsycore.cardbrowser.core.model.Finish
+import com.bitsycore.cardbrowser.core.model.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.LanguageResolution
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.lib.pulse.container.ContainerContract
@@ -42,6 +45,12 @@ object CardDetailContract :
 		val isFullscreen: Boolean = false,
 		val providerStatesIdentity: Boolean = false,
 		val providerStatesFinishes: Boolean = false,
+		/** Every language the source behind these cards can be asked for. Empty when it states none. */
+		val providerLanguages: Set<CardLanguage> = emptySet(),
+		/** The source's own name, for the details table. `null` before the load completes. */
+		val providerDisplayName: String? = null,
+		/** True while a language change is being fetched, so the chips can say so. */
+		val isChangingLanguage: Boolean = false,
 		val attribution: String? = null,
 	) {
 
@@ -66,51 +75,68 @@ object CardDetailContract :
 		)
 
 		/**
-		 * Every language, each with its real standing.
+		 * The language on screen, plus every other one this source can be asked for.
 		 *
-		 * All four are listed rather than only the confirmed one, because "we have no information
-		 * about Korean" is itself information. Only [Availability.AVAILABLE] entries are selectable.
+		 * Deliberately *not* every language the app knows. A chip reading "Russian — unknown" on a
+		 * Riftbound card is noise: nothing here can fetch Russian Riftbound, so offering it and then
+		 * explaining why it is greyed out costs a row of screen to say nothing. What is worth
+		 * showing is what can be switched to, which is [providerLanguages], and what is being shown
+		 * now, which stays in the list even when the source no longer claims it.
+		 *
+		 * Silence is still not a no: a language the provider serves but has not confirmed for *this*
+		 * printing is offered as [Availability.UNKNOWN] and remains selectable, because asking the
+		 * source is the only way to find out and refusing to ask would hide a printing that exists.
 		 */
 		fun languageOptionsFor(card: CardPrinting): List<LanguageOption> {
 			val vShown = languageResolutionFor(card).shown
-			return CardLanguage.PREFERENCE_ORDER.map { vLanguage ->
-				LanguageOption(
-					language = vLanguage,
-					availability = card.languages.availabilityOf(vLanguage),
-					isSelected = vLanguage == vShown,
-				)
-			}
+			val vOffered = providerLanguages + card.languages.confirmed + setOfNotNull(vShown)
+			return CardLanguage.PREFERENCE_ORDER
+				.filter { it in vOffered }
+				.map { vLanguage ->
+					LanguageOption(
+						language = vLanguage,
+						availability = card.languages.availabilityOf(vLanguage),
+						isSelected = vLanguage == vShown,
+						isOfferedBySource = vLanguage in providerLanguages,
+					)
+				}
 		}
 
 		/**
-		 * Every finish and its standing, or an empty list when the provider records none at all.
+		 * The finishes this printing is known to exist in, or nothing at all.
 		 *
-		 * Empty is deliberate and different from "no finishes exist": [providerStatesFinishes] is
-		 * what the screen uses to say which of the two it is.
+		 * Only the confirmed ones, for the same reason [languageOptionsFor] lists only what can be
+		 * chosen: a greyed-out "Etched foil" chip says either "this card was never etched" or "our
+		 * source has never mentioned etching", and a chip cannot tell those apart. A source that
+		 * states no finishes at all returns an empty list and the screen draws no section, rather
+		 * than a heading over an explanation of its own limitations.
 		 */
 		fun finishOptionsFor(card: CardPrinting): List<FinishOption> {
 			if (card.finishes.isUnstated) return emptyList()
-			return Finish.entries.map { vFinish ->
-				FinishOption(
-					finish = vFinish,
-					availability = card.finishes.availabilityOf(vFinish),
-					isSelected = vFinish == selectedFinish,
-				)
-			}
+			return Finish.entries
+				.filter { card.finishes.availabilityOf(it) == Availability.AVAILABLE }
+				.map { vFinish ->
+					FinishOption(
+						finish = vFinish,
+						availability = Availability.AVAILABLE,
+						isSelected = vFinish == selectedFinish,
+					)
+				}
 		}
 
 		/**
-		 * What to say about other artworks, or `null` when the provider states card identity and a
-		 * real list could be shown.
+		 * Other printings of the same card that are already in hand, newest artwork last.
+		 *
+		 * Only ever a real list. It is built from [cards] -- the set the user is swiping through --
+		 * matched on the identity the *provider* stated, never on a shared name. A source that links
+		 * no printings therefore returns nothing here and the section is not drawn at all, which is
+		 * the honest outcome: the app has no other artwork to show, so it shows none rather than a
+		 * paragraph about why.
 		 */
-		val artworkNote: String?
-			get() = if (providerStatesIdentity) {
-				null
-			} else {
-				"This card database lists each printing separately and does not link printings of " +
-					"the same card, so other artworks cannot be listed here. They appear as their " +
-					"own tiles in the set, and you can swipe to them."
-			}
+		fun otherArtworksFor(card: CardPrinting): List<CardPrinting> {
+			val vIdentity = card.identity?.id ?: return emptyList()
+			return cards.filter { it.identity?.id == vIdentity && it.artwork.id != card.artwork.id }
+		}
 
 		/**
 		 * The Cardmarket link for one card.
@@ -120,17 +146,99 @@ object CardDetailContract :
 		 */
 		fun cardmarketLinkFor(card: CardPrinting): CardmarketLink? =
 			CardmarketLinkBuilder.linkFor(card, set)
+
+		/**
+		 * Everything the provider stated about one printing, as labelled rows.
+		 *
+		 * The chips above the rules text are the glance -- rarity, type, cost. This is the rest of
+		 * the record, and it exists because a field the app has parsed and then never shows may as
+		 * well not have been parsed. A row is present only when the provider stated the value, so
+		 * the table's length is itself a fair report of how much a given source knows.
+		 *
+		 * The labels come from [GameVocabulary] rather than from this app's field names: a screen
+		 * that says "Energy" over a Magic mana value is wrong in the way users notice first.
+		 */
+		fun factsFor(card: CardPrinting): List<CardFact> {
+			val vWords = GameVocabulary.of(card.game)
+			return buildList {
+				fact("Set", "${card.setName} (${card.setCode})")
+				fact("Number", card.collectorNumber)
+				// Shown only when the provider's own value is not the one the app displays, which is
+				// the case that is worth being able to check against the source's website.
+				if (card.providerRawCollectorNumber != card.collectorNumber) {
+					fact("Number as published", card.providerRawCollectorNumber)
+				}
+				fact(vWords.cardType, card.classification.type)
+				fact("Supertype", card.classification.supertype)
+				fact("Rarity", card.classification.rarity)
+				vWords.domain?.let { vLabel ->
+					fact(vLabel, card.classification.domains.takeIf { it.isNotEmpty() }?.joinToString(", "))
+				}
+				vWords.energy?.let { vLabel -> fact(vLabel, card.attributes.energy?.toString()) }
+				fact("Might", card.attributes.might?.toString())
+				fact("Power", card.attributes.power?.toString())
+				fact("Tags", card.tags.takeIf { it.isNotEmpty() }?.joinToString(", "))
+				fact("Artist", card.artwork.artist)
+				fact("Treatment", card.artwork.treatment.displayName)
+				if (card.orientation == CardOrientation.LANDSCAPE) fact("Orientation", "Landscape")
+				fact("Text language", card.text.language?.displayName)
+				// Worth its own row only when it disagrees with the text, which is the case a reader
+				// needs to know about: YGOPRODeck translates the text and keeps the English scan.
+				card.artwork.language
+					?.takeIf { it != card.text.language }
+					?.let { fact("Image language", it.displayName) }
+				fact("Same card as", card.identity?.name)
+				fact("Data source", providerDisplayName)
+				fact("Provider id", card.id.local)
+				card.externalIds.forEach { (vKey, vValues) ->
+					fact(externalIdLabel(vKey), vValues.joinToString(", ").ifBlank { null })
+				}
+			}
+		}
+
+		/** Adds a row, or nothing at all when the provider stated no value. */
+		private fun MutableList<CardFact>.fact(label: String, value: String?) {
+			value?.ifBlank { null }?.let { add(CardFact(label, it)) }
+		}
 	}
 
-	/** One language row: what it is, whether it is offered, and whether it is showing. */
+	/** A readable name for an [ExternalIdKey], falling back to the raw key for one not listed. */
+	private fun externalIdLabel(key: String): String = when (key) {
+		ExternalIdKey.CARDMARKET_EXPANSION -> "Cardmarket expansion id"
+		ExternalIdKey.CARDMARKET_PRODUCT -> "Cardmarket product id"
+		ExternalIdKey.TCGPLAYER -> "TCGplayer id"
+		ExternalIdKey.PUBLISHER_CARD -> "Publisher card id"
+		ExternalIdKey.PROVIDER_RECORD -> "Provider record id"
+		else -> key
+	}
+
+	/** One labelled fact about a printing, for the details table. */
+	data class CardFact(val label: String, val value: String)
+
+	/**
+	 * One language row: what it is, whether it is offered, and whether it is showing.
+	 *
+	 * @property isOfferedBySource true when the source can be asked for this language at all, which
+	 *   is what makes the chip tappable. [availability] is the narrower question of whether *this*
+	 *   printing is known to exist in it
+	 */
 	data class LanguageOption(
 		val language: CardLanguage,
 		val availability: Availability,
 		val isSelected: Boolean,
+		val isOfferedBySource: Boolean = false,
 	) {
 
-		/** Only a confirmed language may be chosen. Unknown is not a yes. */
-		val isSelectable: Boolean get() = availability == Availability.AVAILABLE
+		/**
+		 * Whether tapping this chip can do anything.
+		 *
+		 * Anything the source serves, unless this printing is known not to exist in it. Unknown is
+		 * not a no, and the only way to turn it into a yes or a no is to ask.
+		 */
+		val isSelectable: Boolean
+			get() = !isSelected &&
+				availability != Availability.UNAVAILABLE &&
+				(isOfferedBySource || availability == Availability.AVAILABLE)
 	}
 
 	/** One finish row. */
@@ -140,7 +248,8 @@ object CardDetailContract :
 		val isSelected: Boolean,
 	) {
 
-		val isSelectable: Boolean get() = availability == Availability.AVAILABLE
+		/** Everything offered is confirmed, so the only unselectable chip is the one already on. */
+		val isSelectable: Boolean get() = !isSelected && availability == Availability.AVAILABLE
 	}
 
 	sealed interface Intent {
@@ -155,12 +264,31 @@ object CardDetailContract :
 			val attribution: String?,
 			val providerStatesIdentity: Boolean,
 			val providerStatesFinishes: Boolean,
+			val providerLanguages: Set<CardLanguage> = emptySet(),
+			val providerDisplayName: String? = null,
 		) : Intent
 
 		/** The pager settled on another card, or the preview strip was tapped. */
 		data class PageChanged(val index: Int) : Intent
 
 		data class LanguageSelected(val language: CardLanguage) : Intent
+
+		/**
+		 * The set, refetched in another language.
+		 *
+		 * Separate from [Loaded] because the cards are replaced while everything else about the
+		 * screen stays as it was, and because the index has to be re-found rather than reused: a
+		 * source whose ids differ per locale gives back the same set with different ids, so the card
+		 * on screen is identified by its collector number.
+		 */
+		data class LanguageChanged(
+			val language: CardLanguage,
+			val cards: List<CardPrinting>,
+			val collectorNumber: String,
+		) : Intent
+
+		/** A language change that could not be fetched. The screen keeps what it had. */
+		data class LanguageChangeFailed(val language: CardLanguage) : Intent
 
 		data class FinishSelected(val finish: Finish) : Intent
 
@@ -196,6 +324,8 @@ object CardDetailContract :
 			attribution = intent.attribution,
 			providerStatesIdentity = intent.providerStatesIdentity,
 			providerStatesFinishes = intent.providerStatesFinishes,
+			providerLanguages = intent.providerLanguages,
+			providerDisplayName = intent.providerDisplayName,
 			isLoading = false,
 		)
 
@@ -212,7 +342,33 @@ object CardDetailContract :
 			)
 		}
 
-		is Intent.LanguageSelected -> state.copy(requestedLanguage = intent.language)
+		// The preference moves at once, so the chip responds to the tap; the cards follow when the
+		// fetch lands. If it never does, `LanguageChangeFailed` puts the preference back.
+		is Intent.LanguageSelected -> state.copy(
+			requestedLanguage = intent.language,
+			isChangingLanguage = true,
+		)
+
+		// An empty answer is not a language change. A source that has nothing in the new language
+		// leaves the screen on what it was showing rather than emptying it.
+		is Intent.LanguageChanged -> if (intent.cards.isEmpty()) {
+			state.copy(isChangingLanguage = false)
+		} else {
+			state.copy(
+				cards = intent.cards,
+				// Re-found rather than reused: the same set in another locale can come back with
+				// different ids and a different length. The collector number is what survives.
+				currentIndex = intent.cards
+					.indexOfFirst { it.collectorNumber == intent.collectorNumber }
+					.coerceAtLeast(0),
+				requestedLanguage = intent.language,
+				isChangingLanguage = false,
+				selectedFinish = null,
+				isZoomed = false,
+			)
+		}
+
+		is Intent.LanguageChangeFailed -> state.copy(isChangingLanguage = false)
 
 		is Intent.FinishSelected -> state.copy(selectedFinish = intent.finish)
 

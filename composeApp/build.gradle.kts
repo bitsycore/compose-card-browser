@@ -119,6 +119,12 @@ kotlin {
 			implementation(compose.desktop.currentOs)
 			implementation(libs.kotlinx.coroutines.swing)
 		}
+
+		// Skia, so `DetailRenderer` can draw the UI into an off-screen surface and write a PNG.
+		// Checking a layout change then needs neither a display nor a device.
+		getByName("desktopTest").dependencies {
+			implementation(compose.desktop.currentOs)
+		}
 	}
 }
 

@@ -1,16 +1,20 @@
 package com.bitsycore.cardbrowser.ui.detail
 
 import androidx.lifecycle.viewModelScope
+import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.repository.CardRepository
+import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.platform.LinkOpener
 import com.bitsycore.cardbrowser.ui.browse.BrowseSession
 import com.bitsycore.lib.pulse.viewmodel.PulseViewModel
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.launch
 
 /**
@@ -25,6 +29,7 @@ class CardDetailViewModel(
 	private val mRepository: CardRepository,
 	private val mRegistry: ProviderRegistry,
 	private val mLinkOpener: LinkOpener,
+	private val mPreferences: PreferencesStore,
 	mSession: BrowseSession,
 	private val mArgs: CardDetailArgs,
 ) : PulseViewModel<CardDetailContract.UiState, CardDetailContract.Intent, CardDetailContract.Effect>(
@@ -34,7 +39,7 @@ class CardDetailViewModel(
 	// published its list to the session. Starting empty and filling in a moment later meant the
 	// screen opened on a spinner and then snapped to content -- one frame of placeholder that reads
 	// as a stutter precisely because everything else about the transition is smooth.
-	initialState = seedFrom(mSession, mArgs),
+	initialState = seedFrom(mSession, mArgs, mPreferences.preferences.value.primaryLanguage),
 	containerContract = CardDetailContract,
 ) {
 
@@ -55,6 +60,7 @@ class CardDetailViewModel(
 			is CardDetailContract.Intent.PageChanged ->
 				mSession.focus(stateFlow.value.card?.id?.qualified)
 			is CardDetailContract.Intent.OpenCardmarket -> openCardmarket(intent.cardId)
+			is CardDetailContract.Intent.LanguageSelected -> changeLanguage(intent.language)
 			else -> Unit
 		}
 	}
@@ -104,7 +110,58 @@ class CardDetailViewModel(
 				attribution = vProvider?.capabilities?.attribution?.text,
 				providerStatesIdentity = vProvider?.capabilities?.data?.cardIdentity ?: false,
 				providerStatesFinishes = vProvider?.capabilities?.data?.finishes ?: false,
+				providerLanguages = vProvider?.capabilities?.data?.languages.orEmpty(),
+				providerDisplayName = vProvider?.displayName,
 			),
+		)
+		mSession.focus(stateFlow.value.card?.id?.qualified)
+	}
+
+	/**
+	 * Refetches the set in another language and puts the same card back on screen.
+	 *
+	 * The whole set rather than the one card, for two reasons. The swipe list has to be in the new
+	 * language too -- swiping off a Japanese card onto its French neighbours would be worse than not
+	 * offering the switch -- and the repository caches per language, so this is one request the first
+	 * time and free afterwards.
+	 *
+	 * The card is re-found by collector number rather than by id, because an id is only meaningful
+	 * within the locale that issued it: the Wuthering Waves source numbers its Japanese and Chinese
+	 * catalogues separately, and matching on id there would land on nothing.
+	 */
+	private suspend fun changeLanguage(language: CardLanguage) {
+		val vCard = stateFlow.value.card
+		val vSetId = vCard?.setId ?: mArgs.setId?.let(SourceId::parse)
+		if (vCard == null || vSetId == null) {
+			dispatch(CardDetailContract.Intent.LanguageChangeFailed(language))
+			return
+		}
+
+		// Written through to preferences as well: the user has just said which language they want to
+		// read in, and the grid they came from should not disagree with the card they are holding.
+		mPreferences.update { vPreferences ->
+			vPreferences.copy(
+				preferredLanguages = listOf(language) +
+					vPreferences.preferredLanguages.filter { it != language },
+			)
+		}
+
+		val vSnapshot = mRepository
+			.cards(setId = vSetId, game = vCard.game, query = CardQuery(), language = language)
+			// The last emission, not the first. A repository call emits its cached set before the
+			// fetch it then makes, and on a first switch there is no cache under the new language's
+			// key -- so the first emission is a partial page and the last is the complete set.
+			.filter { it.value != null }
+			.lastOrNull()
+
+		dispatch(
+			vSnapshot?.value?.cards?.takeIf { it.isNotEmpty() }?.let { vCards ->
+				CardDetailContract.Intent.LanguageChanged(
+					language = language,
+					cards = vCards,
+					collectorNumber = vCard.collectorNumber,
+				)
+			} ?: CardDetailContract.Intent.LanguageChangeFailed(language),
 		)
 		mSession.focus(stateFlow.value.card?.id?.qualified)
 	}
@@ -160,12 +217,21 @@ data class CardDetailArgs(val cardId: String, val setId: String?)
  * card, or a process death -- and the asynchronous load then does the work with a spinner, which is
  * the honest thing to show when there genuinely is nothing yet.
  */
-private fun seedFrom(session: BrowseSession, args: CardDetailArgs): CardDetailContract.UiState {
+private fun seedFrom(
+	session: BrowseSession,
+	args: CardDetailArgs,
+	language: CardLanguage,
+): CardDetailContract.UiState {
 	val vCards = session.cardsFor(args.setId)
 	val vIndex = vCards.indexOfFirst { it.id.qualified == args.cardId }
 	return if (vIndex >= 0) {
-		CardDetailContract.UiState(cards = vCards, currentIndex = vIndex, isLoading = false)
+		CardDetailContract.UiState(
+			cards = vCards,
+			currentIndex = vIndex,
+			isLoading = false,
+			requestedLanguage = language,
+		)
 	} else {
-		CardDetailContract.UiState()
+		CardDetailContract.UiState(requestedLanguage = language)
 	}
 }

@@ -3,6 +3,7 @@ package com.bitsycore.cardbrowser.ui
 import com.bitsycore.cardbrowser.core.model.Artwork
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardClassification
+import com.bitsycore.cardbrowser.core.model.CardIdentity
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.Finish
@@ -35,6 +36,7 @@ class CardDetailContractTest {
 		number: String,
 		languages: LanguageCoverage = LanguageCoverage.ENGLISH_ONLY,
 		finishes: FinishCoverage = FinishCoverage(),
+		identity: CardIdentity? = null,
 	) = CardPrinting(
 		id = SourceId(mProvider, "card-$number"),
 		game = Game.RIFTBOUND,
@@ -43,10 +45,10 @@ class CardDetailContractTest {
 		setName = "Origins",
 		collectorNumber = number,
 		providerRawCollectorNumber = number,
-		identity = null,
+		identity = identity,
 		text = LocalizedText(CardLanguage.ENGLISH, "Card $number"),
 		artwork = Artwork(
-			id = SourceId(mProvider, "card-$number"),
+			id = SourceId(mProvider, "art-$number"),
 			imageUrl = "https://example.test/$number.png",
 			thumbnailUrl = null,
 			artist = null,
@@ -61,7 +63,11 @@ class CardDetailContractTest {
 	private fun reduce(state: UiState, vararg intents: Intent): UiState =
 		intents.fold(state) { vState, vIntent -> CardDetailContract.reduce(vState, vIntent) }
 
-	private fun loaded(cards: List<CardPrinting>, index: Int) = Intent.Loaded(
+	private fun loaded(
+		cards: List<CardPrinting>,
+		index: Int,
+		providerLanguages: Set<CardLanguage> = setOf(CardLanguage.ENGLISH),
+	) = Intent.Loaded(
 		cards = cards,
 		currentIndex = index,
 		set = null,
@@ -69,6 +75,8 @@ class CardDetailContractTest {
 		attribution = null,
 		providerStatesIdentity = false,
 		providerStatesFinishes = false,
+		providerLanguages = providerLanguages,
+		providerDisplayName = "Riftcodex",
 	)
 
 	private val mThree = listOf(card("1"), card("2"), card("3"))
@@ -174,16 +182,83 @@ class CardDetailContractTest {
 	@Test
 	fun `each card's language options are derived from that card -- not from the screen`() {
 		// The pager renders neighbouring pages at once, so a page must not read the current card's
-		// coverage. Here one card has a French printing and its neighbour does not.
+		// coverage. Here one card has a French printing and its neighbour does not, against a source
+		// that states English only.
 		val vFrench = card("2", languages = LanguageCoverage(confirmed = setOf(CardLanguage.FRENCH)))
 		val vState = reduce(UiState(), loaded(listOf(card("1"), vFrench), 0))
 
-		val vEnglishOnly = vState.languageOptionsFor(vState.cards[0])
-		val vFrenchCard = vState.languageOptionsFor(vState.cards[1])
+		val vEnglishOnly = vState.languageOptionsFor(vState.cards[0]).map { it.language }
+		val vFrenchCard = vState.languageOptionsFor(vState.cards[1]).map { it.language }
 
-		assertTrue(vEnglishOnly.single { it.language == CardLanguage.ENGLISH }.isSelectable)
-		assertFalse(vEnglishOnly.single { it.language == CardLanguage.FRENCH }.isSelectable)
-		assertTrue(vFrenchCard.single { it.language == CardLanguage.FRENCH }.isSelectable)
+		assertEquals(listOf(CardLanguage.ENGLISH), vEnglishOnly)
+		// French is confirmed on this printing, so it is listed even though the source's capability
+		// set does not mention it: a fact about the card outranks a claim about the source.
+		assertTrue(CardLanguage.FRENCH in vFrenchCard)
+	}
+
+	@Test
+	fun `only languages worth offering are listed`() {
+		// The bug this pins: every card used to list all of the app's languages, most of them greyed
+		// out with "-- unknown" beside them, which is a row of disclaimers rather than a choice.
+		val vState = reduce(
+			UiState(),
+			loaded(mThree, 0, providerLanguages = setOf(CardLanguage.ENGLISH, CardLanguage.JAPANESE)),
+		)
+
+		val vOptions = vState.languageOptionsFor(vState.cards[0])
+
+		assertEquals(listOf(CardLanguage.JAPANESE, CardLanguage.ENGLISH), vOptions.map { it.language })
+		// Unstated is not a no: the source serves Japanese, so it can be asked for this card.
+		assertTrue(vOptions.single { it.language == CardLanguage.JAPANESE }.isSelectable)
+		// The one already showing is not something to switch to.
+		assertFalse(vOptions.single { it.language == CardLanguage.ENGLISH }.isSelectable)
+	}
+
+	@Test
+	fun `a language the source cannot serve is not offered at all`() {
+		val vState = reduce(UiState(), loaded(mThree, 0, providerLanguages = emptySet()))
+
+		// English is what the card itself confirms, and it is the whole list.
+		assertEquals(
+			listOf(CardLanguage.ENGLISH),
+			vState.languageOptionsFor(vState.cards[0]).map { it.language },
+		)
+	}
+
+	@Test
+	fun `switching language re-finds the card by collector number`() {
+		// A source may reissue its ids per locale -- Wuthering Waves does -- so the index cannot be
+		// reused and the id cannot be matched. Here the new list is a different length and reordered.
+		var vState = reduce(UiState(), loaded(mThree, 1))
+
+		vState = reduce(
+			vState,
+			Intent.LanguageSelected(CardLanguage.JAPANESE),
+			Intent.LanguageChanged(
+				language = CardLanguage.JAPANESE,
+				cards = listOf(card("9"), card("2"), card("3"), card("4")),
+				collectorNumber = "2",
+			),
+		)
+
+		assertEquals("2", vState.card?.collectorNumber)
+		assertEquals(CardLanguage.JAPANESE, vState.requestedLanguage)
+		assertFalse(vState.isChangingLanguage)
+	}
+
+	@Test
+	fun `a language change that comes back empty leaves the screen as it was`() {
+		var vState = reduce(UiState(), loaded(mThree, 1))
+
+		vState = reduce(
+			vState,
+			Intent.LanguageSelected(CardLanguage.JAPANESE),
+			Intent.LanguageChanged(CardLanguage.JAPANESE, cards = emptyList(), collectorNumber = "2"),
+		)
+
+		assertEquals("2", vState.card?.collectorNumber, "an empty answer is not a language change")
+		assertEquals(3, vState.cards.size)
+		assertFalse(vState.isChangingLanguage)
 	}
 
 	@Test
@@ -213,11 +288,55 @@ class CardDetailContractTest {
 		assertTrue(vResolution.isFallback)
 	}
 
+	// ============
+	//  Other artwork
+
 	@Test
-	fun `the artwork note explains the missing list when the provider states no identity`() {
+	fun `a source that links no printings offers no other artwork`() {
+		// And offers nothing rather than a paragraph about offering nothing: the section is simply
+		// not drawn. Every card here has a null identity, which is what most sources supply.
 		val vState = reduce(UiState(), loaded(mThree, 0))
 
-		val vNote = vState.artworkNote
-		assertTrue(vNote != null && vNote.contains("does not link printings"))
+		assertTrue(vState.otherArtworksFor(vState.cards[0]).isEmpty())
+	}
+
+	@Test
+	fun `other artworks are the printings the provider itself linked`() {
+		val vIdentity = CardIdentity(SourceId(mProvider, "oracle-1"), "Annie")
+		val vA = card("1", identity = vIdentity)
+		val vB = card("2", identity = vIdentity)
+		val vUnrelated = card("3", identity = CardIdentity(SourceId(mProvider, "oracle-2"), "Yi"))
+		val vState = reduce(UiState(), loaded(listOf(vA, vB, vUnrelated), 0))
+
+		val vOthers = vState.otherArtworksFor(vA)
+
+		assertEquals(listOf("2"), vOthers.map { it.collectorNumber })
+	}
+
+	// ============
+	//  Details
+
+	@Test
+	fun `the details table reports what the provider stated`() {
+		val vState = reduce(UiState(), loaded(mThree, 0))
+
+		val vFacts = vState.factsFor(vState.cards[0])
+
+		assertTrue(vFacts.any { it.label == "Rarity" && it.value == "Common" })
+		assertTrue(vFacts.any { it.label == "Set" && it.value == "Origins (OGN)" })
+		assertTrue(vFacts.any { it.label == "Data source" && it.value == "Riftcodex" })
+		// Riftbound calls its cost energy -- not "Energy Cost", and not Magic's "Mana value". This
+		// card states none, so there is no row for it at all.
+		assertFalse(vFacts.any { it.label == "Energy" })
+	}
+
+	@Test
+	fun `a field the provider did not state gets no row`() {
+		val vState = reduce(UiState(), loaded(mThree, 0))
+
+		val vFacts = vState.factsFor(vState.cards[0])
+
+		assertFalse(vFacts.any { it.label == "Artist" }, "these cards state no artist")
+		assertFalse(vFacts.any { it.value.isBlank() })
 	}
 }

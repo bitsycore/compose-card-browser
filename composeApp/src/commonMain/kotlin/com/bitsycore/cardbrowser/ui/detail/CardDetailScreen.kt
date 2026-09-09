@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -78,11 +80,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.cardmarket.CardmarketLink
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
-import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardOrientation
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.Finish
+import com.bitsycore.cardbrowser.core.model.GameVocabulary
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.ui.common.CardImage
 import com.bitsycore.cardbrowser.ui.common.ImageVariant
@@ -105,9 +107,16 @@ import org.koin.compose.viewmodel.koinViewModel
  * One printing, in full, with the rest of the set a swipe away.
  *
  * Three pieces: a preview strip that stays put, a pager holding one card per page, and the details
- * under each card. The sections of a card are ordered by how certain they are -- what the provider
- * stated, then what it stated partially, then what it did not state at all. The last group is still
- * shown: silence about Korean is not the same as there being no Korean printing.
+ * under each card.
+ *
+ * Every section below the card is drawn only when it has something in it. That is a change of mind:
+ * the sections used to be unconditional, each with a paragraph explaining what the source had not
+ * said -- a Finish heading over "this card database does not record finishes", an Other-artwork
+ * heading over a note that no artworks could be listed, and a language list in which most entries
+ * were greyed out and annotated "-- unknown". The reasoning was that silence about Korean is not the
+ * same as there being no Korean printing, which is true and is still what the model holds. But the
+ * place to be careful about that is the model, not four paragraphs on every card in the app. What
+ * the screen shows now is what is known; absence is expressed by the section being absent.
  */
 @Composable
 fun CardDetailScreen(
@@ -359,6 +368,15 @@ private fun CardPager(
 				onFinishSelected = onFinishSelected,
 				onOpenCardmarket = { onOpenCardmarket(vCard.id.qualified) },
 				onOpenFullscreen = onOpenFullscreen,
+				// Tapping another artwork of the same card is a jump within the list already loaded,
+				// so it is the same move the preview strip makes rather than a new screen.
+				onSelectPrinting = { vTarget ->
+					val vIndex = state.cards.indexOfFirst { it.id == vTarget.id }
+					if (vIndex >= 0) {
+						onPageChanged(vIndex)
+						vScope.launch { vPagerState.animateScrollToPage(vIndex) }
+					}
+				},
 				headerHeight = vHeaderHeight,
 				bottomPadding = contentPadding.calculateBottomPadding(),
 			)
@@ -497,6 +515,7 @@ private fun CardDetailPage(
 	onFinishSelected: (Finish) -> Unit,
 	onOpenCardmarket: () -> Unit,
 	onOpenFullscreen: () -> Unit,
+	onSelectPrinting: (CardPrinting) -> Unit,
 	isSharedElement: Boolean,
 	headerHeight: Dp = 0.dp,
 	bottomPadding: Dp = 0.dp,
@@ -543,7 +562,10 @@ private fun CardDetailPage(
 
 			Spacer(Modifier.height(12.dp))
 
-			// Stats and classification, each chip omitted when the provider did not state it.
+			// The glance: what someone reads before the rules text. Everything the provider stated
+			// is in the details table further down, so a chip here is a repeat only of the handful
+			// worth seeing without scrolling. Each is omitted when the provider did not state it.
+			val vWords = remember(card.game) { GameVocabulary.of(card.game) }
 			FlowRow(
 				horizontalArrangement = Arrangement.spacedBy(6.dp),
 				verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -552,9 +574,13 @@ private fun CardDetailPage(
 				card.classification.type?.let { StatChip(it) }
 				card.classification.supertype?.let { StatChip(it) }
 				card.classification.domains.forEach { StatChip(it) }
-				card.attributes.energy?.let { StatChip("$it energy") }
-				card.attributes.might?.let { StatChip("$it might") }
-				card.attributes.power?.let { StatChip("$it power") }
+				// Labelled with the game's own word: "Mana value 3" for Magic, "Level 4" for
+				// Yu-Gi-Oh. "3 energy" was Riftbound's word applied to all seven games.
+				card.attributes.energy?.let { vEnergy ->
+					StatChip(vWords.energy?.let { "$it $vEnergy" } ?: "$vEnergy")
+				}
+				card.attributes.might?.let { StatChip("Might $it") }
+				card.attributes.power?.let { StatChip("Power $it") }
 				if (card.artwork.treatment != ArtworkTreatment.STANDARD) {
 					StatChip(card.artwork.treatment.displayName)
 				}
@@ -575,74 +601,52 @@ private fun CardDetailPage(
 				)
 			}
 
-			card.artwork.artist?.let { vArtist ->
-				Spacer(Modifier.height(10.dp))
-				Text(
-					text = "Art by $vArtist",
-					style = MaterialTheme.typography.labelMedium,
-					color = MaterialTheme.colorScheme.onSurfaceVariant,
-				)
-			}
-
 			// ============
 			//  Language
 
-			SectionDivider()
-			SectionTitle("Language")
-
-			val vResolution = state.languageResolutionFor(card)
-			val vShown = vResolution.shown
-			if (vShown == null) {
-				Note("This card database does not state a printing language for this card.")
-			} else if (vResolution.isFallback) {
-				// The line that keeps the app honest about French.
-				Note(
-					"You prefer ${vResolution.requested.displayName}. This database has only " +
-						"${vShown.displayName} for this card, so the text and image shown are " +
-						"${vShown.displayName}. That does not mean a " +
-						"${vResolution.requested.displayName} printing does not exist.",
-				)
-			}
-
-			Spacer(Modifier.height(8.dp))
-			FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-				state.languageOptionsFor(card).forEach { vOption ->
-					AvailabilityChip(
-						label = vOption.language.displayName,
-						availability = vOption.availability,
-						isSelected = vOption.isSelected,
-						onClick = if (vOption.isSelectable) {
-							{ onLanguageSelected(vOption.language) }
-						} else {
-							null
-						},
-					)
+			val vLanguages = state.languageOptionsFor(card)
+			if (vLanguages.isNotEmpty()) {
+				SectionDivider()
+				SectionTitle("Language")
+				Spacer(Modifier.height(8.dp))
+				FlowRow(
+					horizontalArrangement = Arrangement.spacedBy(6.dp),
+					verticalArrangement = Arrangement.spacedBy(4.dp),
+					modifier = Modifier.fillMaxWidth(),
+				) {
+					vLanguages.forEach { vOption ->
+						AvailabilityChip(
+							label = vOption.language.displayName,
+							isSelected = vOption.isSelected,
+							onClick = if (vOption.isSelectable && !state.isChangingLanguage) {
+								{ onLanguageSelected(vOption.language) }
+							} else {
+								null
+							},
+						)
+					}
 				}
 			}
 
 			// ============
 			//  Finish
 
-			SectionDivider()
-			SectionTitle("Finish")
-
+			// Drawn only when there are finishes to offer. A source that records none has nothing
+			// to say here, and a section explaining that is a section about the app rather than
+			// about the card.
 			val vFinishes = state.finishOptionsFor(card)
-			if (vFinishes.isEmpty()) {
-				Note(
-					if (state.providerStatesFinishes) {
-						"No finish is recorded for this card."
-					} else {
-						"This card database does not record finishes, so none can be offered. " +
-							"Foil and non-foil versions may still exist."
-					},
-				)
-			} else {
+			if (vFinishes.isNotEmpty()) {
+				SectionDivider()
+				SectionTitle("Finish")
 				Spacer(Modifier.height(8.dp))
-				FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+				FlowRow(
+					horizontalArrangement = Arrangement.spacedBy(6.dp),
+					verticalArrangement = Arrangement.spacedBy(4.dp),
+					modifier = Modifier.fillMaxWidth(),
+				) {
 					vFinishes.forEach { vOption ->
 						AvailabilityChip(
 							label = vOption.finish.displayName,
-							availability = vOption.availability,
 							isSelected = vOption.isSelected,
 							onClick = if (vOption.isSelectable) {
 								{ onFinishSelected(vOption.finish) }
@@ -655,12 +659,26 @@ private fun CardDetailPage(
 			}
 
 			// ============
-			//  Artwork
+			//  Other artwork
 
-			state.artworkNote?.let { vNote ->
+			// Same rule: a real list or nothing at all.
+			val vOtherArtworks = state.otherArtworksFor(card)
+			if (vOtherArtworks.isNotEmpty()) {
 				SectionDivider()
 				SectionTitle("Other artwork")
-				Note(vNote)
+				Spacer(Modifier.height(8.dp))
+				OtherArtworkRow(printings = vOtherArtworks, onSelect = onSelectPrinting)
+			}
+
+			// ============
+			//  Details
+
+			val vFacts = state.factsFor(card)
+			if (vFacts.isNotEmpty()) {
+				SectionDivider()
+				SectionTitle("Details")
+				Spacer(Modifier.height(8.dp))
+				vFacts.forEach { vFact -> FactRow(vFact) }
 			}
 
 			// ============
@@ -678,25 +696,22 @@ private fun CardDetailPage(
 					Spacer(Modifier.size(8.dp))
 					Text(vLink.label)
 				}
-				Note(
-					when (vLink) {
-						is CardmarketLink.Product ->
-							"Opens this card's Cardmarket page. It does not place an order."
-						is CardmarketLink.CardSearch ->
-							"Opens a Cardmarket search for \"${vLink.terms}\" in ${vLink.expansion}. " +
-								"This database does not map cards to Cardmarket products, so this is " +
-								"a search rather than an exact product page. It does not place an order."
-						is CardmarketLink.ExpansionSingles ->
-							"Opens the ${vLink.expansion} singles listing. It does not place an order."
-						is CardmarketLink.GameHome ->
-							"Opens Cardmarket's Riftbound section. It does not place an order."
-					},
-				)
+				// One line, and only for the case a reader would otherwise be misled by: a search
+				// can land on the wrong product, a direct link cannot. That a link does not buy
+				// anything is not worth a sentence under every card.
+				if (vLink is CardmarketLink.CardSearch) {
+					FinePrint(
+						"A search for \"${vLink.terms}\" in ${vLink.expansion} — this database does " +
+							"not map cards to Cardmarket products.",
+					)
+				}
 			}
 
+			// The trademark notice. Deliberately the quietest thing on the screen: it has to be
+			// here, and it is never what anyone opened the card to read.
 			state.attribution?.let { vAttribution ->
-				SectionDivider()
-				Note(vAttribution)
+				Spacer(Modifier.height(24.dp))
+				FinePrint(vAttribution)
 			}
 
 			Spacer(Modifier.height(bottomPadding + 32.dp))
@@ -857,27 +872,23 @@ private fun StatChip(label: String) {
 }
 
 /**
- * A chip whose appearance encodes whether the thing is offered, ruled out, or simply unknown.
+ * A chip for one of a card's variants -- a language, a finish -- filled when it is the one showing.
  *
- * Three states rather than two, because a greyed-out chip that means "we have no idea" and a
- * greyed-out chip that means "this does not exist" must not look the same.
+ * The label is the name and nothing else. It used to append "-- unknown" or "-- not printed" to
+ * explain each greyed-out chip, which meant every card carried a row of disclaimers about languages
+ * its database had simply never mentioned. What cannot be chosen is now not listed at all, so a chip
+ * here is either what you are reading or something you can switch to.
  */
 @Composable
 private fun AvailabilityChip(
 	label: String,
-	availability: Availability,
 	isSelected: Boolean,
 	onClick: (() -> Unit)?,
 ) {
-	val vSuffix = when (availability) {
-		Availability.AVAILABLE -> ""
-		Availability.UNAVAILABLE -> " — not printed"
-		Availability.UNKNOWN -> " — unknown"
-	}
 	AssistChip(
 		onClick = onClick ?: {},
-		enabled = onClick != null,
-		label = { Text(label + vSuffix) },
+		enabled = onClick != null || isSelected,
+		label = { Text(label) },
 		colors = if (isSelected) {
 			AssistChipDefaults.assistChipColors(
 				containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -905,13 +916,97 @@ private fun SectionTitle(text: String) {
 	)
 }
 
+/**
+ * The other artworks of the same card, as thumbnails that jump to them.
+ *
+ * Only ever drawn with something in it -- see `UiState.otherArtworksFor`. The treatment goes under
+ * each one, because "which of these is the full-art?" is the question this row exists to answer.
+ */
 @Composable
-private fun Note(text: String) {
+private fun OtherArtworkRow(
+	printings: List<CardPrinting>,
+	onSelect: (CardPrinting) -> Unit,
+) {
+	LazyRow(
+		modifier = Modifier.fillMaxWidth(),
+		horizontalArrangement = Arrangement.spacedBy(8.dp),
+	) {
+		items(printings, key = { it.id.qualified }) { vPrinting ->
+			Column(
+				horizontalAlignment = Alignment.CenterHorizontally,
+				modifier = Modifier.width(OTHER_ARTWORK_WIDTH),
+			) {
+				CardImage(
+					artwork = vPrinting.artwork,
+					contentDescription = vPrinting.artwork.accessibilityText ?: vPrinting.displayName,
+					variant = ImageVariant.THUMBNAIL,
+					contentScale = ContentScale.Crop,
+					modifier = Modifier
+						.width(OTHER_ARTWORK_WIDTH)
+						.aspectRatio(
+							if (vPrinting.orientation == CardOrientation.LANDSCAPE) {
+								1039f / 744f
+							} else {
+								744f / 1039f
+							},
+						)
+						.clip(RoundedCornerShape(6.dp))
+						.background(MaterialTheme.colorScheme.surfaceVariant)
+						.clickable { onSelect(vPrinting) },
+				)
+				Spacer(Modifier.height(4.dp))
+				Text(
+					text = vPrinting.artwork.treatment.displayName,
+					style = MaterialTheme.typography.labelSmall,
+					color = MaterialTheme.colorScheme.onSurfaceVariant,
+					maxLines = 2,
+				)
+			}
+		}
+	}
+}
+
+/**
+ * One labelled fact, label left and value right.
+ *
+ * A table rather than more chips: these are answers to named questions, and a chip reading
+ * "89631139" gives you a value while hiding which field it is the value of.
+ */
+@Composable
+private fun FactRow(fact: CardDetailContract.CardFact) {
+	Row(
+		modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+		verticalAlignment = Alignment.Top,
+	) {
+		Text(
+			text = fact.label,
+			style = MaterialTheme.typography.bodySmall,
+			color = MaterialTheme.colorScheme.onSurfaceVariant,
+			modifier = Modifier.width(FACT_LABEL_WIDTH),
+		)
+		Spacer(Modifier.width(8.dp))
+		Text(
+			text = fact.value,
+			style = MaterialTheme.typography.bodySmall,
+			modifier = Modifier.weight(1f),
+		)
+	}
+}
+
+/**
+ * Text that has to be there and is not what anyone came for: a trademark notice, and the one caveat
+ * a Cardmarket *search* needs that a direct product link does not.
+ *
+ * Smaller and dimmer than body text on purpose. Setting it like everything else is what made the
+ * bottom of this screen read as content.
+ */
+@Composable
+private fun FinePrint(text: String) {
 	Spacer(Modifier.height(6.dp))
 	Text(
 		text = text,
-		style = MaterialTheme.typography.bodySmall,
-		color = MaterialTheme.colorScheme.onSurfaceVariant,
+		style = MaterialTheme.typography.labelSmall,
+		color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
 		modifier = Modifier.fillMaxWidth(),
 	)
 }
@@ -947,6 +1042,12 @@ private val PREVIEW_ROW_HEIGHT = 84.dp
 /** Breathing room between the preview strip and the card it is describing. */
 private val STRIP_TO_CARD_GAP = 8.dp
 
+/** Wide enough to tell two artworks of one card apart, narrow enough that several fit in a row. */
+private val OTHER_ARTWORK_WIDTH = 72.dp
+
+/** Fixed, so every value in the details table starts at the same place and the column reads down. */
+private val FACT_LABEL_WIDTH = 116.dp
+
 // ==================
 // MARK: Previews
 // ==================
@@ -956,12 +1057,17 @@ private fun previewDetailState(
 	currentIndex: Int = 0,
 	isLoading: Boolean = false,
 	requestedLanguage: CardLanguage = CardLanguage.ENGLISH,
+	// Riftcodex's real answer: English, and it says so. Which is why the language section of a
+	// Riftbound card is a single filled chip rather than a list of things it cannot offer.
+	providerLanguages: Set<CardLanguage> = setOf(CardLanguage.ENGLISH),
 ) = CardDetailContract.UiState(
 	cards = cards,
 	currentIndex = currentIndex,
 	set = PreviewData.ORIGINS,
 	isLoading = isLoading,
 	requestedLanguage = requestedLanguage,
+	providerLanguages = providerLanguages,
+	providerDisplayName = "Riftcodex",
 	attribution = "Card data from Riftcodex, an unofficial fan project not affiliated with Riot Games.",
 )
 
@@ -973,11 +1079,16 @@ private fun CardDetailPreview() = PreviewFrame {
 
 @Preview
 @Composable
-private fun CardDetailFrenchFallbackPreview() = PreviewFrame {
-	// The state the whole language model exists for: French asked for, English shown, and the
-	// screen saying so rather than pretending the record is French.
+private fun CardDetailManyLanguagesPreview() = PreviewFrame {
+	// A source that really does serve eleven languages, with French asked for and English the only
+	// one confirmed for this printing. Every chip here is one the user can switch to; the section
+	// exists to be switched in, not to explain itself.
 	CardDetailContent(
-		state = previewDetailState(currentIndex = 5, requestedLanguage = CardLanguage.FRENCH),
+		state = previewDetailState(
+			currentIndex = 5,
+			requestedLanguage = CardLanguage.FRENCH,
+			providerLanguages = CardLanguage.entries.toSet(),
+		),
 		dispatch = {},
 	)
 }
