@@ -324,6 +324,29 @@ default, and the app recolours immediately rather than on the next launch, becau
 `PreferencesStore`'s flow at the root of the composition rather than through a view model of its
 own.
 
+### Favourite sets
+
+A star on any set row pins it to the top of that game's list, under a "favourites" heading, and
+pinned sets can be dragged into whatever order you want — the same drag machinery the game picker
+uses, which is why it lives in `ui/common/Reorder.kt` rather than in either screen.
+
+Three decisions worth knowing:
+
+- **One ordered list, not a set plus an order.** A favourite has a position by virtue of being in
+  the list, so the two cannot disagree — no favourite missing from the order, no order naming
+  something that is not a favourite, and nothing to reconcile.
+- **Favourites are global, not per game.** A `SourceId.qualified` is unique across the app, so one
+  list serves every game and a set list simply never matches another game's ids. That also means an
+  id belonging to a game whose adapter has been removed sits there inertly rather than being an
+  error, and comes back if the adapter does. There is deliberately no "prune unknown ids" helper:
+  it would have to be handed one game's sets and would quietly delete every other game's.
+- **Favourites follow the search.** Pinned sets are derived from the *visible* list, so searching
+  narrows them along with everything else — being shown four unrelated pinned sets while searching
+  reads as the search having failed. The corollary is that dragging is disabled while a search or a
+  region filter is active: the drag reorders the stored list, and if what is on screen is a subset
+  of it then a drop between two visible rows has no single right answer. The handles go away and the
+  heading says why, rather than guessing.
+
 ### Reordering and hiding games
 
 The picker's tune button turns the list into an editor: a drag handle on each row, an eye to hide a

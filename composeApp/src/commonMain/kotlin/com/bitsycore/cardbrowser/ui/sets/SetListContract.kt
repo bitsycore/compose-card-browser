@@ -3,6 +3,7 @@ package com.bitsycore.cardbrowser.ui.sets
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.game.GameRegion
 import com.bitsycore.cardbrowser.core.model.CardSet
+import com.bitsycore.cardbrowser.core.model.SetFavourites
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.cardbrowser.data.settings.ImageDownloadRecord
@@ -74,6 +75,8 @@ object SetListContract :
 		 * mark in the row says saved and promises nothing about how much of the set is there.
 		 */
 		val savedSetIds: Set<String> = emptySet(),
+		/** Pinned sets in the user's order, by qualified id, across every game. See `SetFavourites`. */
+		val favouriteIds: List<String> = emptyList(),
 		/**
 		 * What an image download fetched, per set id, for the language being browsed.
 		 *
@@ -125,6 +128,30 @@ object SetListContract :
 				}
 			}
 
+		/**
+		 * The pinned sets among those currently shown, in the user's order.
+		 *
+		 * Derived from [visibleSets] rather than from every set, so a search narrows the favourites
+		 * along with everything else. That is the less surprising of the two behaviours: searching
+		 * for "origins" and still being shown four unrelated pinned sets reads as the search having
+		 * failed.
+		 */
+		val favouriteSets: List<CardSet> get() = SetFavourites.pinned(visibleSets, favouriteIds)
+
+		/** Everything else currently shown, in the order the provider gave. */
+		val otherSets: List<CardSet> get() = SetFavourites.unpinned(visibleSets, favouriteIds)
+
+		/**
+		 * Whether a pinned set may be dragged right now.
+		 *
+		 * Not while a search or a region filter is narrowing the list. A drag reorders the *stored*
+		 * list, and if what is on screen is a subset of it then dropping a row between two visible
+		 * neighbours has no single correct answer -- there may be hidden favourites between them.
+		 * Rather than guess, the handles go away and the list says why.
+		 */
+		val canReorderFavourites: Boolean
+			get() = favouriteSets.size > 1 && search.isBlank() && region == null
+
 		/** True when there is nothing to draw and no reason yet to explain why. */
 		val isInitialLoad: Boolean get() = isLoading && sets.isEmpty() && error == null
 
@@ -136,6 +163,15 @@ object SetListContract :
 
 		/** Start, or start again. Bumps the generation, which invalidates anything in flight. */
 		data object Refresh : Intent
+
+		/** A set was pinned to the top, or unpinned. */
+		data class FavouriteToggled(val setId: String) : Intent
+
+		/** A pinned set was dragged to [toIndex] of the stored favourites list. */
+		data class FavouriteMovedTo(val setId: String, val toIndex: Int) : Intent
+
+		/** Favourites, as they were last saved. */
+		data class FavouritesRestored(val favouriteIds: List<String>) : Intent
 
 		/** The search box changed. */
 		data class SearchChanged(val text: String) : Intent
@@ -204,6 +240,16 @@ object SetListContract :
 	sealed interface Effect
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
+
+		is Intent.FavouritesRestored -> state.copy(favouriteIds = intent.favouriteIds)
+
+		is Intent.FavouriteToggled -> state.copy(
+			favouriteIds = SetFavourites.toggled(state.favouriteIds, intent.setId),
+		)
+
+		is Intent.FavouriteMovedTo -> state.copy(
+			favouriteIds = SetFavourites.movedTo(state.favouriteIds, intent.setId, intent.toIndex),
+		)
 
 		Intent.Refresh -> state.copy(
 			isLoading = true,

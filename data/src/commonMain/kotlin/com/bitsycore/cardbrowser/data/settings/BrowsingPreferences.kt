@@ -100,6 +100,18 @@ data class BrowsingPreferences(
 	/** Which colour scheme to use. [ThemeMode.SYSTEM] follows the platform, and is the default. */
 	val themeMode: ThemeMode = ThemeMode.SYSTEM,
 	/**
+	 * Sets pinned to the top of the set list, in the user's own order, by qualified id.
+	 *
+	 * One ordered list rather than a set plus an order, because they are the same fact -- a
+	 * favourite has a position by virtue of being in the list, so the two cannot disagree.
+	 *
+	 * Every game's favourites share it. A `SourceId.qualified` is unique across the app, so a set
+	 * list only ever matches its own game's ids and the rest sit there inertly, which is also what
+	 * makes a favourite survive a build that drops the game and a later one that brings it back.
+	 * See `SetFavourites`.
+	 */
+	val favouriteSets: List<String> = emptyList(),
+	/**
 	 * The user's own order for the game picker, as `GameId` values. Empty means the routing order.
 	 *
 	 * Ids rather than an index or an enum, for the same reason [lastGame] is: the list of games a

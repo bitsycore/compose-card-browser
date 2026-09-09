@@ -36,6 +36,17 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import com.bitsycore.cardbrowser.ui.common.reorderHandle
+import com.bitsycore.cardbrowser.ui.common.rememberReorder
+import com.bitsycore.cardbrowser.ui.common.ReorderState
+import com.bitsycore.cardbrowser.ui.common.ReorderHandle
+import com.bitsycore.cardbrowser.ui.common.DRAGGED_ROW_ELEVATION
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.collectAsState
@@ -329,29 +340,70 @@ fun SetListContent(
 
 					vState.isEmptySearch -> EmptyState(emptyMessage(vState))
 
-					else -> LazyColumn(
-						contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-						verticalArrangement = Arrangement.spacedBy(8.dp),
-					) {
-						items(vState.visibleSets, key = { it.id.qualified }) { vSet ->
-							SetRow(
-								set = vSet,
-								// Badged only while every line is on screen: with one line selected
-								// the badge would repeat the chip on every single row.
-								region = if (vState.region != null) {
-									null
-								} else {
-									vState.game?.regionFor(vSet.region)
-								},
-								isLastOpened = vSet.id.qualified == vState.lastOpenedSetId,
-								isSaved = vSet.id.qualified in vState.savedSetIds,
-								onClick = {
-									dispatch(SetListContract.Intent.SetOpened(vSet.id.qualified))
-									onOpenSet(vSet)
-								},
-								downloadStatus = downloads.firstOrNull { it.request.setId == vSet.id },
-								images = vState.imageDownloads[vSet.id.qualified],
-								onDownload = { vPendingSet = vSet },
+					else -> {
+						val vFavourites = vState.favouriteSets
+						val vListState = rememberLazyListState()
+						val vReorder = rememberReorder(vListState)
+						val vFavouriteKeys = vFavourites.map { it.id.qualified }
+						// Indexed against the *stored* favourites, not the visible ones, because
+						// that is the list being reordered. They are the same list whenever a drag
+						// is allowed at all -- see `UiState.canReorderFavourites`.
+						val vOnMove: (String, Int) -> Unit = { vKey, vTo ->
+							dispatch(SetListContract.Intent.FavouriteMovedTo(vKey, vTo))
+						}
+
+						LazyColumn(
+							state = vListState,
+							contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+							verticalArrangement = Arrangement.spacedBy(8.dp),
+						) {
+							if (vFavourites.isNotEmpty()) {
+								item(key = "favourites-heading") {
+									SectionHeading(
+										text = if (vFavourites.size == 1) {
+											"1 favourite"
+										} else {
+											"${vFavourites.size} favourites"
+										},
+										// Said once, where the handles would otherwise have been,
+										// rather than leaving the user to wonder where they went.
+										note = if (vState.canReorderFavourites) {
+											null
+										} else if (vFavourites.size > 1) {
+											"Clear the search to reorder"
+										} else {
+											null
+										},
+									)
+								}
+							}
+
+							setRows(
+								sets = vFavourites,
+								state = vState,
+								dispatch = dispatch,
+								downloads = downloads,
+								onOpenSet = onOpenSet,
+								onDownload = { vPendingSet = it },
+								reorder = vReorder.takeIf { vState.canReorderFavourites },
+								reorderKeys = vFavouriteKeys,
+								onMove = vOnMove,
+							)
+
+							if (vFavourites.isNotEmpty() && vState.otherSets.isNotEmpty()) {
+								item(key = "all-sets-heading") { SectionHeading("All sets") }
+							}
+
+							setRows(
+								sets = vState.otherSets,
+								state = vState,
+								dispatch = dispatch,
+								downloads = downloads,
+								onOpenSet = onOpenSet,
+								onDownload = { vPendingSet = it },
+								reorder = null,
+								reorderKeys = emptyList(),
+								onMove = vOnMove,
 							)
 						}
 					}
@@ -474,6 +526,75 @@ private fun emptyMessage(state: SetListContract.UiState): String {
 	}
 }
 
+/**
+ * Emits one section's worth of set rows.
+ *
+ * A `LazyListScope` function rather than a composable, so both sections are items of the *same*
+ * `LazyColumn` -- which is what lets a favourite keep its identity, and its `animateItem`, when it
+ * is unpinned and moves down into the list below. Two nested lists would make that a disappearance
+ * and a reappearance.
+ *
+ * @param reorder non-null only where dragging is allowed, which is the favourites section with no
+ *   search running. Passing null is what removes the handles
+ */
+private fun LazyListScope.setRows(
+	sets: List<CardSet>,
+	state: SetListContract.UiState,
+	dispatch: (SetListContract.Intent) -> Unit,
+	downloads: List<DownloadJob>,
+	onOpenSet: (CardSet) -> Unit,
+	onDownload: (CardSet) -> Unit,
+	reorder: ReorderState?,
+	reorderKeys: List<String>,
+	onMove: (String, Int) -> Unit,
+) {
+	items(sets, key = { it.id.qualified }) { vSet ->
+		val vId = vSet.id.qualified
+		val vIsDragging = reorder?.draggedKey == vId
+		SetRow(
+			set = vSet,
+			// Badged only while every line is on screen: with one line selected the badge would
+			// repeat the chip on every single row.
+			region = if (state.region != null) null else state.game?.regionFor(vSet.region),
+			isLastOpened = vId == state.lastOpenedSetId,
+			isSaved = vId in state.savedSetIds,
+			onClick = {
+				dispatch(SetListContract.Intent.SetOpened(vId))
+				onOpenSet(vSet)
+			},
+			downloadStatus = downloads.firstOrNull { it.request.setId == vSet.id },
+			images = state.imageDownloads[vId],
+			onDownload = { onDownload(vSet) },
+			isFavourite = vId in state.favouriteIds,
+			onToggleFavourite = { dispatch(SetListContract.Intent.FavouriteToggled(vId)) },
+			// The dragged row follows the finger, so it must not also be animated into place.
+			itemModifier = if (vIsDragging) Modifier else Modifier.animateItem(),
+			isDragging = vIsDragging,
+			dragOffsetY = if (vIsDragging) reorder.offsetY else 0f,
+			handleModifier = reorder?.let { Modifier.reorderHandle(it, vId, reorderKeys, onMove) },
+		)
+	}
+}
+
+/** A quiet label between two groups of rows. */
+@Composable
+private fun SectionHeading(text: String, note: String? = null) {
+	Column(Modifier.padding(top = 8.dp, bottom = 2.dp, start = 4.dp)) {
+		Text(
+			text = text,
+			style = MaterialTheme.typography.labelLarge,
+			color = MaterialTheme.colorScheme.onSurfaceVariant,
+		)
+		if (note != null) {
+			Text(
+				text = note,
+				style = MaterialTheme.typography.bodySmall,
+				color = MaterialTheme.colorScheme.onSurfaceVariant,
+			)
+		}
+	}
+}
+
 /** One set: name, code, card count and release date, plus a mark for where you left off. */
 @Composable
 private fun SetRow(
@@ -485,12 +606,26 @@ private fun SetRow(
 	downloadStatus: DownloadJob? = null,
 	images: SetImageStatus? = null,
 	onDownload: () -> Unit = {},
+	isFavourite: Boolean = false,
+	onToggleFavourite: () -> Unit = {},
+	itemModifier: Modifier = Modifier,
+	isDragging: Boolean = false,
+	dragOffsetY: Float = 0f,
+	handleModifier: Modifier? = null,
 ) {
 	Card(
 		onClick = onClick,
-		// The row is one half of the container transform into the card grid; the grid screen's root
-		// is the other. See `Modifier.sharedSetContainer`.
-		modifier = Modifier.fillMaxWidth().sharedSetContainer(set.id.qualified),
+		modifier = itemModifier
+			.fillMaxWidth()
+			// The lifted row rides above its neighbours while they slide underneath it.
+			.zIndex(if (isDragging) 1f else 0f)
+			.graphicsLayer { translationY = dragOffsetY }
+			// The row is one half of the container transform into the card grid; the grid screen's
+			// root is the other. See `Modifier.sharedSetContainer`.
+			.sharedSetContainer(set.id.qualified),
+		elevation = CardDefaults.cardElevation(
+			defaultElevation = if (isDragging) DRAGGED_ROW_ELEVATION else 0.dp,
+		),
 		colors = if (isLastOpened) {
 			CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
 		} else {
@@ -498,9 +633,14 @@ private fun SetRow(
 		},
 	) {
 		Row(
-			modifier = Modifier.padding(16.dp).fillMaxWidth(),
+			modifier = Modifier
+				.padding(start = if (handleModifier == null) 16.dp else 4.dp, top = 16.dp, end = 16.dp, bottom = 16.dp)
+				.fillMaxWidth(),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
+			if (handleModifier != null) {
+				ReorderHandle(handleModifier)
+			}
 			SetMark(set, isHighlighted = isLastOpened)
 			Spacer(Modifier.size(12.dp))
 			Column(Modifier.weight(1f)) {
@@ -550,6 +690,24 @@ private fun SetRow(
 
 				else -> {
 					Spacer(Modifier.size(4.dp))
+					IconButton(onClick = onToggleFavourite, modifier = Modifier.size(32.dp)) {
+						Icon(
+							imageVector = if (isFavourite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+							contentDescription = if (isFavourite) {
+								"Remove ${set.name} from favourites"
+							} else {
+								"Add ${set.name} to favourites"
+							},
+							// Filled and coloured when on, outlined and quiet when off, so a column
+							// of rows reads as "these few" rather than as a row of identical stars.
+							tint = if (isFavourite) {
+								MaterialTheme.colorScheme.primary
+							} else {
+								MaterialTheme.colorScheme.onSurfaceVariant
+							},
+							modifier = Modifier.size(20.dp),
+						)
+					}
 					IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
 						Icon(
 							imageVector = Icons.Outlined.Download,

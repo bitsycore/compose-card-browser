@@ -2,6 +2,8 @@ package com.bitsycore.cardbrowser.ui
 
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.FastOutLinearInEasing
@@ -201,7 +203,20 @@ fun App() {
 						)
 					}
 
-					is Route.Cards -> NavEntry(vRoute) {
+					// No screen-level transition at all: the container transform is the transition.
+					//
+					// A cross-fade here fights it. The grid fades in as a whole screen while the
+					// shared container is separately growing out of the row, so the two read as
+					// unrelated animations that happen to overlap -- the grid arrives on top of the
+					// set list rather than out of one of its rows. Standing the screen transition
+					// down leaves the shared bounds as the only thing moving, which is the point:
+					// the row becomes the screen, and the set list simply waits underneath.
+					is Route.Cards -> NavEntry(
+						vRoute,
+						metadata = NavDisplay.transitionSpec { heldStill(zIndex = 1f) } +
+							NavDisplay.popTransitionSpec { heldStill(zIndex = 0f) } +
+							NavDisplay.predictivePopTransitionSpec { heldStill(zIndex = 0f) },
+					) {
 						CardGridScreen(
 							setId = vRoute.setId,
 							setName = vRoute.setName,
@@ -298,6 +313,21 @@ private fun AnimatedContentTransitionScope<Scene<*>>.slideBack(): ContentTransfo
 
 /** How far the screen being left behind drifts, as a fraction of its width. */
 private const val OUTGOING_DRIFT_FRACTION = 4
+
+/**
+ * No enter and no exit, for a screen whose arrival is carried by a shared element instead.
+ *
+ * `ContentTransform` still decides which of the two is drawn on top, which is the part that matters
+ * here: forward puts the arriving screen above, and a pop puts it below so the set list is revealed
+ * rather than covered.
+ */
+private fun heldStill(zIndex: Float): ContentTransform =
+	ContentTransform(
+		targetContentEnter = EnterTransition.None,
+		initialContentExit = ExitTransition.None,
+		targetContentZIndex = zIndex,
+		sizeTransform = null,
+	)
 
 private fun <T : Any> fadeThrough(
 	zIndex: Float,

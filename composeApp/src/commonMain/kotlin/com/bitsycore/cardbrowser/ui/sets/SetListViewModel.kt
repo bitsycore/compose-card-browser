@@ -65,6 +65,7 @@ class SetListViewModel(
 
 			dispatch(SetListContract.Intent.GamesRestored(games = vGames, game = vGame))
 			dispatch(SetListContract.Intent.LastOpenedSetRestored(vPreferences.lastSetId))
+			dispatch(SetListContract.Intent.FavouritesRestored(vPreferences.favouriteSets))
 			// Started only once the game is known, so the first request is not fired against
 			// whichever game the initial state happened to name.
 			dispatch(SetListContract.Intent.Refresh)
@@ -96,6 +97,15 @@ class SetListViewModel(
 
 			is SetListContract.Intent.SetOpened -> {
 				mPreferences.update { it.copy(lastSetId = intent.setId) }
+			}
+
+			// Read back off the reduced state rather than recomputed here: `SetFavourites` has
+			// already been applied by the reducer, and applying it twice is how the two would drift.
+			is SetListContract.Intent.FavouriteToggled,
+			is SetListContract.Intent.FavouriteMovedTo,
+			-> {
+				val vFavourites = stateFlow.value.favouriteIds
+				mPreferences.update { it.copy(favouriteSets = vFavourites) }
 			}
 
 			is SetListContract.Intent.GameChanged -> {
