@@ -11,6 +11,7 @@ import com.bitsycore.cardbrowser.data.net.HttpClientFactory
 import com.bitsycore.cardbrowser.data.net.OkioHttpCacheStorage
 import com.bitsycore.cardbrowser.data.net.ProviderHttpPolicy
 import com.bitsycore.cardbrowser.data.repository.CardRepository
+import com.bitsycore.cardbrowser.data.repository.SetCatalogueWarmer
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundArt
@@ -207,6 +208,17 @@ val appModule = module {
 	//
 	// Its scope is the application's, not a screen's: a download must survive the set list being
 	// closed, which is the whole point of queueing one.
+	// Warms every game's set catalogue at startup, so the picker leads to an already-populated
+	// list rather than to a spinner and late-arriving set symbols.
+	single {
+		SetCatalogueWarmer(
+			mRepository = get(),
+			mRegistry = get(),
+			mPreferences = get(),
+			mScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+		)
+	}
+
 	single { CoilImagePrefetcher() }
 	single {
 		DownloadManager(

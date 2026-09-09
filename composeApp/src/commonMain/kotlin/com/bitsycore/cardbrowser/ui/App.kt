@@ -9,6 +9,9 @@ import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.runtime.LaunchedEffect
+import com.bitsycore.cardbrowser.data.repository.SetCatalogueWarmer
+import org.koin.compose.koinInject
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateListOf
@@ -96,6 +99,12 @@ fun App() {
 		// Before anything composes an image, so the first grid already uses the shared Ktor client
 		// and the bounded disk cache rather than Coil's defaults.
 		InstallImageLoader()
+
+		// Every game's set catalogue, fetched once in the background. Started here rather than
+		// from a view model because it outlives any one screen and must not restart when the user
+		// navigates. It is cache-first and its failures are silent -- see `SetCatalogueWarmer`.
+		val vWarmer = koinInject<SetCatalogueWarmer>()
+		LaunchedEffect(Unit) { vWarmer.start() }
 
 		val vBackStack = remember { mutableStateListOf<Route>(Route.Games) }
 
