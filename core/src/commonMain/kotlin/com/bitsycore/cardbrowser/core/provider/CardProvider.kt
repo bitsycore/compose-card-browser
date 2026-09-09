@@ -95,6 +95,24 @@ interface CardProvider<out G : GameProfile> {
 	}
 
 	/**
+	 * Which of [candidates] this source can really serve cards for, for one set.
+	 *
+	 * The default confirms all of them, which is the right answer for a source whose catalogue is
+	 * the same in every language it offers. Override it where a source *lists* a set in a language
+	 * it has no cards for -- a distinction that cannot be seen from a set list and that the user
+	 * would otherwise discover one language at a time.
+	 *
+	 * It is worth overriding only when the check is cheap. TCGdex's is a request per candidate,
+	 * returning about a hundred bytes each; downloading each language's set to find out would not
+	 * be worth knowing.
+	 *
+	 * @param candidates the languages the set claims, which is already a narrower set than
+	 *   [DataCapabilities.languages]
+	 */
+	suspend fun confirmLanguages(setId: SourceId, candidates: Set<CardLanguage>): Set<CardLanguage> =
+		candidates
+
+	/**
 	 * One page of cards matching [request]'s text, across every set of the game.
 	 *
 	 * Only called when [DataCapabilities.crossSetSearch] is true. The default throws rather than

@@ -81,6 +81,28 @@ interface GameProfile {
 		domains.firstOrNull { it.key.equals(key, ignoreCase = true) }
 
 	/**
+	 * This game's separate product lines, or empty for a game that ships one worldwide.
+	 *
+	 * Not translations -- *different products*. Pokémon prints a Japanese line and an international
+	 * line that share neither set list nor numbering: `sv1a` (Triplet Beat) has no international
+	 * counterpart, and there is no Japanese edition of `swsh1` to fetch. Treating them as one
+	 * catalogue meant only one line was ever visible, chosen by whichever language the user happened
+	 * to prefer, so 218 of Pokémon's 486 sets simply did not exist as far as the app was concerned.
+	 *
+	 * A region is *not* a language. Every Korean Pokémon set id is a Japanese set id -- Korea prints
+	 * the Japanese line -- so Korean is a language of the Japan region rather than a region of its
+	 * own. What a set is published in is [com.bitsycore.cardbrowser.core.model.CardSet.languages].
+	 *
+	 * Which line a set belongs to is the provider's to state, because it is a fact about how that
+	 * source keys its data; what the lines *are* is the game's, which is why they are declared here.
+	 */
+	val regions: List<GameRegion> get() = emptyList()
+
+	/** The declared region for [key], or `null` when this game has never heard of it. */
+	fun regionFor(key: String?): GameRegion? =
+		key?.let { vKey -> regions.firstOrNull { it.key.equals(vKey, ignoreCase = true) } }
+
+	/**
 	 * Cardmarket's path segment for this game, or `null` when it is not known.
 	 *
 	 * `null` suppresses the marketplace link entirely rather than shipping a button that lands on a
@@ -118,6 +140,20 @@ data class GameVocabulary(
 	val cardType: String = "Type",
 	val primaryStat: String? = null,
 	val secondaryStat: String? = null,
+)
+
+/**
+ * One of a game's product lines. See [GameProfile.regions].
+ *
+ * @property key what an adapter tags a set with, and what goes into a cache file: `intl`, `jp`
+ * @property label the filter chip: "International", "Japan"
+ * @property badge the two- or three-letter form for the badge on a set row, where the full label
+ *   does not fit beside a set name: `INTL`, `JP`
+ */
+data class GameRegion(
+	val key: String,
+	val label: String,
+	val badge: String,
 )
 
 /**

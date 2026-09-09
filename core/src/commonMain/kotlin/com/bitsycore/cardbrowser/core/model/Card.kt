@@ -17,6 +17,12 @@ import kotlinx.serialization.Serializable
  * @property code the provider's short code, e.g. `OGN`. Shown to the user and used for its filters
  * @property releaseDate `null` when the provider does not state one; the set list sorts those last
  * @property externalIds marketplace and third-party ids the provider supplied, keyed by [ExternalIdKey]
+ * @property region which of the game's product lines this set belongs to, as a `GameRegion` key, or
+ *   `null` for a game that ships one line worldwide. See `GameProfile.regions`
+ * @property languages the languages this set is actually published in, empty when the provider does
+ *   not know set by set. **Not** what the provider can serve in general: that is
+ *   `DataCapabilities.languages`, and using it per set is what offered a Korean Base Set. A language
+ *   here is a claim about this set, so it is what a language menu may offer
  */
 @Serializable
 data class CardSet(
@@ -28,10 +34,32 @@ data class CardSet(
 	val releaseDate: LocalDate?,
 	val externalIds: Map<String, List<String>> = emptyMap(),
 	val symbol: SetSymbol? = null,
+	val region: String? = null,
+	val languages: Set<CardLanguage> = emptySet(),
 ) {
 
 	/** The provider that supplied this record. Kept for provenance in the UI and in the cache. */
 	val provider: ProviderId get() = id.provider
+
+	/**
+	 * Which language to show this set in, given what the user would prefer.
+	 *
+	 * The one rule, in one place, because more than one caller depends on the answer and they have
+	 * to agree. The grid loads a set in this language and the set list checks whether *this*
+	 * language's copy is on disk; a language embedded in a cache key means two callers disagreeing
+	 * do not merely differ in taste, they read and write different files -- which is how every set
+	 * once failed to show as saved.
+	 *
+	 * [preferred] wins when the set has it. Otherwise the app's preference order picks the best
+	 * available, so a Japan-only set opens in Japanese for a user who prefers French rather than
+	 * opening empty. A set stating no languages falls through to [preferred] unchanged: silence
+	 * from the provider is not evidence of absence.
+	 */
+	fun languageFor(preferred: CardLanguage?): CardLanguage? = when {
+		languages.isEmpty() -> preferred
+		preferred != null && preferred in languages -> preferred
+		else -> CardLanguage.PREFERENCE_ORDER.firstOrNull { it in languages } ?: preferred
+	}
 }
 
 /**

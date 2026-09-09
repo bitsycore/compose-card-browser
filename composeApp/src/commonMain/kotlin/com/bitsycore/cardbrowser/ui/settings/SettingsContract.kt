@@ -17,7 +17,15 @@ object SettingsContract :
 		val imageBytes: Long = 0,
 		val imageLimitBytes: Long = CacheManager.DEFAULT_IMAGE_CACHE_MAX_BYTES,
 		val preferredLanguages: List<CardLanguage> = CardLanguage.PREFERENCE_ORDER,
-		val providerAttribution: String? = null,
+		/**
+		 * Every source the app is routed to, and its own notice.
+		 *
+		 * All of them, not the first. This screen used to show whichever provider happened to be
+		 * routed first -- Riftcodex -- under the heading "Data source", so a user browsing Pokemon
+		 * was told their card data came from an unofficial Riot Games fan project. Seven sources
+		 * are credited on the cards they supply; the same is true here.
+		 */
+		val attributions: List<ProviderCredit> = emptyList(),
 		val prefetchRadius: Int = BrowsingPreferences.DEFAULT_PREFETCH_RADIUS,
 		val revalidateSetsOnLaunch: Boolean = true,
 		/**
@@ -32,6 +40,15 @@ object SettingsContract :
 		/** Every request this session, across every host. */
 		val apiCallTotal: Int get() = apiCalls.sumOf { it.second }
 	}
+
+	/**
+	 * One source, as credited on this screen.
+	 *
+	 * @property source the provider's own display name, so the notices are distinguishable
+	 * @property text the provider's own attribution, verbatim. Never composed here: what a source
+	 *   requires to be said about it is the source's to state
+	 */
+	data class ProviderCredit(val source: String, val text: String)
 
 	sealed interface Intent {
 
@@ -58,7 +75,7 @@ object SettingsContract :
 
 		data class RevalidateOnLaunchChanged(val isEnabled: Boolean) : Intent
 
-		data class AttributionRead(val text: String?) : Intent
+		data class AttributionRead(val credits: List<ProviderCredit>) : Intent
 
 		/** Moves a language to the front of the preference order. */
 		data class PromoteLanguage(val language: CardLanguage) : Intent
@@ -107,7 +124,7 @@ object SettingsContract :
 
 		is Intent.RevalidateOnLaunchChanged -> state.copy(revalidateSetsOnLaunch = intent.isEnabled)
 
-		is Intent.AttributionRead -> state.copy(providerAttribution = intent.text)
+		is Intent.AttributionRead -> state.copy(attributions = intent.credits)
 
 		// Promotion is a reorder, not a filter: the other three keep their relative order behind
 		// the promoted one, so tapping through them cycles predictably.

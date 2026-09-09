@@ -2,6 +2,7 @@ package com.bitsycore.cardbrowser.games.pokemon
 
 import com.bitsycore.cardbrowser.core.game.GameDomain
 import com.bitsycore.cardbrowser.core.game.GameProfile
+import com.bitsycore.cardbrowser.core.game.GameRegion
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.games.api.GameArt
@@ -56,6 +57,36 @@ object PokemonGame : GameProfile {
 	 * the button lands on a 404, and the fix is this one line.
 	 */
 	override val cardmarketSlug: String = "Pokemon"
+
+	/**
+	 * Region keys, named here so the adapter that tags sets and the game that labels them cannot
+	 * drift apart on a spelling. They go into cache files, so they never change.
+	 */
+	const val REGION_INTERNATIONAL: String = "intl"
+	const val REGION_JAPAN: String = "jp"
+	const val REGION_TAIWAN: String = "tw"
+	const val REGION_CHINA: String = "cn"
+
+	/**
+	 * Pokémon's four product lines, as measured across TCGdex's eleven locale catalogues.
+	 *
+	 * The set ids of these four barely overlap -- 4 shared ids out of 486 distinct sets -- because
+	 * they are not translations of each other but separate release schedules with separate
+	 * numbering. Japan gets `sv1a` "Triplet Beat", which was never printed internationally;
+	 * Traditional Chinese has an exclusive `SC*` Sword & Shield line of its own.
+	 *
+	 * Korea is deliberately absent. All 95 Korean set ids are Japanese set ids, so Korea prints the
+	 * Japan line and Korean is one of that line's languages -- listing it here would split one
+	 * product line into two and show every Japanese set twice.
+	 *
+	 * The order is the order the chips appear in, largest line first.
+	 */
+	override val regions: List<GameRegion> = listOf(
+		GameRegion(REGION_INTERNATIONAL, "International", "INTL"),
+		GameRegion(REGION_JAPAN, "Japan", "JP"),
+		GameRegion(REGION_TAIWAN, "Taiwan & HK", "TW"),
+		GameRegion(REGION_CHINA, "China", "CN"),
+	)
 
 	/**
 	 * The eleven types TCGdex serves, in the order the game itself lists them.

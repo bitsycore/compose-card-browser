@@ -49,10 +49,152 @@ class TcgdexLiveSmokeTest {
 		val vReleased = vBase.releaseDate
 		assertNotNull(vReleased, "Release dates are missing -- the GraphQL query failed")
 		assertEquals(1999, vReleased.year)
+		// Dates come from a GraphQL endpoint that serves the international catalogue only, so the
+		// claim is about that line rather than about all 486 sets.
+		val vInternational = vSets.filter { it.region == PokemonGame.REGION_INTERNATIONAL }
 		assertTrue(
-			vSets.count { it.releaseDate != null } > vSets.size / 2,
-			"Most sets should have a date; only ${vSets.count { it.releaseDate != null }} do",
+			vInternational.count { it.releaseDate != null } > vInternational.size / 2,
+			"Most international sets should have a date; only " +
+				"${vInternational.count { it.releaseDate != null }} of ${vInternational.size} do",
 		)
+	}
+
+	// ============
+	//  Product lines
+
+	@Test
+	fun `every product line is present at once`() = runBlocking {
+		// The bug this pins: the catalogue used to be one locale's, so whichever language the user
+		// preferred decided which of Pokemon's four product lines existed at all. Browsing in
+		// English hid Japan's 180 sets; preferring Japanese hid the international 221.
+		val vSets = provider().listSets(CardLanguage.ENGLISH)
+
+		val vByRegion = vSets.groupBy { it.region }
+		for (vRegion in PokemonGame.regions) {
+			assertTrue(
+				vByRegion[vRegion.key].orEmpty().size > 20,
+				"Region ${vRegion.key} has only ${vByRegion[vRegion.key].orEmpty().size} sets",
+			)
+		}
+		assertTrue(vSets.size > 400, "Expected every line merged, got ${vSets.size}")
+		assertTrue(vSets.none { it.region == null }, "Every Pokemon set belongs to a line")
+
+		// An international set and a Japan-only one, side by side in the same list.
+		assertEquals(
+			PokemonGame.REGION_INTERNATIONAL,
+			assertNotNull(vSets.firstOrNull { it.id.local == "base1" }).region,
+		)
+		assertEquals(
+			PokemonGame.REGION_JAPAN,
+			assertNotNull(vSets.firstOrNull { it.id.local == "SV1a" }).region,
+		)
+	}
+
+	@Test
+	fun `set ids are case sensitive and name different products`() = runBlocking {
+		// `sm10` is international Unbroken Bonds; `SM10` is Japanese Double Blaze. The detail
+		// endpoint folds the case and will serve Unbroken Bonds for `/en/sets/SM10`, so if this
+		// merge ever folded it too, one of the two would vanish and the other would be offered in
+		// languages that show a different set's cards entirely.
+		val vSets = provider().listSets(CardLanguage.ENGLISH)
+
+		val vInternational = assertNotNull(vSets.firstOrNull { it.id.local == "sm10" })
+		val vJapanese = assertNotNull(vSets.firstOrNull { it.id.local == "SM10" })
+
+		assertEquals(PokemonGame.REGION_INTERNATIONAL, vInternational.region)
+		assertEquals(PokemonGame.REGION_JAPAN, vJapanese.region)
+		assertTrue(CardLanguage.ENGLISH in vInternational.languages)
+		assertTrue(
+			CardLanguage.ENGLISH !in vJapanese.languages,
+			"The Japanese SM10 has no English edition, whatever the detail endpoint answers",
+		)
+	}
+
+	@Test
+	fun `a claimed language with no cards behind it is not confirmed`() = runBlocking {
+		// The residual half of the reported bug. Narrowing eleven locales to the six that list Base
+		// Set is not enough: TCGdex *lists* Spanish and Portuguese editions of it, complete with a
+		// card count of 102, and serves no cards for either. Nothing in a set list distinguishes
+		// that from a real edition, so it is probed.
+		val vProvider = provider()
+		val vBase = SourceId(TcgdexProvider.PROVIDER_ID, "base1")
+
+		val vConfirmed = vProvider.confirmLanguages(
+			setId = vBase,
+			candidates = setOf(
+				CardLanguage.ENGLISH,
+				CardLanguage.FRENCH,
+				CardLanguage.GERMAN,
+				CardLanguage.ITALIAN,
+				CardLanguage.SPANISH,
+				CardLanguage.PORTUGUESE,
+			),
+		)
+
+		assertTrue(CardLanguage.ENGLISH in vConfirmed)
+		assertTrue(CardLanguage.FRENCH in vConfirmed)
+		assertTrue(CardLanguage.SPANISH !in vConfirmed, "Spanish Base Set has no cards")
+		assertTrue(CardLanguage.PORTUGUESE !in vConfirmed, "Portuguese Base Set has no cards")
+	}
+
+	@Test
+	fun `the Korean catalogue is names only and is not offered`() = runBlocking {
+		// Measured across ten Korean sets: every one carries a name and a claimed card count, and
+		// every one serves zero cards. So Korean is real in the catalogue and empty in the data,
+		// which is why "does this set list the language" cannot be the test.
+		val vProvider = provider()
+
+		val vConfirmed = vProvider.confirmLanguages(
+			setId = SourceId(TcgdexProvider.PROVIDER_ID, "SM1S"),
+			candidates = setOf(CardLanguage.JAPANESE, CardLanguage.KOREAN),
+		)
+
+		assertEquals(setOf(CardLanguage.JAPANESE), vConfirmed)
+	}
+
+	@Test
+	fun `a language with real cards survives confirmation`() = runBlocking {
+		// The other side of it: confirmation must not throw away working editions. Traditional
+		// Chinese really does hold 73 of Triplet Beat's cards.
+		val vConfirmed = provider().confirmLanguages(
+			setId = SourceId(TcgdexProvider.PROVIDER_ID, "SV1a"),
+			candidates = setOf(
+				CardLanguage.JAPANESE,
+				CardLanguage.KOREAN,
+				CardLanguage.TRADITIONAL_CHINESE,
+			),
+		)
+
+		assertEquals(
+			setOf(CardLanguage.JAPANESE, CardLanguage.TRADITIONAL_CHINESE),
+			vConfirmed,
+		)
+	}
+
+	@Test
+	fun `a set states the languages it is really published in`() = runBlocking {
+		// The reported bug: the language menu offered all eleven locales for every set, because it
+		// was built from what the *source* serves rather than what the *set* has.
+		val vSets = provider().listSets(CardLanguage.ENGLISH)
+
+		val vBase = assertNotNull(vSets.firstOrNull { it.id.local == "base1" })
+		assertTrue(CardLanguage.ENGLISH in vBase.languages)
+		assertTrue(CardLanguage.FRENCH in vBase.languages)
+		// Base Set is in no Asian catalogue -- `/ko/sets/base1` is a 404, not an empty set.
+		assertTrue(CardLanguage.KOREAN !in vBase.languages, "Base Set has no Korean edition")
+		assertTrue(CardLanguage.JAPANESE !in vBase.languages)
+		assertTrue(vBase.languages.size < CardLanguage.entries.size)
+
+		// Korea prints the Japanese line, which is why it is a language and not a region.
+		val vKorean = vSets.filter { CardLanguage.KOREAN in it.languages }
+		assertTrue(vKorean.isNotEmpty(), "No set claims a Korean edition")
+		assertTrue(
+			vKorean.all { it.region == PokemonGame.REGION_JAPAN },
+			"Every Korean set id is a Japanese set id",
+		)
+
+		// And no set claims every language, which is what the menu used to assume.
+		assertTrue(vSets.none { it.languages.size == CardLanguage.entries.size })
 	}
 
 	@Test

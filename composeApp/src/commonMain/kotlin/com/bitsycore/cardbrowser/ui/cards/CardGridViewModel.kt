@@ -56,13 +56,37 @@ class CardGridViewModel(
 				val vGame = gameOf(intent.setId)
 				val vProvider = vGame?.let { mRegistry.resolve(it) }
 				if (vGame != null && vProvider != null) {
+					// What *this set* is published in, not what the source can serve in general.
+					// Those are different claims, and using the second one for a language menu is
+					// what offered a Korean edition of Pokemon's Base Set: TCGdex serves eleven
+					// locales, and Base Set exists in six of them. Worse than useless, because
+					// TCGdex's detail endpoint folds the case of a set id -- `/en/sets/SM10`
+					// answers with international Unbroken Bonds rather than 404ing on the Japanese
+					// set -- so the wrong language could show a different set's cards entirely.
+					//
+					// Falls back to the provider's own languages when no set record is cached,
+					// which is the only honest answer available: a menu of one language is not
+					// evidence that only one exists.
+					val vSetId = SourceId.parse(intent.setId)
+					val vRecord = vSetId?.let { mRepository.setRecord(it, vGame.id) }
+					// Confirmed, not merely claimed: TCGdex's Korean catalogue names 95 sets and
+					// serves cards for none of them. See `CardRepository.languagesFor`.
+					val vSetLanguages = vSetId?.let { mRepository.languagesFor(it, vGame.id) }
+						?.takeIf { it.isNotEmpty() }
+						?: vProvider.capabilities.data.languages
+					val vPreferred = mPreferences.preferences.value.primaryLanguage
 					dispatch(
 						CardGridContract.Intent.CapabilitiesResolved(
 							supportedFilters = vProvider.capabilities.filtering.supported,
 							game = vGame,
-							languages = vProvider.capabilities.data.languages,
-							language = mPreferences.preferences.value.primaryLanguage
-								.takeIf { it in vProvider.capabilities.data.languages }
+							languages = vSetLanguages,
+							// The same rule the set list's saved mark uses, so the two agree on
+							// which file this set lives in -- see `CardSet.languageFor` -- but over
+							// the confirmed languages, so a set is never opened in a language that
+							// has no cards.
+							language = vRecord?.copy(languages = vSetLanguages)
+								?.languageFor(vPreferred)
+								?: vPreferred.takeIf { it in vSetLanguages }
 								?: vProvider.resolveLanguage(null),
 						),
 					)

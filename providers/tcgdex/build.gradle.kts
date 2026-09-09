@@ -63,6 +63,10 @@ tasks.register<Test>("liveProviderTest") {
 	classpath = vDesktopTest.classpath
 	filter {
 		includeTestsMatching("*LiveSmokeTest")
+		// The wiring test is live too: it drives a real repository over the real API, which is
+		// where the last language bug hid. Left out, it would have sat in the source tree
+		// compiling and never running.
+		includeTestsMatching("*LanguageWiringTest")
 		isFailOnNoMatchingTests = false
 	}
 	outputs.upToDateWhen { false }

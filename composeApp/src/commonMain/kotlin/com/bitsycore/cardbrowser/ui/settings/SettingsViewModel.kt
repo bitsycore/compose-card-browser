@@ -25,10 +25,17 @@ class SettingsViewModel(
 		dispatch(SettingsContract.Intent.PreferencesRead(mPreferences.preferences.value))
 		dispatch(
 			SettingsContract.Intent.AttributionRead(
-				// The first routed game's source. One line, and this screen has room for one;
-				// every provider's own notice is shown on the card it supplied.
-				mRegistry.games.firstOrNull()?.let { mRegistry.resolve(it) }
-					?.capabilities?.attribution?.text,
+				// Every routed source, deduplicated: one provider can serve several games, and
+				// several games can share none. Taking only the first credited Riftcodex to users
+				// of all seven games.
+				mRegistry.games
+					.mapNotNull { mRegistry.resolve(it) }
+					.distinctBy { it.id }
+					.mapNotNull { vProvider ->
+						vProvider.capabilities.attribution?.text?.let { vText ->
+							SettingsContract.ProviderCredit(vProvider.displayName, vText)
+						}
+					},
 			),
 		)
 	}

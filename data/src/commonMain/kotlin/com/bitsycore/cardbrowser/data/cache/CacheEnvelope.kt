@@ -107,6 +107,15 @@ sealed interface CacheScope {
 	 */
 	@Serializable
 	data class Search(val needle: String, val page: Int) : CacheScope
+
+	/**
+	 * Which languages one set is really published in.
+	 *
+	 * Cached because establishing it costs a request per candidate language, and because the answer
+	 * changes only when a source backfills a translation. See `CardRepository.languagesFor`.
+	 */
+	@Serializable
+	data class SetLanguages(val setId: String) : CacheScope
 }
 
 /**

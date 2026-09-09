@@ -53,6 +53,15 @@ internal object TcgdexMapper {
 		dto: TcgdexSetBriefDto,
 		provider: ProviderId,
 		releaseDates: Map<String, LocalDate>,
+		region: String? = null,
+		languages: Set<CardLanguage> = emptySet(),
+		/**
+		 * The logo to use, which may have come from another locale than [dto].
+		 *
+		 * The non-English catalogues often omit it -- Spanish `base1` carries none -- and a blank
+		 * tile for a set whose logo the API does have is a worse answer than the English one.
+		 */
+		logo: String? = dto.logo,
 	): CardSet? {
 		if (dto.id.isBlank()) return null
 		return CardSet(
@@ -61,14 +70,19 @@ internal object TcgdexMapper {
 			// TCGdex's own set id doubles as the code -- `swsh3`, `base1`. The printed abbreviation
 			// ("DAA") exists only on the full set object, which the catalogue endpoint does not
 			// return, so using it here would cost 218 extra requests to save four characters.
-			code = dto.id.uppercase(),
+			//
+			// Not upper-cased: `sm10` and `SM10` are different sets -- international Unbroken Bonds
+			// and Japanese ダブルブレイズ -- and folding the case would show two sets under one code.
+			code = dto.id,
 			name = dto.name.ifBlank { dto.id },
 			// `total` rather than `official`: the grid shows secret rares, so the count beside it
 			// has to include them or the set reads as over-full.
 			cardCount = dto.cardCount?.total ?: dto.cardCount?.official,
 			releaseDate = releaseDates[dto.id],
 			externalIds = emptyMap(),
-			symbol = symbolOf(dto.logo),
+			symbol = symbolOf(logo),
+			region = region,
+			languages = languages,
 		)
 	}
 
@@ -78,7 +92,7 @@ internal object TcgdexMapper {
 		return CardSet(
 			id = SourceId(provider, dto.id),
 			game = PokemonGame.id,
-			code = dto.abbreviation?.official?.ifBlank { null } ?: dto.id.uppercase(),
+			code = dto.abbreviation?.official?.ifBlank { null } ?: dto.id,
 			name = dto.name.ifBlank { dto.id },
 			cardCount = dto.cardCount?.total ?: dto.cardCount?.official,
 			releaseDate = parseDate(dto.releaseDate),

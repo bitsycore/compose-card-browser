@@ -97,7 +97,7 @@ object CardDetailContract :
 		 */
 		fun languageOptionsFor(card: CardPrinting): List<LanguageOption> {
 			val vShown = languageResolutionFor(card).shown
-			val vOffered = providerLanguages + card.languages.confirmed + setOfNotNull(vShown)
+			val vOffered = offerableLanguages + card.languages.confirmed + setOfNotNull(vShown)
 			return CardLanguage.PREFERENCE_ORDER
 				.filter { it in vOffered }
 				.map { vLanguage ->
@@ -105,10 +105,29 @@ object CardDetailContract :
 						language = vLanguage,
 						availability = card.languages.availabilityOf(vLanguage),
 						isSelected = vLanguage == vShown,
-						isOfferedBySource = vLanguage in providerLanguages,
+						isOfferedBySource = vLanguage in offerableLanguages,
 					)
 				}
 		}
+
+		/**
+		 * The languages that can actually be asked for *here*.
+		 *
+		 * The set's own languages when it states any, and only then the source's. A source-wide list
+		 * is a claim about the source: TCGdex serves eleven locales, and Pokemon's Base Set exists
+		 * in six of them, so offering all eleven put seven dead entries in the menu -- which is what
+		 * made every language have to be checked by hand.
+		 *
+		 * The distinction is not cosmetic. TCGdex folds the case of a set id, so
+		 * `/en/sets/SM10` answers with international Unbroken Bonds rather than 404ing on the
+		 * Japanese `SM10`; picking English for that set would have shown a different set's cards
+		 * under its name.
+		 *
+		 * A set that states nothing falls back to the source's list unchanged, because a provider
+		 * that does not describe its sets per language has not thereby said its sets are English.
+		 */
+		val offerableLanguages: Set<CardLanguage>
+			get() = set?.languages?.takeIf { it.isNotEmpty() } ?: providerLanguages
 
 		/**
 		 * The finishes this printing is known to exist in, or nothing at all.

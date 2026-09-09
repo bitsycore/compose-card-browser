@@ -31,6 +31,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.SetSerializer
 import kotlinx.serialization.serializer
 
 /**
@@ -838,11 +839,118 @@ class CardRepository(
 		language: CardLanguage? = null,
 	): Set<String> {
 		val vProvider = mRegistry.resolve(game, language) ?: return emptySet()
-		val vLanguage = effectiveLanguage(vProvider, language)
 		return sets
-			.filter { mCache.exists(completeSetKey(vProvider, it.id, vLanguage)) }
+			.filter { vSet -> isSaved(vProvider, vSet, language) }
 			.map { it.id.qualified }
 			.toSet()
+	}
+
+	/**
+	 * True when any edition of [set] is on disk.
+	 *
+	 * *Any*, rather than the caller's preferred one, because "saved" is a statement about this
+	 * device holding the set and not about which translation it holds. Insisting on one language
+	 * was a real bug twice over: it looked for a French copy of a set published only in Japanese,
+	 * so a fully downloaded Japan-line set never showed as saved, and it also had to agree exactly
+	 * with whichever language the grid chose -- two rules in two layers that could only ever drift.
+	 *
+	 * The language the set would actually open in is checked first, so the ordinary case is one
+	 * file-existence check and stops there.
+	 */
+	private suspend fun isSaved(
+		provider: CardProvider<GameProfile>,
+		set: CardSet,
+		preferred: CardLanguage?,
+	): Boolean {
+		val vFirst = effectiveLanguage(provider, set.languageFor(preferred))
+		val vRest = set.languages.map { effectiveLanguage(provider, it) }
+		return (listOf(vFirst) + vRest)
+			.distinct()
+			.any { mCache.exists(completeSetKey(provider, set.id, it)) }
+	}
+
+	// ============
+	//  One set's record
+
+	/**
+	 * The cached record for one set, or `null` when no set list holding it is on disk.
+	 *
+	 * Reads only what is cached, and deliberately searches *every* language's set list rather than
+	 * the caller's own. The record is what states which languages a set is published in, and that
+	 * answer must not depend on which language the asker happens to be in -- otherwise a Japanese
+	 * set opened by a French user would report no languages at all and its language menu would
+	 * come up empty.
+	 *
+	 * Set lists are small and there are at most a handful of them per provider, so this is a few
+	 * file reads and no requests. It returns `null` rather than fetching because every caller
+	 * reached the set by tapping it in a list that had just been loaded.
+	 */
+	suspend fun setRecord(setId: SourceId, game: GameId): CardSet? {
+		// The set id names its own provider, so there is nothing to search for.
+		val vProvider = mRegistry.byId(setId.provider) ?: return null
+		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardSet>()))
+		val vLanguages = listOf(null) + vProvider.capabilities.data.languages
+			.map { effectiveLanguage(vProvider, it) }
+			.distinct()
+		for (vLanguage in vLanguages) {
+			val vCached = mCache.read(setListKey(vProvider, game, vLanguage), vSerializer) ?: continue
+			vCached.payload.firstOrNull { it.id == setId }?.let { return it }
+		}
+		return null
+	}
+
+	/**
+	 * The languages [setId] can really be browsed in, cached.
+	 *
+	 * Two narrowings, and both are needed:
+	 *
+	 * 1. The set's own claimed languages, from its cached record, rather than everything the source
+	 *    can serve. TCGdex offers eleven locales and Pokemon's Base Set exists in six of them.
+	 * 2. Of those, the ones the provider confirms it holds cards for -- see
+	 *    [CardProvider.confirmLanguages]. The claim in a set list is not reliable: TCGdex's Korean
+	 *    catalogue names 95 sets, states a card count for each, and serves no cards at all.
+	 *
+	 * The result is cached under [CacheScope.SetLanguages], because the second step costs a request
+	 * per candidate and the answer changes only when a source backfills a translation. Falls back
+	 * to the provider's own languages when no set record is on disk: a menu of one entry is not
+	 * evidence that one language exists.
+	 */
+	suspend fun languagesFor(setId: SourceId, game: GameId): Set<CardLanguage> {
+		val vProvider = mRegistry.byId(setId.provider) ?: return emptySet()
+		val vCandidates = setRecord(setId, game)?.languages?.takeIf { it.isNotEmpty() }
+			?: return vProvider.capabilities.data.languages
+
+		val vKey = setLanguagesKey(vProvider, setId)
+		val vSerializer = CacheEnvelope.serializer(SetSerializer(serializer<CardLanguage>()))
+		val vCached = mCache.read(vKey, vSerializer)
+		// Only re-confirmed once the record itself would be refetched anyway. A language a source
+		// has never had is not going to appear between two openings of the same set.
+		if (vCached != null && !vCached.isStale(mClock(), mSetListTtlMillis)) return vCached.payload
+
+		val vConfirmed = try {
+			vProvider.confirmLanguages(setId, vCandidates)
+		} catch (vError: ProviderError) {
+			// Unconfirmed is not empty. Falling back to the claim leaves a menu that may contain an
+			// entry that fails, which the grid already handles by saying so.
+			return vCached?.payload ?: vCandidates
+		}
+		// Never empty: a set no language can serve would leave the grid with no language to load
+		// at all, and the honest report of that is an empty set rather than an absent control.
+		val vResult = vConfirmed.ifEmpty { vCandidates }
+		mCache.write(
+			key = vKey,
+			envelope = CacheEnvelope(
+				schemaVersion = CacheEnvelope.CURRENT_SCHEMA_VERSION,
+				provider = vProvider.id,
+				language = null,
+				scope = CacheScope.SetLanguages(setId.qualified),
+				fetchedAtEpochMillis = mClock(),
+				completeness = Completeness.COMPLETE,
+				payload = vResult,
+			),
+			serializer = vSerializer,
+		)
+		return vResult
 	}
 
 	// ============
@@ -917,6 +1025,18 @@ class CardRepository(
 		provider: CardProvider<GameProfile>,
 		requested: CardLanguage?,
 	): CardLanguage? = provider.resolveLanguage(requested)
+
+	/**
+	 * No language in the key: the answer is *about* languages, so keying it by one would store the
+	 * same fact once per language and let the copies disagree.
+	 */
+	private fun setLanguagesKey(provider: CardProvider<GameProfile>, setId: SourceId) =
+		CacheKey.of(
+			"v${CacheEnvelope.CURRENT_SCHEMA_VERSION}",
+			provider.id.value,
+			"set-languages",
+			setId.qualified,
+		)
 
 	private fun setListKey(provider: CardProvider<GameProfile>, game: GameId, language: CardLanguage?) =
 		CacheKey.of("v${CacheEnvelope.CURRENT_SCHEMA_VERSION}", provider.id.value, "sets", game.value, language?.code ?: "-")

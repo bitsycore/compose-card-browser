@@ -100,7 +100,15 @@ class CardDetailViewModel(
 		}
 
 		val vSet = if (vSetId != null) {
-			mRepository.setList(vGame.id, vLanguage).first().value?.firstOrNull { it.id == vSetId }
+			mRepository.setList(vGame.id, vLanguage).first().value
+				?.firstOrNull { it.id == vSetId }
+				// The set's *confirmed* languages replace its claimed ones, because that is what
+				// the language menu is built from. A set list's claim is not reliable enough to
+				// offer: TCGdex names 95 Korean sets and serves cards for none of them, so the
+				// menu offered Korean on every one of them and it had to be tried to find out.
+				?.let { vRecord ->
+					vRecord.copy(languages = mRepository.languagesFor(vRecord.id, vGame.id))
+				}
 		} else {
 			null
 		}

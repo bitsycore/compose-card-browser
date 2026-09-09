@@ -15,6 +15,7 @@ import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
 import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
+import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.net.mapProviderErrors
 import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
 import io.ktor.client.HttpClient
@@ -28,6 +29,9 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.appendPathSegments
 import io.ktor.http.contentType
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.datetime.LocalDate
 import kotlinx.serialization.Serializable
 
@@ -122,29 +126,128 @@ class TcgdexProvider(
 	//  Sets
 
 	/**
-	 * Every Pokémon set in the requested locale, with release dates.
+	 * Every Pokémon set TCGdex knows, from every locale catalogue, merged.
 	 *
-	 * Two requests, and the second one needs justifying. `GET /{lang}/sets` returns the catalogue
-	 * but omits `releaseDate` entirely -- confirmed by counting, 0 of 218 entries carry it -- which
-	 * would leave every set with a null date. The app sorts undated sets last and alphabetically,
-	 * so a 218-set list would arrive in an order with no relationship to when anything came out.
+	 * ## Why every locale and not just the requested one
 	 *
-	 * The alternative to fixing that is 218 requests for the per-set detail. Instead one GraphQL
-	 * POST returns every id and date together. It is English-only, which is why it is used for
-	 * *dates* and not for the catalogue itself: names and card counts still come from the locale
-	 * REST endpoint, and a set that exists only in a non-English catalogue simply keeps a null date
-	 * rather than being given one that does not apply to it.
+	 * TCGdex's locales are not translations of one catalogue -- they are separate catalogues of
+	 * separate products, and asking for one meant the other lines did not exist. Measured across all
+	 * eleven: 486 distinct sets, of which the English catalogue holds 218. So browsing in English
+	 * hid Japan's 180 sets, and choosing Japanese as a favourite language hid the international ones
+	 * instead. The set list swapped product lines as a side effect of a language preference, which
+	 * is what it was reported as: the two lines looked merged into one list that could only ever
+	 * show half of itself.
 	 *
-	 * A failed date request is not a failed set list. The catalogue is returned regardless.
+	 * Merging them costs one request per locale instead of one, and they are the cheapest requests
+	 * this adapter makes: the response cache holds them, the repository revalidates a set list at
+	 * most every few minutes, and they are issued in parallel. A locale that fails is skipped rather
+	 * than losing the list; only a total failure propagates.
+	 *
+	 * ## Ids are case-sensitive, and this is the one place that matters
+	 *
+	 * The international `sm10` is Unbroken Bonds; the Japanese `SM10` is ダブルブレイズ. Different
+	 * products, 234 cards against 116, distinguished by nothing but the case of the id. And the
+	 * detail endpoint does *not* respect the distinction -- `GET /en/sets/SM10` happily returns
+	 * international Unbroken Bonds -- so a set's languages can only be established from exact-case
+	 * catalogue membership. Nineteen ids collide when case is folded, so folding it would offer
+	 * English for a Japanese set and then show a different set's cards under its name.
+	 *
+	 * ## Dates
+	 *
+	 * `GET /{lang}/sets` omits `releaseDate` entirely -- 0 of 218 entries carry one -- so one
+	 * GraphQL POST recovers them. That endpoint serves the English catalogue only (218 sets, and
+	 * `/v2/ja/graphql` is a 404), so sets outside the international line keep a null date and are
+	 * ordered by code, which for `SV1a`, `SV2a`, `SV3a` is very nearly release order anyway. The
+	 * alternative is one request per set, 265 of them, to fill in a subtitle.
 	 */
 	override suspend fun listSets(language: CardLanguage?): List<CardSet> {
-		val vLocale = localeFor(language)
+		val vRequested = languageFor(language)
 		return mapProviderErrors("TCGdex.listSets") {
-			val vSets: List<TcgdexSetBriefDto> = mClient
-				.get(mBaseUrl) { url { appendPathSegments("v2", vLocale, "sets") } }
-				.body()
-			val vDates = releaseDates()
-			vSets.mapNotNull { TcgdexMapper.toSet(it, id, vDates) }
+			coroutineScope {
+				val vCatalogues = CATALOGUE_LINES
+					.flatMap { vLine -> vLine.languages }
+					.map { vLanguage -> async { vLanguage to catalogueOf(vLanguage) } }
+					.awaitAll()
+					.toMap()
+				// Every locale failing is a failure; one of eleven failing is not.
+				if (vCatalogues.values.all { it == null }) {
+					throw ProviderError.Unknown("TCGdex served no set catalogue in any locale")
+				}
+				merge(vCatalogues, vRequested, releaseDates())
+			}
+		}
+	}
+
+	/**
+	 * One locale's catalogue, or `null` when it could not be had.
+	 *
+	 * `null` rather than an empty list, so a locale that failed is distinguishable from a locale
+	 * that is genuinely empty -- the difference between "unknown" and "this set is not published in
+	 * Portuguese", which is exactly the claim a language menu is built from.
+	 */
+	private suspend fun catalogueOf(language: CardLanguage): List<TcgdexSetBriefDto>? = try {
+		mClient
+			.get(mBaseUrl) { url { appendPathSegments("v2", language.code, "sets") } }
+			.body()
+	} catch (vError: kotlinx.coroutines.CancellationException) {
+		throw vError
+	} catch (vError: Exception) {
+		null
+	}
+
+	/**
+	 * The catalogues, folded into one set per distinct id.
+	 *
+	 * Three things are decided per set, and each has a reason to prefer one locale over another:
+	 *
+	 * - **Region** -- the first line, in [CATALOGUE_LINES] order, whose locales carry the id. The
+	 *   order is what resolves the 4 genuine collisions: `neo1` is in both the English and Japanese
+	 *   catalogues because Japan's Neo Genesis shares the international id, and it is filed under
+	 *   the international line rather than appearing twice.
+	 * - **Languages** -- every locale that carries the id, which is the whole point of merging.
+	 * - **Name and logo** -- the requested language when it has this set, then the set's own line in
+	 *   order, then anything. So a French user sees "Édition Base" for an international set and
+	 *   「トリプレットビート」 for a Japanese one, which has no French name to show. Logo is resolved
+	 *   separately from name because the non-English catalogues frequently omit it: Spanish `base1`
+	 *   carries no logo at all, and falling back to English's keeps the tile from going blank.
+	 */
+	private fun merge(
+		catalogues: Map<CardLanguage, List<TcgdexSetBriefDto>?>,
+		requested: CardLanguage,
+		dates: Map<String, LocalDate>,
+	): List<CardSet> {
+		val vLanguagesById = mutableMapOf<String, MutableSet<CardLanguage>>()
+		val vRegionById = mutableMapOf<String, String>()
+		val vBriefsById = mutableMapOf<String, MutableMap<CardLanguage, TcgdexSetBriefDto>>()
+
+		for (vLine in CATALOGUE_LINES) {
+			for (vLanguage in vLine.languages) {
+				for (vBrief in catalogues[vLanguage].orEmpty()) {
+					if (vBrief.id.isBlank()) continue
+					vLanguagesById.getOrPut(vBrief.id) { mutableSetOf() }.add(vLanguage)
+					vRegionById.getOrPut(vBrief.id) { vLine.region }
+					vBriefsById.getOrPut(vBrief.id) { mutableMapOf() }[vLanguage] = vBrief
+				}
+			}
+		}
+
+		return vBriefsById.mapNotNull { (vId, vBriefs) ->
+			val vRegion = vRegionById[vId] ?: return@mapNotNull null
+			val vOrder = listOfNotNull(requested) +
+				CATALOGUE_LINES.first { it.region == vRegion }.languages +
+				vBriefs.keys
+			val vPrimary = vOrder.firstNotNullOfOrNull { vBriefs[it] } ?: return@mapNotNull null
+			val vWithLogo = vOrder.firstNotNullOfOrNull { vLanguage ->
+				vBriefs[vLanguage]?.takeIf { !it.logo.isNullOrBlank() }
+			}
+			TcgdexMapper.toSet(
+				dto = vPrimary,
+				provider = id,
+				releaseDates = dates,
+				region = vRegion,
+				languages = vLanguagesById[vId].orEmpty(),
+				logo = vWithLogo?.logo,
+			)
 		}
 	}
 
@@ -208,6 +311,59 @@ class TcgdexProvider(
 				hasMore = false,
 			)
 		}
+	}
+
+	/**
+	 * Which of a set's claimed languages TCGdex actually holds cards for.
+	 *
+	 * Worth the requests because the catalogue over-claims, and not by a little. A set brief
+	 * carries a card count in every locale that lists it -- Spanish `base1` says 102 -- and the set
+	 * endpoint then returns an empty card list. Measured: French, German, Spanish, Italian and
+	 * Portuguese all list `base4` and none has a card of it; Spanish and Italian list `col1` and
+	 * neither has one; and **the entire Korean catalogue** is 95 named sets with claimed counts and
+	 * no card data at all, as is Simplified Chinese. Modern sets are complete in every locale, so
+	 * this is a fact about how far back each translation was backfilled and there is no rule to
+	 * infer it from.
+	 *
+	 * The probe is `GET /{lang}/cards?set={id}` asking for one item: about 100 bytes for a hit and
+	 * 2 bytes for a miss, one per candidate, all in parallel. That is the difference between a menu
+	 * whose entries all work and a menu the user has to test by hand.
+	 *
+	 * `set=` is matched case-insensitively, which is why this only ever probes the candidates the
+	 * caller already established from exact-case catalogue membership. Probing English for the
+	 * Japanese `SM10` would answer yes -- with international Unbroken Bonds.
+	 *
+	 * A probe that fails keeps its language, because a language is dropped only on evidence that
+	 * the set is not published in it, and a timeout is not that.
+	 */
+	override suspend fun confirmLanguages(
+		setId: SourceId,
+		candidates: Set<CardLanguage>,
+	): Set<CardLanguage> = coroutineScope {
+		candidates
+			.map { vLanguage -> async { vLanguage to hasCards(vLanguage, setId.local) } }
+			.awaitAll()
+			.filter { it.second }
+			.mapTo(mutableSetOf()) { it.first }
+	}
+
+	/** True when TCGdex holds at least one card of this set in this locale, or could not say. */
+	private suspend fun hasCards(language: CardLanguage, setLocal: String): Boolean = try {
+		val vProbe: List<TcgdexCardBriefDto> = mClient
+			.get(mBaseUrl) {
+				url { appendPathSegments("v2", language.code, "cards") }
+				parameter("set", setLocal)
+				parameter("pagination:page", 1)
+				parameter("pagination:itemsPerPage", 1)
+			}
+			.body()
+		vProbe.isNotEmpty()
+	} catch (vError: kotlinx.coroutines.CancellationException) {
+		throw vError
+	} catch (vError: Exception) {
+		// Unknown, not absent. Keeping the language leaves the user a switch that may fail and
+		// says so; dropping it hides an edition that probably exists.
+		true
 	}
 
 	override suspend fun cardDetail(id: SourceId, language: CardLanguage?): CardPrinting? {
@@ -312,5 +468,64 @@ class TcgdexProvider(
 
 		/** Ids and dates for every set, which the REST catalogue does not carry. */
 		private const val RELEASE_DATE_QUERY = "{ sets { id releaseDate } }"
+
+		/**
+		 * TCGdex's locales, grouped into the product lines they publish, highest priority first.
+		 *
+		 * The grouping is measured, not assumed. Exact-case id overlap across the eleven
+		 * catalogues:
+		 *
+		 * - the seven western locales share one id space entirely -- German, Spanish, Italian and
+		 *   Portuguese are subsets of English's 218, French adds 3 McDonald's sets, Russian holds 9
+		 *   XY sets -- so they are one line, 221 sets
+		 * - Japanese holds 184 and Korean 95, and **every Korean id is a Japanese id**: Korea prints
+		 *   the Japanese line, so Korean is a language of it rather than a line of its own
+		 * - Traditional Chinese holds 98, of which 62 are Japanese ids and 36 are an exclusive
+		 *   `SC*` Sword & Shield line
+		 * - Simplified Chinese holds 56, 49 of them its own
+		 *
+		 * A locale appears once. Korean sits under Japan, and Traditional Chinese under its own
+		 * line, because its Japanese-id sets are picked up as a language of the Japan line by
+		 * priority -- which is what leaves exactly its 36 exclusives behind.
+		 */
+		private val CATALOGUE_LINES: List<CatalogueLine> = listOf(
+			CatalogueLine(
+				region = PokemonGame.REGION_INTERNATIONAL,
+				languages = listOf(
+					CardLanguage.ENGLISH,
+					CardLanguage.FRENCH,
+					CardLanguage.GERMAN,
+					CardLanguage.SPANISH,
+					CardLanguage.ITALIAN,
+					CardLanguage.PORTUGUESE,
+					CardLanguage.RUSSIAN,
+				),
+			),
+			CatalogueLine(
+				region = PokemonGame.REGION_JAPAN,
+				languages = listOf(CardLanguage.JAPANESE, CardLanguage.KOREAN),
+			),
+			CatalogueLine(
+				region = PokemonGame.REGION_TAIWAN,
+				languages = listOf(CardLanguage.TRADITIONAL_CHINESE),
+			),
+			CatalogueLine(
+				region = PokemonGame.REGION_CHINA,
+				languages = listOf(CardLanguage.SIMPLIFIED_CHINESE),
+			),
+		)
 	}
+
+	/**
+	 * One product line and the locales that publish it.
+	 *
+	 * @param region a `GameRegion` key declared by [PokemonGame]
+	 * @param languages in fallback order, so the first is the line's own language -- English for the
+	 *   international line, Japanese for Japan -- and is what names a set the requested language has
+	 *   no name for
+	 */
+	private data class CatalogueLine(
+		val region: String,
+		val languages: List<CardLanguage>,
+	)
 }

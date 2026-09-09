@@ -88,6 +88,9 @@ class CardmarketLinkBuilderTest {
 
 		val vHome = assertIs<CardmarketLink.GameHome>(vLink)
 		assertEquals("https://www.cardmarket.com/en/Riftbound", vHome.url)
+		// The label used to be the literal "Open Riftbound on Cardmarket", so every game's cards
+		// offered to open Riftbound -- including the six that are not it.
+		assertEquals("Open Test Game on Cardmarket", vHome.label)
 	}
 
 	@Test

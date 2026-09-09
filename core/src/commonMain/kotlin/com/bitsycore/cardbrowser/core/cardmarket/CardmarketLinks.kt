@@ -54,9 +54,14 @@ sealed interface CardmarketLink {
 		override val label: String get() = "Browse $expansion singles"
 	}
 
-	/** The game's Cardmarket section, when even the expansion slug is not known. */
-	data class GameHome(override val url: String) : CardmarketLink {
-		override val label: String get() = "Open Riftbound on Cardmarket"
+	/**
+	 * The game's Cardmarket section, when even the expansion slug is not known.
+	 *
+	 * @property gameName the game this actually opens. Named rather than hardcoded: the label read
+	 *   "Open Riftbound on Cardmarket" on every game's cards, including the six it was not
+	 */
+	data class GameHome(override val url: String, val gameName: String) : CardmarketLink {
+		override val label: String get() = "Open $gameName on Cardmarket"
 	}
 }
 
@@ -210,7 +215,10 @@ object CardmarketLinkBuilder {
 		}
 
 		// 4. The game's section.
-		return CardmarketLink.GameHome(url = "$BASE_URL/$UI_LOCALE/$vGame")
+		return CardmarketLink.GameHome(
+			url = "$BASE_URL/$UI_LOCALE/$vGame",
+			gameName = game.displayName,
+		)
 	}
 
 	/**

@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -44,9 +45,11 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
 import com.bitsycore.cardbrowser.core.game.GameProfile
+import com.bitsycore.cardbrowser.core.game.GameRegion
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.ProviderError
@@ -153,6 +156,15 @@ fun SetListContent(
 				)
 			}
 
+			// Only for a game that really ships more than one line. See `GameProfile.regions`.
+			if (vState.regionOptions.isNotEmpty()) {
+				RegionFilter(
+					regions = vState.regionOptions,
+					selected = vState.region,
+					onSelect = { dispatch(SetListContract.Intent.RegionSelected(it)) },
+				)
+			}
+
 			OutlinedTextField(
 				value = vState.search,
 				onValueChange = { dispatch(SetListContract.Intent.SearchChanged(it)) },
@@ -183,7 +195,7 @@ fun SetListContent(
 						onRetry = { dispatch(SetListContract.Intent.Refresh) },
 					)
 
-					vState.isEmptySearch -> EmptyState("No set matches \"${vState.search}\".")
+					vState.isEmptySearch -> EmptyState(emptyMessage(vState))
 
 					else -> LazyColumn(
 						contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
@@ -192,6 +204,13 @@ fun SetListContent(
 						items(vState.visibleSets, key = { it.id.qualified }) { vSet ->
 							SetRow(
 								set = vSet,
+								// Badged only while every line is on screen: with one line selected
+								// the badge would repeat the chip on every single row.
+								region = if (vState.region != null) {
+									null
+								} else {
+									vState.game?.regionFor(vSet.region)
+								},
 								isLastOpened = vSet.id.qualified == vState.lastOpenedSetId,
 								isSaved = vSet.id.qualified in vState.savedSetIds,
 								onClick = {
@@ -237,10 +256,64 @@ private fun GameSwitcher(
 	}
 }
 
+/**
+ * A game's product lines, as chips, with "All" first.
+ *
+ * Pokemon's Japanese and international catalogues are different products on different schedules,
+ * not translations of each other -- 486 sets between them sharing 4 ids -- so they belong in one
+ * list that can be narrowed rather than in one list that silently shows whichever the language
+ * preference happened to select.
+ */
+@Composable
+private fun RegionFilter(
+	regions: List<GameRegion>,
+	selected: String?,
+	onSelect: (String?) -> Unit,
+) {
+	val vScroll = rememberScrollState()
+	Row(
+		modifier = Modifier
+			.fillMaxWidth()
+			.horizontalScroll(vScroll)
+			.padding(horizontal = 16.dp, vertical = 4.dp),
+		horizontalArrangement = Arrangement.spacedBy(8.dp),
+	) {
+		FilterChip(
+			selected = selected == null,
+			onClick = { onSelect(null) },
+			label = { Text("All") },
+		)
+		regions.forEach { vRegion ->
+			FilterChip(
+				selected = vRegion.key == selected,
+				onClick = { onSelect(vRegion.key) },
+				label = { Text(vRegion.label) },
+			)
+		}
+	}
+}
+
+/**
+ * Why the list is empty, which depends on which filter emptied it.
+ *
+ * Blaming the search text for a region chip's doing would send the user to fix the wrong control.
+ */
+private fun emptyMessage(state: SetListContract.UiState): String {
+	val vRegion = state.game?.regionFor(state.region)?.label
+	val vSearch = state.search.trim()
+	return when {
+		vSearch.isNotEmpty() && vRegion != null -> "No $vRegion set matches \"$vSearch\"."
+		vSearch.isNotEmpty() -> "No set matches \"$vSearch\"."
+		vRegion != null -> "No $vRegion sets."
+		else -> "No sets."
+	}
+}
+
 /** One set: name, code, card count and release date, plus a mark for where you left off. */
 @Composable
 private fun SetRow(
 	set: CardSet,
+	region: GameRegion?,
 	isLastOpened: Boolean,
 	isSaved: Boolean,
 	onClick: () -> Unit,
@@ -267,11 +340,24 @@ private fun SetRow(
 					fontWeight = FontWeight.Medium,
 				)
 				Spacer(Modifier.height(2.dp))
-				Text(
-					text = setSubtitle(set),
-					style = MaterialTheme.typography.bodySmall,
-					color = MaterialTheme.colorScheme.onSurfaceVariant,
-				)
+				// The badge sits on the subtitle line rather than at the end of the row. As a
+				// trailing sibling of a weighted column it took its width from the set name, and
+				// on a row that also says "Last opened" that left the name about one character
+				// wide. Here it competes with nothing: it is provenance, like the code and the
+				// date it sits next to.
+				Row(verticalAlignment = Alignment.CenterVertically) {
+					if (region != null) {
+						RegionBadge(region)
+						Spacer(Modifier.size(6.dp))
+					}
+					Text(
+						text = setSubtitle(set, isLastOpened),
+						style = MaterialTheme.typography.bodySmall,
+						color = MaterialTheme.colorScheme.onSurfaceVariant,
+						maxLines = 2,
+						overflow = TextOverflow.Ellipsis,
+					)
+				}
 			}
 			if (isSaved) {
 				Spacer(Modifier.size(8.dp))
@@ -284,16 +370,36 @@ private fun SetRow(
 					modifier = Modifier.size(20.dp),
 				)
 			}
-			if (isLastOpened) {
-				Spacer(Modifier.size(8.dp))
-				Text(
-					text = "Last opened",
-					style = MaterialTheme.typography.labelSmall,
-					color = MaterialTheme.colorScheme.onSecondaryContainer,
-				)
-			}
+			// "Last opened" is on the metadata line rather than out here. As an unweighted
+			// trailing sibling it was measured at its full intrinsic width before the weighted
+			// column got any, so on a row with a long set name the name was squeezed to about one
+			// character per line. The row's own tint is the primary signal anyway; this is the
+			// label that explains it.
 		}
 	}
+}
+
+/**
+ * Which product line a set belongs to, as a small outlined tag.
+ *
+ * The short form, because it sits beside a set name that needs the width: "INTL", "JP". Outlined
+ * and in the muted colour rather than filled -- it is provenance, not a call to action, and it
+ * appears on every row.
+ */
+@Composable
+private fun RegionBadge(region: GameRegion) {
+	Text(
+		text = region.badge,
+		style = MaterialTheme.typography.labelSmall,
+		color = MaterialTheme.colorScheme.onSurfaceVariant,
+		modifier = Modifier
+			.border(
+				width = 1.dp,
+				color = MaterialTheme.colorScheme.outlineVariant,
+				shape = RoundedCornerShape(4.dp),
+			)
+			.padding(horizontal = 6.dp, vertical = 2.dp),
+	)
 }
 
 /**
@@ -417,10 +523,11 @@ private const val MONOGRAM_LIGHTNESS = 0.62f
  * A missing release date shows nothing rather than "Unknown date": the row is not the place to
  * discuss what the provider does not know.
  */
-private fun setSubtitle(set: CardSet): String = buildList {
+private fun setSubtitle(set: CardSet, isLastOpened: Boolean = false): String = buildList {
 	add(set.code)
 	set.cardCount?.let { add("$it cards") }
 	set.releaseDate?.let { add("${monthName(it.month.ordinal)} ${it.year}") }
+	if (isLastOpened) add("last opened")
 }.joinToString(" · ")
 
 /** Zero-based, matching `Month.ordinal`, so January is 0. */

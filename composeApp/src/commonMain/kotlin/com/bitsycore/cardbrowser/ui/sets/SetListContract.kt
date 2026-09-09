@@ -1,6 +1,7 @@
 package com.bitsycore.cardbrowser.ui.sets
 
 import com.bitsycore.cardbrowser.core.game.GameProfile
+import com.bitsycore.cardbrowser.core.game.GameRegion
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
@@ -51,19 +52,44 @@ object SetListContract :
 		 * mark in the row says saved and promises nothing about how much of the set is there.
 		 */
 		val savedSetIds: Set<String> = emptySet(),
+		/**
+		 * Which product line to show, or `null` for all of them.
+		 *
+		 * Pokemon ships four -- see `GameProfile.regions` -- and they are different products rather
+		 * than translations, so they belong in one list with a way to narrow it. A game that
+		 * declares no regions never sees this.
+		 */
+		val region: String? = null,
 	) {
 
 		/**
-		 * The sets actually shown, filtered by [search] over name and code.
+		 * The regions worth offering, in the game's own order.
+		 *
+		 * Only those the loaded sets actually use: a game declaring a line that the routed provider
+		 * turns out not to serve should not get a chip that filters to nothing.
+		 */
+		val regionOptions: List<GameRegion>
+			get() {
+				val vPresent = sets.mapNotNullTo(mutableSetOf()) { it.region }
+				return if (vPresent.size <= 1) {
+					emptyList()
+				} else {
+					game?.regions.orEmpty().filter { it.key in vPresent }
+				}
+			}
+
+		/**
+		 * The sets actually shown, filtered by [region] and then by [search] over name and code.
 		 *
 		 * Computed rather than stored so it cannot drift out of step with [sets], and cheap enough
 		 * to do per recomposition for a list of eight.
 		 */
 		val visibleSets: List<CardSet>
 			get() {
+				val vInRegion = if (region == null) sets else sets.filter { it.region == region }
 				val vNeedle = search.trim()
-				if (vNeedle.isEmpty()) return sets
-				return sets.filter { vSet ->
+				if (vNeedle.isEmpty()) return vInRegion
+				return vInRegion.filter { vSet ->
 					vSet.name.contains(vNeedle, ignoreCase = true) ||
 						vSet.code.contains(vNeedle, ignoreCase = true)
 				}
@@ -72,7 +98,7 @@ object SetListContract :
 		/** True when there is nothing to draw and no reason yet to explain why. */
 		val isInitialLoad: Boolean get() = isLoading && sets.isEmpty() && error == null
 
-		/** True when a search matched nothing but sets did load. */
+		/** True when a search or a region filter matched nothing but sets did load. */
 		val isEmptySearch: Boolean get() = sets.isNotEmpty() && visibleSets.isEmpty()
 	}
 
@@ -127,6 +153,9 @@ object SetListContract :
 
 		/** Which sets are on disk. Computed after a load, since it depends on the set list. */
 		data class SavedSetsResolved(val setIds: Set<String>) : Intent
+
+		/** A product line was picked, or `null` to see every line again. */
+		data class RegionSelected(val region: String?) : Intent
 	}
 
 	sealed interface Effect
@@ -174,6 +203,8 @@ object SetListContract :
 				state.copy(
 					game = intent.game,
 					sets = emptyList(),
+					// One game's lines mean nothing to another's.
+					region = null,
 					// Cleared with the list. Leaving them would tick rows of the new game whose
 					// ids happen to collide, and briefly claim the wrong sets are downloaded.
 					savedSetIds = emptySet(),
@@ -190,5 +221,9 @@ object SetListContract :
 		)
 
 		is Intent.SavedSetsResolved -> state.copy(savedSetIds = intent.setIds)
+
+		// Purely a view of what is already loaded: every line arrives in one request, so narrowing
+		// to one of them is not a reload.
+		is Intent.RegionSelected -> state.copy(region = intent.region)
 	}
 }

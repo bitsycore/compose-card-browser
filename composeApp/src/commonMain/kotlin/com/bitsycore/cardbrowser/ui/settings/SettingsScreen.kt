@@ -217,7 +217,7 @@ fun SettingsContent(
 			ChoiceRow(
 				label = "Card data limit",
 				note = "Applies immediately. Card data is what makes the app work offline and is " +
-					"tiny next to images -- a whole Riftbound set is a few megabytes.",
+					"tiny next to images -- a whole set is a few megabytes.",
 				options = BrowsingPreferences.METADATA_CACHE_CHOICES,
 				selected = vState.metadataLimitBytes,
 				render = ::formatBytes,
@@ -272,17 +272,26 @@ fun SettingsContent(
 				)
 			}
 
-			vState.providerAttribution?.let { vAttribution ->
+			if (vState.attributions.isNotEmpty()) {
 				Spacer(Modifier.height(20.dp))
 				HorizontalDivider()
 				Spacer(Modifier.height(12.dp))
-				Text("Data source", style = MaterialTheme.typography.titleSmall)
-				Spacer(Modifier.height(4.dp))
 				Text(
-					text = vAttribution,
-					style = MaterialTheme.typography.bodySmall,
-					color = MaterialTheme.colorScheme.onSurfaceVariant,
+					text = if (vState.attributions.size == 1) "Data source" else "Data sources",
+					style = MaterialTheme.typography.titleSmall,
 				)
+				vState.attributions.forEach { vCredit ->
+					Spacer(Modifier.height(8.dp))
+					Text(
+						text = vCredit.source,
+						style = MaterialTheme.typography.labelMedium,
+					)
+					Text(
+						text = vCredit.text,
+						style = MaterialTheme.typography.bodySmall,
+						color = MaterialTheme.colorScheme.onSurfaceVariant,
+					)
+				}
 			}
 		}
 	}
@@ -381,8 +390,18 @@ private fun SettingsPreview() = PreviewFrame {
 			metadataLimitBytes = BrowsingPreferences.DEFAULT_METADATA_CACHE_LIMIT_BYTES,
 			imageBytes = 82L * 1024 * 1024,
 			imageLimitBytes = BrowsingPreferences.DEFAULT_IMAGE_CACHE_LIMIT_BYTES,
-			providerAttribution = "Card data from Riftcodex, an unofficial fan project not " +
-				"affiliated with Riot Games.",
+			attributions = listOf(
+				SettingsContract.ProviderCredit(
+					source = "Riftcodex",
+					text = "Card data from Riftcodex, an unofficial fan project not affiliated " +
+						"with Riot Games.",
+				),
+				SettingsContract.ProviderCredit(
+					source = "TCGdex",
+					text = "Pokémon card data from TCGdex, a community project not affiliated " +
+						"with Nintendo, Creatures or GAME FREAK.",
+				),
+			),
 		),
 		dispatch = {},
 		onBack = {},
