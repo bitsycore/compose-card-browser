@@ -681,22 +681,24 @@ newest are also colour-quantised, being gradient-heavy artwork that PNG stores b
 
 Two presentation rules, both driven by the artwork rather than by taste:
 
-- The Wuthering Waves and One Piece marks are solid black wordmarks, so they are drawn in the
-  theme's foreground colour — their own black on the light theme, inverted to white on the dark one,
-  which is how both publishers present them against dark backgrounds. Not the row accent: a teal
-  Wuthering Waves logo is not its logo. One Piece measures 0% saturation and 0% low-contrast against
-  a light tile, so the problem it has is the opposite one — invisible on *dark* — and tinting is the
-  answer to that rather than a dark plate.
-- Cyberpunk, Altered, Riftbound and Lorcana have no dark outline and wash out on a light background
-  — of their visible pixels, 100%, 49%, 31% and 33% respectively fall below a 2:1 contrast ratio
-  against a pale tile. The yellow Cyberpunk mark is the worst case in the app: every pixel of it
-  fails, and its "TRADING CARD GAME" line disappears completely. For Riftbound and Lorcana the loss is *concentrated* rather than spread:
+- **A single-colour mark is painted rather than plated.** Wuthering Waves and One Piece are solid
+  black wordmarks drawn in the theme's foreground — their own black on light, inverted to white on
+  dark, which is how both publishers present them. Never the row accent: a teal Wuthering Waves logo
+  is not its logo.
+
+  Cyberpunk is the same idea with a brand colour instead of the foreground. Its mark is published
+  both yellow-on-black and black-on-yellow, so it is drawn black on the light theme and in its own
+  yellow on the dark one — `GameArt.logoTintDarkArgb`. A plain foreground tint would turn it white
+  and lose the brand; a plate would put a saturated yellow block in the app bar for no reason. It
+  had that plate for one commit before the mark alone turned out to be the better answer.
+- Altered, Riftbound and Lorcana have no dark outline and wash out on a light background — of their
+  visible pixels, 49%, 31% and 33% respectively fall below a 2:1 contrast ratio against a pale
+  tile. For Riftbound and Lorcana the loss is *concentrated* rather than spread:
   Riftbound's is entirely in its "League of Legends" subtitle, and Lorcana's runs 0/0/36/48/2% by
-  fifths of the image, those middle bands being the word LORCANA itself. Those four state the plate
-  they were drawn for and keep it on both themes — three of them a near-black grey, and Cyberpunk
-  the brand's own yellow, since the publisher also draws that mark in black and yellow suits it far
-  better than hiding it on grey. That is why `GameArt.backdropArgb` is a colour rather than the
-  "prefers dark" boolean it grew out of: a boolean could only pick the one plate everybody shared. Magic, Pokémon, Yu-Gi-Oh and the WoW TCG are not flagged despite comparable raw
+  fifths of the image, those middle bands being the word LORCANA itself. All three are full-colour
+  artwork, so they cannot be recoloured to suit the background and the background is changed
+  instead: each states the plate it was drawn for and keeps it on both themes, in the picker and in
+  the set list's title bar alike. Magic, Pokémon, Yu-Gi-Oh and the WoW TCG are not flagged despite comparable raw
   figures — the WoW mark measures 18% and the Yu-Gi-Oh one 44% — because their dark outlines carry
   the shape. Yu-Gi-Oh is the clearest illustration that the number is evidence and not the rule: its
   44% is counting the white interiors of letters that each sit inside a heavy black outline, and it

@@ -75,6 +75,7 @@ import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.ui.common.LoadingState
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
+import com.bitsycore.cardbrowser.ui.theme.isDarkTheme
 import org.koin.compose.koinInject
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import org.jetbrains.compose.resources.painterResource
@@ -491,6 +492,23 @@ private class ReorderState(val listState: LazyListState) {
 		mPending = vTo
 		onMove(game, vTo)
 
+		// Pin the viewport, or the list scrolls out from under the drag.
+		//
+		// A `LazyColumn` restores its scroll position by *key*, not by index: at measure time it
+		// finds where the key that used to be first has gone, and re-anchors to it. That is right
+		// when items are inserted or removed above you, and wrong here -- moving the top row down
+		// takes the anchor with it, so the viewport follows the row instead of staying put and the
+		// whole list appears to jump one place. It shows up on the first move away from the top of
+		// the list, which is exactly when the anchor is the row being dragged.
+		//
+		// Re-requesting the position already on screen overrides that for the next measure. The
+		// values are read *before* the reorder lands, which is the point: they describe where the
+		// list is now and where it should stay.
+		listState.requestScrollToItem(
+			listState.firstVisibleItemIndex,
+			listState.firstVisibleItemScrollOffset,
+		)
+
 		// Pin the viewport. A `LazyColumn` anchors its scroll position to the first visible item's
 		// *key*, so moving the top row down takes the anchor with it and the whole list appears to
 		// scroll under the finger. Re-requesting the position that is already showing re-anchors it
@@ -542,6 +560,26 @@ private fun Modifier.dragHandle(
 				reorder.drag(vDragged.y, game, vVisible, vOnMove)
 			},
 		)
+	}
+}
+
+/**
+ * How to paint a game's mark, or `null` to leave the artwork alone.
+ *
+ * Three cases, and the middle one is why this is a function rather than a line at each call site:
+ *
+ * - full-colour artwork is never recoloured, because tinting flattens it to a silhouette;
+ * - a single-colour mark with a brand colour is painted in it on dark and left as drawn on light;
+ * - any other single-colour mark follows the theme's own foreground, so it inverts with the theme.
+ */
+@Composable
+internal fun logoTintFor(art: GameArt): ColorFilter? {
+	if (!art.tintLogo) return null
+	val vDarkTint = art.logoTintDarkArgb
+	return if (vDarkTint != null && isDarkTheme()) {
+		ColorFilter.tint(Color(vDarkTint.toInt()))
+	} else {
+		ColorFilter.tint(MaterialTheme.colorScheme.onSurface)
 	}
 }
 
@@ -637,15 +675,10 @@ private fun GameMark(art: GameArt?) {
 				contentDescription = null,
 				contentScale = ContentScale.Fit,
 				modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 10.dp),
-				// A monochrome wordmark is drawn in the theme's own foreground colour -- its
-				// original black on the light theme, inverted to white on the dark one so it does
-				// not vanish. Deliberately *not* the row accent: a teal Wuthering Waves logo is
-				// not its logo. Colour artwork is never tinted. See `GameArt.tintLogo`.
-				colorFilter = if (art.tintLogo) {
-					ColorFilter.tint(MaterialTheme.colorScheme.onSurface)
-				} else {
-					null
-				},
+				// A monochrome wordmark is painted rather than left as drawn -- see [logoTintFor].
+				// Deliberately never the row accent: a teal Wuthering Waves logo is not its logo,
+				// and colour artwork is not tinted at all.
+				colorFilter = logoTintFor(art),
 			)
 		}
 	}

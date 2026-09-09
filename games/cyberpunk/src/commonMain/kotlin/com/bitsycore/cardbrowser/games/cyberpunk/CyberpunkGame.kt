@@ -78,21 +78,25 @@ object CyberpunkArt : GameArt {
 	override val accentArgb: Long = 0xFFFEEC00
 
 	/**
-	 * The brand's own yellow plate, with the black wordmark on it.
+	 * A single-colour mark, so it is painted rather than plated.
 	 *
-	 * The publisher publishes this mark two ways -- yellow on black, and black on yellow -- and the
-	 * second is what is bundled, at the project owner's suggestion. It sidesteps the problem the
-	 * first one has outright: measured, **100%** of the yellow version's visible pixels fall below a
-	 * 2:1 contrast ratio against a light tile, every fifth of the image alike, with no dark outline
-	 * anywhere to carry the shape and the "TRADING CARD GAME" line gone completely.
+	 * The publisher draws this two ways -- yellow on black and black on yellow -- and the bundled
+	 * artwork is one flat colour either way, which means the app can simply paint it to suit the
+	 * background instead of putting a background behind it. Black on the light theme, and its own
+	 * yellow on the dark one, where a plain foreground tint would make it white and lose the brand.
 	 *
-	 * A dark grey plate would have fixed that too, and this is better: the tile is the game's colour
-	 * rather than a neutral one, and the mark is drawn exactly as its owner draws it. Being able to
-	 * say so is why [GameArt.backdropArgb] is a colour and not the boolean it replaced.
+	 * That replaced a yellow plate with the black mark on it. The plate worked and was worse: it
+	 * put a saturated yellow block in the app bar next to the back arrow, when the mark on its own
+	 * reads perfectly well against both themes once it is painted the right colour. What it *did*
+	 * fix is real, though, and still applies to the three logos that cannot be recoloured because
+	 * they are full-colour artwork -- see [GameArt.backdropArgb].
 	 *
-	 * Not [GameArt.tintLogo], despite the artwork now being single-colour. Tinting means "follow the
-	 * theme's foreground", which on the dark theme would turn this white -- and white on yellow is
-	 * the thing being avoided. The plate is fixed, so the mark on it must be too.
+	 * Measured on the yellow version of the artwork: 100% of its visible pixels fall below a 2:1
+	 * contrast ratio against a light tile, every fifth of the image alike. That is why the light
+	 * theme gets the black one rather than the yellow one, and not the other way around.
 	 */
-	override val backdropArgb: Long = 0xFFFEEC00
+	override val tintLogo: Boolean = true
+
+	/** See [GameArt.logoTintDarkArgb]. The brand yellow, sampled from the supplied mark. */
+	override val logoTintDarkArgb: Long = 0xFFFEEC00
 }

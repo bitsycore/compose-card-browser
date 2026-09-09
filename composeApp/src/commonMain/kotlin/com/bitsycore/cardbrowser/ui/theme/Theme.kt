@@ -6,6 +6,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 
 /**
  * The app's colours, in both modes.
@@ -47,3 +48,14 @@ fun CardBrowserTheme(
 		content = content,
 	)
 }
+
+/**
+ * Whether the dark scheme is the one currently in force.
+ *
+ * Derived from the scheme rather than from `isSystemInDarkTheme()`, and that distinction matters
+ * now that the theme is a user preference: someone running the app in Light on a dark phone would
+ * otherwise have every "is it dark?" decision answered backwards. Asking the colours that are
+ * actually painting is the only answer that survives the override.
+ */
+@Composable
+fun isDarkTheme(): Boolean = MaterialTheme.colorScheme.surface.luminance() < 0.5f

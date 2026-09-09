@@ -57,6 +57,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import com.bitsycore.cardbrowser.games.api.GameArt
 import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
+import com.bitsycore.cardbrowser.ui.games.logoTintFor
 import org.jetbrains.compose.resources.painterResource
 import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.Description
@@ -225,23 +226,23 @@ fun SetListContent(
 								// widest of them crowds the three action buttons on a narrow phone.
 								// `Fit` then scales by whichever limit binds first.
 								modifier = Modifier.heightIn(max = 30.dp).widthIn(max = 132.dp),
-								// Same rule as the picker: a single-colour wordmark is drawn in the
-								// theme's foreground, colour artwork is never recoloured.
-								colorFilter = if (gameArt.tintLogo) {
-									ColorFilter.tint(MaterialTheme.colorScheme.onSurface)
-								} else {
-									null
-								},
+								// Exactly the picker's rule, from the same function.
+								colorFilter = logoTintFor(gameArt),
 							)
 						}
 
 						// Artwork that declares a plate gets it here too, not only in the picker.
-						// Without it the mark is drawn straight onto the app bar, which is the one
-						// background it was never designed for: Cyberpunk's black wordmark vanishes
-						// on the dark theme, and Altered's near-white, Riftbound's subtitle and
-						// Lorcana's gold all vanish on the light one. The picker had a tile and
-						// this did not, so the same four logos were correct on one screen and
-						// invisible on the other.
+						// Without it such a mark is drawn straight onto the app bar, which is the
+						// one background it was never designed for: Altered's near-white wordmark,
+						// Riftbound's white subtitle and Lorcana's gold all vanish on the light
+						// theme. The picker had a tile and this did not, so those three were
+						// correct on one screen and invisible on the other.
+						//
+						// A mark that can be *painted* never gets here, and should not: a plate
+						// behind a recolourable wordmark is a saturated block in the app bar for no
+						// reason. Cyberpunk is the case that proved it -- it wore a yellow pill
+						// until it was pointed out that the mark alone, painted its own yellow, is
+						// what belongs on a dark bar.
 						val vBackdrop = gameArt.backdropArgb
 						if (vBackdrop == null) {
 							vLogoImage()

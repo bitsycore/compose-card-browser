@@ -64,19 +64,28 @@ import org.jetbrains.compose.resources.DrawableResource
  *
  * ## Artwork drawn for dark backgrounds
  *
- * Four of these logos have no dark outline: Cyberpunk is flat yellow, Altered a near-white
- * wordmark, Riftbound sets a white "LEAGUE OF LEGENDS" under its orange title, and Lorcana's name
- * is gold filigree. On the light theme they wash out -- measured as the share of visible pixels
- * falling below a 2:1 contrast ratio against a light tile, the yellow Cyberpunk mark loses
- * **100%**, every pixel of it, and Altered 49%. Riftbound's overall figure is a milder 31% and
+ * Three of these logos have no dark outline: Altered is a near-white wordmark, Riftbound sets a
+ * white "LEAGUE OF LEGENDS" under its orange title, and Lorcana's name is gold filigree. On the
+ * light theme they wash out -- measured as the share of visible pixels falling below a 2:1 contrast
+ * ratio against a light tile, Altered loses 49%. Riftbound's overall figure is a milder 31% and
  * Lorcana's 33%, but both are *concentrated* rather than spread: Riftbound's is entirely in the
  * subtitle, and Lorcana's runs 0/0/36/48/2% by fifths of the image, the middle bands being the word
  * LORCANA itself. In each case what vanishes is the part that names the game.
  *
- * Those four set [backdropArgb], so the artwork sits on what it was drawn for. Three take
- * [DARK_BACKDROP]; Cyberpunk is the one that wanted something else, and is the reason that property
- * is a colour instead of a boolean -- its mark is published in black on the brand's yellow, so it
- * carries a black wordmark and puts `0xFFFEEC00` behind it rather than hiding yellow on grey.
+ * Those three set [backdropArgb] to [DARK_BACKDROP], so the artwork sits on something like what it
+ * was drawn for. All three are full-colour artwork, which is the reason they need a plate at all:
+ * a mark that cannot be recoloured has to have its background changed instead.
+ *
+ * ## Artwork that can simply be painted
+ *
+ * A single-colour mark needs no plate, because it can be drawn in whatever colour suits the
+ * background. Wuthering Waves and One Piece are black wordmarks and follow the theme's foreground.
+ * Cyberpunk is the interesting one: its mark is published both yellow-on-black and black-on-yellow,
+ * so it is drawn black on the light theme and in its own `0xFFFEEC00` on the dark one, via
+ * [logoTintDarkArgb]. Following the plain foreground would make it white and lose the brand.
+ *
+ * It wore a yellow plate for one commit. That worked and was worse: a saturated block in the app
+ * bar beside the back arrow, where the mark alone reads perfectly once painted correctly.
  *
  * Magic, Pokémon, Yu-Gi-Oh and the WoW TCG are *not* flagged despite comparable raw numbers -- the
  * WoW mark measures 18% spread evenly at 19/14/29/14/9% by fifths, and the Yu-Gi-Oh one a startling
@@ -89,6 +98,11 @@ import org.jetbrains.compose.resources.DrawableResource
  * @property logo the game's wordmark, bundled by the game's own module
  * @property accentArgb the tile colour, as `0xAARRGGBB`. A `Long` rather than a Compose `Color` so
  *   this interface needs no graphics dependency; the UI converts it once
+ * @property logoTintDarkArgb what to paint a [tintLogo] mark on the dark theme, instead of the
+ *   theme's own foreground. For a brand whose single-colour mark has a colour: Cyberpunk's is drawn
+ *   black on light and in its own yellow on dark, which is how its owner presents it, and neither of
+ *   those is the theme's foreground. `null` means follow the foreground, which is right for a mark
+ *   that is simply black-or-white
  * @property tintLogo true only for a single-colour wordmark, which is then drawn in the theme's
  *   foreground colour so it stays legible on both themes. Never true for colour artwork -- tinting
  *   a full-colour logo flattens it to a silhouette, and a teal Wuthering Waves mark is not its mark
@@ -107,6 +121,8 @@ interface GameArt {
 	val accentArgb: Long
 
 	val tintLogo: Boolean get() = false
+
+	val logoTintDarkArgb: Long? get() = null
 
 	val backdropArgb: Long? get() = null
 
