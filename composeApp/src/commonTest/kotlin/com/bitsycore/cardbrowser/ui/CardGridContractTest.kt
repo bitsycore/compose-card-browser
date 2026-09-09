@@ -2,6 +2,7 @@ package com.bitsycore.cardbrowser.ui
 
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
+import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.CardSortField
@@ -298,6 +299,8 @@ class CardGridContractTest {
 			Intent.CapabilitiesResolved(
 				supportedFilters = setOf(CardFilterField.TEXT, CardFilterField.RARITY),
 				game = RiftboundGame,
+				languages = setOf(CardLanguage.ENGLISH),
+				language = CardLanguage.ENGLISH,
 			),
 		)
 
@@ -313,7 +316,12 @@ class CardGridContractTest {
 		// words for every game.
 		val vState = reduce(
 			UiState(),
-			Intent.CapabilitiesResolved(supportedFilters = emptySet(), game = MagicGame),
+			Intent.CapabilitiesResolved(
+				supportedFilters = emptySet(),
+				game = MagicGame,
+				languages = setOf(CardLanguage.ENGLISH, CardLanguage.FRENCH),
+				language = CardLanguage.FRENCH,
+			),
 		)
 
 		assertEquals(MagicGame, vState.game)
@@ -361,5 +369,109 @@ class CardGridContractTest {
 		assertTrue(vState.isEmptyAfterFilter)
 		assertNull(vState.error)
 		assertFalse(vState.isInitialLoad)
+	}
+
+	// ============
+	//  Changing the edition on screen
+
+	@Test
+	fun `only a real choice of language is offered`() {
+		// A menu holding one already-selected item is furniture. Riftcodex describes English and
+		// nothing else, so the control does not appear for Riftbound at all.
+		val vOne = reduce(
+			UiState(),
+			Intent.CapabilitiesResolved(
+				supportedFilters = emptySet(),
+				game = RiftboundGame,
+				languages = setOf(CardLanguage.ENGLISH),
+				language = CardLanguage.ENGLISH,
+			),
+		)
+		assertTrue(vOne.languageOptions.isEmpty())
+
+		val vMany = reduce(
+			UiState(),
+			Intent.CapabilitiesResolved(
+				supportedFilters = emptySet(),
+				game = MagicGame,
+				languages = setOf(CardLanguage.ENGLISH, CardLanguage.JAPANESE, CardLanguage.FRENCH),
+				language = CardLanguage.FRENCH,
+			),
+		)
+		// In the app's preference order, not the set's iteration order.
+		assertEquals(
+			listOf(CardLanguage.FRENCH, CardLanguage.JAPANESE, CardLanguage.ENGLISH),
+			vMany.languageOptions,
+		)
+	}
+
+	@Test
+	fun `switching language keeps the old cards on screen while the new ones load`() {
+		// Blanking the grid would make a switch that turns out to be impossible look like one that
+		// destroyed the set.
+		val vLoaded = reduce(
+			UiState(),
+			Intent.CapabilitiesResolved(
+				supportedFilters = emptySet(),
+				game = MagicGame,
+				languages = setOf(CardLanguage.ENGLISH, CardLanguage.JAPANESE),
+				language = CardLanguage.ENGLISH,
+			),
+			loaded(generation = 0, cards = listOf(card("1"), card("2"))),
+		)
+
+		val vSwitching = reduce(vLoaded, Intent.LanguageSelected(CardLanguage.JAPANESE))
+
+		assertEquals(CardLanguage.JAPANESE, vSwitching.language)
+		assertEquals(2, vSwitching.cards.size, "the current edition stays visible while loading")
+		assertTrue(vSwitching.isChangingLanguage)
+		assertTrue(vSwitching.isLoading)
+	}
+
+	@Test
+	fun `a language with nothing for this set is put back`() {
+		// The real case: TCGdex keys each locale by its own set ids, so there is no Korean edition
+		// of an English Pokemon set to fetch. Leaving the user on an empty grid in a language they
+		// cannot browse is worse than not having offered the switch.
+		val vLoaded = reduce(
+			UiState(),
+			Intent.CapabilitiesResolved(
+				supportedFilters = emptySet(),
+				game = PokemonGame,
+				languages = setOf(CardLanguage.ENGLISH, CardLanguage.KOREAN),
+				language = CardLanguage.ENGLISH,
+			),
+			loaded(generation = 0, cards = listOf(card("1"))),
+		)
+
+		val vReverted = reduce(
+			vLoaded,
+			Intent.LanguageSelected(CardLanguage.KOREAN),
+			Intent.LanguageUnavailable,
+		)
+
+		assertEquals(CardLanguage.ENGLISH, vReverted.language, "the previous edition must come back")
+		assertFalse(vReverted.isChangingLanguage)
+		assertFalse(vReverted.isLoading)
+		assertEquals(1, vReverted.cards.size)
+	}
+
+	@Test
+	fun `picking the language already showing does nothing at all`() {
+		val vLoaded = reduce(
+			UiState(),
+			Intent.CapabilitiesResolved(
+				supportedFilters = emptySet(),
+				game = MagicGame,
+				languages = setOf(CardLanguage.ENGLISH, CardLanguage.JAPANESE),
+				language = CardLanguage.ENGLISH,
+			),
+		)
+
+		val vAgain = reduce(vLoaded, Intent.LanguageSelected(CardLanguage.ENGLISH))
+
+		// No reload, so no generation bump: a request for what is already on screen is waste.
+		assertEquals(vLoaded.requestGeneration, vAgain.requestGeneration)
+		assertFalse(vAgain.isChangingLanguage)
 	}
 }

@@ -60,6 +60,10 @@ class CardGridViewModel(
 						CardGridContract.Intent.CapabilitiesResolved(
 							supportedFilters = vProvider.capabilities.filtering.supported,
 							game = vGame,
+							languages = vProvider.capabilities.data.languages,
+							language = mPreferences.preferences.value.primaryLanguage
+								.takeIf { it in vProvider.capabilities.data.languages }
+								?: vProvider.resolveLanguage(null),
 						),
 					)
 				}
@@ -68,7 +72,49 @@ class CardGridViewModel(
 			CardGridContract.Intent.Load -> startLoad(debounce = false)
 			is CardGridContract.Intent.QueryChanged -> startLoad(debounce = intent.query.text != null)
 			CardGridContract.Intent.ClearFilters -> startLoad(debounce = false)
+			is CardGridContract.Intent.LanguageSelected -> changeLanguage(intent.language)
 			else -> Unit
+		}
+	}
+
+	/**
+	 * Loads this set in another language, and puts it back if that turns out to be impossible.
+	 *
+	 * The preference is written *after* the load succeeds, not before. A source that cannot answer
+	 * for this set in the chosen language would otherwise leave the whole app switched to a
+	 * language the user could not see anything in -- and that is a real case rather than a
+	 * defensive one: TCGdex keys each locale by its own set ids, so the English `base1` is `PMCG1`
+	 * in Japanese and simply absent from Korean. There is no Korean edition of an English Pokémon
+	 * set to fetch.
+	 */
+	private fun changeLanguage(language: CardLanguage) {
+		val vSetName = stateFlow.value.setName
+		startLoad(debounce = false)
+
+		viewModelScope.launch {
+			// The load job is the one just started; waiting on it keeps the two decisions in order.
+			mLoadJob?.join()
+			val vState = stateFlow.value
+			if (vState.language != language) return@launch
+
+			if (vState.cards.isEmpty()) {
+				dispatch(CardGridContract.Intent.LanguageUnavailable)
+				emitEffect(
+					CardGridContract.Effect.LanguageUnavailable(
+						language = language,
+						reason = "This source has no ${language.displayName} edition of $vSetName.",
+					),
+				)
+			} else {
+				// It worked, so it becomes the preference: the set list, search and card detail all
+				// read the same one, and disagreeing with the grid is what made sets read as unsaved.
+				mPreferences.update { vPreferences ->
+					vPreferences.copy(
+						preferredLanguages = listOf(language) +
+							vPreferences.preferredLanguages.filter { it != language },
+					)
+				}
+			}
 		}
 	}
 
@@ -82,12 +128,13 @@ class CardGridViewModel(
 		val vSetId = SourceId.parse(vSnapshot.setId) ?: return
 		val vGeneration = vSnapshot.requestGeneration
 		val vQuery = vSnapshot.query
-		// The preference goes in as-is. Narrowing it here was a bug: this used to drop the language
-		// to `null` whenever the provider could not serve it, while the set list passed the
-		// preference unchanged -- and since a cache key embeds the language, the two wrote and read
-		// different files and no set ever showed as saved. `CardRepository` normalises it once, for
-		// every caller, against what the provider will really answer in.
-		val vLanguage = mPreferences.preferences.value.primaryLanguage
+		// The state's language, which starts as the user's preference and can be changed from the
+		// top bar. Never narrowed here: doing that was a bug -- it dropped the language to `null`
+		// whenever the provider could not serve it while the set list passed the preference
+		// unchanged, and since a cache key embeds the language the two wrote and read different
+		// files, so no set ever showed as saved. `CardRepository` normalises it once, for every
+		// caller, against what the provider will really answer in.
+		val vLanguage = vSnapshot.language ?: mPreferences.preferences.value.primaryLanguage
 		val vGame = gameOf(vSnapshot.setId) ?: return
 
 		mLoadJob?.cancel()

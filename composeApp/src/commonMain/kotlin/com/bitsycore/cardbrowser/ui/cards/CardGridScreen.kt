@@ -23,6 +23,8 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Search
@@ -30,6 +32,8 @@ import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,8 +43,11 @@ import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -49,7 +56,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +72,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.filter.CardFilterEngine
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
+import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardOrientation
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.provider.CardFilterField
@@ -79,6 +89,7 @@ import com.bitsycore.cardbrowser.ui.common.sharedCardArt
 import com.bitsycore.cardbrowser.ui.preview.PreviewData
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
+import com.bitsycore.lib.pulse.compose.collectEffect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -100,6 +111,16 @@ fun CardGridScreen(
 	onOpenCard: (CardPrinting) -> Unit,
 	viewModel: CardGridViewModel = koinViewModel(),
 ) {
+	val vSnackbarHost = remember { SnackbarHostState() }
+
+	// A language that turns out to have nothing for this set has to say so. Silence would read as
+	// a tap that did not register, and the grid would still be showing the old edition.
+	viewModel.collectEffect { vEffect ->
+		when (vEffect) {
+			is CardGridContract.Effect.LanguageUnavailable ->
+				vSnackbarHost.showSnackbar(vEffect.reason)
+		}
+	}
 	val vState by viewModel.collectAsStateWithLifecycle()
 
 	// Dispatched once per set. Keyed on setId so reusing this view model for a different set
@@ -115,6 +136,7 @@ fun CardGridScreen(
 	val vFocusedCardId by koinInject<BrowseSession>().focusedCardId.collectAsState()
 
 	CardGridContent(
+		snackbarHostState = vSnackbarHost,
 		state = vState,
 		dispatch = viewModel::dispatch,
 		fallbackSetName = setName,
@@ -140,6 +162,8 @@ fun CardGridContent(
 	focusedCardId: String? = null,
 	onBack: () -> Unit = {},
 	onOpenCard: (CardPrinting) -> Unit = {},
+	/** Hoisted so the screen can post to it from an effect. A preview passes a fresh, unused one. */
+	snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
 	val vState = state
 	val setName = fallbackSetName
@@ -178,6 +202,7 @@ fun CardGridContent(
 
 	Scaffold(
 		modifier = Modifier.nestedScroll(vScrollBehavior.nestedScrollConnection),
+		snackbarHost = { SnackbarHost(snackbarHostState) },
 		topBar = {
 			// A surface, not a bare Column. The app bar paints its own background but the controls
 			// stacked under it do not, so the grid scrolling underneath showed straight through the
@@ -205,6 +230,17 @@ fun CardGridContent(
 						}
 					},
 					actions = {
+						// Only where there is a choice to make -- see `UiState.languageOptions`.
+						if (vState.languageOptions.size > 1) {
+							LanguageMenu(
+								options = vState.languageOptions,
+								selected = vState.language,
+								isBusy = vState.isChangingLanguage,
+								onSelect = {
+									dispatch(CardGridContract.Intent.LanguageSelected(it))
+								},
+							)
+						}
 						// Search is a button beside filters rather than a field permanently occupying a
 						// strip of a screen whose whole job is showing pictures.
 						IconButton(
@@ -545,4 +581,64 @@ private fun CardGridLoadingPreview() = PreviewFrame {
 		state = previewGridState(cards = emptyList(), isLoading = true, knownSetSize = null),
 		dispatch = {},
 	)
+}
+
+/**
+ * Which edition of the set is on screen, and a menu to change it.
+ *
+ * A two-letter code rather than an icon, because there is no glyph for "Japanese" that anyone reads
+ * as one, and rather than the full name because the bar already holds a title, a search button and
+ * a filter badge. The code is the language's own tag, upper-cased -- `EN`, `JA`, `ZH-CN` -- which is
+ * what a card database shows and what the menu then spells out in full.
+ *
+ * The detail screen has its own language chips. This exists because those were the *only* way to
+ * change edition: browsing a whole set in another language meant changing the global preference in
+ * Settings and navigating back in.
+ */
+@Composable
+private fun LanguageMenu(
+	options: List<CardLanguage>,
+	selected: CardLanguage?,
+	isBusy: Boolean,
+	onSelect: (CardLanguage) -> Unit,
+) {
+	var vIsOpen by remember { mutableStateOf(false) }
+
+	Box {
+		TextButton(
+			onClick = { vIsOpen = true },
+			// Disabled while a switch is in flight, so a second tap cannot start a third load and
+			// leave the state describing an edition nobody asked for.
+			enabled = !isBusy,
+		) {
+			Text(
+				text = selected?.code?.uppercase() ?: "--",
+				style = MaterialTheme.typography.labelLarge,
+			)
+			Icon(
+				imageVector = Icons.Outlined.ArrowDropDown,
+				contentDescription = "Change language",
+				modifier = Modifier.size(18.dp),
+			)
+		}
+
+		DropdownMenu(expanded = vIsOpen, onDismissRequest = { vIsOpen = false }) {
+			options.forEach { vLanguage ->
+				DropdownMenuItem(
+					text = { Text(vLanguage.displayName) },
+					onClick = {
+						vIsOpen = false
+						onSelect(vLanguage)
+					},
+					trailingIcon = {
+						// A tick on the current one rather than a highlight: the menu is short and
+						// the point is which edition you are reading, not which row is hovered.
+						if (vLanguage == selected) {
+							Icon(Icons.Outlined.Check, contentDescription = "Showing")
+						}
+					},
+				)
+			}
+		}
+	}
 }
