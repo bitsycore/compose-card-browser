@@ -8,6 +8,7 @@ import com.bitsycore.cardbrowser.data.cache.CacheManager
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
 import com.bitsycore.cardbrowser.data.net.ApiCallStats
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
+import com.bitsycore.cardbrowser.data.net.OkioHttpCacheStorage
 import com.bitsycore.cardbrowser.data.net.ProviderHttpPolicy
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
@@ -45,6 +46,7 @@ import com.bitsycore.cardbrowser.ui.sets.SetListViewModel
 import com.bitsycore.cardbrowser.ui.settings.SettingsViewModel
 import kotlinx.coroutines.Dispatchers
 import org.koin.core.module.dsl.viewModel
+import org.koin.core.qualifier.named
 import org.koin.dsl.bind
 import org.koin.dsl.module
 
@@ -63,7 +65,21 @@ val appModule = module {
 	// One counter behind every client, so the stats screen reports what actually left the device.
 	single { ApiCallStats() }
 
+	// Response bodies, so a revalidation can come back as a 304 rather than a full download.
+	single { OkioHttpCacheStorage(get()) }
+
+	// Two clients, and the split matters.
+	//
+	// The default one is the image loader's: no response cache, because Coil keeps its own 1 GB
+	// disk cache of artwork and storing every card twice would blow the HTTP budget in one grid.
 	single { HttpClientFactory.create(stats = get()) }
+
+	// The providers': same policy, plus the response cache. Reopening a set the next day
+	// re-requests its pages, and against an origin that sends an ETag -- all of ours do -- those
+	// come back empty instead of carrying the whole set again.
+	single(named(PROVIDER_CLIENT)) {
+		HttpClientFactory.create(stats = get(), httpCache = get<OkioHttpCacheStorage>())
+	}
 
 	single { PreferencesStore(get(), get(), Dispatchers.Default) }
 
@@ -105,18 +121,30 @@ val appModule = module {
 	// finds only the last -- which the registry then rejects at startup with "routing table names
 	// providers that are not registered". Distinct primary types plus `bind` is what makes
 	// `getAll` see all seven.
-	single { RiftcodexProvider(mClient = get()) } bind CardProvider::class
-	single { TcgdexProvider(mClient = get()) } bind CardProvider::class
+	single { RiftcodexProvider(mClient = get(named(PROVIDER_CLIENT))) } bind CardProvider::class
+	single { TcgdexProvider(mClient = get(named(PROVIDER_CLIENT))) } bind CardProvider::class
 	// Their own clients, not the shared one, because these two carry a request throttle and the
 	// shared client is also the image loader's -- throttling that would queue every thumbnail in a
 	// grid behind the gap. See `ProviderHttpPolicy.minRequestInterval`.
 	single {
-		ScryfallProvider(mClient = HttpClientFactory.create(ProviderHttpPolicy.SCRYFALL, get()))
+		ScryfallProvider(
+			mClient = HttpClientFactory.create(
+				policy = ProviderHttpPolicy.SCRYFALL,
+				stats = get(),
+				httpCache = get<OkioHttpCacheStorage>(),
+			),
+		)
 	} bind CardProvider::class
-	single { OptcgProvider(mClient = get()) } bind CardProvider::class
-	single { AlteredProvider(mClient = get()) } bind CardProvider::class
+	single { OptcgProvider(mClient = get(named(PROVIDER_CLIENT))) } bind CardProvider::class
+	single { AlteredProvider(mClient = get(named(PROVIDER_CLIENT))) } bind CardProvider::class
 	single {
-		YgoprodeckProvider(mClient = HttpClientFactory.create(ProviderHttpPolicy.YGOPRODECK, get()))
+		YgoprodeckProvider(
+			mClient = HttpClientFactory.create(
+				policy = ProviderHttpPolicy.YGOPRODECK,
+				stats = get(),
+				httpCache = get<OkioHttpCacheStorage>(),
+			),
+		)
 	} bind CardProvider::class
 	single { WuwaProvider() } bind CardProvider::class
 
@@ -217,3 +245,11 @@ val providerRoutes: List<ProviderRoute> = listOf(
  */
 @OptIn(kotlin.time.ExperimentalTime::class)
 fun nowEpochMillis(): Long = kotlin.time.Clock.System.now().toEpochMilliseconds()
+
+/**
+ * Names the provider HTTP client, as distinct from the image loader's.
+ *
+ * They differ in one thing -- a response cache -- and that one thing is why they cannot be the
+ * same client. See the two `single`s above.
+ */
+const val PROVIDER_CLIENT: String = "provider-http-client"

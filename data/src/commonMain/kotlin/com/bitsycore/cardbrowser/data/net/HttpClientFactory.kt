@@ -5,18 +5,20 @@ import io.ktor.client.plugins.HttpRequestRetry
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.UserAgent
 import io.ktor.client.plugins.api.createClientPlugin
+import io.ktor.client.plugins.cache.HttpCache
+import io.ktor.client.plugins.cache.storage.CacheStorage
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.http.HttpHeaders
 import io.ktor.client.plugins.defaultRequest
+import io.ktor.http.HttpHeaders
 import io.ktor.serialization.kotlinx.json.json
+import kotlin.math.pow
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.math.pow
-import kotlin.time.TimeSource
 
 /**
  * The one HTTP stack the app has.
@@ -53,9 +55,17 @@ object HttpClientFactory {
 	 * @param policy per-provider knobs. The default is deliberately conservative: providers here
 	 *   are free community APIs and the app is a browser, not a scraper
 	 */
+	/**
+	 * Builds a client.
+	 *
+	 * @param httpCache where to keep response bodies so a revalidation can come back as a 304.
+	 *   `null` -- the default -- installs no response cache at all, which is what the image
+	 *   client wants: Coil keeps its own, and storing artwork here as well would double it
+	 */
 	fun create(
 		policy: ProviderHttpPolicy = ProviderHttpPolicy(),
 		stats: ApiCallStats? = null,
+		httpCache: CacheStorage? = null,
 	): HttpClient = HttpClient {
 		// Let non-2xx statuses come back as responses rather than exceptions where a caller wants
 		// to read the code, and as exceptions where it does not. `mapProviderErrors` handles both.
@@ -80,6 +90,18 @@ object HttpClientFactory {
 		// Counted before anything else, so the number is what left the device rather than what a
 		// caller asked for -- retries included, because a retried timeout really did cost two.
 		if (stats != null) install(requestCounter(stats))
+
+		// Conditional revalidation, where a store was supplied.
+		//
+		// This does not stop requests -- the repository's own cache does that -- it stops them
+		// carrying a body they do not need to. Reopening a set the next day re-downloads every
+		// page; against an origin that sends an `ETag`, and all of ours do, each of those becomes
+		// an empty 304 instead. See `OkioHttpCacheStorage`.
+		if (httpCache != null) {
+			install(HttpCache) {
+				publicStorage(httpCache)
+			}
+		}
 
 		// A minimum gap between requests, where a provider documents one.
 		//

@@ -10,6 +10,7 @@ import com.bitsycore.cardbrowser.core.model.SetCodeComparator
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.model.SourceId
+import com.bitsycore.cardbrowser.core.provider.CardPage
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardProvider
 import com.bitsycore.cardbrowser.core.provider.CardQuery
@@ -332,6 +333,8 @@ class CardRepository(
 		var vTotal: Int? = null
 		val vCollected = mutableListOf<CardPrinting>()
 		var vPreviewWasWholeSet = false
+		// True when the preview came back as a whole page, so the page-one request is redundant.
+		var vPreviewIsPageOne = false
 
 		if (vWantsPreview) {
 			currentCoroutineContext().ensureActive()
@@ -346,6 +349,18 @@ class CardRepository(
 				// A set small enough to arrive whole in the preview needs nothing further.
 				vCollected += vPreview.cards
 				vPreviewWasWholeSet = true
+			} else if (vPreview.cards.size >= vPageSize) {
+				// The provider ignored the size we asked for and sent a full page anyway, so this
+				// *is* page one -- adopt it rather than asking for the same thing again.
+				//
+				// Scryfall does exactly this: `/cards/search` has a fixed page of 175 and takes no
+				// size parameter, so a request for 24 returns 175. The preview and the page-one
+				// request that followed it were byte-identical URLs returning byte-identical
+				// bodies, which cost every Magic set above 175 cards an extra ~200 KB request --
+				// and an extra 100 ms of Scryfall's own request throttle on top.
+				vCollected += vPreview.cards
+				vPreviewIsPageOne = true
+				emitProgress(vPreview.cards, vTotal)
 			} else if (vPreview.cards.isNotEmpty()) {
 				emitProgress(vPreview.cards, vTotal)
 			}
@@ -354,19 +369,29 @@ class CardRepository(
 		if (!vPreviewWasWholeSet) {
 			// Page one at the provider's own size, on its own, because nothing can be planned until
 			// it answers: it carries the total and therefore how many more pages there are. When a
-			// preview ran, this overlaps it and supersedes it.
-			currentCoroutineContext().ensureActive()
-			val vFirst = provider.listCards(
-				CardPageRequest(setId = setId, query = CardQuery(), page = 1, pageSize = vPageSize, language = language),
-			)
-			vCollected += vFirst.cards
-			vTotal = vFirst.totalCount ?: vTotal
+			// preview ran, this overlaps it and supersedes it -- unless the preview already *was*
+			// page one, in which case asking again would fetch the same bytes twice.
+			val vFirst = if (vPreviewIsPageOne) {
+				CardPage(
+					cards = vCollected.toList(),
+					page = 1,
+					pageSize = vPageSize,
+					totalCount = vTotal,
+					hasMore = true,
+				)
+			} else {
+				currentCoroutineContext().ensureActive()
+				val vPage = provider.listCards(
+					CardPageRequest(setId = setId, query = CardQuery(), page = 1, pageSize = vPageSize, language = language),
+				)
+				vCollected += vPage.cards
+				vTotal = vPage.totalCount ?: vTotal
 
-			// Straight to the screen, whether or not a preview preceded it: page one is a hundred
-			// cards where the preview was two dozen, and the user should see the grid fill rather
-			// than sit on the preview until the whole set lands.
-			if (vFirst.hasMore && vFirst.cards.isNotEmpty()) {
-				emitProgress(vCollected, vTotal)
+				// Straight to the screen, whether or not a preview preceded it: page one is a
+				// hundred cards where the preview was two dozen, and the user should see the grid
+				// fill rather than sit on the preview until the whole set lands.
+				if (vPage.hasMore && vPage.cards.isNotEmpty()) emitProgress(vCollected, vTotal)
+				vPage
 			}
 
 			if (vFirst.hasMore) {
