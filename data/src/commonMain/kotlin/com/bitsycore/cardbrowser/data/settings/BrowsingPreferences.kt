@@ -51,10 +51,15 @@ data class ImageDownloadRecord(
 	val isComplete: Boolean get() = total > 0 && fetched >= total
 }
 
-/** The key [BrowsingPreferences.imageDownloads] is stored under. Language included: a set in French
- * and the same set in Japanese are different downloads of different files. */
-fun imageDownloadKey(setId: String, language: CardLanguage?): String =
-	setId + "|" + (language?.code ?: "-")
+/**
+ * The key [BrowsingPreferences.imageDownloads] is stored under.
+ *
+ * Language, because a set in French and the same set in Japanese are different files. Rendition,
+ * because grid thumbnails and full art are separately downloadable and separately true -- a set can
+ * have every thumbnail and no art at all.
+ */
+fun imageDownloadKey(setId: String, language: CardLanguage?, kind: String): String =
+	setId + "|" + (language?.code ?: "-") + "|" + kind
 
 @Serializable
 data class BrowsingPreferences(
@@ -96,9 +101,9 @@ data class BrowsingPreferences(
 	val imageDownloads: Map<String, ImageDownloadRecord> = emptyMap(),
 ) {
 
-	/** What [imageDownloads] recorded for a set in a language, or `null` if never downloaded. */
-	fun imageDownloadFor(setId: String, language: CardLanguage?): ImageDownloadRecord? =
-		imageDownloads[imageDownloadKey(setId, language)]
+	/** What [imageDownloads] recorded for one rendition, or `null` if it was never downloaded. */
+	fun imageDownloadFor(setId: String, language: CardLanguage?, kind: String): ImageDownloadRecord? =
+		imageDownloads[imageDownloadKey(setId, language, kind)]
 
 	/** The highest-priority language, used as the default request language. */
 	val primaryLanguage: CardLanguage

@@ -263,6 +263,31 @@ that set was really printed in. `CardSet.languages` carries what the source stat
 offers Japanese for a Japanese-line Pokémon set and does not offer Russian for a game that has none.
 A switch that fails says so rather than silently showing the previous language.
 
+### Downloading a set
+
+A set row has a download button, and the top bar can queue every set currently shown. Three things
+are offered separately, because they cost very differently:
+
+| | What it buys | Rough size |
+|---|---|---|
+| **Card info** | the set browsable and searchable offline | a handful of small requests |
+| **Grid thumbnails** | the grid renders offline | ~32 KB a card |
+| **Full card art** | a card readable and zoomable offline | ~94 KB a card |
+
+Those per-card figures are measured, not guessed — sampled across three providers on 2026-09-09:
+TCGdex 19.5 KB against 63 KB, Scryfall 47 against 67, YGOPRODeck 28 against 153. A thumbnail is
+about a quarter of the pair, which is why it is a separate purchase: browsing a set offline costs
+roughly a quarter of what reading it does. The spread is wide, so the dialog says "about".
+
+Jobs run **one at a time**. The provider clients already pace within a host, but nothing bounded how
+many jobs ran at once, and several of these APIs return 429 when pushed. Images within a job go four
+at a time, since those hit a CDN rather than the API.
+
+The set list then shows what a set has: a document mark for records, a grid mark for thumbnails, a
+photo mark for full art, with a percentage when a download did not finish. The image marks are
+records of a *download*, not proof of *presence* — the image cache is an LRU and the OS may purge it
+— so they read "downloaded", and art that arrived through ordinary browsing is not counted at all.
+
 ### Cross-set search
 
 Search every set of a game by card name. Five of the seven sources can search their whole catalogue;

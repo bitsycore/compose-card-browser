@@ -76,8 +76,10 @@ fun DownloadKindDialog(
 	setCount: Int = 1,
 ) {
 	var vInfo by remember { mutableStateOf(true) }
-	// Never pre-ticked, and least of all for a bulk download.
-	var vImages by remember { mutableStateOf(false) }
+	// Thumbnails are the cheap useful half -- about a quarter of the image bytes, and enough to
+	// browse a set's grid offline -- so they sit above full art. Neither is pre-ticked.
+	var vThumbnails by remember { mutableStateOf(false) }
+	var vArt by remember { mutableStateOf(false) }
 
 	AlertDialog(
 		onDismissRequest = onDismiss,
@@ -100,13 +102,21 @@ fun DownloadKindDialog(
 				)
 				Spacer(Modifier.height(8.dp))
 				KindRow(
-					checked = vImages,
-					onCheckedChange = { vImages = it },
-					title = "Card images",
+					checked = vThumbnails,
+					onCheckedChange = { vThumbnails = it },
+					title = "Grid thumbnails",
 					detail = cardCount
-						?.let { "Two images per card, about ${estimateMegabytes(it)} MB in total." }
-						?: "Two images per card: the grid thumbnail and the full-size art. Size " +
-							"unknown, because these sets do not state a card count.",
+						?.let { "About ${megabytes(it, THUMBNAIL_BYTES)} MB. Enough to browse the grid offline." }
+						?: "The small rendition the grid draws.",
+				)
+				Spacer(Modifier.height(8.dp))
+				KindRow(
+					checked = vArt,
+					onCheckedChange = { vArt = it },
+					title = "Full card art",
+					detail = cardCount
+						?.let { "About ${megabytes(it, FULL_ART_BYTES)} MB. Needed to read a card offline." }
+						?: "The full-size rendition the card screen draws.",
 				)
 				Spacer(Modifier.height(12.dp))
 				Text(
@@ -129,12 +139,13 @@ fun DownloadKindDialog(
 		confirmButton = {
 			TextButton(
 				// Nothing ticked is not a download, so the button is not offered as one.
-				enabled = vInfo || vImages,
+				enabled = vInfo || vThumbnails || vArt,
 				onClick = {
 					onConfirm(
 						buildSet {
 							if (vInfo) add(DownloadKind.CARD_INFO)
-							if (vImages) add(DownloadKind.CARD_IMAGES)
+							if (vThumbnails) add(DownloadKind.GRID_THUMBNAILS)
+							if (vArt) add(DownloadKind.FULL_ART)
 						},
 					)
 				},
@@ -165,18 +176,25 @@ private fun KindRow(
 	}
 }
 
-/**
- * A rough size for a set's art, so the choice is informed rather than blind.
- *
- * Deliberately approximate and labelled "about". Measured across the providers here, a thumbnail
- * runs about 20 KB and a full-size render about 180 KB, so a card costs roughly 200 KB of the two.
- * Sets vary and some sources serve one image at full size for both, which this will under-count --
- * it is an order of magnitude, not a promise.
- */
-private fun estimateMegabytes(cardCount: Int): Int =
-	((cardCount * APPROX_BYTES_PER_CARD) / 1_000_000).coerceAtLeast(1)
+/** A rough size, so the choice is informed rather than blind. Always labelled "about". */
+private fun megabytes(cardCount: Int, bytesPerCard: Int): Int =
+	((cardCount.toLong() * bytesPerCard) / 1_000_000).toInt().coerceAtLeast(1)
 
-private const val APPROX_BYTES_PER_CARD = 200_000
+/**
+ * Per-card image sizes, measured rather than guessed.
+ *
+ * Sampled on 2026-09-09 across three providers: TCGdex 19.5 KB thumbnail against 63 KB full,
+ * Scryfall 47 against 67, YGOPRODeck 28 against 153. The means are about 32 KB and 94 KB, so a
+ * thumbnail is roughly a quarter of the pair -- which is the whole reason the two are separate
+ * choices rather than one.
+ *
+ * The spread is wide, so these are an order of magnitude and not a promise: Scryfall's two
+ * renditions barely differ, and a provider with no small rendition at all fetches nothing for the
+ * thumbnail option.
+ */
+private const val THUMBNAIL_BYTES = 32_000
+
+private const val FULL_ART_BYTES = 94_000
 
 // ==================
 // MARK: The queue
@@ -286,10 +304,11 @@ private fun DownloadRow(job: DownloadJob, onCancel: (String) -> Unit) {
 
 /** One line saying exactly where a job stands. */
 private fun describe(job: DownloadJob): String {
-	val vWhat = job.request.kinds.sortedBy { it.name }.joinToString(" + ") {
+	val vWhat = job.request.kinds.sortedBy { it.ordinal }.joinToString(" + ") {
 		when (it) {
 			DownloadKind.CARD_INFO -> "info"
-			DownloadKind.CARD_IMAGES -> "images"
+			DownloadKind.GRID_THUMBNAILS -> "thumbnails"
+			DownloadKind.FULL_ART -> "art"
 		}
 	}
 	return when (val vStatus = job.status) {
@@ -320,7 +339,7 @@ private fun previewJob(
 	id: String,
 	name: String,
 	status: DownloadStatus,
-	kinds: Set<DownloadKind> = setOf(DownloadKind.CARD_INFO, DownloadKind.CARD_IMAGES),
+	kinds: Set<DownloadKind> = setOf(DownloadKind.CARD_INFO, DownloadKind.FULL_ART),
 ) = DownloadJob(
 	id = id,
 	request = DownloadRequest(

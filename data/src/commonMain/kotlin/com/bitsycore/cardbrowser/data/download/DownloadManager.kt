@@ -42,8 +42,27 @@ enum class DownloadKind {
 	/** Card records: names, numbers, rarities, rules text. What makes a set browsable offline. */
 	CARD_INFO,
 
-	/** Every card's grid thumbnail *and* its full-size art, so the detail screen works offline too. */
-	CARD_IMAGES,
+	/**
+	 * The small rendition the grid draws.
+	 *
+	 * Split from [FULL_ART] because the two are not the same purchase. Measured across three
+	 * providers, a thumbnail is about a quarter of the pair -- 19 KB against 63 for TCGdex, 28
+	 * against 153 for YGOPRODeck -- so this alone makes a set fully browsable offline for roughly a
+	 * quarter of the bytes, with card art fetched on demand.
+	 */
+	GRID_THUMBNAILS,
+
+	/**
+	 * The full-size rendition the detail screen and the zoom viewer draw.
+	 *
+	 * The expensive three quarters. Worth it for a set you intend to read on a train, and pure cost
+	 * for one you only want to scroll.
+	 */
+	FULL_ART,
+	;
+
+	/** True for the two kinds that fetch pictures, as opposed to records. */
+	val isImagery: Boolean get() = this == GRID_THUMBNAILS || this == FULL_ART
 }
 
 /** A request to put a set on disk. */
@@ -293,45 +312,67 @@ class DownloadManager(
 				return
 			}
 
-			if (DownloadKind.CARD_IMAGES !in vRequest.kinds) {
+			if (vRequest.kinds.none { it.isImagery }) {
 				update(job.id) {
 					DownloadStatus.Completed(cards = vCards.size, imagesFetched = 0, imagesFailed = 0)
 				}
 				return
 			}
 
-			// 2. The art. Both variants, because a set that is browsable offline but cannot open a
-			//    card is only half downloaded.
-			val vUrls = vCards
-				.flatMap { vCard ->
-					listOfNotNull(
-						vCard.artwork.thumbnailUrl,
-						vCard.artwork.displayUrl ?: vCard.artwork.imageUrl.ifBlank { null },
+			// 2. The art, in whichever renditions were asked for -- kept in separate lists so each
+			//    can be counted and recorded on its own. A provider with no small rendition (One
+			//    Piece, Altered) yields an empty thumbnail list rather than quietly falling back to
+			//    the full image, which would record art under the heading "thumbnails".
+			val vByKind: Map<DownloadKind, List<String>> = buildMap {
+				if (DownloadKind.GRID_THUMBNAILS in vRequest.kinds) {
+					put(
+						DownloadKind.GRID_THUMBNAILS,
+						vCards.mapNotNull { it.artwork.thumbnailUrl?.ifBlank { null } }.distinct(),
 					)
 				}
-				.filter { it.isNotBlank() }
-				.distinct()
+				if (DownloadKind.FULL_ART in vRequest.kinds) {
+					put(
+						DownloadKind.FULL_ART,
+						vCards.mapNotNull {
+							(it.artwork.displayUrl ?: it.artwork.imageUrl).ifBlank { null }
+						}.distinct(),
+					)
+				}
+			}
+			val vUrls = vByKind.values.flatten()
 
 			var vDone = 0
 			var vFailed = 0
 			update(job.id) { DownloadStatus.Running(completed = 0, total = vUrls.size) }
 
-			for (vBatch in vUrls.chunked(MAX_CONCURRENT_IMAGES)) {
-				currentCoroutineContext().ensureActive()
-				coroutineScope {
-					val vPending = vBatch.map { vUrl ->
-						async { runCatching { mImagePrefetcher.prefetch(vUrl) }.getOrDefault(false) }
+			// Per rendition, so what gets recorded is what actually happened to that rendition
+			// rather than a share of a combined figure.
+			for ((vKind, vKindUrls) in vByKind) {
+				var vKindDone = 0
+				for (vBatch in vKindUrls.chunked(MAX_CONCURRENT_IMAGES)) {
+					currentCoroutineContext().ensureActive()
+					coroutineScope {
+						val vPending = vBatch.map { vUrl ->
+							async { runCatching { mImagePrefetcher.prefetch(vUrl) }.getOrDefault(false) }
+						}
+						for (vDeferred in vPending) {
+							if (vDeferred.await()) {
+								vKindDone++
+								vDone++
+							} else {
+								vFailed++
+							}
+						}
 					}
-					for (vDeferred in vPending) {
-						if (vDeferred.await()) vDone++ else vFailed++
+					update(job.id) {
+						DownloadStatus.Running(completed = vDone + vFailed, total = vUrls.size)
 					}
 				}
-				update(job.id) { DownloadStatus.Running(completed = vDone + vFailed, total = vUrls.size) }
+				// Recorded so the set list can say what came down, across restarts. A record of a
+				// download, not a claim that every file is still there -- see `imageDownloads`.
+				recordImages(vRequest, vKind, fetched = vKindDone, total = vKindUrls.size)
 			}
 
-			// Recorded so the set list can say what came down, across restarts. A record of a
-			// download, not a claim that every file is still there -- see `imageDownloads`.
-			recordImages(vRequest, fetched = vDone, total = vUrls.size)
 
 			update(job.id) {
 				DownloadStatus.Completed(
@@ -357,10 +398,15 @@ class DownloadManager(
 	 * be able to show honestly. Failures here are swallowed: a download that worked should not be
 	 * reported as failed because a preferences write did not.
 	 */
-	private suspend fun recordImages(request: DownloadRequest, fetched: Int, total: Int) {
+	private suspend fun recordImages(
+		request: DownloadRequest,
+		kind: DownloadKind,
+		fetched: Int,
+		total: Int,
+	) {
 		if (total <= 0) return
 		runCatching {
-			val vKey = imageDownloadKey(request.setId.qualified, request.language)
+			val vKey = imageDownloadKey(request.setId.qualified, request.language, kind.name)
 			mPreferences.update { vPreferences ->
 				vPreferences.copy(
 					imageDownloads = vPreferences.imageDownloads +

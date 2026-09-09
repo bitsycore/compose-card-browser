@@ -60,8 +60,9 @@ import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
 import org.jetbrains.compose.resources.painterResource
 import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.Image
 import com.bitsycore.cardbrowser.data.settings.ImageDownloadRecord
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -440,7 +441,7 @@ private fun SetRow(
 	isSaved: Boolean,
 	onClick: () -> Unit,
 	downloadStatus: DownloadJob? = null,
-	images: ImageDownloadRecord? = null,
+	images: SetImageStatus? = null,
 	onDownload: () -> Unit = {},
 ) {
 	Card(
@@ -517,7 +518,10 @@ private fun SetRow(
 			}
 			// Two marks, because the two halves of a download are separately true: a set can have
 			// its records and none of its art, which is the common case after browsing it once.
-			if (isSaved || images != null) {
+			// Three marks, because the three halves of a download are separately true: a set can
+			// have its records and no art, or thumbnails and no full art, and those are genuinely
+			// different states -- browsable offline versus readable offline.
+			if (isSaved || images?.isEmpty == false) {
 				Spacer(Modifier.size(6.dp))
 				Row(verticalAlignment = Alignment.CenterVertically) {
 					if (isSaved) {
@@ -530,37 +534,18 @@ private fun SetRow(
 							modifier = Modifier.size(18.dp),
 						)
 					}
-					if (images != null) {
-						if (isSaved) Spacer(Modifier.size(6.dp))
-						Icon(
-							imageVector = Icons.Outlined.Image,
-							// "Downloaded", not "available": the image cache is an LRU and the OS
-							// may purge it, so this records what came down rather than promising
-							// what is still there.
-							contentDescription = if (images.isComplete) {
-								"Card images downloaded"
-							} else {
-								"${images.percent}% of card images downloaded"
-							},
-							tint = if (images.isComplete) {
-								MaterialTheme.colorScheme.primary
-							} else {
-								// A partial download is not a tick. Same colour as the rest of the
-								// metadata line, so it reads as a qualification rather than a win.
-								MaterialTheme.colorScheme.onSurfaceVariant
-							},
-							modifier = Modifier.size(18.dp),
-						)
-						// The number only when it says something a tick does not.
-						if (!images.isComplete) {
-							Spacer(Modifier.size(2.dp))
-							Text(
-								text = "${images.percent}%",
-								style = MaterialTheme.typography.labelSmall,
-								color = MaterialTheme.colorScheme.onSurfaceVariant,
-							)
-						}
-					}
+					ImageMark(
+						record = images?.thumbnails,
+						icon = Icons.Outlined.GridView,
+						label = "Grid thumbnails",
+						leadingSpace = isSaved,
+					)
+					ImageMark(
+						record = images?.art,
+						icon = Icons.Outlined.Photo,
+						label = "Full card art",
+						leadingSpace = isSaved || images?.thumbnails != null,
+					)
 				}
 			}
 			// "Last opened" is on the metadata line rather than out here. As an unweighted
@@ -593,6 +578,51 @@ private fun RegionBadge(region: GameRegion) {
 			)
 			.padding(horizontal = 6.dp, vertical = 2.dp),
 	)
+}
+
+/**
+ * One rendition's mark, with a percentage when the download did not finish.
+ *
+ * Draws nothing at all when no download was recorded. Absent is not the same as zero: art arrives
+ * by browsing too and that is not tracked, so a missing mark means "never downloaded", never "not
+ * present".
+ */
+@Composable
+private fun ImageMark(
+	record: ImageDownloadRecord?,
+	icon: androidx.compose.ui.graphics.vector.ImageVector,
+	label: String,
+	leadingSpace: Boolean,
+) {
+	if (record == null) return
+	if (leadingSpace) Spacer(Modifier.size(6.dp))
+	Icon(
+		imageVector = icon,
+		// "Downloaded", not "available": the image cache is an LRU and the OS may purge it, so
+		// this records what came down rather than promising what is still there.
+		contentDescription = if (record.isComplete) {
+			"$label downloaded"
+		} else {
+			"${record.percent}% of $label downloaded"
+		},
+		tint = if (record.isComplete) {
+			MaterialTheme.colorScheme.primary
+		} else {
+			// A partial download is not a tick. The muted metadata colour, so it reads as a
+			// qualification rather than a win.
+			MaterialTheme.colorScheme.onSurfaceVariant
+		},
+		modifier = Modifier.size(18.dp),
+	)
+	// The number only when it says something the icon does not.
+	if (!record.isComplete) {
+		Spacer(Modifier.size(2.dp))
+		Text(
+			text = "${record.percent}%",
+			style = MaterialTheme.typography.labelSmall,
+			color = MaterialTheme.colorScheme.onSurfaceVariant,
+		)
+	}
 }
 
 /**
@@ -839,8 +869,15 @@ private fun SetListDownloadMarksPreview() = PreviewFrame {
 			isLoading = false,
 			savedSetIds = PreviewData.SETS.drop(1).map { it.id.qualified }.toSet(),
 			imageDownloads = mapOf(
-				PreviewData.SETS[1].id.qualified to ImageDownloadRecord(fetched = 560, total = 560),
-				PreviewData.SETS[2].id.qualified to ImageDownloadRecord(fetched = 412, total = 576),
+				// Thumbnails only: browsable offline, not readable offline.
+				PreviewData.SETS[1].id.qualified to SetImageStatus(
+					thumbnails = ImageDownloadRecord(fetched = 280, total = 280),
+				),
+				// Both, with the art download interrupted.
+				PreviewData.SETS[2].id.qualified to SetImageStatus(
+					thumbnails = ImageDownloadRecord(fetched = 288, total = 288),
+					art = ImageDownloadRecord(fetched = 206, total = 288),
+				),
 			),
 		),
 		dispatch = {},

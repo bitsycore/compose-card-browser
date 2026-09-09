@@ -14,6 +14,21 @@ import com.bitsycore.lib.pulse.container.ContainerContract
  * The reducer lives here and is total and synchronous: given a state and an intent it returns the
  * next state, with no I/O and no coroutine. Everything asynchronous is in [SetListViewModel].
  */
+/**
+ * What a set has had downloaded, per rendition.
+ *
+ * Two nullable records rather than one, because the two are separately true: a set can have every
+ * grid thumbnail and no full art, which is exactly what "browsable offline but not readable
+ * offline" looks like and is worth being able to show.
+ */
+data class SetImageStatus(
+	val thumbnails: ImageDownloadRecord? = null,
+	val art: ImageDownloadRecord? = null,
+) {
+
+	val isEmpty: Boolean get() = thumbnails == null && art == null
+}
+
 object SetListContract :
 	ContainerContract<SetListContract.UiState, SetListContract.Intent, SetListContract.Effect>() {
 
@@ -66,7 +81,7 @@ object SetListContract :
 		 * arrives by browsing too, and that is not tracked, so this under-claims rather than
 		 * over-claims. See `BrowsingPreferences.imageDownloads`.
 		 */
-		val imageDownloads: Map<String, ImageDownloadRecord> = emptyMap(),
+		val imageDownloads: Map<String, SetImageStatus> = emptyMap(),
 		/**
 		 * Which product line to show, or `null` for all of them.
 		 *
@@ -179,7 +194,7 @@ object SetListContract :
 		/** Which sets are on disk. Computed after a load, since it depends on the set list. */
 		data class SavedSetsResolved(
 			val setIds: Set<String>,
-			val imageDownloads: Map<String, ImageDownloadRecord> = emptyMap(),
+			val imageDownloads: Map<String, SetImageStatus> = emptyMap(),
 		) : Intent
 
 		/** A product line was picked, or `null` to see every line again. */

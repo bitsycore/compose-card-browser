@@ -94,13 +94,15 @@ class DownloadManagerTest {
 
 	@Test
 	fun `the same set with different kinds is a different job`() = runTest {
-		// Card info and card images are separate asks, so wanting both is two rows, not one.
+		// Records, thumbnails and full art are three separate asks against one set, so each is its
+		// own row rather than being collapsed into one.
 		val vManager = managerWith(RecordingPrefetcher(), testScheduler)
 
 		vManager.enqueue(request(kinds = setOf(DownloadKind.CARD_INFO)))
-		vManager.enqueue(request(kinds = setOf(DownloadKind.CARD_IMAGES)))
+		vManager.enqueue(request(kinds = setOf(DownloadKind.GRID_THUMBNAILS)))
+		vManager.enqueue(request(kinds = setOf(DownloadKind.FULL_ART)))
 
-		assertEquals(2, vManager.jobs.value.size)
+		assertEquals(3, vManager.jobs.value.size)
 	}
 
 	@Test
@@ -149,6 +151,18 @@ class DownloadManagerTest {
 
 		assertEquals(1, vManager.jobs.value.size, "Got ${vManager.jobs.value}")
 		assertTrue(vManager.jobs.value.single().isActive, "The replacement should be live again")
+	}
+
+	@Test
+	fun `thumbnails and full art are separate kinds -- and only they fetch pictures`() {
+		// The split exists because a thumbnail is about a quarter of the pair: measured across
+		// three providers, 19.5 KB against 63 for TCGdex and 28 against 153 for YGOPRODeck. So
+		// grid-browsable offline is a much cheaper purchase than readable offline, and the two are
+		// separately buyable.
+		assertTrue(DownloadKind.GRID_THUMBNAILS.isImagery)
+		assertTrue(DownloadKind.FULL_ART.isImagery)
+		assertFalse(DownloadKind.CARD_INFO.isImagery)
+		assertEquals(3, DownloadKind.entries.size, "A new kind needs the UI and the record updating")
 	}
 
 	@Test

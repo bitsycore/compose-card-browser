@@ -2,6 +2,7 @@ package com.bitsycore.cardbrowser.ui.sets
 
 import androidx.lifecycle.viewModelScope
 import com.bitsycore.cardbrowser.core.game.GameProfile
+import com.bitsycore.cardbrowser.data.download.DownloadKind
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.repository.CardRepository
@@ -127,8 +128,19 @@ class SetListViewModel(
 						// checked cheaply, and what the record therefore does and does not mean.
 						imageDownloads = mPreferences.preferences.value.let { vPreferences ->
 							vSets.mapNotNull { vSet ->
-								vPreferences.imageDownloadFor(vSet.id.qualified, vLanguage)
-									?.let { vSet.id.qualified to it }
+								val vStatus = SetImageStatus(
+									thumbnails = vPreferences.imageDownloadFor(
+										vSet.id.qualified,
+										vLanguage,
+										DownloadKind.GRID_THUMBNAILS.name,
+									),
+									art = vPreferences.imageDownloadFor(
+										vSet.id.qualified,
+										vLanguage,
+										DownloadKind.FULL_ART.name,
+									),
+								)
+								if (vStatus.isEmpty) null else vSet.id.qualified to vStatus
 							}.toMap()
 						},
 					),
