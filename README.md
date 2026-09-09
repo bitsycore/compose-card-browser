@@ -400,10 +400,12 @@ the inline image and the fullscreen viewer now decode at source resolution.
 - **Altered's grid tiles are expensive.** Its mirror has no resized variant, so a grid tile loads
   the same 200–300 KB JPEG the detail screen does. Every other provider serves a small variant. The
   artwork records this by leaving `thumbnailUrl` null rather than pointing it at the full image.
-- **Wuthering Waves grids are sparse.** Its list endpoint carries six fields per card; rarity,
-  attribute, cost and rules text exist only on the per-card detail endpoint. Filling the grid would
-  cost 123 requests per set against somebody's unpublished endpoint, so the data appears when a card
-  is opened and the filter sheet hides the facets that are empty until then.
+- **Wuthering Waves sets cost extra requests to open.** Its list endpoint carries six fields per
+  card, so rarity, attribute, cost and rules text are fetched per card and merged in — about 4
+  seconds for a 25-card starter deck and 13 for the 74-card booster set, at four requests in
+  flight, once per day. Using the provider's own filters to tag cards in bulk would be far cheaper
+  and does not work: `rarity_id` is silently ignored, and `fee=0` means "no filter" rather than
+  "costs zero", which would misreport the 31 cards that genuinely cost 0.
 - **Cardmarket links exist for Riftbound only.** Cardmarket answers 403 to every scripted request,
   including one for the Riftbound path that is known to work, so the other six games' path segments
   could not be verified. Plausible guesses are not shipped; see [Cardmarket](#cardmarket).

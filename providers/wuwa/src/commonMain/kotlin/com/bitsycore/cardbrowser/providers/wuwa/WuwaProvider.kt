@@ -24,6 +24,11 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.http.appendPathSegments
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 /**
  * The UCP adapter, serving [Game.WUTHERING_WAVES].
@@ -53,12 +58,11 @@ import io.ktor.http.appendPathSegments
  * - **Cards**: 123 in total, all of which arrive in a single `size=200` request, so a set costs one
  *   request and completeness is definite.
  *
- *   The list carries six fields per card. Rarity, attribute, cost and rules text exist **only** on
- *   `/web/card/info`, one card at a time -- so a browsed grid here shows names and images, and the
- *   rest appears when a card is opened. Enriching the grid would cost 123 requests per set, which
- *   is not a reasonable thing to do to somebody's unpublished endpoint.
- * - **Filters**: consequently thin. Card type is on the list; rarity and attribute are not, so
- *   their facets are empty until cards are opened, and the filter sheet hides an empty facet.
+ *   The list carries only six fields per card, so each set's cards are then enriched one request
+ *   each from `/web/card/info` -- see [detailsFor] for what that costs and why the provider's own
+ *   filters cannot do the job more cheaply.
+ * - **Filters**: complete, because of that enrichment. Rarity, attribute, cost, level, weapon and
+ *   faction all reach the grid, where before only card type did.
  * - **Images**: already WebP and already compressed, on a Tencent COS bucket. One size only.
  * - **Finishes, artwork variants, card identity, Cardmarket**: no fields, all unstated. Cardmarket
  *   has no section for this game at all -- it is Japan-only so far.
@@ -151,7 +155,15 @@ class WuwaProvider(
 		return mapProviderErrors("Wuwa.listCards") {
 			val vSetCards = allCards().filter { WuwaMapper.setCodeOf(it.code) == vSetCode }
 			val vSet = WuwaMapper.toSet(vSetCode, vSetCards.size, id)
-			val vMapped = vSetCards.mapNotNull { WuwaMapper.toPrinting(it, id, vSet, LANGUAGE) }
+			val vDetails = detailsFor(vSetCards)
+
+			val vMapped = vSetCards.mapNotNull { vBrief ->
+				// The detail record where it arrived, the six-field brief where it did not. A card
+				// whose detail request failed is still shown, just with less on it -- losing it
+				// entirely would make the set look short for no reason the user could see.
+				vDetails[vBrief.id]?.let { WuwaMapper.toPrinting(it, id, vSet, LANGUAGE) }
+					?: WuwaMapper.toPrinting(vBrief, id, vSet, LANGUAGE)
+			}
 			CardPage(
 				cards = vMapped,
 				page = 1,
@@ -160,6 +172,68 @@ class WuwaProvider(
 				hasMore = false,
 			)
 		}
+	}
+
+	/**
+	 * Full records for a set's cards, fetched one request each.
+	 *
+	 * ## Why this is worth 25 to 74 extra requests
+	 *
+	 * `/web/card/list` returns six fields. Rarity, attribute, cost, level, weapon, faction and the
+	 * rules text exist **only** on `/web/card/info`, one card at a time -- so without this the grid
+	 * has names and pictures, the filter sheet has almost no facets to offer, and sorting by cost
+	 * does nothing.
+	 *
+	 * The obvious alternative was to use the provider's own filters to tag cards in bulk, which
+	 * would have been far cheaper. It does not work, and this was established by crawling the whole
+	 * catalogue and comparing: `rarity_id` is accepted and silently ignored under every spelling
+	 * tried, and `fee=0` and `level=0` mean "no filter" rather than "costs zero" -- so the 31 cards
+	 * that genuinely cost 0 would be indistinguishable from the 67 that have no cost at all.
+	 *
+	 * ## Why the cost is acceptable
+	 *
+	 * Per *set*, not per catalogue, because that is the unit the repository caches. The largest set
+	 * is 74 cards and the two starter decks are about 25 each, against 123 for everything. At
+	 * [MAX_CONCURRENT_DETAILS] in flight that is roughly 4 seconds for a starter deck and 13 for the
+	 * booster set, once, and then the complete set is on disk for a day and every later open is
+	 * instant and works offline.
+	 *
+	 * Four at a time rather than as fast as possible: this is an undocumented endpoint belonging to
+	 * someone else, and a burst of 74 simultaneous connections is not a reasonable way to treat it.
+	 */
+	private suspend fun detailsFor(cards: List<WuwaCardBriefDto>): Map<Long, WuwaCardDetailDto> {
+		if (cards.isEmpty()) return emptyMap()
+		val vResults = mutableMapOf<Long, WuwaCardDetailDto>()
+
+		for (vBatch in cards.chunked(MAX_CONCURRENT_DETAILS)) {
+			currentCoroutineContext().ensureActive()
+			coroutineScope {
+				val vPending = vBatch.map { vCard ->
+					vCard.id to async {
+						runCatching {
+							unwrap(
+								mClient
+									.get(mBaseUrl) {
+										url { appendPathSegments("api", "web", "card", "info") }
+										parameter("id", vCard.id)
+										localise()
+									}
+									.body<WuwaEnvelopeDto<WuwaCardDetailDto>>(),
+							)
+						}
+					}
+				}
+				for ((vId, vDeferred) in vPending) {
+					val vDetail = vDeferred.await().getOrElse {
+						// Cancellation must unwind rather than be recorded as a missing card.
+						if (it is CancellationException) throw it
+						null
+					}
+					if (vDetail != null) vResults[vId] = vDetail
+				}
+			}
+		}
+		return vResults
 	}
 
 	/**
@@ -278,6 +352,14 @@ class WuwaProvider(
 
 		/** The envelope's success value. Not an HTTP status. */
 		private const val SUCCESS_CODE = 1
+
+		/**
+		 * How many card-detail requests may be in flight at once.
+		 *
+		 * Matches the repository's own page concurrency. This is an undocumented endpoint on
+		 * somebody else's server and a burst of 74 connections is not a polite way to use it.
+		 */
+		private const val MAX_CONCURRENT_DETAILS = 4
 
 		/**
 		 * Comfortably above the 123 cards that exist, so the whole catalogue is one request.

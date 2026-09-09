@@ -81,29 +81,53 @@ class WuwaLiveSmokeTest {
 	}
 
 	@Test
-	fun `the detail endpoint fills in what the list omits`() = runBlocking<Unit> {
+	fun `a listed set arrives already enriched -- rarity and all`() = runBlocking<Unit> {
+		// The list endpoint carries six fields and no rarity. `listCards` fetches the per-card
+		// detail for the set so the grid, the filter facets and the cost sort have something to
+		// work with; this asserts that actually happened rather than silently degrading.
+		val vPage = provider().listCards(
+			CardPageRequest(setId = SourceId(WuwaProvider.PROVIDER_ID, "SD01")),
+		)
+
+		assertTrue(vPage.cards.isNotEmpty())
+		val vWithRarity = vPage.cards.count { !it.classification.rarity.isNullOrBlank() }
+		assertTrue(
+			vWithRarity == vPage.cards.size,
+			"Expected every card enriched, got $vWithRarity of ${vPage.cards.size}",
+		)
+		assertTrue(
+			vPage.cards.count { !it.text.rules.isNullOrBlank() } > 0,
+			"Rules text should come through with the detail records",
+		)
+		// `obtain` is the products a card is really found in, which is not always its own prefix.
+		assertTrue(
+			vPage.cards.any { vCard -> vCard.tags.any { it.startsWith("SD") || it.startsWith("BP") } },
+			"The products a card is found in should be carried across",
+		)
+	}
+
+	@Test
+	fun `a single card still resolves through the detail endpoint`() = runBlocking<Unit> {
 		val vList = provider().listCards(
 			CardPageRequest(setId = SourceId(WuwaProvider.PROVIDER_ID, "SD01")),
 		)
-		val vBrief = vList.cards.first()
-		// The list carries six fields; rarity is not one of them.
-		assertEquals(null, vBrief.classification.rarity)
+		val vFirst = vList.cards.first()
 
-		val vDetail = provider().cardDetail(vBrief.id)
-		assertNotNull(vDetail, "${vBrief.id.local} should resolve through /web/card/info")
-		assertEquals(vBrief.id, vDetail.id)
+		val vDetail = provider().cardDetail(vFirst.id)
+		assertNotNull(vDetail, "${vFirst.id.local} should resolve through /web/card/info")
+		assertEquals(vFirst.id, vDetail.id)
 		assertNotNull(vDetail.classification.rarity, "Detail should supply the rarity")
-		assertTrue(!vDetail.text.rules.isNullOrBlank(), "Detail should supply the rules text")
 	}
 
 	@Test
 	fun `the API's dash placeholder never becomes a filter chip`() = runBlocking<Unit> {
+		// Several fields come back as a literal "-" when they do not apply. Shown as-is they would
+		// produce a filter chip reading "-". The whole set is enriched now, so this checks all of
+		// it rather than a sample.
 		val vList = provider().listCards(
 			CardPageRequest(setId = SourceId(WuwaProvider.PROVIDER_ID, "SD01")),
 		)
-		// Several fields come back as a literal "-" when they do not apply. Shown as-is they would
-		// produce a filter chip reading "-".
-		val vDetails = vList.cards.take(8).mapNotNull { provider().cardDetail(it.id) }
+		val vDetails = vList.cards
 
 		assertTrue(vDetails.isNotEmpty())
 		assertTrue(vDetails.none { "-" in it.classification.domains }, "A dash leaked into domains")

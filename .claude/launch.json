@@ -1,0 +1,6 @@
+echo "--- launching desktop app in background ---"
+./gradlew :composeApp:run --console=plain > .research/desktop.log 2>&1 &
+echo "pid $!"; sleep 60
+tail -5 .research/desktop.log
+echo "--- java windows ---"
+powershell -NoProfile -Command "Get-Process java -ErrorAction SilentlyContinue | Select-Object Id,MainWindowTitle | Format-Table -AutoSize" 2>&1 | head -10
