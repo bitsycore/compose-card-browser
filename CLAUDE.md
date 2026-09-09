@@ -124,9 +124,17 @@ was found.
 **`local.properties` needs forward slashes on Windows.** `C:/Users/...`, not `C:\Users\...`; AGP
 mis-parses the escapes.
 
-**Cardmarket answers 403 to every scripted request**, including paths known to work. Its per-game
-slugs cannot be verified from a script, so a `cardmarketSlug` that has not been seen on a real page
-in a browser stays `null`. Do not guess one.
+**Cardmarket answers 403 to every scripted request**, including paths known to work, and its bot
+protection blocks an automated browser too. Its URLs can only be confirmed by a human with a
+browser, so a `cardmarketSlug` that has not been seen on a real page stays `null`. Do not guess one.
+
+Two results already bought with someone's time — do not spend it again:
+
+- Per-game slugs `Magic`, `Pokemon`, `YuGiOh`, `OnePiece` are corroborated against real URLs.
+  `Altered` is declared but never confirmed.
+- **`?idProduct=<n>` alone does not work.** It is ignored and yields an unfiltered singles listing.
+  The numeric id both TCGdex and Scryfall publish is therefore *not* enough to build a card link;
+  the slug path is what identifies the product.
 
 **Scryfall's live suite trips its own rate limit.** 12 checks in one run exceeds what the host
 accepts, and re-running alone after a pause did not clear it. Three failures there are expected
