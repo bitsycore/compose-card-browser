@@ -148,7 +148,16 @@ fun App() {
 						)
 					}
 
-					is Route.Sets -> NavEntry(vRoute) {
+					// The one lateral move in the app: picking a game goes sideways into its sets,
+					// and back returns the way it came. Everything else keeps the cross-fade, and
+					// that contrast is the point -- a slide that happens everywhere says nothing
+					// about direction, and one that happens on a single hop reads as "in".
+					is Route.Sets -> NavEntry(
+						vRoute,
+						metadata = NavDisplay.transitionSpec { slideForward() } +
+							NavDisplay.popTransitionSpec { slideBack() } +
+							NavDisplay.predictivePopTransitionSpec { slideBack() },
+					) {
 						SetListScreen(
 							// A route naming a game this build no longer routes resolves to null in
 							// the view model, which shows an error rather than crashing on a
@@ -247,6 +256,49 @@ fun App() {
  *   like; 0 to leave the departing screen on top and let it dissolve to reveal what is underneath,
  *   which is what a pop looks like
  */
+/**
+ * Forward: the arriving screen slides in from the end, the leaving one drifts a quarter out.
+ *
+ * A quarter rather than the full width, which is the Material forward pattern: the outgoing screen
+ * reads as being pushed aside and still present rather than as a second screen racing off. Both
+ * carry a fade so neither is ever a hard edge sliding over the other.
+ */
+private fun AnimatedContentTransitionScope<Scene<*>>.slideForward(): ContentTransform =
+	ContentTransform(
+		targetContentEnter = slideIntoContainer(
+			towards = AnimatedContentTransitionScope.SlideDirection.Start,
+			animationSpec = tween(ENTER_MILLIS, easing = LinearOutSlowInEasing),
+		) + fadeIn(tween(ENTER_MILLIS, easing = LinearOutSlowInEasing)),
+		initialContentExit = slideOutOfContainer(
+			towards = AnimatedContentTransitionScope.SlideDirection.Start,
+			animationSpec = tween(EXIT_MILLIS, easing = FastOutLinearInEasing),
+			targetOffset = { -it / OUTGOING_DRIFT_FRACTION },
+		) + fadeOut(tween(EXIT_MILLIS, easing = FastOutLinearInEasing)),
+		targetContentZIndex = 1f,
+		sizeTransform = null,
+	)
+
+/** The same move reversed, for both the back button and a predictive back gesture. */
+private fun AnimatedContentTransitionScope<Scene<*>>.slideBack(): ContentTransform =
+	ContentTransform(
+		targetContentEnter = slideIntoContainer(
+			towards = AnimatedContentTransitionScope.SlideDirection.End,
+			animationSpec = tween(ENTER_MILLIS, easing = LinearOutSlowInEasing),
+			initialOffset = { -it / OUTGOING_DRIFT_FRACTION },
+		) + fadeIn(tween(ENTER_MILLIS, easing = LinearOutSlowInEasing)),
+		initialContentExit = slideOutOfContainer(
+			towards = AnimatedContentTransitionScope.SlideDirection.End,
+			animationSpec = tween(EXIT_MILLIS, easing = FastOutLinearInEasing),
+		) + fadeOut(tween(EXIT_MILLIS, easing = FastOutLinearInEasing)),
+		// Below the screen being uncovered, so the set list slides off *over* the picker rather
+		// than the picker appearing on top of it.
+		targetContentZIndex = 0f,
+		sizeTransform = null,
+	)
+
+/** How far the screen being left behind drifts, as a fraction of its width. */
+private const val OUTGOING_DRIFT_FRACTION = 4
+
 private fun <T : Any> fadeThrough(
 	zIndex: Float,
 ): AnimatedContentTransitionScope<Scene<T>>.() -> ContentTransform = {

@@ -276,6 +276,27 @@ the Japan line — so Korean is a *language of* the Japan region rather than a r
 lines a game has is declared by the game (`GameProfile.regions`); which line a set belongs to is
 tagged by the adapter, because that is a fact about how the source keys its data.
 
+### How screens move between each other
+
+Three different transitions, and the differences are deliberate rather than decorative.
+
+- **Picking a game slides.** The set list comes in from the end and the picker drifts a quarter of
+  its width out behind it, which is the Material forward pattern. Back reverses it. This is the one
+  lateral move in the app, and that is what makes it mean something: a slide used everywhere says
+  nothing about direction, while one used on a single hop reads as "into".
+- **Opening a set is a container transform.** The row grows into the grid screen and shrinks back
+  into the row on the way out, via `sharedBounds` keyed on the set's id. It scales rather than
+  remeasures — the two ends are a 72 dp row and a full screen, and remeasuring would lay a lazy grid
+  out afresh at every intermediate size, a hundred times during a 300 ms animation.
+- **Opening a card is a shared element**, and predates both: the artwork itself is the same element
+  in the tile and on the detail screen, so the picture flies rather than the screen changing.
+- **Everything else cross-fades**, with no size transform. Predictive back is a separate parameter
+  with its own default, and on Android that default scales the whole outgoing screen down to 70% —
+  which is what shrinks the app into a rectangle while a card is supposed to be flying home.
+
+The shared-element work all hangs off two composition locals and is null-safe: with no navigation
+host in scope the modifiers do nothing, so previews and tests render normally rather than throwing.
+
 ### Light, dark, or the system's choice
 
 Settings carries a three-way theme control. Three values rather than a switch, because "follow the

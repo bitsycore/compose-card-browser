@@ -88,6 +88,7 @@ import com.bitsycore.cardbrowser.ui.common.EmptyState
 import com.bitsycore.cardbrowser.ui.common.ErrorState
 import com.bitsycore.cardbrowser.ui.common.LoadingState
 import com.bitsycore.cardbrowser.ui.common.NoticeBanner
+import com.bitsycore.cardbrowser.ui.common.sharedSetContainer
 import com.bitsycore.cardbrowser.ui.preview.PreviewData
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
@@ -487,7 +488,9 @@ private fun SetRow(
 ) {
 	Card(
 		onClick = onClick,
-		modifier = Modifier.fillMaxWidth(),
+		// The row is one half of the container transform into the card grid; the grid screen's root
+		// is the other. See `Modifier.sharedSetContainer`.
+		modifier = Modifier.fillMaxWidth().sharedSetContainer(set.id.qualified),
 		colors = if (isLastOpened) {
 			CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
 		} else {

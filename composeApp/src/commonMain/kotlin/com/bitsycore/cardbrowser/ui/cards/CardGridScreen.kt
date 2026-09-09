@@ -53,6 +53,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import com.bitsycore.cardbrowser.ui.common.sharedSetContainer
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -135,15 +136,21 @@ fun CardGridScreen(
 	// previewed. A preview has no Koin graph at all and `koinInject` throws outright.
 	val vFocusedCardId by koinInject<BrowseSession>().focusedCardId.collectAsState()
 
-	CardGridContent(
-		snackbarHostState = vSnackbarHost,
-		state = vState,
-		dispatch = viewModel::dispatch,
-		fallbackSetName = setName,
-		focusedCardId = vFocusedCardId,
-		onBack = onBack,
-		onOpenCard = onOpenCard,
-	)
+	// The other half of the container transform out of the set list's row. Wrapped here rather than
+	// applied inside `CardGridContent`, so the content stays a pure function of its arguments and
+	// keeps previewing -- the modifier reads navigation composition locals that a preview has not
+	// got, and this screen is the layer that already knows about navigation.
+	Box(Modifier.fillMaxSize().sharedSetContainer(setId)) {
+		CardGridContent(
+			snackbarHostState = vSnackbarHost,
+			state = vState,
+			dispatch = viewModel::dispatch,
+			fallbackSetName = setName,
+			focusedCardId = vFocusedCardId,
+			onBack = onBack,
+			onOpenCard = onOpenCard,
+		)
+	}
 }
 
 /**

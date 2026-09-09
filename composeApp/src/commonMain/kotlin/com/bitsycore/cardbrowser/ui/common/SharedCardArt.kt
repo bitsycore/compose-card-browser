@@ -6,11 +6,16 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.ContentScale
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 
 /**
@@ -72,3 +77,46 @@ private val CARD_BOUNDS_TRANSFORM = BoundsTransform { _, _ ->
 		visibilityThreshold = Rect.VisibilityThreshold,
 	)
 }
+
+/**
+ * Marks a set's row and the card grid it opens as the same container.
+ *
+ * The Material container transform: tapping a set grows that row into the whole grid screen, and
+ * going back shrinks it home. Applied to the row in the set list and to the grid screen's root with
+ * the same key, which is the set's source-qualified id.
+ *
+ * ## Why `ScaleToBounds` and not `RemeasureToBounds`
+ *
+ * The two ends are wildly different shapes -- a 72 dp row against a full screen -- and remeasuring
+ * would lay the entire grid out afresh on every animation frame at every intermediate size, which
+ * for a 350-card set means re-measuring a lazy grid a hundred times during a 300 ms transition.
+ * Scaling draws it once and transforms it, which is what the pattern is for.
+ *
+ * Silently does nothing when either scope is missing, exactly as [sharedCardArt] does, so previews
+ * and tests render normally.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+fun Modifier.sharedSetContainer(setId: String): Modifier {
+	val vSharedScope = LocalSharedTransitionScope.current ?: return this
+	val vAnimatedScope = LocalNavAnimatedContentScope.current
+
+	return with(vSharedScope) {
+		this@sharedSetContainer.sharedBounds(
+			sharedContentState = rememberSharedContentState(key = "set-container:$setId"),
+			animatedVisibilityScope = vAnimatedScope,
+			boundsTransform = CARD_BOUNDS_TRANSFORM,
+			resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
+				contentScale = ContentScale.Crop,
+				alignment = Alignment.TopStart,
+			),
+			// The contents cross-fade while the container travels. Without this the grid's text is
+			// legible at row size for the first frames, which reads as a glitch rather than a grow.
+			enter = fadeIn(tween(CONTAINER_FADE_MILLIS)),
+			exit = fadeOut(tween(CONTAINER_FADE_MILLIS)),
+		)
+	}
+}
+
+/** Short: the fade is there to hide the size change, not to be seen in its own right. */
+private const val CONTAINER_FADE_MILLIS = 120
