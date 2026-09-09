@@ -12,9 +12,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.resources.Res
+import com.bitsycore.cardbrowser.resources.game_logo_altered
 import com.bitsycore.cardbrowser.resources.game_logo_magic
 import com.bitsycore.cardbrowser.resources.game_logo_onepiece
 import com.bitsycore.cardbrowser.resources.game_logo_pokemon
+import com.bitsycore.cardbrowser.resources.game_logo_riftbound
 import com.bitsycore.cardbrowser.resources.game_logo_wuwa
 import com.bitsycore.cardbrowser.resources.game_logo_yugioh
 import org.jetbrains.compose.resources.DrawableResource
@@ -23,14 +25,16 @@ import org.jetbrains.compose.resources.DrawableResource
  * A game's mark: its real logo where one can legitimately be used, and a Material symbol where it
  * cannot.
  *
- * ## Where the logos come from, and why five of seven
+ * ## Where the logos come from
  *
- * Every logo bundled here came from **Wikimedia Commons**, and that is the reason it can be bundled
- * at all. Commons accepts only freely-licensed media. A logo merely *shown* on Wikipedia usually
- * lives on Wikipedia itself under a non-free fair-use rationale that does not permit
- * redistribution; none of those are used here.
+ * Two different provenances, and the difference matters enough to keep straight.
  *
- * Each file's licence was checked individually through the Commons API rather than assumed:
+ * ### Five from Wikimedia Commons, licence-checked
+ *
+ * Commons accepts only freely-licensed media, which is what makes these bundleable. A logo merely
+ * *shown* on Wikipedia usually lives on Wikipedia itself under a non-free fair-use rationale that
+ * does not permit redistribution; none of those are used. Each licence was checked individually
+ * through the Commons API rather than assumed:
  *
  * | Game | Licence | Note |
  * | --- | --- | --- |
@@ -45,13 +49,37 @@ import org.jetbrains.compose.resources.DrawableResource
  * it to identify that owner's game -- the only thing this screen does with it -- is what trademarks
  * are for. The app remains unaffiliated with every publisher named, and says so on the same screen.
  *
- * **Riftbound and Altered have no logo here.** Both were searched for on Commons *and* on English
- * Wikipedia, under several names; Commons holds nothing, and the only Wikipedia files are a cover
- * and a card back uploaded under non-free fair-use rationales that do not permit redistribution.
- * Both games are recent enough that no freely-licensed mark exists yet. The alternatives were
- * scraping fan wikis for files of unknown provenance or hotlinking a publisher's CDN, neither of
- * which is worth doing to fill a tile, so they keep their Material mark -- which is why the
- * fallback below is not dead code.
+ * ### Two supplied by the project owner
+ *
+ * Riftbound and Altered are **not** in that table and are not equivalent to it. Neither exists on
+ * Commons -- both games are recent enough that no freely-licensed mark has been uploaded, and the
+ * only English Wikipedia files are a cover and a card back under non-free fair-use rationales. The
+ * two bundled here were chosen and supplied by the owner of this project from third-party sites (a
+ * card shop's CDN and a retailer's blog), and were downloaded and resized on request.
+ *
+ * So: no licence was verified for those two, because there is none to verify. They are the
+ * publishers' trademarks used to identify the publishers' own games, which is the ordinary
+ * nominative use every card database relies on, but anyone redistributing this app should make
+ * their own decision about them rather than assume they carry the same clearance as the five above.
+ *
+ * The Material fallback below is therefore no longer reached by any shipped game -- it remains
+ * because a logo that fails to load still has to draw something, and because the next game added
+ * will not have one on day one.
+ *
+ * ## Artwork drawn for dark backgrounds
+ *
+ * Three of these logos have no dark outline: Altered is a near-white wordmark, One Piece is flat
+ * yellow, and Riftbound sets a white "LEAGUE OF LEGENDS" under its orange title. On the light theme
+ * they wash out -- measured as the share of visible pixels falling below a 2:1 contrast ratio
+ * against a light tile, Altered loses 49% and One Piece 76%. Riftbound's overall figure is a milder
+ * 31%, but it is concentrated entirely in the subtitle, which disappears completely.
+ *
+ * Those three keep a dark tile on both themes, so the artwork sits on what it was drawn for.
+ *
+ * Magic, Pokémon and Yu-Gi-Oh are *not* flagged despite similar raw numbers, because their dark
+ * outlines carry the shape: they read correctly against a pale tile where an unoutlined wordmark
+ * does not. That is a judgement from looking at all seven on both themes, with the measurement as
+ * supporting evidence rather than as the rule.
  *
  * ## Monochrome marks
  *
@@ -65,31 +93,43 @@ import org.jetbrains.compose.resources.DrawableResource
  * Wuthering Waves logo is not its logo. The other four measure a mean saturation above 120 and are
  * full-colour artwork; tinting one would flatten it to a silhouette.
  *
- * @property icon a Material symbol. The fallback, and the whole answer for two of the seven
+ * @property icon a Material symbol. The fallback when a logo is absent or fails to load
  * @property accent used for the tile, so the rows are distinguishable at a glance
  * @property logo the game's real logo, or `null` to use [icon]
  * @property tintLogo true only for a single-colour wordmark, which is then drawn in the theme's
  *   foreground colour so it stays legible on both themes. Never true for colour artwork
+ * @property prefersDarkBackdrop true for artwork drawn for dark backgrounds, which then keeps a
+ *   dark tile on the light theme too. See the note below
  */
 data class GameVisual(
 	val icon: ImageVector,
 	val accent: Color,
 	val logo: DrawableResource? = null,
 	val tintLogo: Boolean = false,
+	val prefersDarkBackdrop: Boolean = false,
 ) {
 
 	companion object {
 
 		/** The mark for [game]. Total, so a new game cannot be added without choosing one. */
 		fun of(game: Game): GameVisual = when (game) {
-			// No freely-licensed logo exists for these two; see the class doc.
-			Game.RIFTBOUND -> GameVisual(Icons.Outlined.Bolt, Color(0xFF7C6BF5))
-			Game.ALTERED -> GameVisual(Icons.Outlined.Terrain, Color(0xFF4FA97C))
-
+			Game.RIFTBOUND -> GameVisual(
+				icon = Icons.Outlined.Bolt,
+				accent = Color(0xFF7C6BF5),
+				logo = Res.drawable.game_logo_riftbound,
+				prefersDarkBackdrop = true,
+			)
+			Game.ALTERED -> GameVisual(
+				icon = Icons.Outlined.Terrain,
+				accent = Color(0xFF4FA97C),
+				logo = Res.drawable.game_logo_altered,
+				prefersDarkBackdrop = true,
+			)
 			Game.ONE_PIECE -> GameVisual(
 				icon = Icons.Outlined.Sailing,
 				accent = Color(0xFF3E8FD0),
 				logo = Res.drawable.game_logo_onepiece,
+				prefersDarkBackdrop = true,
 			)
 
 			Game.POKEMON -> GameVisual(
@@ -119,7 +159,8 @@ data class GameVisual(
 		/**
 		 * The credit the Yu-Gi-Oh! logo's CC BY 3.0 licence requires.
 		 *
-		 * The four public-domain marks need none, so this is the only one. It is shown on the game
+		 * Only the Commons files carry a licence at all, and of those only Yu-Gi-Oh! requires a
+		 * credit. It is shown on the game
 		 * picker rather than buried in a settings page, because an attribution nobody sees is not
 		 * an attribution.
 		 */

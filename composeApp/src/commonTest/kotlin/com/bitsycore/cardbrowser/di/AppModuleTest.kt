@@ -137,11 +137,20 @@ class AppModuleTest {
 		for (vGame in vRegistry.games) {
 			val vVisual = com.bitsycore.cardbrowser.ui.games.GameVisual.of(vGame)
 			assertNotNull(vVisual.icon, "$vGame has no fallback mark")
-			// A tinted logo must be a single-colour silhouette; tinting full-colour artwork would
-			// flatten it. Nothing without a logo can be marked tintable.
+			// Neither presentation flag means anything without a logo to apply it to.
 			assertTrue(
 				!vVisual.tintLogo || vVisual.logo != null,
 				"$vGame is marked tintable but has no logo to tint",
+			)
+			assertTrue(
+				!vVisual.prefersDarkBackdrop || vVisual.logo != null,
+				"$vGame asks for a dark backdrop but has no logo to put on it",
+			)
+			// Tinting recolours the whole image, so a logo that needs its own colours kept must
+			// not also be tinted -- the two flags answer different questions.
+			assertTrue(
+				!(vVisual.tintLogo && vVisual.prefersDarkBackdrop),
+				"$vGame is both recoloured and given a dark plate; pick one",
 			)
 		}
 	}

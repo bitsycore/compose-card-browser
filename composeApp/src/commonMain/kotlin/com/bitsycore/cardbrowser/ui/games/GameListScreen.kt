@@ -195,9 +195,17 @@ private fun GameMark(visual: GameVisual) {
 			// 960x275 logo into a smear; the icon rows simply centre their glyph in the space.
 			.size(width = 72.dp, height = 48.dp)
 			.clip(RoundedCornerShape(12.dp))
-			// Tinted rather than saturated, so seven of these in a column read as one list rather
-			// than as a paint chart.
-			.background(visual.accent.copy(alpha = 0.18f)),
+			.background(
+				if (visual.prefersDarkBackdrop) {
+					// Artwork with no dark outline, drawn for dark backgrounds. It keeps one on
+					// both themes rather than washing out against a pale tile.
+					DARK_LOGO_BACKDROP
+				} else {
+					// Tinted rather than saturated, so seven of these in a column read as one
+					// list rather than as a paint chart.
+					visual.accent.copy(alpha = 0.18f)
+				},
+			),
 		contentAlignment = Alignment.Center,
 	) {
 		val vLogo = visual.logo
@@ -225,7 +233,16 @@ private fun GameMark(visual: GameVisual) {
 	}
 }
 
-/** The Material mark: the fallback, and the whole answer for the three games with no free logo. */
+/**
+ * The tile behind a logo that was drawn for a dark background.
+ *
+ * A fixed colour rather than a theme one, because the point is that it does *not* follow the theme
+ * -- see the note in [GameVisual]. Close to the dark theme's own surface, so on that theme it is
+ * nearly invisible and only the light theme sees a change.
+ */
+private val DARK_LOGO_BACKDROP = Color(0xFF201E26)
+
+/** The Material mark: the fallback for any game with no logo, and for a logo that will not load. */
 @Composable
 private fun GameMarkIcon(visual: GameVisual) {
 	Icon(

@@ -447,11 +447,13 @@ This app is not affiliated with any game's publisher.
 
 ### Game logos
 
-Five of the seven games show their real logo in the picker. Every one came from **Wikimedia
-Commons**, which is what makes bundling them possible: Commons accepts only freely-licensed media,
-whereas a logo merely *shown* on Wikipedia normally lives there under a non-free fair-use rationale
-that does not permit redistribution. Each file's licence was checked individually through the
-Commons API:
+All seven games show their real logo in the picker, but they do not all come from the same place
+and the difference matters.
+
+**Five from Wikimedia Commons**, which is what makes bundling them possible: Commons accepts only
+freely-licensed media, whereas a logo merely *shown* on Wikipedia normally lives there under a
+non-free fair-use rationale that does not permit redistribution. Each licence was checked
+individually through the Commons API:
 
 | Game | Licence | Attribution |
 |---|---|---|
@@ -465,14 +467,25 @@ Commons API:
 the file may be redistributed, while the trademark still belongs to its owner. Using it to identify
 that owner's game is what a trademark is for.
 
-**Riftbound and Altered keep a Material symbol.** Both were searched for on Commons *and* on
-English Wikipedia under several names: Commons holds nothing for either, and the only Wikipedia
-files are a cover and a card back uploaded under non-free fair-use rationales that do not permit
-redistribution. Both games are recent enough that no freely-licensed mark exists yet. The remaining
-options were scraping fan wikis for files of unknown provenance or hotlinking a publisher's CDN,
-and neither is worth doing to fill a tile.
+**Two supplied by the project owner.** Riftbound and Altered exist on neither Commons nor English
+Wikipedia under any name I searched — both games are recent enough that no freely-licensed mark has
+been uploaded, and the only Wikipedia files are a cover and a card back under non-free fair-use
+rationales. The two bundled here were chosen by the owner of this project from third-party sites (a
+card shop's CDN and a retailer's blog) and downloaded on request.
 
-The Wuthering Waves mark is a solid black wordmark, so it is drawn in the theme's foreground colour
-— its own black on the light theme, inverted to white on the dark one, which is how the official
-mark is presented against dark backgrounds. Not the row's accent colour: a teal Wuthering Waves
-logo is not its logo.
+**No licence was verified for those two, because there is none to verify.** They are publishers'
+trademarks used to identify the publishers' own games — the ordinary nominative use every card
+database relies on — but anyone redistributing this app should form their own view rather than
+assume they carry the clearance the five Commons files do.
+
+Two presentation rules, both driven by the artwork rather than by taste:
+
+- The Wuthering Waves mark is a solid black wordmark, so it is drawn in the theme's foreground
+  colour — its own black on the light theme, inverted to white on the dark one, which is how the
+  official mark is presented against dark backgrounds. Not the row accent: a teal Wuthering Waves
+  logo is not its logo.
+- Altered, One Piece and Riftbound have no dark outline and wash out on a light background — of
+  their visible pixels, 49%, 76% and 31% respectively fall below a 2:1 contrast ratio against a
+  pale tile, and Riftbound's are concentrated entirely in its "League of Legends" subtitle, which
+  vanishes. Those three keep a dark tile on both themes. Magic, Pokémon and Yu-Gi-Oh are not
+  flagged despite similar raw figures, because their dark outlines carry the shape.
