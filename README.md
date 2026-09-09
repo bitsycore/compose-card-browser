@@ -428,3 +428,27 @@ This app is not affiliated with any game's publisher.
 | Altered | the community **Altered TCG Card Database**; Altered is a trademark of Equinox |
 | Yu-Gi-Oh! | **YGOPRODeck**, not affiliated with Konami |
 | Wuthering Waves TCG | **UCP**'s official card list; not affiliated with UCP or Kuro Games |
+
+### Game logos
+
+Four of the seven games show their real logo in the picker. Every one came from **Wikimedia
+Commons**, which is what makes bundling them possible: Commons accepts only freely-licensed media,
+whereas a logo merely *shown* on Wikipedia normally lives there under a non-free fair-use rationale
+that does not permit redistribution. Each file's licence was checked individually through the
+Commons API:
+
+| Game | Licence | Attribution |
+|---|---|---|
+| Pokémon | Public domain (trademarked) | not required |
+| Magic: The Gathering | Public domain (trademarked) | not required |
+| Yu-Gi-Oh! | CC BY 3.0 | **required** — Kazuki Takahashi, credited in the app |
+| Wuthering Waves | Public domain (trademarked) | not required |
+
+"Public domain, trademarked" is the normal state of a wordmark: nobody holds a copyright in it, so
+the file may be redistributed, while the trademark still belongs to its owner. Using it to identify
+that owner's game is what a trademark is for.
+
+**Riftbound, One Piece and Altered keep a Material symbol**, because Commons holds no logo for any
+of them — all three are recent enough that no freely-licensed mark has been uploaded. The remaining
+options were scraping fan wikis for files of unknown provenance or hotlinking a publisher's CDN,
+and neither is worth doing to fill a tile.

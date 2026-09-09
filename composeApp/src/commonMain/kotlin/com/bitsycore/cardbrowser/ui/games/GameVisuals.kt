@@ -11,59 +11,99 @@ import androidx.compose.material.icons.outlined.Waves
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.resources.Res
+import com.bitsycore.cardbrowser.resources.game_logo_magic
+import com.bitsycore.cardbrowser.resources.game_logo_pokemon
+import com.bitsycore.cardbrowser.resources.game_logo_wuwa
+import com.bitsycore.cardbrowser.resources.game_logo_yugioh
+import org.jetbrains.compose.resources.DrawableResource
 
 /**
- * A mark and a colour for each game.
+ * A game's mark: its real logo where one can legitimately be used, and a Material symbol where it
+ * cannot.
  *
- * **These are not the games' logos, and none of them is passed off as one.** Every game here is a
- * trademarked product and this app is not affiliated with any of their publishers; shipping their
- * artwork would be both a licensing problem and the same category of dishonesty the rest of this
- * codebase avoids. Riftcodex, TCGdex and the others supply card art, not brand assets.
+ * ## Where the logos come from, and why only four of seven
  *
- * So each game gets a Material icon that gestures at its subject -- waves for Wuthering Waves, a
- * sail for One Piece -- plus a distinct colour. That is enough to tell seven rows apart at a
- * glance, which is what the icon is for, without implying any of them is official.
+ * Every logo bundled here came from **Wikimedia Commons**, and that is the reason it can be bundled
+ * at all. Commons accepts only freely-licensed media. A logo merely *shown* on Wikipedia usually
+ * lives on Wikipedia itself under a non-free fair-use rationale that does not permit
+ * redistribution; none of those are used here.
  *
- * Colours are picked for separation from one another rather than to match a brand.
+ * Each file's licence was checked individually through the Commons API rather than assumed:
  *
- * ## Supplying real logos
+ * | Game | Licence | Note |
+ * | --- | --- | --- |
+ * | Pokémon | Public domain | Below the threshold of originality. Trademarked. |
+ * | Magic | Public domain | Below the threshold of originality. Trademarked. |
+ * | Yu-Gi-Oh! | **CC BY 3.0** | Attribution required -- Kazuki Takahashi. Shown in the app. |
+ * | Wuthering Waves | Public domain | Below the threshold of originality. Trademarked. |
  *
- * [logoUrl] is the slot for them, and it is empty in this repository on purpose.
+ * "Public domain, trademarked" is the ordinary state of a wordmark: no one holds a *copyright* in
+ * it, so redistributing the file is fine, while the *trademark* still belongs to its owner. Using
+ * it to identify that owner's game -- the only thing this screen does with it -- is what trademarks
+ * are for. The app remains unaffiliated with every publisher named, and says so on the same screen.
  *
- * No provider publishes one. All seven were checked: TCGdex, Scryfall and YGOPRODeck publish *set*
- * and *series* artwork, which is a different thing, and the publishers' own sites either serve no
- * logo as a static asset or serve one in a style that matches none of the others. Committing brand
- * artwork scraped from fan wikis would mean shipping files of unknown provenance and hotlinking
- * somebody's CDN, so nothing is committed here.
+ * **Riftbound, One Piece and Altered have no logo here** because Commons holds none -- all three
+ * are recent enough that no freely-licensed mark has been uploaded. The alternatives were scraping
+ * fan wikis for files of unknown provenance or hotlinking a publisher's CDN, neither of which is
+ * worth doing to fill a tile. They keep their Material mark, which is why the fallback below is not
+ * dead code.
  *
- * Filling a slot in is one line each. Point it at a bundled asset or a URL you are happy to use,
- * and the picker shows it instead of the Material mark; a slot left null, or an image that fails to
- * load, falls back to the mark automatically, so a broken or missing logo can never leave an empty
- * row.
- *
- * @property icon a Material symbol, never a logo. The fallback, and today the default
+ * @property icon a Material symbol. The fallback, and the whole answer for three of the seven
  * @property accent used for the tile, so the rows are distinguishable at a glance
- * @property logoUrl the game's real logo, when one has been supplied. `null` uses [icon]
+ * @property logo the game's real logo, or `null` to use [icon]
+ * @property tintLogo true for a logo that is a single-colour silhouette. The Wuthering Waves mark
+ *   is solid black -- mean luminance of its visible pixels measured at 0 -- so drawn untinted it is
+ *   invisible against the dark theme. The other three are full-colour and must never be tinted
  */
 data class GameVisual(
 	val icon: ImageVector,
 	val accent: Color,
-	val logoUrl: String? = null,
+	val logo: DrawableResource? = null,
+	val tintLogo: Boolean = false,
 ) {
 
 	companion object {
 
 		/** The mark for [game]. Total, so a new game cannot be added without choosing one. */
 		fun of(game: Game): GameVisual = when (game) {
+			// No freely-licensed logo exists for these three; see the class doc.
 			Game.RIFTBOUND -> GameVisual(Icons.Outlined.Bolt, Color(0xFF7C6BF5))
-			// Material ships an actual Poké Ball glyph. It is a Material icon rather than
-			// Nintendo's mark, which is exactly the distinction this class is about.
-			Game.POKEMON -> GameVisual(Icons.Filled.CatchingPokemon, Color(0xFFE4573D))
-			Game.MAGIC -> GameVisual(Icons.Outlined.AutoAwesome, Color(0xFFD9A441))
 			Game.ONE_PIECE -> GameVisual(Icons.Outlined.Sailing, Color(0xFF3E8FD0))
 			Game.ALTERED -> GameVisual(Icons.Outlined.Terrain, Color(0xFF4FA97C))
-			Game.YU_GI_OH -> GameVisual(Icons.Outlined.Casino, Color(0xFF9B5FC0))
-			Game.WUTHERING_WAVES -> GameVisual(Icons.Outlined.Waves, Color(0xFF2FA8A0))
+
+			Game.POKEMON -> GameVisual(
+				icon = Icons.Filled.CatchingPokemon,
+				accent = Color(0xFFE4573D),
+				logo = Res.drawable.game_logo_pokemon,
+			)
+			Game.MAGIC -> GameVisual(
+				icon = Icons.Outlined.AutoAwesome,
+				accent = Color(0xFFD9A441),
+				logo = Res.drawable.game_logo_magic,
+			)
+			Game.YU_GI_OH -> GameVisual(
+				icon = Icons.Outlined.Casino,
+				accent = Color(0xFF9B5FC0),
+				logo = Res.drawable.game_logo_yugioh,
+			)
+			Game.WUTHERING_WAVES -> GameVisual(
+				icon = Icons.Outlined.Waves,
+				accent = Color(0xFF2FA8A0),
+				logo = Res.drawable.game_logo_wuwa,
+				// A solid black silhouette. Untinted it disappears on the dark theme.
+				tintLogo = true,
+			)
 		}
+
+		/**
+		 * The credit the Yu-Gi-Oh! logo's CC BY 3.0 licence requires.
+		 *
+		 * The three public-domain marks need none, so this is the only one. It is shown on the game
+		 * picker rather than buried in a settings page, because an attribution nobody sees is not
+		 * an attribution.
+		 */
+		const val LOGO_ATTRIBUTION: String =
+			"Game logos from Wikimedia Commons. The Yu-Gi-Oh! logo is by Kazuki Takahashi, CC BY 3.0."
 	}
 }

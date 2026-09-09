@@ -127,22 +127,21 @@ class AppModuleTest {
 	}
 
 	@Test
-	fun `every game has a mark -- and none silently claims to be a logo`() {
-		// `GameVisual.of` is exhaustive, so this cannot fail by omission -- it fails by not
-		// compiling. What it does check is the invariant the class documents: the fallback mark is
-		// always present, so a game whose logo slot is empty or whose logo fails to load still
-		// draws something.
+	fun `every game has a fallback mark -- logo or not`() {
+		// `GameVisual.of` is exhaustive, so a new game cannot skip this by omission -- it fails to
+		// compile instead. What this checks is the invariant the class documents: the Material mark
+		// is always present, because only four of the seven games have a freely-licensed logo and
+		// the other three rely on the fallback permanently.
 		val vRegistry = graph().get<ProviderRegistry>()
 
 		for (vGame in vRegistry.games) {
 			val vVisual = com.bitsycore.cardbrowser.ui.games.GameVisual.of(vGame)
 			assertNotNull(vVisual.icon, "$vGame has no fallback mark")
-			// Empty in this repository on purpose: no provider publishes a game logo and no brand
-			// artwork is committed here. If this ever fails, someone has added one -- check they
-			// had the right to.
+			// A tinted logo must be a single-colour silhouette; tinting full-colour artwork would
+			// flatten it. Nothing without a logo can be marked tintable.
 			assertTrue(
-				vVisual.logoUrl == null || vVisual.logoUrl.startsWith("http"),
-				"$vGame has a logo slot filled with something that is not a URL",
+				!vVisual.tintLogo || vVisual.logo != null,
+				"$vGame is marked tintable but has no logo to tint",
 			)
 		}
 	}

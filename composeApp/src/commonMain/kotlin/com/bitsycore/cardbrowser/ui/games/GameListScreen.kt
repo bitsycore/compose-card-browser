@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.ui.games
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,14 +33,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import coil3.compose.SubcomposeAsyncImage
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.ui.common.LoadingState
+import org.jetbrains.compose.resources.painterResource
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import org.koin.compose.viewmodel.koinViewModel
@@ -119,7 +121,7 @@ fun GameListContent(
 						Text(
 							text = "Every game listed has a working data source. Card data is " +
 								"supplied by the projects named above; this app is not affiliated " +
-								"with any game's publisher.",
+								"with any game's publisher. " + GameVisual.LOGO_ATTRIBUTION,
 							style = MaterialTheme.typography.bodySmall,
 							color = MaterialTheme.colorScheme.onSurfaceVariant,
 							modifier = Modifier.padding(horizontal = 4.dp, vertical = 16.dp),
@@ -189,39 +191,35 @@ private fun GameRow(
 private fun GameMark(visual: GameVisual) {
 	Box(
 		modifier = Modifier
-			.size(48.dp)
+			// Wider than it is tall, because most of these are wordmarks. A square tile squeezes a
+			// 960x275 logo into a smear; the icon rows simply centre their glyph in the space.
+			.size(width = 72.dp, height = 48.dp)
 			.clip(RoundedCornerShape(12.dp))
 			// Tinted rather than saturated, so seven of these in a column read as one list rather
 			// than as a paint chart.
 			.background(visual.accent.copy(alpha = 0.18f)),
 		contentAlignment = Alignment.Center,
 	) {
-		val vLogo = visual.logoUrl
+		val vLogo = visual.logo
 		if (vLogo == null) {
-			Icon(
-				imageVector = visual.icon,
-				contentDescription = null,
-				tint = visual.accent,
-				modifier = Modifier.size(26.dp),
-			)
+			GameMarkIcon(visual)
 		} else {
-			// A real logo, when one has been supplied. `Fit` rather than `Crop` because logos are
-			// wordmarks of every aspect ratio and cropping one is worse than letterboxing it.
-			SubcomposeAsyncImage(
-				model = vLogo,
+			// `Fit` rather than `Crop`: these are wordmarks of every aspect ratio -- the Magic one
+			// is 960x275 -- and cropping one is far worse than letterboxing it.
+			Image(
+				painter = painterResource(vLogo),
 				contentDescription = null,
 				contentScale = ContentScale.Fit,
-				modifier = Modifier.fillMaxSize().padding(6.dp),
-				// A logo that has not arrived yet, or will never arrive, shows the mark rather
-				// than an empty tile -- so a bad URL degrades instead of breaking the row.
-				loading = { GameMarkIcon(visual) },
-				error = { GameMarkIcon(visual) },
+				modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 10.dp),
+				// Only for a single-colour silhouette; tinting full-colour artwork would flatten
+				// it to a blob. See `GameVisual.tintLogo`.
+				colorFilter = if (visual.tintLogo) ColorFilter.tint(visual.accent) else null,
 			)
 		}
 	}
 }
 
-/** The Material fallback, shared by the null case and by a logo that fails to load. */
+/** The Material mark: the fallback, and the whole answer for the three games with no free logo. */
 @Composable
 private fun GameMarkIcon(visual: GameVisual) {
 	Icon(
