@@ -6,6 +6,7 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.UserAgent
 import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.http.HttpHeaders
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.delay
@@ -14,6 +15,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.math.pow
 import kotlin.time.TimeSource
 
 /**
@@ -95,9 +97,20 @@ object HttpClientFactory {
 			maxRetries = policy.maxRetries
 			retryOnServerErrors(maxRetries = policy.maxRetries)
 			retryOnExceptionIf { _, vCause -> vCause is io.ktor.client.plugins.HttpRequestTimeoutException }
-			exponentialDelay(base = policy.retryBackoffBase, maxDelayMs = policy.retryMaxDelayMillis)
 			// Honour a Retry-After when the provider sends one, rather than backing off blind.
-			modifyRequest { it.headers.remove("Retry-After") }
+			//
+			// This used to be `modifyRequest { it.headers.remove("Retry-After") }`, which strips a
+			// *request* header nothing ever set: a no-op standing in for the behaviour the comment
+			// claimed. A provider that starts answering 429 with a Retry-After was going to be
+			// retried on a blind exponential schedule regardless of what it asked for.
+			delayMillis { vAttempt ->
+				val vAsked = response?.headers?.get(HttpHeaders.RetryAfter)?.toLongOrNull()
+				// Seconds on the wire, and capped: a provider asking for an hour should not hang a
+				// request for an hour. Past the cap the retry is abandoned rather than delayed.
+				vAsked?.times(1_000)?.coerceAtMost(policy.retryMaxDelayMillis)
+					?: (policy.retryBackoffBase.pow(vAttempt) * 1_000).toLong()
+						.coerceAtMost(policy.retryMaxDelayMillis)
+			}
 		}
 
 		defaultRequest {

@@ -129,7 +129,11 @@ class CardGridViewModel(
 				if (vCards?.isCompleteSet == true) {
 					dispatch(
 						CardGridContract.Intent.FacetsComputed(
-							mRepository.facetsFor(vSetId, vGame.id),
+							// The language matters: it is part of the cache key, and omitting it read
+							// `…/set/…/fr` while the grid had written `…/set/…/en`. The miss was
+							// silent -- an empty `CardFacets` -- so the filter sheet came up with no
+							// chips at all for a set that was fully downloaded.
+							mRepository.facetsFor(vSetId, vGame.id, vLanguage),
 						),
 					)
 				}

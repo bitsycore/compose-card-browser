@@ -120,19 +120,42 @@ class PreferencesStore(
 	private val mFile get() = mStorage.preferencesRoot / FILE_NAME
 
 	/** Reads from disk into [preferences]. Call once at startup. */
+	init {
+		// Read here, synchronously, and not only from [load].
+		//
+		// Two things read `preferences.value` before any coroutine has had a chance to run: the
+		// image loader, which is built in the first composition and takes its disk budget from it,
+		// and the metadata cache's byte-limit lambda. Both were therefore always constructed
+		// against the *defaults* -- so a user who set the image cache to 128 MB got a 1 GB one
+		// anyway, and the settings screen drew a usage bar against a limit nothing was enforcing.
+		//
+		// It is one small JSON file. Blocking the caller for it at construction is cheaper than
+		// every consumer having to wait for a flow that may already have missed its moment.
+		mState.value = readFromDisk()
+	}
+
+	/** Re-reads from disk. Kept for callers that want to pick up an external change. */
 	suspend fun load() {
-		val vLoaded = withContext(mIoDispatcher) {
-			try {
-				if (!mStorage.fileSystem.exists(mFile)) return@withContext BrowsingPreferences()
-				val vText = mStorage.fileSystem.source(mFile).buffer().use { it.readUtf8() }
-				mJson.decodeFromString(BrowsingPreferences.serializer(), vText)
-			} catch (vSerialization: SerializationException) {
-				BrowsingPreferences()
-			} catch (vIo: IOException) {
-				BrowsingPreferences()
-			}
+		mState.value = withContext(mIoDispatcher) { readFromDisk() }
+	}
+
+	/**
+	 * The stored preferences, or the defaults.
+	 *
+	 * A corrupt or unreadable file falls back rather than throwing: preferences are not worth a
+	 * crash, and the defaults are all valid.
+	 */
+	private fun readFromDisk(): BrowsingPreferences = try {
+		if (!mStorage.fileSystem.exists(mFile)) {
+			BrowsingPreferences()
+		} else {
+			val vText = mStorage.fileSystem.source(mFile).buffer().use { it.readUtf8() }
+			mJson.decodeFromString(BrowsingPreferences.serializer(), vText)
 		}
-		mState.value = vLoaded
+	} catch (vSerialization: SerializationException) {
+		BrowsingPreferences()
+	} catch (vIo: IOException) {
+		BrowsingPreferences()
 	}
 
 	/** Applies [transform] and persists the result. */

@@ -27,6 +27,7 @@ import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.ProviderRoute
+import com.bitsycore.cardbrowser.data.cache.Completeness
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
 import com.bitsycore.cardbrowser.data.repository.CardRepository
@@ -613,11 +614,72 @@ class CardRepositoryTest {
 		val vEmissions = repositoryFor(FakeProvider(mProviderId, vPages), vFileSystem)
 			.cards(mSetId, TestGame.id, CardQuery()).toList()
 
-		assertEquals(2, vEmissions.size)
-		assertEquals(DataOrigin.CACHE, vEmissions[0].origin)
-		assertTrue(vEmissions[0].isStale)
-		assertEquals(3, vEmissions[0].value?.cards?.size)
-		assertEquals(DataOrigin.NETWORK, vEmissions[1].origin)
+		assertEquals(DataOrigin.CACHE, vEmissions.first().origin)
+		assertTrue(vEmissions.first().isStale)
+		assertEquals(3, vEmissions.first().value?.cards?.size)
+		assertEquals(DataOrigin.NETWORK, vEmissions.last().origin)
+	}
+
+	@Test
+	fun `a stale set is refreshed as a whole set -- and the refresh is kept`() = runTest {
+		// Regression, and it was permanent. The refresh route was chosen by
+		// `requiresCompleteSet(query) || vCachedComplete == null`, and `requiresCompleteSet` is
+		// false for an *empty* query -- so reopening a fully downloaded set a day later, with no
+		// filters, took the single-page branch. That fetched page one, presented it as fresh with
+		// `isCompleteSet = false`, and wrote nothing back. The grid replaced a whole set with its
+		// first page and called it partial, the filter sheet emptied because facets need a complete
+		// set, and `fetchedAt` never advanced -- so it repeated on every open, forever.
+		val vFileSystem = FakeFileSystem()
+		val vPages = listOf(listOf(card(1), card(2)), listOf(card(3)))
+		repositoryFor(FakeProvider(mProviderId, vPages), vFileSystem)
+			.cards(mSetId, TestGame.id, CardQuery()).toList()
+
+		mNow += CardRepository.DEFAULT_CARDS_TTL_MILLIS + 1
+		val vRefreshed = repositoryFor(FakeProvider(mProviderId, vPages), vFileSystem)
+			.cards(mSetId, TestGame.id, CardQuery()).toList().last()
+
+		// The whole set, and known to be whole.
+		assertEquals(3, vRefreshed.value?.cards?.size)
+		assertTrue(vRefreshed.value?.isCompleteSet == true, "a refresh must not downgrade the set")
+		assertEquals(Completeness.COMPLETE, vRefreshed.completeness)
+
+		// And it was written back, so the next open costs nothing. This is the half that made the
+		// old bug permanent rather than merely wasteful.
+		val vProvider = FakeProvider(mProviderId, vPages)
+		val vNext = repositoryFor(vProvider, vFileSystem)
+			.cards(mSetId, TestGame.id, CardQuery()).toList()
+
+		assertEquals(1, vNext.size, "a fresh cached set should answer on its own")
+		assertEquals(DataOrigin.CACHE, vNext.single().origin)
+		assertFalse(vNext.single().isStale)
+		assertEquals(0, vProvider.listCardsCallCount, "no request should have been made")
+	}
+
+	@Test
+	fun `a partial cached set is repaired rather than re-served forever`() = runTest {
+		// The same routing bug from the other side: a cached PARTIAL set -- an interrupted download
+		// -- also took the single-page branch, so it could never become complete however many times
+		// the user opened it.
+		val vFileSystem = FakeFileSystem()
+		// Two pages advertised, and the second one fails -- so page one is cached as PARTIAL. A
+		// single page with `hasMore = false` would be legitimately *complete* at two cards, which
+		// is not the case under test.
+		val vFailing = FakeProvider(
+			mProviderId,
+			listOf(listOf(card(1), card(2)), listOf(card(3))),
+			mFailFromPage = 2,
+		)
+		repositoryFor(vFailing, vFileSystem).cards(mSetId, TestGame.id, CardQuery(), knownSetSize = 3)
+			.toList()
+
+		// Now the provider is healthy and the whole set is available.
+		val vHealthy = FakeProvider(mProviderId, listOf(listOf(card(1), card(2)), listOf(card(3))))
+		val vResult = repositoryFor(vHealthy, vFileSystem)
+			.cards(mSetId, TestGame.id, CardQuery(), knownSetSize = 3)
+			.toList().last()
+
+		assertEquals(3, vResult.value?.cards?.size, "the partial set must be completed")
+		assertEquals(Completeness.COMPLETE, vResult.completeness)
 	}
 
 	@Test

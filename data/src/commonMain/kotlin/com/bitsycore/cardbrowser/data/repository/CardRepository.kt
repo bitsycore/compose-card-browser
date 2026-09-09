@@ -178,12 +178,14 @@ class CardRepository(
 		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>()))
 		val vCachedComplete = mCache.read(vCompleteKey, vSerializer)
 		val vNow = mClock()
+		// Hoisted out of the block below, because the refresh decision needs it too: a stale set is
+		// refreshed as a whole set, not as a single page.
+		val vIsStale = vCachedComplete?.isStale(vNow, mCardsTtlMillis) ?: true
 
 		// 1. Answer from a cached complete set whenever one exists. Even when it is stale it is
 		//    emitted first, because a filtered screen that draws instantly and then refreshes beats
 		//    a spinner over data we already have.
 		if (vCachedComplete != null) {
-			val vIsStale = vCachedComplete.isStale(vNow, mCardsTtlMillis)
 			emit(
 				DataSnapshot.cached(
 					value = cachedSetCards(
@@ -201,12 +203,27 @@ class CardRepository(
 			if (!vIsStale && vCachedComplete.completeness == Completeness.COMPLETE) return@flow
 		}
 
+		// Anything that is not "a fresh complete set, already answered above" is refreshed by
+		// fetching the whole set.
+		//
+		// This condition used to be `requiresCompleteSet(query) || vCachedComplete == null`, and the
+		// gap between the two was a permanent bug. `requiresCompleteSet` is false for an *empty*
+		// query, so reopening a fully-downloaded set a day later -- stale but complete, no filters,
+		// the single most ordinary thing a user does -- took the single-page branch. That fetched
+		// page 1 only, emitted it as fresh with `isCompleteSet = false`, and wrote nothing. So a
+		// 358-card grid was replaced by 100 cards labelled "Partial set: 100 of 358 downloaded"
+		// while the whole set sat on disk, `facetsFor` stopped returning facets because the set no
+		// longer read as complete, and `fetchedAt` never advanced -- so it happened again on every
+		// single open, forever. A cached PARTIAL set could never be repaired for the same reason.
 		val vNeedsCompleteSet = vProvider.capabilities.filtering.requiresCompleteSet(query) ||
 			// No cached complete set and no local filter needed still warrants fetching the whole
 			// set here: sets are at most a few hundred cards, the pages are needed for scrolling
 			// anyway, and holding the complete set is what makes every later filter instant and
 			// every later launch offline-capable.
-			vCachedComplete == null
+			vCachedComplete == null ||
+			// Stale, or never finished. Either way the answer is the whole set, not a page of it.
+			vIsStale ||
+			vCachedComplete.completeness != Completeness.COMPLETE
 
 		try {
 			if (vNeedsCompleteSet) {
@@ -430,10 +447,20 @@ class CardRepository(
 		// then cached as a complete set, so the empty set was served from disk forever after.
 		if (vTotal != null && vBest.size < vTotal) vComplete = false
 
+		// If the refresh collected less than what was already cached, `vBest` *is* the cached
+		// payload -- so it is as complete as it ever was, and re-filing it as PARTIAL because this
+		// attempt failed would be a lie about the data. That downgrade was silent and permanent:
+		// a set that fell back like this stopped offering filter chips, stopped counting towards
+		// "sets searched", and could never short-circuit again.
+		val vKeptPreviousPayload = vBest === previouslyCached
 		val vDeduped = dedupePrintings(vBest)
 
 		val vFetchedAt = mClock()
-		val vCompleteness = if (vComplete) Completeness.COMPLETE else Completeness.PARTIAL
+		val vCompleteness = if (vComplete || vKeptPreviousPayload) {
+			Completeness.COMPLETE
+		} else {
+			Completeness.PARTIAL
+		}
 		mCache.write(
 			key = completeSetKey(provider, setId, language),
 			envelope = CacheEnvelope(
@@ -633,12 +660,17 @@ class CardRepository(
 				),
 			)
 		} catch (vError: ProviderError) {
+			// The cached page for *this* search where there is one, and only the local sets
+			// otherwise. Falling straight back to `vLocal` meant a failed refresh replaced 60
+			// visible cached results with an empty list, and the screen drew a full-page "No
+			// connection" over results the user could see a moment earlier.
+			val vFallback = vCachedSearch?.let { searchResultsOf(it.payload, knownSets) } ?: vLocal
 			emit(
 				DataSnapshot(
-					value = vLocal,
+					value = vFallback,
 					origin = DataOrigin.CACHE,
-					completeness = Completeness.PARTIAL,
-					fetchedAtEpochMillis = mClock(),
+					completeness = vCachedSearch?.completeness ?: Completeness.PARTIAL,
+					fetchedAtEpochMillis = vCachedSearch?.fetchedAtEpochMillis ?: mClock(),
 					isStale = true,
 					error = vError,
 				),

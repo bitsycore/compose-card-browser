@@ -77,7 +77,14 @@ class CardDetailViewModel(
 		// load. Returning beats guessing at one, which is what the old `?: Game.RIFTBOUND` did.
 		val vGame = mRegistry.gameFor(vCardId.provider) ?: return
 
-		val vCards = siblingsFor(intent.setId, vSetId, vCardId, vGame)
+		// Every repository call below passes the language, because it is part of every cache key.
+		// Omitting it resolved to the first language the provider happened to carry -- French, for
+		// most of them -- so this screen looked for its data under a key the grid had never
+		// written: a set list refetched, a card refetched in the wrong language, and a second full
+		// download of a set that was already on disk.
+		val vLanguage = mPreferences.preferences.value.primaryLanguage
+
+		val vCards = siblingsFor(intent.setId, vSetId, vCardId, vGame, vLanguage)
 		val vIndex = vCards.indexOfFirst { it.id == vCardId }
 
 		// The tapped card may be absent from the list -- a stale session, or a set that could not
@@ -87,13 +94,13 @@ class CardDetailViewModel(
 			vCards to vIndex
 		} else {
 			val vSingle = mRepository
-				.cardDetail(id = vCardId, game = vGame.id, setId = vSetId)
+				.cardDetail(id = vCardId, game = vGame.id, setId = vSetId, language = vLanguage)
 				.value
 			if (vSingle != null) listOf(vSingle) to 0 else emptyList<CardPrinting>() to 0
 		}
 
 		val vSet = if (vSetId != null) {
-			mRepository.setList(vGame.id).first().value?.firstOrNull { it.id == vSetId }
+			mRepository.setList(vGame.id, vLanguage).first().value?.firstOrNull { it.id == vSetId }
 		} else {
 			null
 		}
@@ -202,12 +209,13 @@ class CardDetailViewModel(
 		setId: SourceId?,
 		cardId: SourceId,
 		game: GameProfile,
+		language: CardLanguage,
 	): List<CardPrinting> {
 		val vFromSession = mSession.cardsFor(rawSetId)
 		if (vFromSession.any { it.id == cardId }) return vFromSession
 		if (setId == null) return emptyList()
 		return mRepository
-			.cards(setId = setId, game = game.id, query = CardQuery())
+			.cards(setId = setId, game = game.id, query = CardQuery(), language = language)
 			.first()
 			.value
 			?.cards

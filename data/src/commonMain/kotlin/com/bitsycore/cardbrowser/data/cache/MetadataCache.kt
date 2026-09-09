@@ -86,7 +86,13 @@ class MetadataCache(
 				deleteQuietly(vPath)
 				null
 			} catch (vIo: IOException) {
-				deleteQuietly(vPath)
+				// Kept, deliberately. A malformed record is deleted just above -- it can never be
+				// read and holding it wastes the budget -- but an I/O failure means "not readable
+				// *now*": too many open files, a locked file, an OS cache purge racing the read,
+				// iOS data protection on a locked device. Deleting on that destroyed the only copy
+				// of a set at the exact moment there was no network to fetch it again, which made
+				// this the one unrecoverable path in a cache where every other failure costs a
+				// re-download.
 				null
 			}
 		}
