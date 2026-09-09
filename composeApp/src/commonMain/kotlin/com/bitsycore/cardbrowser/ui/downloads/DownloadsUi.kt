@@ -67,13 +67,21 @@ fun DownloadKindDialog(
 	cardCount: Int?,
 	onDismiss: () -> Unit,
 	onConfirm: (Set<DownloadKind>) -> Unit,
+	/**
+	 * How many sets this covers. 1 for a single row; more for "download all".
+	 *
+	 * Above one the dialog stops pretending to be about a set and starts warning, because "download
+	 * all" on Magic is 988 sets and tens of thousands of images.
+	 */
+	setCount: Int = 1,
 ) {
 	var vInfo by remember { mutableStateOf(true) }
+	// Never pre-ticked, and least of all for a bulk download.
 	var vImages by remember { mutableStateOf(false) }
 
 	AlertDialog(
 		onDismissRequest = onDismiss,
-		title = { Text("Download $setName") },
+		title = { Text(if (setCount > 1) "Download $setCount sets" else "Download $setName") },
 		text = {
 			Column {
 				KindRow(
@@ -82,8 +90,13 @@ fun DownloadKindDialog(
 					title = "Card info",
 					// Deliberately not "small": the honest thing is to say what it is, since a set
 					// with an unknown card count cannot be sized at all.
-					detail = cardCount?.let { "$it cards. Names, numbers, rarities and rules text." }
-						?: "Names, numbers, rarities and rules text.",
+					detail = when {
+						setCount > 1 && cardCount != null ->
+							"About $cardCount cards across $setCount sets. Names, numbers, " +
+								"rarities and rules text."
+						cardCount != null -> "$cardCount cards. Names, numbers, rarities and rules text."
+						else -> "Names, numbers, rarities and rules text."
+					},
 				)
 				Spacer(Modifier.height(8.dp))
 				KindRow(
@@ -92,12 +105,22 @@ fun DownloadKindDialog(
 					title = "Card images",
 					detail = cardCount
 						?.let { "Two images per card, about ${estimateMegabytes(it)} MB in total." }
-						?: "Two images per card: the grid thumbnail and the full-size art.",
+						?: "Two images per card: the grid thumbnail and the full-size art. Size " +
+							"unknown, because these sets do not state a card count.",
 				)
 				Spacer(Modifier.height(12.dp))
 				Text(
-					text = "Downloads run one set at a time, to stay within what these free APIs " +
-						"allow. You can keep browsing while one runs.",
+					text = if (setCount > 1) {
+						// The honest warning. A queue of 988 sets is hours of work against someone
+						// else's free API, and the user should know that before starting, not
+						// discover it from a badge that will not go down.
+						"$setCount sets will be queued and downloaded one at a time, to stay " +
+							"within what these free APIs allow. That can take a long while. You " +
+							"can keep browsing, and you can stop it from the downloads button."
+					} else {
+						"Downloads run one set at a time, to stay within what these free APIs " +
+							"allow. You can keep browsing while one runs."
+					},
 					style = MaterialTheme.typography.bodySmall,
 					color = MaterialTheme.colorScheme.onSurfaceVariant,
 				)
@@ -351,4 +374,17 @@ private fun DownloadKindDialogPreview() = PreviewFrame {
 private fun DownloadKindDialogUnknownSizePreview() = PreviewFrame {
 	// No card count, so no size estimate is offered rather than a made-up one.
 	DownloadKindDialog(setName = "Promos", cardCount = null, onDismiss = {}, onConfirm = {})
+}
+
+@Preview
+@Composable
+private fun DownloadAllDialogPreview() = PreviewFrame {
+	// The bulk case, which warns rather than reassures.
+	DownloadKindDialog(
+		setName = "",
+		cardCount = 21_450,
+		setCount = 88,
+		onDismiss = {},
+		onConfirm = {},
+	)
 }

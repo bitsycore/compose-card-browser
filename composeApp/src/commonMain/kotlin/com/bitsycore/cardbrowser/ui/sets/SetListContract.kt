@@ -37,6 +37,12 @@ object SetListContract :
 		 * not a game this app offers, and putting it in the switcher would produce a menu item that
 		 * leads to an empty screen. Cyberpunk TCG is exactly that case today.
 		 */
+		/**
+		 * Every game this build serves.
+		 *
+		 * Populated, and currently read by nothing but the render harness -- the top bar shows the
+		 * game's logo rather than a row of chips. Kept for the same reason as [Intent.GameChanged].
+		 */
 		val availableGames: List<GameProfile> = emptyList(),
 		val search: String = "",
 		val isLoading: Boolean = true,
@@ -145,6 +151,16 @@ object SetListContract :
 		 * Clears the list rather than keeping the old one visible under a new title: the sets of
 		 * one game are not a stale view of another game's, they are simply the wrong data, and
 		 * leaving them on screen for the length of a load would show Pokémon sets under "Magic".
+		 */
+		/**
+		 * Switch game without leaving this screen.
+		 *
+		 * **Nothing dispatches this today.** The chip row that did was removed once the game picker
+		 * became a screen of its own: two ways to change game, one of which duplicated the screen
+		 * above it. The transition is kept, and tested, because it is correct and because putting a
+		 * switcher back is a plausible thing to want -- but it is unreachable from the UI as it
+		 * stands, and this note exists so nobody spends an afternoon working out why their taps do
+		 * nothing.
 		 */
 		data class GameChanged(val game: GameProfile) : Intent
 

@@ -43,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.bitsycore.cardbrowser.data.download.DownloadJob
+import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.data.download.DownloadKind
 import com.bitsycore.cardbrowser.data.download.DownloadManager
 import com.bitsycore.cardbrowser.data.download.DownloadRequest
@@ -50,6 +51,13 @@ import com.bitsycore.cardbrowser.ui.downloads.DownloadKindDialog
 import com.bitsycore.cardbrowser.ui.downloads.DownloadsButton
 import com.bitsycore.cardbrowser.ui.downloads.DownloadsDialog
 import org.koin.compose.koinInject
+import androidx.compose.foundation.Image
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.foundation.layout.heightIn
+import com.bitsycore.cardbrowser.games.api.GameArt
+import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
+import org.jetbrains.compose.resources.painterResource
+import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,6 +108,11 @@ fun SetListScreen(
 	// as plain state -- `SetListContent` stays free of Koin and therefore previewable.
 	val vDownloads = koinInject<DownloadManager>()
 	val vJobs by vDownloads.jobs.collectAsState()
+	val vPreferences = koinInject<PreferencesStore>()
+	// Resolved here rather than in `SetListContent`, so the content stays free of Koin and keeps
+	// previewing. `null` for a game whose module ships no logo, which the title falls back for.
+	val vArtRegistry = koinInject<GameArtRegistry>()
+	val vArt = vState.game?.let(vArtRegistry::forGame)
 
 	SetListContent(
 		state = vState,
@@ -116,21 +129,26 @@ fun SetListScreen(
 					game = vSet.game,
 					setName = vSet.name,
 					kinds = vKinds,
-					// No language, which means the provider's own default for this user -- the
-					// same thing opening the set from here would fetch.
+					// The user's preferred language, which is what every other caller passes --
+					// not `null`.
 					//
-					// The set list has no language of its own; that choice lives on the card grid,
-					// per set. So a set downloaded from here and then switched to another language
-					// on the grid will fetch that language separately, because they are separate
-					// cache entries. Downloading from the grid instead of here would be the way to
-					// pin a specific one, and this button does not pretend to.
-					language = null,
+					// A cache key embeds the language, so a download written under `null` and a
+					// grid or a search reading under `fr` are different files: the set would come
+					// down, and then not be found by the search that was the reason for
+					// downloading it. `CardRepository` normalises this once against what the
+					// provider can really answer in, so passing the preference is correct even for
+					// a source that cannot serve it.
+					//
+					// This is the same mistake that once stopped any set ever showing as saved;
+					// see the note in `CardGridViewModel.startLoad`.
+					language = vPreferences.preferences.value.primaryLanguage,
 				),
 			)
 		},
 		onCancelDownload = vDownloads::cancel,
 		onCancelAllDownloads = vDownloads::cancelAll,
 		onClearFinishedDownloads = vDownloads::clearFinished,
+		gameArt = vArt,
 	)
 }
 
@@ -156,6 +174,7 @@ fun SetListContent(
 	onCancelDownload: (String) -> Unit = {},
 	onCancelAllDownloads: () -> Unit = {},
 	onClearFinishedDownloads: () -> Unit = {},
+	gameArt: GameArt? = null,
 ) {
 	val vState = state
 
@@ -163,26 +182,59 @@ fun SetListContent(
 	// is worth a trip through the state machine: nothing outside this screen cares.
 	var vPendingSet by remember { mutableStateOf<CardSet?>(null) }
 	var vShowQueue by remember { mutableStateOf(false) }
+	var vPendingAll by remember { mutableStateOf(false) }
 
 	Scaffold(
 		topBar = {
 			TopAppBar(
-				title = {
-					Row(verticalAlignment = Alignment.CenterVertically) {
-						// A neutral mark, not the game's logo: the provider ships no artwork for a
-						// game either, and inventing something that looks official would be worse
-						// than a plain one.
+				navigationIcon = {
+					// The game picker is a real screen above this one now, so this is a genuine
+					// back rather than a decoration.
+					IconButton(onClick = onBack) {
 						Icon(
-							imageVector = Icons.Outlined.Style,
-							contentDescription = null,
-							modifier = Modifier.size(22.dp),
-							tint = MaterialTheme.colorScheme.primary,
+							Icons.AutoMirrored.Outlined.ArrowBack,
+							contentDescription = "Back to games",
 						)
-						Spacer(Modifier.size(10.dp))
+					}
+				},
+				title = {
+					// The game's own logo rather than its name in text. The chip row that used to
+					// sit under this bar said which game you were in; with the picker above, that
+					// row was a second way to do one thing, and the logo says it in the space the
+					// title already occupies.
+					val vLogo = gameArt?.logo
+					if (vLogo == null) {
+						// A game whose module ships no logo, and the state before one loads.
 						Text(vState.game?.shortName.orEmpty())
+					} else {
+						Image(
+							painter = painterResource(vLogo),
+							// The title *is* the game name, so this carries it for a screen reader
+							// rather than being decorative.
+							contentDescription = vState.game?.displayName,
+							contentScale = ContentScale.Fit,
+							modifier = Modifier.heightIn(max = 30.dp),
+							// Same rule as the picker: a single-colour wordmark is drawn in the
+							// theme's foreground, colour artwork is never recoloured.
+							colorFilter = if (gameArt.tintLogo) {
+								ColorFilter.tint(MaterialTheme.colorScheme.onSurface)
+							} else {
+								null
+							},
+						)
 					}
 				},
 				actions = {
+					// Whatever the list is currently showing, which is the useful scope: with a
+					// region chip or a search active, "all" means all of *those*, not all 988.
+					if (vState.visibleSets.isNotEmpty()) {
+						IconButton(onClick = { vPendingAll = true }) {
+							Icon(
+								Icons.Outlined.CloudDownload,
+								contentDescription = "Download all ${vState.visibleSets.size} sets shown",
+							)
+						}
+					}
 					DownloadsButton(jobs = downloads, onClick = { vShowQueue = true })
 					IconButton(onClick = { vState.game?.let(onOpenSearch) }) {
 						Icon(
@@ -198,16 +250,6 @@ fun SetListContent(
 		},
 	) { vPadding ->
 		Column(Modifier.padding(vPadding).fillMaxSize()) {
-
-			// Hidden entirely when only one game is routed, rather than shown as a single chip
-			// that cannot be changed.
-			if (vState.availableGames.size > 1) {
-				GameSwitcher(
-					games = vState.availableGames,
-					selected = vState.game,
-					onSelect = { dispatch(SetListContract.Intent.GameChanged(it)) },
-				)
-			}
 
 			// Only for a game that really ships more than one line. See `GameProfile.regions`.
 			if (vState.regionOptions.isNotEmpty()) {
@@ -295,6 +337,25 @@ fun SetListContent(
 		)
 	}
 
+	if (vPendingAll) {
+		val vSets = vState.visibleSets
+		DownloadKindDialog(
+			setName = "",
+			setCount = vSets.size,
+			// Summed only when every set states one. A partial sum would understate the job by
+			// however many sets stayed silent, which is worse than offering no number.
+			cardCount = vSets.mapNotNull { it.cardCount }
+				.takeIf { it.size == vSets.size }
+				?.sum(),
+			onDismiss = { vPendingAll = false },
+			onConfirm = { vKinds ->
+				vSets.forEach { vSet -> onDownload(vSet, vKinds) }
+				vPendingAll = false
+				vShowQueue = true
+			},
+		)
+	}
+
 	if (vShowQueue) {
 		DownloadsDialog(
 			jobs = downloads,
@@ -306,35 +367,6 @@ fun SetListContent(
 	}
 }
 
-/**
- * The games this build can actually serve, as a scrolling row of chips.
- *
- * A row rather than a dropdown because the list is short, fixed and worth seeing: which games are
- * available is a genuine property of the build, and a menu would hide it behind a tap.
- */
-@Composable
-private fun GameSwitcher(
-	games: List<GameProfile>,
-	selected: GameProfile?,
-	onSelect: (GameProfile) -> Unit,
-) {
-	val vScroll = rememberScrollState()
-	Row(
-		modifier = Modifier
-			.fillMaxWidth()
-			.horizontalScroll(vScroll)
-			.padding(horizontal = 16.dp, vertical = 4.dp),
-		horizontalArrangement = Arrangement.spacedBy(8.dp),
-	) {
-		games.forEach { vGame ->
-			FilterChip(
-				selected = vGame == selected,
-				onClick = { onSelect(vGame) },
-				label = { Text(vGame.shortName) },
-			)
-		}
-	}
-}
 
 /**
  * A game's product lines, as chips, with "All" first.
@@ -715,22 +747,6 @@ private fun SetListEmptySearchPreview() = PreviewFrame(isDark = false) {
 	)
 }
 
-@Preview
-@Composable
-private fun SetListGameSwitcherPreview() = PreviewFrame {
-	// Every routed game at once, which is the state the switcher exists for.
-	SetListContent(
-		state = SetListContract.UiState(
-			sets = PreviewData.SETS,
-			isLoading = false,
-			availableGames = listOf(RiftboundGame),
-			game = RiftboundGame,
-		),
-		dispatch = {},
-		onOpenSet = {},
-		onOpenSettings = {},
-	)
-}
 
 @Preview
 @Composable
