@@ -44,6 +44,10 @@ import com.bitsycore.cardbrowser.ui.search.SearchViewModel
 import com.bitsycore.cardbrowser.ui.sets.SetListArgs
 import com.bitsycore.cardbrowser.ui.sets.SetListViewModel
 import com.bitsycore.cardbrowser.ui.settings.SettingsViewModel
+import com.bitsycore.cardbrowser.data.download.DownloadManager
+import com.bitsycore.cardbrowser.ui.common.CoilImagePrefetcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
@@ -198,6 +202,19 @@ val appModule = module {
 	// rather than a view-model field because it outlives both screens' view models, which are
 	// scoped to their own back-stack entries.
 	single { BrowseSession() }
+
+	// The download queue, and the bridge that lets it reach Coil's cache from `:data`.
+	//
+	// Its scope is the application's, not a screen's: a download must survive the set list being
+	// closed, which is the whole point of queueing one.
+	single { CoilImagePrefetcher() }
+	single {
+		DownloadManager(
+			mRepository = get(),
+			mImagePrefetcher = get<CoilImagePrefetcher>(),
+			mScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+		)
+	}
 
 	viewModel { (vArgs: SetListArgs) -> SetListViewModel(get(), get(), get(), vArgs) }
 	viewModel { GameListViewModel(get(), get()) }

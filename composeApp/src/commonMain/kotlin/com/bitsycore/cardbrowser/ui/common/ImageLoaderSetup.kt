@@ -1,8 +1,10 @@
 package com.bitsycore.cardbrowser.ui.common
 
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import coil3.ImageLoader
 import coil3.PlatformContext
+import coil3.compose.LocalPlatformContext
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
@@ -42,8 +44,14 @@ fun InstallImageLoader() {
 	// than pretending otherwise.
 	val vLimit = vPreferences.preferences.value.imageCacheLimitBytes
 
-	setSingletonImageLoaderFactory { vContext ->
-		newImageLoader(vContext, vStorage, vClient, vLimit)
+	// The download queue needs a `PlatformContext` to resolve the singleton loader, and it is a
+	// plain Koin singleton with no composition near it. This is the one place that has both.
+	val vPrefetcher = koinInject<CoilImagePrefetcher>()
+	val vContext = LocalPlatformContext.current
+	LaunchedEffect(vContext) { vPrefetcher.attach(vContext) }
+
+	setSingletonImageLoaderFactory { vFactoryContext ->
+		newImageLoader(vFactoryContext, vStorage, vClient, vLimit)
 	}
 }
 

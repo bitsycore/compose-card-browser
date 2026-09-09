@@ -36,6 +36,20 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.bitsycore.cardbrowser.data.download.DownloadJob
+import com.bitsycore.cardbrowser.data.download.DownloadKind
+import com.bitsycore.cardbrowser.data.download.DownloadManager
+import com.bitsycore.cardbrowser.data.download.DownloadRequest
+import com.bitsycore.cardbrowser.ui.downloads.DownloadKindDialog
+import com.bitsycore.cardbrowser.ui.downloads.DownloadsButton
+import com.bitsycore.cardbrowser.ui.downloads.DownloadsDialog
+import org.koin.compose.koinInject
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,6 +96,11 @@ fun SetListScreen(
 ) {
 	val vState by viewModel.collectAsStateWithLifecycle()
 
+	// The queue is application-scoped rather than this screen's, so it is read here and handed down
+	// as plain state -- `SetListContent` stays free of Koin and therefore previewable.
+	val vDownloads = koinInject<DownloadManager>()
+	val vJobs by vDownloads.jobs.collectAsState()
+
 	SetListContent(
 		state = vState,
 		dispatch = viewModel::dispatch,
@@ -89,6 +108,29 @@ fun SetListScreen(
 		onOpenSet = onOpenSet,
 		onOpenSettings = onOpenSettings,
 		onOpenSearch = onOpenSearch,
+		downloads = vJobs,
+		onDownload = { vSet, vKinds ->
+			vDownloads.enqueue(
+				DownloadRequest(
+					setId = vSet.id,
+					game = vSet.game,
+					setName = vSet.name,
+					kinds = vKinds,
+					// No language, which means the provider's own default for this user -- the
+					// same thing opening the set from here would fetch.
+					//
+					// The set list has no language of its own; that choice lives on the card grid,
+					// per set. So a set downloaded from here and then switched to another language
+					// on the grid will fetch that language separately, because they are separate
+					// cache entries. Downloading from the grid instead of here would be the way to
+					// pin a specific one, and this button does not pretend to.
+					language = null,
+				),
+			)
+		},
+		onCancelDownload = vDownloads::cancel,
+		onCancelAllDownloads = vDownloads::cancelAll,
+		onClearFinishedDownloads = vDownloads::clearFinished,
 	)
 }
 
@@ -109,8 +151,18 @@ fun SetListContent(
 	onOpenSet: (CardSet) -> Unit,
 	onOpenSettings: () -> Unit,
 	onOpenSearch: (GameProfile) -> Unit = {},
+	downloads: List<DownloadJob> = emptyList(),
+	onDownload: (CardSet, Set<DownloadKind>) -> Unit = { _, _ -> },
+	onCancelDownload: (String) -> Unit = {},
+	onCancelAllDownloads: () -> Unit = {},
+	onClearFinishedDownloads: () -> Unit = {},
 ) {
 	val vState = state
+
+	// Which set's download dialog is open, and whether the queue is showing. Local because neither
+	// is worth a trip through the state machine: nothing outside this screen cares.
+	var vPendingSet by remember { mutableStateOf<CardSet?>(null) }
+	var vShowQueue by remember { mutableStateOf(false) }
 
 	Scaffold(
 		topBar = {
@@ -131,6 +183,7 @@ fun SetListContent(
 					}
 				},
 				actions = {
+					DownloadsButton(jobs = downloads, onClick = { vShowQueue = true })
 					IconButton(onClick = { vState.game?.let(onOpenSearch) }) {
 						Icon(
 							Icons.Outlined.TravelExplore,
@@ -217,12 +270,39 @@ fun SetListContent(
 									dispatch(SetListContract.Intent.SetOpened(vSet.id.qualified))
 									onOpenSet(vSet)
 								},
+								downloadStatus = downloads.firstOrNull { it.request.setId == vSet.id },
+								onDownload = { vPendingSet = vSet },
 							)
 						}
 					}
 				}
 			}
 		}
+	}
+
+	vPendingSet?.let { vSet ->
+		DownloadKindDialog(
+			setName = vSet.name,
+			cardCount = vSet.cardCount,
+			onDismiss = { vPendingSet = null },
+			onConfirm = { vKinds ->
+				onDownload(vSet, vKinds)
+				vPendingSet = null
+				// Straight to the queue, so the download is visibly a thing that now exists rather
+				// than a dialog that closed and apparently did nothing.
+				vShowQueue = true
+			},
+		)
+	}
+
+	if (vShowQueue) {
+		DownloadsDialog(
+			jobs = downloads,
+			onCancel = onCancelDownload,
+			onCancelAll = onCancelAllDownloads,
+			onClearFinished = onClearFinishedDownloads,
+			onDismiss = { vShowQueue = false },
+		)
 	}
 }
 
@@ -317,6 +397,8 @@ private fun SetRow(
 	isLastOpened: Boolean,
 	isSaved: Boolean,
 	onClick: () -> Unit,
+	downloadStatus: DownloadJob? = null,
+	onDownload: () -> Unit = {},
 ) {
 	Card(
 		onClick = onClick,
@@ -357,6 +439,37 @@ private fun SetRow(
 						maxLines = 2,
 						overflow = TextOverflow.Ellipsis,
 					)
+				}
+			}
+			// A running download replaces the button with its own progress, so the row shows one
+			// state rather than a button next to a spinner describing the same thing.
+			when {
+				downloadStatus?.isActive == true -> {
+					Spacer(Modifier.size(8.dp))
+					val vProgress = downloadStatus.progress
+					Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+						if (vProgress == null) {
+							CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+						} else {
+							CircularProgressIndicator(
+								progress = { vProgress },
+								modifier = Modifier.size(20.dp),
+								strokeWidth = 2.dp,
+							)
+						}
+					}
+				}
+
+				else -> {
+					Spacer(Modifier.size(4.dp))
+					IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
+						Icon(
+							imageVector = Icons.Outlined.Download,
+							contentDescription = "Download ${set.name}",
+							tint = MaterialTheme.colorScheme.onSurfaceVariant,
+							modifier = Modifier.size(20.dp),
+						)
+					}
 				}
 			}
 			if (isSaved) {
