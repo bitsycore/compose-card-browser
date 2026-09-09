@@ -17,6 +17,29 @@ import com.bitsycore.cardbrowser.games.onepiece.OnePieceGame
 /** Turns the OPTCG API's wire format into core's model. */
 internal object OptcgMapper {
 
+	/**
+	 * Null for a value that is absent, blank, or one of this API's spellings of "nothing".
+	 *
+	 * The data carries three: the literal string `NULL` (in `card_text`, `attribute`, `card_power`,
+	 * `life` and `sub_types`), `N/A`, and the empty string. Measured across all 22 sets on
+	 * 2026-09-10 -- 82 cards say their rules text is `NULL`.
+	 *
+	 * Without this they are simply shown. A card whose ability reads "NULL" is worse than one that
+	 * shows no ability at all, because the first is the app stating something and the second is the
+	 * app saying nothing -- and only one of those is true.
+	 */
+	private fun String?.orNullIfSentinel(): String? {
+		val vTrimmed = this?.trim() ?: return null
+		if (vTrimmed.isEmpty()) return null
+		return if (vTrimmed.equals("NULL", ignoreCase = true) ||
+			vTrimmed.equals("N/A", ignoreCase = true)
+		) {
+			null
+		} else {
+			vTrimmed
+		}
+	}
+
 	// ============
 	//  Sets
 
@@ -58,7 +81,7 @@ internal object OptcgMapper {
 			text = LocalizedText(
 				language = CardLanguage.ENGLISH,
 				name = dto.cardName.ifBlank { dto.cardSetId },
-				rules = dto.cardText?.ifBlank { null },
+				rules = dto.cardText.orNullIfSentinel(),
 				// The API has no flavour-text field, and the rules text is not it.
 				flavour = null,
 				// Inferred, not stated. The API has no language field at all; the data is plainly
@@ -81,13 +104,13 @@ internal object OptcgMapper {
 			),
 			attributes = CardAttributes(
 				// Cost arrives as a string and is blank on Leaders, which have no cost.
-				cost = dto.cardCost?.trim()?.toIntOrNull(),
-				primary = dto.cardPower?.trim()?.toIntOrNull(),
-				secondary = dto.life,
+				cost = dto.cardCost.orNullIfSentinel()?.toIntOrNull(),
+				primary = dto.cardPower.orNullIfSentinel()?.toIntOrNull(),
+				secondary = dto.life.orNullIfSentinel()?.toIntOrNull(),
 			),
 			classification = CardClassification(
-				type = dto.cardType?.ifBlank { null },
-				supertype = dto.attribute?.ifBlank { null },
+				type = dto.cardType.orNullIfSentinel(),
+				supertype = dto.attribute.orNullIfSentinel(),
 				rarity = expandRarity(dto.rarity),
 				// Colour is One Piece's colour-like axis. Dual-colour cards arrive as "Red/Green".
 				// Split, because a dual-colour card is both of its colours rather than a seventh
@@ -96,7 +119,7 @@ internal object OptcgMapper {
 				// added a "Blue Purple" chip of its own to the sheet.
 				domains = colourKeysOf(dto.cardColor),
 			),
-			tags = dto.subTypes
+			tags = dto.subTypes.orNullIfSentinel()
 				?.split('/')
 				.orEmpty()
 				.map { it.trim() }

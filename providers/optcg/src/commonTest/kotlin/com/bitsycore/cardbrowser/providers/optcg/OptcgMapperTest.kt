@@ -23,9 +23,12 @@ class OptcgMapperTest {
 		cost: String? = "1",
 		power: String? = "2000",
 		subTypes: String? = "Thriller Bark Pirates",
+		text: String? = "[On Play] Look at 5 cards from the top of your deck.",
+		attribute: String? = "Special",
+		life: String? = null,
 	) = OptcgCardDto(
 		cardName = "Perona",
-		cardText = "[On Play] Look at 5 cards from the top of your deck.",
+		cardText = text,
 		setName = "Romance Dawn",
 		setId = "OP-01",
 		cardSetId = cardSetId,
@@ -35,8 +38,9 @@ class OptcgMapperTest {
 		cardCost = cost,
 		cardPower = power,
 		subTypes = subTypes,
-		attribute = "Special",
+		attribute = attribute,
 		counterAmount = 1000,
+		life = life,
 		cardImage = "https://optcgapi.com/media/static/Card_Images/OP01-077.jpg",
 	)
 
@@ -149,4 +153,62 @@ class OptcgMapperTest {
 		assertTrue(vCard.tags.none { it.contains("0.55") || it.contains("0.73") })
 		assertTrue(vCard.externalIds.isEmpty())
 	}
+
+	// ==================
+	// MARK: The "NULL" sentinel
+	// ==================
+
+	@Test
+	fun `a Leader whose life is the string NULL still maps`() {
+		// Six sets -- OP-02, OP-03, OP-04, OP-05, OP-07 and OP-08 -- failed to load entirely
+		// because of this. `life` was declared `Int?`, the client parses leniently so a quoted "5"
+		// was fine, and then 17 records turned out to carry the literal string "NULL". That is not
+		// a number under any leniency, so the whole response failed to deserialise and the app
+		// reported a server error against a server that was answering perfectly.
+		val vCard = OptcgMapper.toPrinting(card(life = "NULL"), mProvider, null)
+
+		assertNotNull(vCard)
+		assertNull(vCard.attributes.secondary, "\"NULL\" is not a life total")
+	}
+
+	@Test
+	fun `a real life total is still read`() {
+		val vCard = OptcgMapper.toPrinting(card(life = "5"), mProvider, null)
+
+		assertEquals(5, assertNotNull(vCard).attributes.secondary)
+	}
+
+	@Test
+	fun `NULL never reaches the screen as text`() {
+		// The quieter half of the same bug. These fields are declared as strings, so "NULL" does
+		// not fail -- it is simply displayed. A card whose ability reads "NULL" is worse than one
+		// showing no ability, because the first is the app stating something untrue and the second
+		// is the app saying nothing.
+		val vCard = assertNotNull(
+			OptcgMapper.toPrinting(
+				card(text = "NULL", power = "NULL", attribute = "NULL", subTypes = "NULL"),
+				mProvider,
+				null,
+			),
+		)
+
+		assertNull(vCard.text.rules)
+		assertNull(vCard.attributes.primary)
+		assertNull(vCard.classification.supertype)
+		assertTrue(vCard.tags.isEmpty(), "Got ${vCard.tags}")
+	}
+
+	@Test
+	fun `the other two spellings of nothing are caught as well`() {
+		// `N/A` appears twice and the empty string six times, both in `attribute`.
+		assertNull(
+			assertNotNull(OptcgMapper.toPrinting(card(attribute = "N/A"), mProvider, null))
+				.classification.supertype,
+		)
+		assertNull(
+			assertNotNull(OptcgMapper.toPrinting(card(attribute = "  "), mProvider, null))
+				.classification.supertype,
+		)
+	}
+
 }

@@ -44,7 +44,18 @@ data class OptcgCardDto(
 	val cardColor: String? = null,
 	@SerialName("card_type")
 	val cardType: String? = null,
-	val life: Int? = null,
+	/**
+	 * A string, because the API sends one -- and not always a number.
+	 *
+	 * Declared `Int?` originally, which worked until it did not: the client parses leniently, so a
+	 * quoted `"5"` was accepted, but 17 Leader records across six sets carry the literal string
+	 * `"NULL"`. That is not a number under any leniency, so deserialisation threw and **OP-02,
+	 * OP-03, OP-04, OP-05, OP-07 and OP-08 failed to load at all**, reported as a server error when
+	 * the server was fine.
+	 *
+	 * Kept as the raw string here and interpreted in the mapper, which is where a sentinel belongs.
+	 */
+	val life: String? = null,
 	@SerialName("card_cost")
 	val cardCost: String? = null,
 	@SerialName("card_power")
