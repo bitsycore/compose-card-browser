@@ -137,6 +137,9 @@ fun CardDetailScreen(
 		when (vEffect) {
 			is CardDetailContract.Effect.LinkFailed ->
 				vSnackbarHost.showSnackbar("Could not open a browser for that link.")
+
+			is CardDetailContract.Effect.LanguageUnavailable ->
+				vSnackbarHost.showSnackbar(vEffect.reason)
 		}
 	}
 

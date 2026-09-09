@@ -317,6 +317,16 @@ object CardDetailContract :
 
 		/** Shown when the platform refused to open a browser, so the tap is not silently lost. */
 		data class LinkFailed(val url: String) : Effect
+
+		/**
+		 * A language was chosen and could not be shown, with the reason.
+		 *
+		 * The chips used to do nothing at all in this case, which is how a Pokémon card behaves for
+		 * Japanese, Korean and either Chinese: TCGdex keys those catalogues by their own set ids --
+		 * the English `base1` is `PMCG1` in Japanese and does not exist in Korean -- so there is no
+		 * Korean edition of the set to fetch. A tap that cannot work has to say so.
+		 */
+		data class LanguageUnavailable(val language: CardLanguage, val reason: String) : Effect
 	}
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
@@ -362,23 +372,31 @@ object CardDetailContract :
 			isChangingLanguage = true,
 		)
 
-		// An empty answer is not a language change. A source that has nothing in the new language
-		// leaves the screen on what it was showing rather than emptying it.
-		is Intent.LanguageChanged -> if (intent.cards.isEmpty()) {
-			state.copy(isChangingLanguage = false)
-		} else {
-			state.copy(
-				cards = intent.cards,
-				// Re-found rather than reused: the same set in another locale can come back with
-				// different ids and a different length. The collector number is what survives.
-				currentIndex = intent.cards
-					.indexOfFirst { it.collectorNumber == intent.collectorNumber }
-					.coerceAtLeast(0),
-				requestedLanguage = intent.language,
-				isChangingLanguage = false,
-				selectedFinish = null,
-				isZoomed = false,
-			)
+		// Three outcomes, and only one of them is a language change.
+		//
+		// An empty answer means the source has nothing in that language. A non-empty answer that
+		// does not contain *this* card means the set exists in that language but this printing does
+		// not -- Bloomburrow is 398 cards in English and 355 in French. Both leave the screen on
+		// what it was showing; the view model says why. Only the third case moves.
+		//
+		// The middle case used to fall through `coerceAtLeast(0)` and silently jump to the first
+		// card of the set, which read as the screen losing your place at random.
+		is Intent.LanguageChanged -> {
+			val vIndex = intent.cards.indexOfFirst { it.collectorNumber == intent.collectorNumber }
+			if (intent.cards.isEmpty() || vIndex < 0) {
+				state.copy(isChangingLanguage = false)
+			} else {
+				state.copy(
+					cards = intent.cards,
+					// Re-found rather than reused: the same set in another locale can come back
+					// with different ids and a different length. The collector number survives.
+					currentIndex = vIndex,
+					requestedLanguage = intent.language,
+					isChangingLanguage = false,
+					selectedFinish = null,
+					isZoomed = false,
+				)
+			}
 		}
 
 		is Intent.LanguageChangeFailed -> state.copy(isChangingLanguage = false)

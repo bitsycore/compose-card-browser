@@ -312,7 +312,7 @@ private fun SetMark(set: CardSet, isHighlighted: Boolean) {
 		return
 	}
 
-	Box(modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+	Box(modifier = Modifier.size(SET_MARK_WIDTH, SET_MARK_HEIGHT), contentAlignment = Alignment.Center) {
 		SubcomposeAsyncImage(
 			model = vSymbol.url,
 			contentDescription = null,
@@ -347,7 +347,7 @@ private fun SetMonogram(code: String, isHighlighted: Boolean) {
 	val vTint = setColour(code)
 	Box(
 		modifier = Modifier
-			.size(44.dp)
+			.size(SET_MARK_WIDTH, SET_MARK_HEIGHT)
 			.clip(RoundedCornerShape(10.dp))
 			.background(
 				if (isHighlighted) {
@@ -361,12 +361,14 @@ private fun SetMonogram(code: String, isHighlighted: Boolean) {
 		contentAlignment = Alignment.Center,
 	) {
 		Text(
-			// Promo codes are two characters, expansions three; anything longer is truncated
-			// rather than shrunk to illegibility.
-			text = code.take(4),
+			// Long enough for the codes that actually occur. One Piece's are five characters --
+			// `OP-14`, `ST-21`, `EB-02` -- and a four-character cap truncated every one of them to
+			// `OP-1`, which is a different set. Six covers those plus Pokémon's `sv08.5`.
+			text = code.take(6),
 			style = MaterialTheme.typography.labelLarge,
 			fontWeight = FontWeight.Medium,
 			maxLines = 1,
+			softWrap = false,
 			color = if (isHighlighted) MaterialTheme.colorScheme.onPrimary else vTint,
 		)
 	}
@@ -529,3 +531,15 @@ private fun SetListSavedPreview() = PreviewFrame {
 		onOpenSettings = {},
 	)
 }
+
+/**
+ * The set mark's box: wider than it is tall, and both larger than they were.
+ *
+ * A 44 dp square could not hold a five-character set code -- every One Piece code is five, so all
+ * of them were truncated to something that named a different set -- and it squeezed the wordmark-
+ * shaped set logos that TCGdex and Scryfall publish into a smear. Landscape suits both: a code sits
+ * comfortably on one line, and a logo letterboxes instead of cropping.
+ */
+private val SET_MARK_WIDTH = 68.dp
+
+private val SET_MARK_HEIGHT = 44.dp

@@ -82,14 +82,13 @@ class CardGridViewModel(
 		val vSetId = SourceId.parse(vSnapshot.setId) ?: return
 		val vGeneration = vSnapshot.requestGeneration
 		val vQuery = vSnapshot.query
-		// The routed provider is asked in a language only when it can actually serve one. Riftcodex
-		// describes English and nothing else, so scoping its requests -- and therefore its cache
-		// entries -- by "French" would key four identical copies of a set under four languages and
-		// throw the cache away every time the preference changed, for no difference in the data.
-		val vPreferred = mPreferences.preferences.value.primaryLanguage
+		// The preference goes in as-is. Narrowing it here was a bug: this used to drop the language
+		// to `null` whenever the provider could not serve it, while the set list passed the
+		// preference unchanged -- and since a cache key embeds the language, the two wrote and read
+		// different files and no set ever showed as saved. `CardRepository` normalises it once, for
+		// every caller, against what the provider will really answer in.
+		val vLanguage = mPreferences.preferences.value.primaryLanguage
 		val vGame = gameOf(vSnapshot.setId) ?: return
-		val vProviderLanguages = mRegistry.resolve(vGame)?.capabilities?.data?.languages.orEmpty()
-		val vLanguage = vPreferred.takeIf { it in vProviderLanguages && vProviderLanguages.size > 1 }
 
 		mLoadJob?.cancel()
 		mLoadJob = viewModelScope.launch {

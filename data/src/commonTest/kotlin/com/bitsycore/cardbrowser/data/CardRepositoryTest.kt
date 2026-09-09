@@ -759,6 +759,53 @@ class CardRepositoryTest {
 
 		assertEquals(2, vResult.value?.cards?.size, "Same number, different printings: two cards")
 	}
+
+	// ============
+	//  Saved sets
+
+	@Test
+	fun `a fetched set is saved whatever language the caller asked for`() = runTest {
+		// Regression, and a bad one: nothing was ever marked saved, so search had nothing to search.
+		//
+		// The cache key embeds the language. The grid passed `null` whenever the user's preferred
+		// language was not one the provider carried, while the set list passed the preference
+		// unconditionally -- so a Riftbound set was written under `-` and looked for under `fr`.
+		// This provider serves English only, exactly like Riftcodex, so French is the case that
+		// used to break.
+		val vProvider = FakeProvider(mProviderId, listOf(listOf(card(1), card(2))))
+		val vFileSystem = FakeFileSystem()
+		val vRepository = repositoryFor(vProvider, vFileSystem)
+		val vSet = CardSet(mSetId, TestGame.id, "OGN", "Origins", 2, null)
+
+		// Fetched in a language the provider cannot serve.
+		vRepository.cards(mSetId, TestGame.id, CardQuery(), language = CardLanguage.FRENCH)
+			.toList()
+
+		// Asked about in that same language, and in the two other ways a caller might ask.
+		for (vLanguage in listOf(CardLanguage.FRENCH, CardLanguage.ENGLISH, null)) {
+			assertEquals(
+				setOf(mSetId.qualified),
+				vRepository.savedSetIds(TestGame.id, listOf(vSet), vLanguage),
+				"a set fetched once must read as saved when asked about with $vLanguage",
+			)
+		}
+	}
+
+	@Test
+	fun `facets are found for a set fetched under a language the provider does not serve`() = runTest {
+		// Same key, same bug: an empty facet set meant a filter sheet with nothing in it.
+		val vProvider = FakeProvider(mProviderId, listOf(listOf(card(1, rarity = "Epic"))))
+		val vFileSystem = FakeFileSystem()
+		val vRepository = repositoryFor(vProvider, vFileSystem)
+
+		vRepository.cards(mSetId, TestGame.id, CardQuery(), language = CardLanguage.FRENCH).toList()
+
+		assertEquals(
+			listOf("Epic"),
+			vRepository.facetsFor(mSetId, TestGame.id, CardLanguage.FRENCH).rarities,
+		)
+	}
+
 }
 
 /**

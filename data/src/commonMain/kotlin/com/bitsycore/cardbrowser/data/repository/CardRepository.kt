@@ -6,6 +6,7 @@ import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
+import com.bitsycore.cardbrowser.core.model.SetCodeComparator
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.model.SourceId
@@ -83,7 +84,8 @@ class CardRepository(
 				return@flow
 			}
 
-		val vKey = setListKey(vProvider, game, language)
+		val vLanguage = effectiveLanguage(vProvider, language)
+		val vKey = setListKey(vProvider, game, vLanguage)
 		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardSet>()))
 
 		val vCached = mCache.read(vKey, vSerializer)
@@ -107,14 +109,14 @@ class CardRepository(
 		}
 
 		try {
-			val vSets = vProvider.listSets(language).sortedWith(SET_ORDER)
+			val vSets = vProvider.listSets(vLanguage).sortedWith(SET_ORDER)
 			val vFetchedAt = mClock()
 			mCache.write(
 				key = vKey,
 				envelope = CacheEnvelope(
 					schemaVersion = CacheEnvelope.CURRENT_SCHEMA_VERSION,
 					provider = vProvider.id,
-					language = language,
+					language = vLanguage,
 					scope = CacheScope.SetList(game.value),
 					fetchedAtEpochMillis = vFetchedAt,
 					completeness = Completeness.COMPLETE,
@@ -171,7 +173,8 @@ class CardRepository(
 				return@flow
 			}
 
-		val vCompleteKey = completeSetKey(vProvider, setId, language)
+		val vLanguage = effectiveLanguage(vProvider, language)
+		val vCompleteKey = completeSetKey(vProvider, setId, vLanguage)
 		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>()))
 		val vCachedComplete = mCache.read(vCompleteKey, vSerializer)
 		val vNow = mClock()
@@ -207,9 +210,9 @@ class CardRepository(
 
 		try {
 			if (vNeedsCompleteSet) {
-				emitCompleteSet(vProvider, setId, language, query, knownSetSize, vCachedComplete?.payload)
+				emitCompleteSet(vProvider, setId, vLanguage, query, knownSetSize, vCachedComplete?.payload)
 			} else {
-				emitSinglePage(vProvider, setId, language, query, knownSetSize)
+				emitSinglePage(vProvider, setId, vLanguage, query, knownSetSize)
 			}
 		} catch (vError: ProviderError) {
 			if (vCachedComplete != null) {
@@ -540,10 +543,11 @@ class CardRepository(
 				return@flow
 			}
 
+		val vLanguage = effectiveLanguage(vProvider, language)
 		val vCanSearchRemotely = vProvider.capabilities.data.crossSetSearch
 
 		// 1. The sets already on disk, always, and first.
-		val vLocal = searchCachedSets(vProvider, vNeedle, knownSets, language)
+		val vLocal = searchCachedSets(vProvider, vNeedle, knownSets, vLanguage)
 		// Skipped only when it found nothing *and* a real search is about to run: an empty local
 		// result flashed up before the network answers reads as "no matches" for a moment.
 		if (vLocal.cards.isNotEmpty() || !vCanSearchRemotely) {
@@ -566,7 +570,7 @@ class CardRepository(
 			val vPage = vProvider.searchAllSets(
 				CardSearchRequest(
 					text = vNeedle,
-					language = language,
+					language = vLanguage,
 					page = 1,
 					pageSize = SEARCH_PAGE_SIZE.coerceAtMost(vProvider.capabilities.maxPageSize),
 				),
@@ -657,9 +661,11 @@ class CardRepository(
 		val vProvider = mRegistry.resolve(game, language)
 			?: return DataSnapshot.failed(ProviderError.Unknown("No provider serves $game"))
 
+		val vLanguage = effectiveLanguage(vProvider, language)
+
 		if (setId != null) {
 			val vCached = mCache.read(
-				completeSetKey(vProvider, setId, language),
+				completeSetKey(vProvider, setId, vLanguage),
 				CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>())),
 			)
 			val vHit = vCached?.payload?.firstOrNull { it.id == id }
@@ -674,7 +680,7 @@ class CardRepository(
 		}
 
 		return try {
-			val vCard = vProvider.cardDetail(id, language)
+			val vCard = vProvider.cardDetail(id, vLanguage)
 				?: return DataSnapshot.failed(ProviderError.BadRequest(404))
 			DataSnapshot.fresh(vCard, mClock())
 		} catch (vError: ProviderError) {
@@ -700,8 +706,9 @@ class CardRepository(
 		language: CardLanguage? = null,
 	): Set<String> {
 		val vProvider = mRegistry.resolve(game, language) ?: return emptySet()
+		val vLanguage = effectiveLanguage(vProvider, language)
 		return sets
-			.filter { mCache.exists(completeSetKey(vProvider, it.id, language)) }
+			.filter { mCache.exists(completeSetKey(vProvider, it.id, vLanguage)) }
 			.map { it.id.qualified }
 			.toSet()
 	}
@@ -717,8 +724,9 @@ class CardRepository(
 	 */
 	suspend fun facetsFor(setId: SourceId, game: GameId, language: CardLanguage? = null): CardFacets {
 		val vProvider = mRegistry.resolve(game, language) ?: return CardFacets()
+		val vLanguage = effectiveLanguage(vProvider, language)
 		val vCached = mCache.read(
-			completeSetKey(vProvider, setId, language),
+			completeSetKey(vProvider, setId, vLanguage),
 			CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>())),
 		) ?: return CardFacets()
 		if (vCached.completeness != Completeness.COMPLETE) return CardFacets()
@@ -758,6 +766,26 @@ class CardRepository(
 	// ============
 	//  Keys
 
+
+	/**
+	 * The language a provider will really answer in, given what a caller asked for.
+	 *
+	 * Every cache key in this file embeds a language, so the *requested* one cannot be the one that
+	 * keys it: two callers asking the same question differently would write and read different
+	 * files. That is exactly what happened. The card grid passed `null` whenever the user's
+	 * preferred language was not one the provider carried, while the set list passed the preference
+	 * unconditionally -- so opening a Riftbound set wrote `…/set/riftcodex:OGN/-` and the set list
+	 * then looked for `…/set/riftcodex:OGN/fr`, found nothing, and never marked the set saved. With
+	 * nothing marked saved, search had nothing to search.
+	 *
+	 * Normalising here fixes it for every caller at once, and makes the key honest besides: a set
+	 * is filed under the language it actually holds rather than the one somebody hoped for.
+	 */
+	private fun effectiveLanguage(
+		provider: CardProvider<GameProfile>,
+		requested: CardLanguage?,
+	): CardLanguage? = provider.resolveLanguage(requested)
+
 	private fun setListKey(provider: CardProvider<GameProfile>, game: GameId, language: CardLanguage?) =
 		CacheKey.of("v${CacheEnvelope.CURRENT_SCHEMA_VERSION}", provider.id.value, "sets", game.value, language?.code ?: "-")
 
@@ -774,6 +802,10 @@ class CardRepository(
 		 */
 		val SET_ORDER: Comparator<CardSet> = compareBy<CardSet> { it.releaseDate == null }
 			.thenByDescending { it.releaseDate }
+			// Undated sets have no chronology to sort by, so they go in code order. This used to
+			// fall back to the *name*, which for One Piece -- where no set carries a date -- listed
+			// "Awakening of the New Era" before "Romance Dawn" and buried OP-14 in the middle.
+			.then(SetCodeComparator)
 			.thenBy { it.name }
 
 		/**

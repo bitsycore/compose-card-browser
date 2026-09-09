@@ -158,14 +158,35 @@ class CardDetailViewModel(
 			.filter { it.value != null }
 			.lastOrNull()
 
-		dispatch(
-			vSnapshot?.value?.cards?.takeIf { it.isNotEmpty() }?.let { vCards ->
-				CardDetailContract.Intent.LanguageChanged(
+		val vCards = vSnapshot?.value?.cards.orEmpty()
+		val vHasThisCard = vCards.any { it.collectorNumber == vCard.collectorNumber }
+
+		if (vCards.isEmpty() || !vHasThisCard) {
+			// Said out loud rather than shrugged off. Which of the two it is matters to the user:
+			// one means the source has no edition of this set in that language, the other that it
+			// has the set but not this card in it.
+			dispatch(CardDetailContract.Intent.LanguageChangeFailed(language))
+			emitEffect(
+				CardDetailContract.Effect.LanguageUnavailable(
 					language = language,
-					cards = vCards,
-					collectorNumber = vCard.collectorNumber,
-				)
-			} ?: CardDetailContract.Intent.LanguageChangeFailed(language),
+					reason = if (vCards.isEmpty()) {
+						"${stateFlow.value.providerDisplayName ?: "This source"} has no " +
+							"${language.displayName} edition of ${vCard.setName}."
+					} else {
+						"${vCard.setName} has a ${language.displayName} edition, but no " +
+							"${language.displayName} printing of ${vCard.collectorNumber}."
+					},
+				),
+			)
+			return
+		}
+
+		dispatch(
+			CardDetailContract.Intent.LanguageChanged(
+				language = language,
+				cards = vCards,
+				collectorNumber = vCard.collectorNumber,
+			),
 		)
 		mSession.focus(stateFlow.value.card?.id?.qualified)
 	}

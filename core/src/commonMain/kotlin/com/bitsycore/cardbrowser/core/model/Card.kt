@@ -54,6 +54,28 @@ data class SetSymbol(
 	val isMonochrome: Boolean = false,
 )
 
+/**
+ * Orders sets by their code, numerically where the code carries numbers.
+ *
+ * For games whose sets carry no release date. Sorting those by *name* -- which is what the set list
+ * used to fall back to -- put One Piece's "Awakening of the New Era" before "Romance Dawn", an
+ * order with no relationship to how the game shipped. Code order is the one every player already
+ * knows: OP-01 through OP-14, and naturally rather than as strings, which would put OP-10 before
+ * OP-02.
+ */
+object SetCodeComparator : Comparator<CardSet> {
+
+	override fun compare(a: CardSet, b: CardSet): Int {
+		val vLeft = CardPrinting.naturalParts(a.code)
+		val vRight = CardPrinting.naturalParts(b.code)
+		for (vIndex in 0 until minOf(vLeft.size, vRight.size)) {
+			val vResult = vLeft[vIndex].compareTo(vRight[vIndex])
+			if (vResult != 0) return vResult
+		}
+		return vLeft.size.compareTo(vRight.size)
+	}
+}
+
 /** Keys used in [CardSet.externalIds] and [CardPrinting.externalIds]. */
 object ExternalIdKey {
 
