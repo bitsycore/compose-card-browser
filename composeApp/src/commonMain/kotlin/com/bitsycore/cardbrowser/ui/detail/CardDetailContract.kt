@@ -180,7 +180,13 @@ object CardDetailContract :
 				fact("Supertype", card.classification.supertype)
 				fact("Rarity", card.classification.rarity)
 				vWords.domain?.let { vLabel ->
-					fact(vLabel, card.classification.domains.takeIf { it.isNotEmpty() }?.joinToString(", "))
+					// Labels, not keys: this row reads "White, Blue" rather than "W, U".
+					fact(
+						vLabel,
+						card.classification.domains
+							.takeIf { it.isNotEmpty() }
+							?.joinToString(", ") { vKey -> game?.domainFor(vKey)?.label ?: vKey },
+					)
 				}
 				// Labelled with the game's own word, and with a neutral one where the game states
 				// none. A value the provider supplied is not dropped for want of a name for it --

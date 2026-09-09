@@ -105,7 +105,20 @@ class OptcgMapperTest {
 		val vCard = OptcgMapper.toPrinting(card(colour = "Red/Green"), mProvider, null)
 
 		assertNotNull(vCard)
-		assertEquals(listOf("Red", "Green"), vCard.classification.domains)
+		// Lower-cased onto the keys `OnePieceGame` declares, which is what makes a Red filter match
+		// a Red/Green leader.
+		assertEquals(listOf("red", "green"), vCard.classification.domains)
+	}
+
+	@Test
+	fun `a dual colour stated with a space is split too`() {
+		// What the live API actually sends: OP-01 reports `Blue Purple` and `Green Red` as single
+		// space-separated strings, not slash-separated ones. Kept whole, a Blue/Purple leader did
+		// not match the Blue filter and added a "Blue Purple" chip of its own to the sheet.
+		val vCard = OptcgMapper.toPrinting(card(colour = "Blue Purple"), mProvider, null)
+
+		assertNotNull(vCard)
+		assertEquals(listOf("blue", "purple"), vCard.classification.domains)
 	}
 
 	@Test

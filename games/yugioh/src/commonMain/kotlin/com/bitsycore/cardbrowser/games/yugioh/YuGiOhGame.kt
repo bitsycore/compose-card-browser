@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.games.yugioh
 
+import com.bitsycore.cardbrowser.core.game.GameDomain
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.GameId
@@ -60,6 +61,23 @@ object YuGiOhGame : GameProfile {
 	 * the button lands on a 404, and the fix is this one line.
 	 */
 	override val cardmarketSlug: String = "YuGiOh"
+
+	/**
+	 * The seven attributes.
+	 *
+	 * Six were measured from a 120-card sample -- `DARK`, `EARTH`, `FIRE`, `LIGHT`, `WATER`,
+	 * `WIND`. `DIVINE` is the seventh and is declared too: it belongs to three cards in the whole
+	 * game, so a sample that misses it is not evidence it does not exist.
+	 */
+	override val domains: List<GameDomain> = listOf(
+		GameDomain("light", "Light", 0xFFF0E2A8),
+		GameDomain("dark", "Dark", 0xFF6A4A8E),
+		GameDomain("water", "Water", 0xFF3B7FC4),
+		GameDomain("fire", "Fire", 0xFFD8503C),
+		GameDomain("earth", "Earth", 0xFF9A7B4F),
+		GameDomain("wind", "Wind", 0xFF5FAE85),
+		GameDomain("divine", "Divine", 0xFFE0B23A),
+	)
 
 }
 

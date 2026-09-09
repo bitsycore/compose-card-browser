@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.games.pokemon
 
+import com.bitsycore.cardbrowser.core.game.GameDomain
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.GameId
@@ -55,6 +56,26 @@ object PokemonGame : GameProfile {
 	 * the button lands on a 404, and the fix is this one line.
 	 */
 	override val cardmarketSlug: String = "Pokemon"
+
+	/**
+	 * The eleven types TCGdex serves, in the order the game itself lists them.
+	 *
+	 * Measured from `/v2/en/types`. The colours are the ones the cards use for their energy
+	 * symbols.
+	 */
+	override val domains: List<GameDomain> = listOf(
+		GameDomain("grass", "Grass", 0xFF6FBF5B),
+		GameDomain("fire", "Fire", 0xFFE2542C),
+		GameDomain("water", "Water", 0xFF3FA9E0),
+		GameDomain("lightning", "Lightning", 0xFFF2C230),
+		GameDomain("psychic", "Psychic", 0xFFB05FC0),
+		GameDomain("fighting", "Fighting", 0xFFC1682F),
+		GameDomain("darkness", "Darkness", 0xFF4A4B58),
+		GameDomain("metal", "Metal", 0xFF8E9BA6),
+		GameDomain("dragon", "Dragon", 0xFFC9A227),
+		GameDomain("fairy", "Fairy", 0xFFE86FA8),
+		GameDomain("colorless", "Colourless", 0xFFD8D3C6),
+	)
 
 }
 

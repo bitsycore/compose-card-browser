@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.games.riftbound
 
+import com.bitsycore.cardbrowser.core.game.GameDomain
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.GameId
@@ -46,6 +47,22 @@ object RiftboundGame : GameProfile {
 	 * segment that lands on a 404 is worse than no button.
 	 */
 	override val cardmarketSlug: String = "Riftbound"
+	/**
+	 * The six domains plus colourless, in Riftcodex's own order of appearance.
+	 *
+	 * Measured: OGN reports exactly `Body`, `Calm`, `Chaos`, `Colorless`, `Fury`, `Mind` and
+	 * `Order`. The colours are the ones the game prints on its own cards.
+	 */
+	override val domains: List<GameDomain> = listOf(
+		GameDomain("fury", "Fury", 0xFFD9453B),
+		GameDomain("calm", "Calm", 0xFF3E8FD0),
+		GameDomain("mind", "Mind", 0xFF6F5BD0),
+		GameDomain("body", "Body", 0xFFD98A2B),
+		GameDomain("chaos", "Chaos", 0xFF8E3FA8),
+		GameDomain("order", "Order", 0xFFD9C24A),
+		GameDomain("colorless", "Colourless", 0xFF9A9AA5),
+	)
+
 }
 
 /** Riftbound's mark. See [GameArt] for where each logo came from and what may be done with it. */

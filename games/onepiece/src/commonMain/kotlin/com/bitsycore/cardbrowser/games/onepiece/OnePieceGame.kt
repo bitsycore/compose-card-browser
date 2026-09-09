@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.games.onepiece
 
+import com.bitsycore.cardbrowser.core.game.GameDomain
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.GameId
@@ -49,6 +50,23 @@ object OnePieceGame : GameProfile {
 	 * the button lands on a 404, and the fix is this one line.
 	 */
 	override val cardmarketSlug: String = "OnePiece"
+
+	/**
+	 * The six colours.
+	 *
+	 * Measured from OP-01, which reports `Blue`, `Green`, `Purple`, `Red` and the *dual* values
+	 * `Blue Purple` and `Green Red`. A dual-colour card is both of its colours rather than a
+	 * seventh thing, so the adapter splits those and each half lands here -- which is what makes
+	 * filtering by Blue match a Blue/Purple leader.
+	 */
+	override val domains: List<GameDomain> = listOf(
+		GameDomain("red", "Red", 0xFFD8453C),
+		GameDomain("green", "Green", 0xFF3F9A62),
+		GameDomain("blue", "Blue", 0xFF3B7FC4),
+		GameDomain("purple", "Purple", 0xFF8E5CC0),
+		GameDomain("black", "Black", 0xFF4A4351),
+		GameDomain("yellow", "Yellow", 0xFFE8C13A),
+	)
 
 }
 

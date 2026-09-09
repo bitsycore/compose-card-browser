@@ -63,6 +63,24 @@ interface GameProfile {
 	val rarityLadder: List<String> get() = emptyList()
 
 	/**
+	 * This game's colour-like axis, in the game's own order, with the colour each one is drawn in.
+	 *
+	 * Riftbound domains, Magic colours, Pokémon types, Altered factions, Yu-Gi-Oh attributes. The
+	 * *rule* is here because it is a fact about the game -- Magic's red is red whoever supplies the
+	 * data, and WUBRG is an order every player knows and no alphabetical sort produces. What each
+	 * provider happens to *call* red is that provider's business: an adapter maps its own value to
+	 * one of these keys, which is what makes a filter work when the source is answering in French.
+	 *
+	 * Empty for a game with no such axis, and a value a game does not declare still shows -- as its
+	 * own raw text, uncoloured. A source inventing a new domain must not vanish from the filter.
+	 */
+	val domains: List<GameDomain> get() = emptyList()
+
+	/** The declared domain for [key], or `null` when this game has never heard of it. */
+	fun domainFor(key: String): GameDomain? =
+		domains.firstOrNull { it.key.equals(key, ignoreCase = true) }
+
+	/**
 	 * Cardmarket's path segment for this game, or `null` when it is not known.
 	 *
 	 * `null` suppresses the marketplace link entirely rather than shipping a button that lands on a
@@ -100,4 +118,21 @@ data class GameVocabulary(
 	val cardType: String = "Type",
 	val primaryStat: String? = null,
 	val secondaryStat: String? = null,
+)
+
+/**
+ * One value of a game's colour-like axis.
+ *
+ * @property key what an adapter maps its own value onto, and what a `CardPrinting` carries. Stable,
+ *   because it goes into cache files: Magic's `W`, One Piece's `red`, Pokémon's `fire`
+ * @property label what to show. The app's UI is English, so this is English -- a provider's own
+ *   localised name is not used, which is the point: a French Pokémon card's type still reads
+ *   "Fire" and still matches the Fire filter
+ * @property colourArgb the chip colour, as `0xAARRGGBB`. A `Long` rather than a Compose `Color`
+ *   because `:core` has no Compose in it; the UI converts it once
+ */
+data class GameDomain(
+	val key: String,
+	val label: String,
+	val colourArgb: Long,
 )

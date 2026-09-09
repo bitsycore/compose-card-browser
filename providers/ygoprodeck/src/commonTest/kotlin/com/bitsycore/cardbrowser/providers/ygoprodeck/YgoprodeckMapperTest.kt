@@ -150,7 +150,8 @@ class YgoprodeckMapperTest {
 		assertEquals(4, vCard.attributes.cost)
 		assertEquals(1800, vCard.attributes.primary)
 		assertEquals(800, vCard.attributes.secondary)
-		assertEquals(listOf("WATER"), vCard.classification.domains)
+		// Lower-cased onto the key `YuGiOhGame` declares, which is what carries its colour.
+		assertEquals(listOf("water"), vCard.classification.domains)
 	}
 
 	@Test

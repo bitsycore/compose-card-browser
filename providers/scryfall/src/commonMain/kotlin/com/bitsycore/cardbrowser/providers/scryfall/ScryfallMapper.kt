@@ -128,7 +128,13 @@ internal object ScryfallMapper {
 				// Colours, which is Magic's colour-like axis and what `GameVocabulary` labels for
 				// it. `colors` rather than `color_identity`: the former is what the card *is*, the
 				// latter is a deck-building rule about what it may go in.
-				domains = dto.colors.ifEmpty { vFront?.colors.orEmpty() }.map(::colourName),
+				// Scryfall's own single letters, which are what `MagicGame` keys its colours on, so
+				// there is nothing to translate. A card with no colours is colourless rather than
+				// having no colour axis at all -- that is what `C` is for, and it is how Magic
+				// itself reads an artifact.
+				domains = dto.colors.ifEmpty { vFront?.colors.orEmpty() }
+					.map { it.trim().uppercase() }
+					.ifEmpty { listOf("C") },
 			),
 			tags = dto.keywords,
 			// Scryfall states the printing language on the record itself, which makes this a fact

@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.games.altered
 
+import com.bitsycore.cardbrowser.core.game.GameDomain
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.GameId
@@ -47,6 +48,22 @@ object AlteredGame : GameProfile {
 	 * the button lands on a 404, and the fix is this one line.
 	 */
 	override val cardmarketSlug: String = "Altered"
+
+	/**
+	 * The six factions, keyed by the two-letter reference the API itself uses.
+	 *
+	 * `mainFaction.reference` is canonical where `mainFaction.name` is localised, so the reference
+	 * is the key and this supplies the English label -- which is why an Altered filter keeps
+	 * working when the source is answering in French.
+	 */
+	override val domains: List<GameDomain> = listOf(
+		GameDomain("AX", "Axiom", 0xFFB0743A),
+		GameDomain("BR", "Bravos", 0xFFD8453C),
+		GameDomain("LY", "Lyra", 0xFFE07AA8),
+		GameDomain("MU", "Muna", 0xFF3F9A62),
+		GameDomain("OR", "Ordis", 0xFF3B7FC4),
+		GameDomain("YZ", "Yzmir", 0xFF8E5CC0),
+	)
 
 }
 

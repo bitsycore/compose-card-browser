@@ -137,7 +137,10 @@ internal object YgoprodeckMapper {
 				// is available without knowing which set the user meant.
 				rarity = vAppearance?.setRarity?.ifBlank { null },
 				// Attribute -- DARK, LIGHT, WATER -- is Yu-Gi-Oh's colour-like axis.
-				domains = listOfNotNull(dto.attribute?.ifBlank { null }),
+				// `DARK`, `LIGHT`, `WIND` and so on, lower-cased onto the keys `YuGiOhGame`
+				// declares. YGOPRODeck reports the attribute in English whatever language the text
+				// is requested in, so nothing else is needed.
+				domains = listOfNotNull(dto.attribute?.trim()?.lowercase()?.ifBlank { null }),
 			),
 			tags = dto.typeline,
 			languages = LanguageCoverage(confirmed = setOf(language)),

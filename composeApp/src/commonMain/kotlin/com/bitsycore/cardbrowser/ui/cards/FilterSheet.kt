@@ -16,7 +16,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +27,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.provider.CardFilterField
@@ -127,11 +130,23 @@ fun FilterSheet(
 			// The word for this axis is the game's, not the app's: Riftbound has domains, Magic
 			// has colours, Altered has factions. `GameVocabulary` is the one place that decides.
 			Section(vVocabulary.domain ?: "Domain") {
-				state.facets.domains.forEach { vDomain ->
-					FilterChip(
-						selected = vDomain in state.query.domains,
-						onClick = { onQueryChanged(state.query.copy(domains = state.query.domains.toggle(vDomain))) },
-						label = { Text(vDomain) },
+				// In the game's own order, not the order the facets happened to come out in. WUBRG
+				// is the point: no alphabetical sort produces it, and a Magic player reads any
+				// other order as wrong.
+				state.facets.domains.sortedBy { vKey ->
+					val vIndex = state.game?.domains?.indexOfFirst { it.key.equals(vKey, true) } ?: -1
+					// A domain the game does not declare sorts after the ones it does, rather than
+					// being dropped: a source inventing a value must still be filterable.
+					if (vIndex >= 0) vIndex else Int.MAX_VALUE
+				}.forEach { vKey ->
+					val vDomain = state.game?.domainFor(vKey)
+					DomainChip(
+						label = vDomain?.label ?: vKey,
+						colour = vDomain?.let { Color(it.colourArgb.toInt()) },
+						isSelected = vKey in state.query.domains,
+						onClick = {
+							onQueryChanged(state.query.copy(domains = state.query.domains.toggle(vKey)))
+						},
 					)
 				}
 			}
@@ -257,7 +272,11 @@ fun ActiveFilterChips(
 		verticalArrangement = Arrangement.spacedBy(0.dp),
 	) {
 		vQuery.domains.forEach { vValue ->
-			RemovableChip(vValue) { onQueryChanged(vQuery.copy(domains = vQuery.domains - vValue)) }
+			// The game's label, so the summary row reads "White" rather than the `W` the filter
+			// is actually keyed on.
+			RemovableChip(state.game?.domainFor(vValue)?.label ?: vValue) {
+				onQueryChanged(vQuery.copy(domains = vQuery.domains - vValue))
+			}
 		}
 		vQuery.cardTypes.forEach { vValue ->
 			RemovableChip(vValue) { onQueryChanged(vQuery.copy(cardTypes = vQuery.cardTypes - vValue)) }
@@ -296,5 +315,47 @@ private fun RemovableChip(label: String, onRemove: () -> Unit) {
 				modifier = Modifier.size(16.dp),
 			)
 		},
+	)
+}
+
+/**
+ * A domain chip, in that domain's own colour.
+ *
+ * The colour is a *rule*, declared by the game module -- Magic's red is red whoever supplied the
+ * data -- and it arrives here already resolved. `null` means the game has never heard of this
+ * value, which happens when a provider invents one; the chip then draws in the theme's own colours
+ * rather than being hidden, because a value a card really has must stay filterable.
+ *
+ * Selected fills with the colour and picks black or white text from its luminance, so a pale chip
+ * (Magic white, Pokémon colourless) does not end up white-on-white. Unselected keeps a tinted
+ * outline: seven saturated fills in a row read as a paint chart rather than as a list.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DomainChip(
+	label: String,
+	colour: Color?,
+	isSelected: Boolean,
+	onClick: () -> Unit,
+) {
+	val vColour = colour ?: MaterialTheme.colorScheme.primary
+	// Perceived brightness rather than a plain average: the eye weights green far above blue, and
+	// an unweighted mean calls Magic's blue light enough for black text.
+	val vIsLight = (0.299f * vColour.red + 0.587f * vColour.green + 0.114f * vColour.blue) > 0.6f
+	FilterChip(
+		selected = isSelected,
+		onClick = onClick,
+		label = { Text(label) },
+		colors = FilterChipDefaults.filterChipColors(
+			selectedContainerColor = vColour,
+			selectedLabelColor = if (vIsLight) Color.Black else Color.White,
+			labelColor = MaterialTheme.colorScheme.onSurface,
+		),
+		border = FilterChipDefaults.filterChipBorder(
+			enabled = true,
+			selected = isSelected,
+			borderColor = vColour.copy(alpha = 0.55f),
+			selectedBorderColor = vColour,
+		),
 	)
 }

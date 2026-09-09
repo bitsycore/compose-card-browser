@@ -226,7 +226,7 @@ class ScryfallMapperTest {
 	}
 
 	@Test
-	fun `colours are spelled out for the filter chips`() {
+	fun `colours are the letters the game keys on`() {
 		val vCard = ScryfallMapper.toPrinting(
 			dto = card(colors = listOf("W", "U")),
 			provider = mProvider,
@@ -235,7 +235,10 @@ class ScryfallMapperTest {
 		)
 
 		assertNotNull(vCard)
-		assertEquals(listOf("White", "Blue"), vCard.classification.domains)
+		// Scryfall's own letters now, not spelled-out names: `MagicGame` keys its colours on
+		// exactly these, supplies "White" and "Blue" for display, and puts them in WUBRG order --
+		// which is the order no alphabetical sort produces.
+		assertEquals(listOf("W", "U"), vCard.classification.domains)
 	}
 
 	@Test

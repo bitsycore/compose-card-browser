@@ -115,7 +115,12 @@ internal object AlteredMapper {
 				supertype = dto.cardSubTypes.firstOrNull()?.name?.ifBlank { null },
 				rarity = dto.rarity?.name?.ifBlank { null },
 				// Faction is Altered's colour-like axis.
-				domains = listOfNotNull(dto.mainFaction?.name?.ifBlank { null }),
+				// The faction's `reference` -- `AX`, `BR`, `YZ` -- not its `name`, which the API
+				// localises. `AlteredGame` keys on the reference and supplies the English label, so
+				// a faction filter keeps working when the mirror is answering in French.
+				domains = listOfNotNull(
+					dto.mainFaction?.reference?.trim()?.uppercase()?.ifBlank { null },
+				),
 			),
 			tags = buildList {
 				addAll(dto.cardSubTypes.mapNotNull { it.name.ifBlank { null } })

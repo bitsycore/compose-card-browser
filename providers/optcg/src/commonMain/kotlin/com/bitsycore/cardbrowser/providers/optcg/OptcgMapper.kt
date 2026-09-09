@@ -90,11 +90,11 @@ internal object OptcgMapper {
 				supertype = dto.attribute?.ifBlank { null },
 				rarity = expandRarity(dto.rarity),
 				// Colour is One Piece's colour-like axis. Dual-colour cards arrive as "Red/Green".
-				domains = dto.cardColor
-					?.split('/')
-					.orEmpty()
-					.map { it.trim() }
-					.filter { it.isNotEmpty() },
+				// Split, because a dual-colour card is both of its colours rather than a seventh
+				// thing. The API states them as one string -- `Blue Purple`, `Green Red` -- and
+				// leaving it whole meant a Blue/Purple leader did not match the Blue filter and
+				// added a "Blue Purple" chip of its own to the sheet.
+				domains = colourKeysOf(dto.cardColor),
 			),
 			tags = dto.subTypes
 				?.split('/')
@@ -128,4 +128,18 @@ internal object OptcgMapper {
 		"SP" -> "Special"
 		else -> code.trim()
 	}
+
+	/**
+	 * One Piece colours, split apart and keyed as `OnePieceGame` declares them.
+	 *
+	 * `card_color` carries a dual-colour card as a single space-separated string, and older records
+	 * use a slash. Both separators are handled, and a token the game does not declare passes
+	 * through lower-cased rather than being dropped -- a colour this app has not heard of is still
+	 * a colour the card has.
+	 */
+	internal fun colourKeysOf(raw: String?): List<String> =
+		raw.orEmpty()
+			.split('/', ' ', '\u3001', ',')
+			.mapNotNull { it.trim().lowercase().ifBlank { null } }
+			.distinct()
 }

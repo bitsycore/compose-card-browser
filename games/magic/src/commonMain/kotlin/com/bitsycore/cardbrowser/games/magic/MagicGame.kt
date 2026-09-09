@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.games.magic
 
+import com.bitsycore.cardbrowser.core.game.GameDomain
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.GameId
@@ -46,6 +47,23 @@ object MagicGame : GameProfile {
 	 * the button lands on a 404, and the fix is this one line.
 	 */
 	override val cardmarketSlug: String = "Magic"
+
+	/**
+	 * WUBRG, plus colourless.
+	 *
+	 * The order is the one every Magic player and every Magic product uses, and no alphabetical
+	 * sort produces it -- which is most of the reason this list exists rather than being derived
+	 * from whatever the provider happened to send. The keys are Scryfall's own single letters, so
+	 * the adapter has nothing to translate.
+	 */
+	override val domains: List<GameDomain> = listOf(
+		GameDomain("W", "White", 0xFFF8F4E4),
+		GameDomain("U", "Blue", 0xFF3B7FC4),
+		GameDomain("B", "Black", 0xFF4A4351),
+		GameDomain("R", "Red", 0xFFD8503C),
+		GameDomain("G", "Green", 0xFF3F9A62),
+		GameDomain("C", "Colourless", 0xFF9A9AA5),
+	)
 
 }
 

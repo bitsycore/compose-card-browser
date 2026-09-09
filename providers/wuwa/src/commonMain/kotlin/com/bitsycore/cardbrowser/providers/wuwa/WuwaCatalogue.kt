@@ -204,8 +204,11 @@ internal object WuwaCatalogue {
 				type = term(snapshot, "cardType", card.cardTypeId, language),
 				supertype = term(snapshot, "weaponType", card.weaponTypeId, language),
 				rarity = rarityOf(card),
-				// The game's element axis: 気動, 焦熱, 電導 and the rest.
-				domains = listOfNotNull(term(snapshot, "attribute", card.attributeId, language)),
+				// The element axis, as UCP's own numeric attribute id rather than its localised
+				// label -- attribute 2 is 焦熱, 热熔 and 용융, one element with three names.
+				// `WutheringWavesGame` keys on the id and supplies an English label, so the filter
+				// means the same thing in all three locales.
+				domains = listOfNotNull(card.attributeId?.toString()),
 			),
 			tags = buildList {
 				term(snapshot, "faction", card.factionId, language)?.let(::add)

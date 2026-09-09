@@ -164,11 +164,17 @@ class AlteredMapperTest {
 	}
 
 	@Test
-	fun `faction and rarity use the localised names`() {
+	fun `rarity and type are localised -- the faction key is not`() {
 		val vCard = AlteredMapper.toPrinting(card(), mProvider, mSet, CardLanguage.FRENCH, mImages)
 
 		assertNotNull(vCard)
-		assertEquals(listOf("Axiom"), vCard.classification.domains)
+		// The faction is the API's own `reference`, which is the same string in every locale.
+		// It used to be `mainFaction.name` -- "Axiom" in English, and something else in French --
+		// so a faction filter stopped matching as soon as the mirror answered in another language.
+		// `AlteredGame` turns `AX` back into "Axiom" for display.
+		assertEquals(listOf("AX"), vCard.classification.domains)
+		// Rarity and type stay as the provider spelled them: no game declares a canonical set for
+		// either, so there is nothing to map them onto and inventing one would be a guess.
 		assertEquals("Commun", vCard.classification.rarity)
 		assertEquals("Personnage", vCard.classification.type)
 	}

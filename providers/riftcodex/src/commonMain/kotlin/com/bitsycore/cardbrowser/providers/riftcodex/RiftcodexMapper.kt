@@ -135,7 +135,7 @@ internal object RiftcodexMapper {
 				type = dto.classification.type?.takeIf { it.isNotBlank() },
 				supertype = dto.classification.supertype?.takeIf { it.isNotBlank() },
 				rarity = dto.classification.rarity?.takeIf { it.isNotBlank() },
-				domains = dto.classification.domain,
+				domains = dto.classification.domain.map { it.trim().lowercase() },
 			),
 			tags = dto.tags,
 			// English confirmed; French, Japanese and Korean left UNKNOWN rather than UNAVAILABLE.

@@ -69,6 +69,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
@@ -577,7 +578,14 @@ private fun CardDetailPage(
 				card.classification.rarity?.let { StatChip(it) }
 				card.classification.type?.let { StatChip(it) }
 				card.classification.supertype?.let { StatChip(it) }
-				card.classification.domains.forEach { StatChip(it) }
+				// The game's label and colour, not the raw key the filter is keyed on.
+				card.classification.domains.forEach { vKey ->
+					val vDomain = state.game?.domainFor(vKey)
+					StatChip(
+						label = vDomain?.label ?: vKey,
+						colour = vDomain?.let { Color(it.colourArgb.toInt()) },
+					)
+				}
 				// Labelled with the game's own word: "Mana value 3" for Magic, "Level 4" for
 				// Yu-Gi-Oh. "3 energy" was Riftbound's word applied to all seven games.
 				card.attributes.cost?.let { vCost ->
@@ -863,17 +871,30 @@ private fun ZoomableCardImage(
 // MARK: Small parts
 // ==================
 
-/** A plain fact chip. */
+/**
+ * A plain fact chip, or a coloured one when the fact carries a colour.
+ *
+ * Only a domain does. The colour is the game's rule -- see `GameDomain` -- and a `null` means the
+ * game has never heard of the value, which is drawn in the ordinary chip colours rather than hidden.
+ */
 @Composable
-private fun StatChip(label: String) {
+private fun StatChip(label: String, colour: Color? = null) {
+	// Perceived brightness rather than a plain average: the eye weights green far above blue, and
+	// an unweighted mean calls Magic's blue light enough for black text.
+	val vIsLight = colour != null &&
+		(0.299f * colour.red + 0.587f * colour.green + 0.114f * colour.blue) > 0.6f
 	Surface(
-		color = MaterialTheme.colorScheme.secondaryContainer,
+		color = colour ?: MaterialTheme.colorScheme.secondaryContainer,
 		shape = RoundedCornerShape(20.dp),
 	) {
 		Text(
 			text = label,
 			style = MaterialTheme.typography.labelMedium,
-			color = MaterialTheme.colorScheme.onSecondaryContainer,
+			color = when {
+				colour == null -> MaterialTheme.colorScheme.onSecondaryContainer
+				vIsLight -> Color.Black
+				else -> Color.White
+			},
 			modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
 		)
 	}

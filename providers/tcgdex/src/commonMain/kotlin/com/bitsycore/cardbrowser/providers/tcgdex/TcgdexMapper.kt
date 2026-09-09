@@ -195,7 +195,7 @@ internal object TcgdexMapper {
 				supertype = dto.stage?.ifBlank { null } ?: dto.trainerType?.ifBlank { null },
 				rarity = dto.rarity?.ifBlank { null },
 				// The Pokémon "colour" axis. `GameVocabulary` labels this "Type" for Pokémon.
-				domains = dto.types,
+				domains = dto.types.mapNotNull(::typeKeyOf),
 			),
 			tags = listOfNotNull(dto.suffix?.ifBlank { null }, dto.energyType?.ifBlank { null }),
 			languages = languageCoverageFor(language),
@@ -285,4 +285,47 @@ internal object TcgdexMapper {
 
 		return FinishCoverage(confirmed = vConfirmed, absent = vAbsent)
 	}
+
+	/**
+	 * A Pokemon type, as the key `PokemonGame` declares rather than as TCGdex spelled it.
+	 *
+	 * TCGdex localises `types`: the same card is `Fire` under `/en/` and `Feu` under `/fr/`. Left
+	 * as-is, a type filter silently stopped matching the moment the catalogue was fetched in
+	 * another language, and one card counted as two different types across two locales.
+	 *
+	 * English and French are mapped, both measured from `/v2/{lang}/types`. The other nine locales
+	 * are not, and their values pass through lower-cased -- which shows the provider's own word,
+	 * uncoloured, rather than dropping a type the card really has. Adding a locale is a row here.
+	 */
+	internal fun typeKeyOf(type: String): String? {
+		val vType = type.trim().lowercase().ifBlank { return null }
+		return TYPE_KEYS[vType] ?: vType
+	}
+
+	/** Localised type name to the key `PokemonGame` declares. Lower-cased on both sides. */
+	private val TYPE_KEYS: Map<String, String> = mapOf(
+		// English, from `/v2/en/types`.
+		"grass" to "grass",
+		"fire" to "fire",
+		"water" to "water",
+		"lightning" to "lightning",
+		"psychic" to "psychic",
+		"fighting" to "fighting",
+		"darkness" to "darkness",
+		"metal" to "metal",
+		"dragon" to "dragon",
+		"fairy" to "fairy",
+		"colorless" to "colorless",
+		// French, from `/v2/fr/types`.
+		"plante" to "grass",
+		"feu" to "fire",
+		"eau" to "water",
+		"électrique" to "lightning",
+		"psy" to "psychic",
+		"combat" to "fighting",
+		"obscurité" to "darkness",
+		"métal" to "metal",
+		"fée" to "fairy",
+		"incolore" to "colorless",
+	)
 }

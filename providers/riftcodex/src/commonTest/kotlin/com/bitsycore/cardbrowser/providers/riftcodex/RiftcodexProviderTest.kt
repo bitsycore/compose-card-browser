@@ -151,7 +151,8 @@ class RiftcodexProviderTest {
 		assertEquals("Epic", vCard.classification.rarity)
 		assertEquals("Unit", vCard.classification.type)
 		assertEquals("Champion", vCard.classification.supertype)
-		assertEquals(listOf("Fury"), vCard.classification.domains)
+		// Lower-cased onto the key `RiftboundGame` declares, which carries its label and colour.
+		assertEquals(listOf("fury"), vCard.classification.domains)
 		assertEquals(5, vCard.attributes.cost)
 		assertEquals(4, vCard.attributes.primary)
 		assertEquals(1, vCard.attributes.secondary)
