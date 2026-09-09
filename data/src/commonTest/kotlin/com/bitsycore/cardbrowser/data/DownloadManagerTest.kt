@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.data
 
+import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
@@ -36,11 +37,13 @@ class DownloadManagerTest {
 	private fun request(
 		set: String = "OGN",
 		kinds: Set<DownloadKind> = setOf(DownloadKind.CARD_INFO),
+		language: com.bitsycore.cardbrowser.core.model.CardLanguage? = null,
 	) = DownloadRequest(
 		setId = SourceId(mProvider, set),
 		game = GameId("riftbound"),
 		setName = set,
 		kinds = kinds,
+		language = language,
 	)
 
 	/** Records what it was asked for, and can be held open to observe a job mid-flight. */
@@ -189,6 +192,38 @@ class DownloadManagerTest {
 		assertEquals(4, vStatus.imagesFailed)
 		assertFalse(vJob.isActive)
 	}
+
+	@Test
+	fun `the same set and kinds in two languages are two jobs`() = runTest {
+		// Everything downstream is per language -- a cache key embeds it, and so does an image
+		// download record -- so a set's art in Japanese and in French is two pieces of work. The
+		// job id left the language out, so the second silently replaced the first in the queue and
+		// only one of them ever ran. Nothing noticed until the dialog started offering a choice.
+		val vManager = managerWith(RecordingPrefetcher(), testScheduler)
+
+		val vJapanese = vManager.enqueue(
+			request(kinds = setOf(DownloadKind.FULL_ART), language = CardLanguage.JAPANESE),
+		)
+		val vFrench = vManager.enqueue(
+			request(kinds = setOf(DownloadKind.FULL_ART), language = CardLanguage.FRENCH),
+		)
+
+		assertTrue(vJapanese != vFrench, "Two languages must not share a job id")
+		assertEquals(2, vManager.jobs.value.size, "Got ${vManager.jobs.value.map { it.id }}")
+	}
+
+	@Test
+	fun `the same set in the same language is still one job`() = runTest {
+		// The dedupe that mattered before still has to hold: two taps are one download.
+		val vManager = managerWith(RecordingPrefetcher(), testScheduler)
+
+		val vFirst = vManager.enqueue(request(language = CardLanguage.ENGLISH))
+		val vSecond = vManager.enqueue(request(language = CardLanguage.ENGLISH))
+
+		assertEquals(vFirst, vSecond)
+		assertEquals(1, vManager.jobs.value.size)
+	}
+
 
 	/** Builds a manager over throwaway collaborators, so a constructor change is one edit here. */
 	private fun managerWith(

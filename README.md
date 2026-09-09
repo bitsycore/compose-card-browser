@@ -408,6 +408,22 @@ A switch that fails says so rather than silently showing the previous language.
 
 ### Downloading a set
 
+Card info and card art are fetched per language, and the two are offered differently: **info comes
+down in every language the set states, art only in the languages you tick.** That asymmetry is the
+point of it — records are small and being able to switch a downloaded card's language is most of
+why you downloaded it, while a set's art is tens of megabytes per language and almost nobody wants
+all eleven.
+
+The choice only appears where the *set* states more than one language. A source that says nothing
+about languages gets no picker, because there is nothing honest to offer — and it is the set's
+languages, not the provider's, so a Japanese-only set never offers Korean.
+
+Each language is its own job. That is not cosmetic: a cache key embeds the language and so does an
+image download record, so a set's art in French and in Japanese are genuinely two pieces of work.
+The job id used to leave the language out, which meant the second of two languages silently
+*replaced* the first in the queue and only one ever ran — invisible until something offered a
+choice.
+
 A set row has a download button, and the top bar can queue every set currently shown. Three things
 are offered separately, because they cost very differently:
 

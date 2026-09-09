@@ -429,8 +429,23 @@ class DownloadManager(
 		}
 	}
 
-	private fun idOf(request: DownloadRequest): String =
-		request.setId.qualified + "|" + request.kinds.map { it.name }.sorted().joinToString(",")
+	/**
+	 * What makes two requests the same job.
+	 *
+	 * The language is part of it, and was not. Everything downstream is per language -- a cache key
+	 * embeds it, and so does an image download record -- so downloading a set's art in Japanese and
+	 * then in French is two different pieces of work. Leaving the language out gave them one id, so
+	 * the second silently *replaced* the first in the queue and only one of the two ever ran.
+	 *
+	 * It only stopped mattering because nothing offered a choice of language until now.
+	 */
+	private fun idOf(request: DownloadRequest): String = buildString {
+		append(request.setId.qualified)
+		append('|')
+		append(request.kinds.map { it.name }.sorted().joinToString(","))
+		append('|')
+		append(request.language?.code ?: "-")
+	}
 
 	companion object {
 

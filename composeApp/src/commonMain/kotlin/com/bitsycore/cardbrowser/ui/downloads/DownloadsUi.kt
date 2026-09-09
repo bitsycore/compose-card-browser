@@ -20,6 +20,10 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.DownloadDone
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import com.bitsycore.cardbrowser.core.model.CardLanguage
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -93,7 +97,7 @@ fun DownloadKindDialog(
 	setName: String,
 	cardCount: Int?,
 	onDismiss: () -> Unit,
-	onConfirm: (Set<DownloadKind>) -> Unit,
+	onConfirm: (Set<DownloadKind>, Set<CardLanguage>) -> Unit,
 	/**
 	 * How many sets this covers. 1 for a single row; more for "download all".
 	 *
@@ -112,6 +116,16 @@ fun DownloadKindDialog(
 	 * Only *complete* kinds belong here. A part-finished art download is still worth offering.
 	 */
 	alreadyHave: Set<DownloadKind> = emptySet(),
+	/**
+	 * The languages this set is actually published in, as its provider stated them.
+	 *
+	 * Empty for a source that says nothing about languages, which is most of them -- and then no
+	 * choice is offered, because there is nothing honest to offer. Not the languages the *provider*
+	 * can serve in general: that would put Korean on a set that was never printed in it.
+	 */
+	languages: List<CardLanguage> = emptyList(),
+	/** Ticked when the dialog opens. The user's own preference, where the set has it. */
+	defaultLanguage: CardLanguage? = null,
 ) {
 	// Ticking is a fresh decision each time the dialog opens, so it is keyed on what is already
 	// held: reopening after a download must not restore a tick for something now on disk.
@@ -125,6 +139,17 @@ fun DownloadKindDialog(
 	// browse a set's grid offline -- so they sit above full art. Neither is pre-ticked.
 	var vThumbnails by remember(alreadyHave) { mutableStateOf(false) }
 	var vArt by remember(alreadyHave) { mutableStateOf(false) }
+
+	// Which languages the art is wanted in. Card info is not part of this: text records are small
+	// and a card is not much use in a language you cannot read *and* cannot switch to, so info is
+	// fetched in every language the set states. Images are the expensive half -- a full set's art
+	// is tens of megabytes -- so those are chosen.
+	val vChoosable = languages.size > 1
+	var vLanguages by remember(languages, defaultLanguage) {
+		mutableStateOf(
+			setOfNotNull(defaultLanguage?.takeIf { it in languages } ?: languages.firstOrNull()),
+		)
+	}
 
 	AlertDialog(
 		onDismissRequest = onDismiss,
@@ -171,6 +196,53 @@ fun DownloadKindDialog(
 						?.let { "About ${megabytes(it, FULL_ART_BYTES)} MB. Needed to read a card offline." }
 						?: "The full-size rendition the card screen draws.",
 				)
+				if (vChoosable) {
+					Spacer(Modifier.height(14.dp))
+					HorizontalDivider()
+					Spacer(Modifier.height(10.dp))
+					Text(
+						text = "Image languages",
+						style = MaterialTheme.typography.labelLarge,
+					)
+					Text(
+						// The asymmetry, said plainly. Card info is cheap and switching language on
+						// a card you already have is the point of downloading it; art is tens of
+						// megabytes a language and almost nobody wants all of them.
+						text = "Card info is downloaded in all ${languages.size} languages this " +
+							"set was printed in. Pick which of them to fetch art for.",
+						style = MaterialTheme.typography.bodySmall,
+						color = MaterialTheme.colorScheme.onSurfaceVariant,
+					)
+					Spacer(Modifier.height(8.dp))
+					FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+						for (vLanguage in languages) {
+							FilterChip(
+								selected = vLanguage in vLanguages,
+								onClick = {
+									vLanguages = if (vLanguage in vLanguages) {
+										vLanguages - vLanguage
+									} else {
+										vLanguages + vLanguage
+									}
+								},
+								// Only meaningful for the kinds that fetch pictures. Greyed rather
+								// than hidden, so the choice does not appear and vanish as the
+								// tick boxes above are used.
+								enabled = vThumbnails || vArt,
+								label = { Text(vLanguage.displayName) },
+							)
+						}
+					}
+					if ((vThumbnails || vArt) && vLanguages.isEmpty()) {
+						Spacer(Modifier.height(6.dp))
+						Text(
+							text = "Choose at least one language for the art.",
+							style = MaterialTheme.typography.bodySmall,
+							color = MaterialTheme.colorScheme.error,
+						)
+					}
+				}
+
 				Spacer(Modifier.height(12.dp))
 				Text(
 					text = if (setCount > 1) {
@@ -191,8 +263,10 @@ fun DownloadKindDialog(
 		},
 		confirmButton = {
 			TextButton(
-				// Nothing ticked is not a download, so the button is not offered as one.
-				enabled = vInfo || vThumbnails || vArt,
+				// Nothing ticked is not a download, so the button is not offered as one -- and
+				// neither is art in no language at all.
+				enabled = (vInfo || vThumbnails || vArt) &&
+					(!(vThumbnails || vArt) || !vChoosable || vLanguages.isNotEmpty()),
 				onClick = {
 					onConfirm(
 						buildSet {
@@ -200,6 +274,7 @@ fun DownloadKindDialog(
 							if (vThumbnails) add(DownloadKind.GRID_THUMBNAILS)
 							if (vArt) add(DownloadKind.FULL_ART)
 						},
+						vLanguages,
 					)
 				},
 			) { Text("Download") }
@@ -474,14 +549,14 @@ private fun DownloadsDialogStartingPreview() = PreviewFrame(isDark = false) {
 @Preview
 @Composable
 private fun DownloadKindDialogPreview() = PreviewFrame {
-	DownloadKindDialog(setName = "Origins", cardCount = 352, onDismiss = {}, onConfirm = {})
+	DownloadKindDialog(setName = "Origins", cardCount = 352, onDismiss = {}, onConfirm = { _, _ -> })
 }
 
 @Preview
 @Composable
 private fun DownloadKindDialogUnknownSizePreview() = PreviewFrame {
 	// No card count, so no size estimate is offered rather than a made-up one.
-	DownloadKindDialog(setName = "Promos", cardCount = null, onDismiss = {}, onConfirm = {})
+	DownloadKindDialog(setName = "Promos", cardCount = null, onDismiss = {}, onConfirm = { _, _ -> })
 }
 
 @Preview
@@ -493,7 +568,7 @@ private fun DownloadAllDialogPreview() = PreviewFrame {
 		cardCount = 21_450,
 		setCount = 88,
 		onDismiss = {},
-		onConfirm = {},
+		onConfirm = { _, _ -> },
 	)
 }
 
@@ -507,6 +582,6 @@ private fun DownloadKindDialogPartlyHeldPreview() = PreviewFrame {
 		cardCount = 352,
 		alreadyHave = setOf(DownloadKind.CARD_INFO, DownloadKind.GRID_THUMBNAILS),
 		onDismiss = {},
-		onConfirm = {},
+		onConfirm = { _, _ -> },
 	)
 }

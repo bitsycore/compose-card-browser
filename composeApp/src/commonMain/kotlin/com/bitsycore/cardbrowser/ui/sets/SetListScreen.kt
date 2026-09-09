@@ -90,6 +90,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.game.GameRegion
+import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.ProviderError
@@ -141,33 +142,66 @@ fun SetListScreen(
 		onOpenSettings = onOpenSettings,
 		onOpenSearch = onOpenSearch,
 		downloads = vJobs,
-		onDownload = { vSet, vKinds ->
-			vDownloads.enqueue(
-				DownloadRequest(
-					setId = vSet.id,
-					game = vSet.game,
-					setName = vSet.name,
-					kinds = vKinds,
-					// The user's preferred language, which is what every other caller passes --
-					// not `null`.
-					//
-					// A cache key embeds the language, so a download written under `null` and a
-					// grid or a search reading under `fr` are different files: the set would come
-					// down, and then not be found by the search that was the reason for
-					// downloading it. `CardRepository` normalises this once against what the
-					// provider can really answer in, so passing the preference is correct even for
-					// a source that cannot serve it.
-					//
-					// This is the same mistake that once stopped any set ever showing as saved;
-					// see the note in `CardGridViewModel.startLoad`.
-					language = vPreferences.preferences.value.primaryLanguage,
-				),
-			)
+		onDownload = { vSet, vKinds, vLanguages ->
+			// One job per language, because everything downstream is per language: a cache key
+			// embeds it and so does an image download record. Splitting here is what makes "card
+			// info in every language, art in the two you read" a thing the queue can express.
+			//
+			// The two halves are treated differently on purpose. Card records are small and the
+			// whole point of having them is being able to switch language on a card you already
+			// hold, so those are fetched in every language the set states. Art is tens of megabytes
+			// a language, so it goes only where it was asked for.
+			val vPrimary = vPreferences.preferences.value.primaryLanguage
+			// A set that states no languages gets one job in the user's own, which is exactly what
+			// happened before this existed -- see the note below on why `null` is not passed.
+			val vStated = vSet.languages.toList().ifEmpty { listOf(vPrimary) }
+			val vForArt = vLanguages.ifEmpty { setOf(vPrimary) }.filter { it in vStated || vSet.languages.isEmpty() }
+
+			val vInfoKinds = vKinds.filterNot { it.isImagery }.toSet()
+			val vArtKinds = vKinds.filter { it.isImagery }.toSet()
+
+			for (vLanguage in vStated) {
+				if (vInfoKinds.isEmpty()) break
+				vDownloads.enqueue(
+					DownloadRequest(
+						setId = vSet.id,
+						game = vSet.game,
+						setName = vSet.name,
+						kinds = vInfoKinds,
+						// The user's preferred language, which is what every other caller passes --
+						// not `null`.
+						//
+						// A cache key embeds the language, so a download written under `null` and a
+						// grid or a search reading under `fr` are different files: the set would
+						// come down, and then not be found by the search that was the reason for
+						// downloading it. `CardRepository` normalises this once against what the
+						// provider can really answer in, so passing a language is correct even for
+						// a source that cannot serve it.
+						//
+						// This is the same mistake that once stopped any set ever showing as saved;
+						// see the note in `CardGridViewModel.startLoad`.
+						language = vLanguage,
+					),
+				)
+			}
+			for (vLanguage in vForArt) {
+				if (vArtKinds.isEmpty()) break
+				vDownloads.enqueue(
+					DownloadRequest(
+						setId = vSet.id,
+						game = vSet.game,
+						setName = vSet.name,
+						kinds = vArtKinds,
+						language = vLanguage,
+					),
+				)
+			}
 		},
 		onCancelDownload = vDownloads::cancel,
 		onCancelAllDownloads = vDownloads::cancelAll,
 		onClearFinishedDownloads = vDownloads::clearFinished,
 		gameArt = vArt,
+		preferredLanguage = vPreferences.preferences.value.primaryLanguage,
 	)
 }
 
@@ -189,7 +223,14 @@ fun SetListContent(
 	onOpenSettings: () -> Unit,
 	onOpenSearch: (GameProfile) -> Unit = {},
 	downloads: List<DownloadJob> = emptyList(),
-	onDownload: (CardSet, Set<DownloadKind>) -> Unit = { _, _ -> },
+	onDownload: (CardSet, Set<DownloadKind>, Set<CardLanguage>) -> Unit = { _, _, _ -> },
+	/**
+	 * The user's preferred language, ticked by default in the download dialog.
+	 *
+	 * Passed in rather than read here, because this composable stays free of Koin so it can be
+	 * previewed. `null` leaves the set's own first stated language ticked instead.
+	 */
+	preferredLanguage: CardLanguage? = null,
 	onCancelDownload: (String) -> Unit = {},
 	onCancelAllDownloads: () -> Unit = {},
 	onClearFinishedDownloads: () -> Unit = {},
@@ -421,8 +462,10 @@ fun SetListContent(
 				images = vState.imageDownloads[vSet.id.qualified],
 			),
 			onDismiss = { vPendingSet = null },
-			onConfirm = { vKinds ->
-				onDownload(vSet, vKinds)
+			languages = vSet.languages.toList(),
+			defaultLanguage = preferredLanguage,
+			onConfirm = { vKinds, vLanguages ->
+				onDownload(vSet, vKinds, vLanguages)
 				vPendingSet = null
 				// Straight to the queue, so the download is visibly a thing that now exists rather
 				// than a dialog that closed and apparently did nothing.
@@ -452,9 +495,13 @@ fun SetListContent(
 				}
 				.reduceOrNull { vAcc, vNext -> vAcc intersect vNext }
 				.orEmpty(),
+			// Every language any of these sets states. A language only some of them have is still
+			// worth offering -- the enqueue skips it for the sets that were never printed in it.
+			languages = vSets.flatMap { it.languages }.distinct(),
+			defaultLanguage = preferredLanguage,
 			onDismiss = { vPendingAll = false },
-			onConfirm = { vKinds ->
-				vSets.forEach { vSet -> onDownload(vSet, vKinds) }
+			onConfirm = { vKinds, vLanguages ->
+				vSets.forEach { vSet -> onDownload(vSet, vKinds, vLanguages) }
 				vPendingAll = false
 				vShowQueue = true
 			},
