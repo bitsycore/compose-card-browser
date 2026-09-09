@@ -62,6 +62,7 @@ internal object TcgdexMapper {
 		 * tile for a set whose logo the API does have is a worse answer than the English one.
 		 */
 		logo: String? = dto.logo,
+		releaseOrder: Int? = null,
 	): CardSet? {
 		if (dto.id.isBlank()) return null
 		return CardSet(
@@ -83,6 +84,7 @@ internal object TcgdexMapper {
 			symbol = symbolOf(logo),
 			region = region,
 			languages = languages,
+			releaseOrder = releaseOrder,
 		)
 	}
 

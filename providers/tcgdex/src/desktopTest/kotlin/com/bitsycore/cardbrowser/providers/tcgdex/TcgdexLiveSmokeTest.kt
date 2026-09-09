@@ -91,6 +91,59 @@ class TcgdexLiveSmokeTest {
 	}
 
 	@Test
+	fun `the lines with no published dates still come back in release order`() = runBlocking {
+		// 265 of Pokemon's 486 sets carry no date: the GraphQL endpoint that publishes them serves
+		// the international catalogue only, and `/v2/ja/graphql` is a 404. Without an order they
+		// fell through to code order, which puts the 2013 XY sets after the 2023 SV ones -- an
+		// unreadable list of sets whose names are not in a Latin alphabet either.
+		//
+		// So the catalogue is asked for sorted, and the rank is kept. This checks the rank is
+		// really there and really increasing with time.
+		val vSets = provider().listSets(CardLanguage.ENGLISH)
+
+		val vJapan = vSets.filter { it.region == PokemonGame.REGION_JAPAN }
+		assertTrue(vJapan.all { it.releaseOrder != null }, "Japan-line sets carry no rank")
+		// A rank is a position in one catalogue, so within a line they must all be distinct.
+		assertEquals(
+			vJapan.size,
+			vJapan.mapNotNull { it.releaseOrder }.distinct().size,
+			"two Japan-line sets share a rank",
+		)
+
+		// The anchors: TCGdex's own era ids, which run PMCG (1996) then XY (2013) then SM (2016)
+		// then SV (2023). If the rank were meaningless these would not be ordered.
+		//
+		// `neo1` is deliberately not among them. It is one of the four ids the Japanese and
+		// international catalogues genuinely share, so region priority files it under the
+		// international line -- which is the intended behaviour and makes it useless as an anchor
+		// here.
+		val vRankOf = { vLocal: String ->
+			val vSet = assertNotNull(
+				vJapan.firstOrNull { it.id.local == vLocal },
+				"$vLocal is missing from the Japan line",
+			)
+			assertNotNull(vSet.releaseOrder, "$vLocal has no rank")
+		}
+		val vSequence = listOf("PMCG1", "XY1a", "SM1S", "SV1a").map(vRankOf)
+		assertEquals(
+			vSequence.sorted(),
+			vSequence,
+			"the Japanese line is not in release order: $vSequence",
+		)
+
+		// And the international line, where the dates are published, is ordered by them -- the
+		// cross-check that the server's sort really is by date.
+		val vDated = vSets
+			.filter { it.region == PokemonGame.REGION_INTERNATIONAL && it.releaseDate != null }
+			.sortedBy { it.releaseOrder }
+		assertEquals(
+			vDated.mapNotNull { it.releaseDate }.sorted(),
+			vDated.mapNotNull { it.releaseDate },
+			"rank order and date order disagree",
+		)
+	}
+
+	@Test
 	fun `set ids are case sensitive and name different products`() = runBlocking {
 		// `sm10` is international Unbroken Bonds; `SM10` is Japanese Double Blaze. The detail
 		// endpoint folds the case and will serve Unbroken Bonds for `/en/sets/SM10`, so if this

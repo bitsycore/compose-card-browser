@@ -1095,9 +1095,20 @@ class CardRepository(
 		 */
 		val SET_ORDER: Comparator<CardSet> = compareBy<CardSet> { it.releaseDate == null }
 			.thenByDescending { it.releaseDate }
-			// Undated sets have no chronology to sort by, so they go in code order. This used to
-			// fall back to the *name*, which for One Piece -- where no set carries a date -- listed
-			// "Awakening of the New Era" before "Romance Dawn" and buried OP-14 in the middle.
+			// A dated set is ordered by its date; an undated one by its line and its rank within
+			// it. Grouping by line first is what makes the rank meaningful: it is a position in one
+			// catalogue's chronology, so comparing a Japanese set's rank with a Chinese set's would
+			// interleave two unrelated release schedules.
+			//
+			// This is what orders Pokemon's Japanese line, where TCGdex publishes the chronology
+			// without publishing the dates -- see `CardSet.releaseOrder`. Before it, 265 of the
+			// game's 486 sets fell through to code order, which puts the 2013 XY sets after the
+			// 2023 SV ones.
+			.thenBy { it.region ?: "" }
+			.thenByDescending { it.releaseOrder ?: Int.MIN_VALUE }
+			// Nothing left to go on. This used to fall back to the *name*, which for One Piece --
+			// where no set carries a date -- listed "Awakening of the New Era" before "Romance
+			// Dawn" and buried OP-14 in the middle.
 			.then(SetCodeComparator)
 			.thenBy { it.name }
 

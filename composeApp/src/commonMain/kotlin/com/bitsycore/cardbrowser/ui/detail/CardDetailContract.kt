@@ -24,7 +24,7 @@ import com.bitsycore.lib.pulse.container.ContainerContract
  * render the page either side of the current one correctly.
  *
  * Most of the interesting logic is about what *not* to claim -- see [languageOptionsFor],
- * [finishOptionsFor] and [artworkNote].
+ * [finishesFor] and [artworkNote].
  */
 object CardDetailContract :
 	ContainerContract<CardDetailContract.UiState, CardDetailContract.Intent, CardDetailContract.Effect>() {
@@ -41,7 +41,6 @@ object CardDetailContract :
 		val isLoading: Boolean = true,
 		val error: ProviderError? = null,
 		val requestedLanguage: CardLanguage = CardLanguage.ENGLISH,
-		val selectedFinish: Finish? = null,
 		val isZoomed: Boolean = false,
 		val isFullscreen: Boolean = false,
 		val providerStatesIdentity: Boolean = false,
@@ -134,21 +133,21 @@ object CardDetailContract :
 		 *
 		 * Only the confirmed ones, for the same reason [languageOptionsFor] lists only what can be
 		 * chosen: a greyed-out "Etched foil" chip says either "this card was never etched" or "our
-		 * source has never mentioned etching", and a chip cannot tell those apart. A source that
-		 * states no finishes at all returns an empty list and the screen draws no section, rather
-		 * than a heading over an explanation of its own limitations.
+		 * source has never mentioned etching", and no chip can tell those apart. `null` when the
+		 * source states nothing, so the row is absent rather than explaining the app's limitations.
+		 *
+		 * A string rather than a row of chips, because a chip implies a choice and choosing a
+		 * finish changed nothing: no source here publishes a separate scan per finish, so every
+		 * finish of a card is the same picture. The chips were a control whose only effect was on
+		 * themselves. Which finishes exist is a fact about the printing, so it sits with the other
+		 * facts -- and it is still a filter in the grid, where it does narrow something.
 		 */
-		fun finishOptionsFor(card: CardPrinting): List<FinishOption> {
-			if (card.finishes.isUnstated) return emptyList()
+		fun finishesFor(card: CardPrinting): String? {
+			if (card.finishes.isUnstated) return null
 			return Finish.entries
 				.filter { card.finishes.availabilityOf(it) == Availability.AVAILABLE }
-				.map { vFinish ->
-					FinishOption(
-						finish = vFinish,
-						availability = Availability.AVAILABLE,
-						isSelected = vFinish == selectedFinish,
-					)
-				}
+				.joinToString(", ") { it.displayName }
+				.ifBlank { null }
 		}
 
 		/**
@@ -216,6 +215,7 @@ object CardDetailContract :
 				fact("Tags", card.tags.takeIf { it.isNotEmpty() }?.joinToString(", "))
 				fact("Artist", card.artwork.artist)
 				fact("Treatment", card.artwork.treatment.displayName)
+				fact("Finish", finishesFor(card))
 				if (card.orientation == CardOrientation.LANDSCAPE) fact("Orientation", "Landscape")
 				fact("Text language", card.text.language?.displayName)
 				// Worth its own row only when it disagrees with the text, which is the case a reader
@@ -277,17 +277,6 @@ object CardDetailContract :
 				(isOfferedBySource || availability == Availability.AVAILABLE)
 	}
 
-	/** One finish row. */
-	data class FinishOption(
-		val finish: Finish,
-		val availability: Availability,
-		val isSelected: Boolean,
-	) {
-
-		/** Everything offered is confirmed, so the only unselectable chip is the one already on. */
-		val isSelectable: Boolean get() = !isSelected && availability == Availability.AVAILABLE
-	}
-
 	sealed interface Intent {
 
 		data class Load(val cardId: String, val setId: String?) : Intent
@@ -326,8 +315,6 @@ object CardDetailContract :
 
 		/** A language change that could not be fetched. The screen keeps what it had. */
 		data class LanguageChangeFailed(val language: CardLanguage) : Intent
-
-		data class FinishSelected(val finish: Finish) : Intent
 
 		data class ZoomToggled(val isZoomed: Boolean) : Intent
 
@@ -385,8 +372,6 @@ object CardDetailContract :
 				// A new card is not the card that was zoomed in on.
 				isZoomed = false,
 				isFullscreen = false,
-				// Finish is a property of the printing, so a selection does not carry across.
-				selectedFinish = null,
 			)
 		}
 
@@ -418,7 +403,6 @@ object CardDetailContract :
 					currentIndex = vIndex,
 					requestedLanguage = intent.language,
 					isChangingLanguage = false,
-					selectedFinish = null,
 					isZoomed = false,
 				)
 			}
@@ -426,7 +410,6 @@ object CardDetailContract :
 
 		is Intent.LanguageChangeFailed -> state.copy(isChangingLanguage = false)
 
-		is Intent.FinishSelected -> state.copy(selectedFinish = intent.finish)
 
 		is Intent.ZoomToggled -> state.copy(isZoomed = intent.isZoomed)
 

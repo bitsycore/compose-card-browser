@@ -86,7 +86,6 @@ import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardOrientation
 import com.bitsycore.cardbrowser.core.model.CardPrinting
-import com.bitsycore.cardbrowser.core.model.Finish
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.ui.common.CardImage
@@ -231,7 +230,6 @@ fun CardDetailContent(
 				onPageChanged = { dispatch(CardDetailContract.Intent.PageChanged(it)) },
 				onZoomToggle = { dispatch(CardDetailContract.Intent.ZoomToggled(it)) },
 				onLanguageSelected = { dispatch(CardDetailContract.Intent.LanguageSelected(it)) },
-				onFinishSelected = { dispatch(CardDetailContract.Intent.FinishSelected(it)) },
 				onOpenCardmarket = { dispatch(CardDetailContract.Intent.OpenCardmarket(it)) },
 				onOpenFullscreen = { dispatch(CardDetailContract.Intent.FullscreenToggled(true)) },
 			)
@@ -268,7 +266,6 @@ private fun CardPager(
 	onPageChanged: (Int) -> Unit,
 	onZoomToggle: (Boolean) -> Unit,
 	onLanguageSelected: (CardLanguage) -> Unit,
-	onFinishSelected: (Finish) -> Unit,
 	onOpenCardmarket: (String) -> Unit,
 	onOpenFullscreen: () -> Unit,
 	modifier: Modifier = Modifier,
@@ -370,7 +367,6 @@ private fun CardPager(
 				isSharedElement = vPage == state.currentIndex,
 				onZoomToggle = onZoomToggle,
 				onLanguageSelected = onLanguageSelected,
-				onFinishSelected = onFinishSelected,
 				onOpenCardmarket = { onOpenCardmarket(vCard.id.qualified) },
 				onOpenFullscreen = onOpenFullscreen,
 				// Tapping another artwork of the same card is a jump within the list already loaded,
@@ -517,7 +513,6 @@ private fun CardDetailPage(
 	card: CardPrinting,
 	onZoomToggle: (Boolean) -> Unit,
 	onLanguageSelected: (CardLanguage) -> Unit,
-	onFinishSelected: (Finish) -> Unit,
 	onOpenCardmarket: () -> Unit,
 	onOpenFullscreen: () -> Unit,
 	onSelectPrinting: (CardPrinting) -> Unit,
@@ -644,35 +639,9 @@ private fun CardDetailPage(
 				}
 			}
 
-			// ============
-			//  Finish
-
-			// Drawn only when there are finishes to offer. A source that records none has nothing
-			// to say here, and a section explaining that is a section about the app rather than
-			// about the card.
-			val vFinishes = state.finishOptionsFor(card)
-			if (vFinishes.isNotEmpty()) {
-				SectionDivider()
-				SectionTitle("Finish")
-				Spacer(Modifier.height(8.dp))
-				FlowRow(
-					horizontalArrangement = Arrangement.spacedBy(6.dp),
-					verticalArrangement = Arrangement.spacedBy(4.dp),
-					modifier = Modifier.fillMaxWidth(),
-				) {
-					vFinishes.forEach { vOption ->
-						AvailabilityChip(
-							label = vOption.finish.displayName,
-							isSelected = vOption.isSelected,
-							onClick = if (vOption.isSelectable) {
-								{ onFinishSelected(vOption.finish) }
-							} else {
-								null
-							},
-						)
-					}
-				}
-			}
+			// Finish has no section of its own: it is a row in Details. Every finish of a card is
+			// the same picture -- no source here publishes a scan per finish -- so chips offered a
+			// choice that changed nothing on screen. See `UiState.finishesFor`.
 
 			// ============
 			//  Other artwork

@@ -187,7 +187,18 @@ class TcgdexProvider(
 	 */
 	private suspend fun catalogueOf(language: CardLanguage): List<TcgdexSetBriefDto>? = try {
 		mClient
-			.get(mBaseUrl) { url { appendPathSegments("v2", language.code, "sets") } }
+			.get(mBaseUrl) {
+				url { appendPathSegments("v2", language.code, "sets") }
+				// Sorted by the server, oldest first, and the order is the only reason this is
+				// asked for. The response still omits `releaseDate` -- so this does not recover the
+				// dates -- but the *sequence* is authoritative: checked against the 218 dates the
+				// GraphQL endpoint does publish, the sorted English catalogue has zero
+				// out-of-order pairs. That is what gives the Japanese and Chinese lines a
+				// chronology, since no endpoint will state their dates. See
+				// `CardSet.releaseOrder`.
+				parameter("sort:field", "releaseDate")
+				parameter("sort:order", "ASC")
+			}
 			.body()
 	} catch (vError: kotlinx.coroutines.CancellationException) {
 		throw vError
@@ -219,14 +230,21 @@ class TcgdexProvider(
 		val vLanguagesById = mutableMapOf<String, MutableSet<CardLanguage>>()
 		val vRegionById = mutableMapOf<String, String>()
 		val vBriefsById = mutableMapOf<String, MutableMap<CardLanguage, TcgdexSetBriefDto>>()
+		val vRankById = mutableMapOf<String, Int>()
 
 		for (vLine in CATALOGUE_LINES) {
 			for (vLanguage in vLine.languages) {
-				for (vBrief in catalogues[vLanguage].orEmpty()) {
-					if (vBrief.id.isBlank()) continue
+				catalogues[vLanguage].orEmpty().forEachIndexed { vIndex, vBrief ->
+					if (vBrief.id.isBlank()) return@forEachIndexed
 					vLanguagesById.getOrPut(vBrief.id) { mutableSetOf() }.add(vLanguage)
 					vRegionById.getOrPut(vBrief.id) { vLine.region }
 					vBriefsById.getOrPut(vBrief.id) { mutableMapOf() }[vLanguage] = vBrief
+					// The rank from the first catalogue that carries the set, which by the loop
+					// order is the set's own line's own language. A rank is a position within one
+					// catalogue, so taking a later locale's would mix two chronologies -- Korean
+					// holds 95 of Japan's 184 sets, and position 40 of 95 is not position 40 of
+					// 184.
+					vRankById.getOrPut(vBrief.id) { vIndex }
 				}
 			}
 		}
@@ -247,6 +265,7 @@ class TcgdexProvider(
 				region = vRegion,
 				languages = vLanguagesById[vId].orEmpty(),
 				logo = vWithLogo?.logo,
+				releaseOrder = vRankById[vId],
 			)
 		}
 	}

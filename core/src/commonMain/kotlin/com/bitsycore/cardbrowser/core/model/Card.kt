@@ -19,6 +19,12 @@ import kotlinx.serialization.Serializable
  * @property externalIds marketplace and third-party ids the provider supplied, keyed by [ExternalIdKey]
  * @property region which of the game's product lines this set belongs to, as a `GameRegion` key, or
  *   `null` for a game that ships one line worldwide. See `GameProfile.regions`
+ * @property releaseOrder where this set falls in its own line's release order, oldest 0, or `null`
+ *   when the provider states no order. A rank rather than a date, for the case where a source knows
+ *   the chronology without publishing it: TCGdex will sort a catalogue by release date and then omit
+ *   the dates from the response, so for its Japanese line the order is knowable and the dates are
+ *   not. Compared only between sets of the same line -- two catalogues' ranks mean nothing to each
+ *   other
  * @property languages the languages this set is actually published in, empty when the provider does
  *   not know set by set. **Not** what the provider can serve in general: that is
  *   `DataCapabilities.languages`, and using it per set is what offered a Korean Base Set. A language
@@ -36,6 +42,7 @@ data class CardSet(
 	val symbol: SetSymbol? = null,
 	val region: String? = null,
 	val languages: Set<CardLanguage> = emptySet(),
+	val releaseOrder: Int? = null,
 ) {
 
 	/** The provider that supplied this record. Kept for provenance in the UI and in the cache. */

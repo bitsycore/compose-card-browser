@@ -147,25 +147,19 @@ class CardDetailContractTest {
 	}
 
 	@Test
-	fun `moving to another card drops the zoom and the finish selection`() {
-		// Both belong to the card that was on screen, not to the screen.
-		var vState = reduce(
-			UiState(),
-			loaded(mThree, 0),
-			Intent.ZoomToggled(true),
-			Intent.FinishSelected(Finish.FOIL),
-		)
+	fun `moving to another card drops the zoom`() {
+		// The zoom belongs to the card that was on screen, not to the screen.
+		var vState = reduce(UiState(), loaded(mThree, 0), Intent.ZoomToggled(true))
 		assertTrue(vState.isZoomed)
 
 		vState = reduce(vState, Intent.PageChanged(1))
 
 		assertFalse(vState.isZoomed, "a new card is not the card that was zoomed in on")
-		assertNull(vState.selectedFinish)
 	}
 
 	@Test
 	fun `the language preference survives moving between cards`() {
-		// Unlike finish, this is a preference about the reader rather than about the printing.
+		// A preference about the reader rather than about the printing, so it carries across.
 		var vState = reduce(
 			UiState(),
 			loaded(mThree, 0),
@@ -263,15 +257,22 @@ class CardDetailContractTest {
 	}
 
 	@Test
-	fun `a card with no finish data offers nothing while its neighbour offers what it has`() {
-		val vFoil = card("2", finishes = FinishCoverage(confirmed = setOf(Finish.FOIL)))
+	fun `a card states its finishes only when its source does`() {
+		// A fact, not a control: every finish of a card is the same picture, so the screen lists
+		// them in the details table instead of offering chips that changed nothing when tapped.
+		val vFoil = card(
+			"2",
+			finishes = FinishCoverage(confirmed = setOf(Finish.NON_FOIL, Finish.FOIL)),
+		)
 		val vState = reduce(UiState(), loaded(listOf(card("1"), vFoil), 0))
 
-		assertTrue(vState.finishOptionsFor(vState.cards[0]).isEmpty())
-		assertTrue(
-			vState.finishOptionsFor(vState.cards[1])
-				.single { it.finish == Finish.FOIL }
-				.isSelectable,
+		// Silence stays silent: no row rather than a row saying the source does not know.
+		assertNull(vState.finishesFor(vState.cards[0]))
+		assertEquals("Non-foil, Foil", vState.finishesFor(vState.cards[1]))
+		assertTrue(vState.factsFor(vState.cards[0]).none { it.label == "Finish" })
+		assertEquals(
+			"Non-foil, Foil",
+			vState.factsFor(vState.cards[1]).single { it.label == "Finish" }.value,
 		)
 	}
 

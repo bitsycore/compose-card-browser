@@ -128,6 +128,5 @@ private fun linkedArtworkState(): CardDetailContract.UiState {
 		cards = vCards,
 		providerStatesIdentity = true,
 		providerStatesFinishes = true,
-		selectedFinish = Finish.FOIL,
 	)
 }
