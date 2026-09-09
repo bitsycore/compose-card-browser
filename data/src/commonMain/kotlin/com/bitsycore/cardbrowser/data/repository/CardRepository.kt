@@ -301,17 +301,21 @@ class CardRepository(
 
 		/** Emits what has been collected so far, marked partial. */
 		suspend fun emitProgress(cards: List<CardPrinting>, total: Int?) {
+			// De-duplicated once and used for both the list and the count. Counting the raw records
+			// here reported a different unit from the one on screen -- 100 held against 62 drawn --
+			// and the two numbers are read side by side.
+			val vDeduped = dedupePrintings(cards)
 			emit(
 				DataSnapshot(
 					value = SetCards(
 						cards = CardFilterEngine.apply(
-							cards = dedupePrintings(cards),
+							cards = vDeduped,
 							query = query,
 							rarityLadder = provider.game.rarityLadder,
 						),
 						isCompleteSet = false,
 						knownSetSize = knownSetSize ?: total,
-						cachedCardCount = cards.size,
+						cachedCardCount = vDeduped.size,
 					),
 					origin = DataOrigin.NETWORK,
 					completeness = Completeness.PARTIAL,
@@ -539,11 +543,12 @@ class CardRepository(
 				language = language,
 			),
 		)
+		val vDeduped = dedupePrintings(vPage.cards)
 		emit(
 			DataSnapshot.fresh(
 				value = SetCards(
 					cards = CardFilterEngine.sort(
-						cards = dedupePrintings(vPage.cards),
+						cards = vDeduped,
 						query = query,
 						rarityLadder = provider.game.rarityLadder,
 					),
@@ -551,7 +556,8 @@ class CardRepository(
 					// the provider says there is no more.
 					isCompleteSet = !vPage.hasMore,
 					knownSetSize = knownSetSize ?: vPage.totalCount,
-					cachedCardCount = vPage.cards.size,
+					// The de-duplicated count, so it matches the list beside it.
+					cachedCardCount = vDeduped.size,
 				),
 				fetchedAt = mClock(),
 				completeness = if (vPage.hasMore) Completeness.PARTIAL else Completeness.COMPLETE,

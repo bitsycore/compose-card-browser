@@ -242,6 +242,45 @@ class CardGridContractTest {
 		assertEquals("Partial set: 200 of 352 cards downloaded.", vState.coverageNotice)
 	}
 
+	// ============
+	//  The count in the bar
+
+	@Test
+	fun `a complete set counts the cards it shows and not the provider's records`() {
+		// Riftbound's Vendetta: 358 records, one per variant, collapsing to 227 distinct cards. The
+		// bar used to compare those two numbers and read "227 of 358" over a set that was fully
+		// downloaded -- which is what a download that gave up two thirds of the way looks like.
+		var vState = reduce(UiState(), Intent.Load)
+		vState = reduce(
+			vState,
+			loaded(vState.requestGeneration, List(227) { card("$it") }, knownSetSize = 358),
+		)
+
+		assertEquals("227 cards", vState.countLabel)
+		assertNull(vState.coverageNotice)
+	}
+
+	@Test
+	fun `a filtered set counts against what is held`() {
+		var vState = reduce(UiState(), Intent.QueryChanged(CardQuery(rarities = setOf("Epic"))))
+		vState = reduce(
+			vState,
+			Intent.Loaded(
+				generation = vState.requestGeneration,
+				cards = List(12) { card("$it", "Epic") },
+				isCompleteSet = true,
+				cachedCardCount = 227,
+				knownSetSize = 358,
+				origin = DataOrigin.NETWORK,
+				isStale = false,
+				error = null,
+				isFinal = true,
+			),
+		)
+
+		assertEquals("12 of 227", vState.countLabel)
+	}
+
 	@Test
 	fun `filtering a partial set says the results are not the whole set`() {
 		var vState = reduce(UiState(), Intent.QueryChanged(CardQuery(rarities = setOf("Epic"))))

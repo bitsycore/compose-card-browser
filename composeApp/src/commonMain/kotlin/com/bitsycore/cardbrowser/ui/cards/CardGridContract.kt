@@ -119,6 +119,26 @@ object CardGridContract :
 				else -> null
 			}
 
+		/**
+		 * The count under the set's name: "227 cards", or "12 of 227" while a filter narrows them.
+		 *
+		 * The denominator is how many cards the app is holding, never the provider's own count for
+		 * the set, because those are not the same unit. Riftbound's Vendetta is 358 *records* -- one
+		 * per variant -- which collapse to 227 distinct cards, so comparing the two made a fully
+		 * downloaded set read "227 of 358": indistinguishable from a download that gave up two
+		 * thirds of the way through. How much of the set is actually held is [coverageNotice]'s job,
+		 * and it says so in words rather than leaving a ratio to be misread.
+		 */
+		val countLabel: String
+			get() {
+				val vHeld = maxOf(cachedCardCount, cards.size)
+				return if (vHeld > 0 && cards.size != vHeld) {
+					"${cards.size} of $vHeld"
+				} else {
+					"${cards.size} cards"
+				}
+			}
+
 		/** True when the notice describes a failure the user can act on. */
 		val noticeIsRetryable: Boolean get() = error != null && cards.isNotEmpty()
 	}

@@ -218,7 +218,7 @@ fun CardGridContent(
 								overflow = TextOverflow.Ellipsis,
 							)
 							Text(
-								text = gridSubtitle(vState),
+								text = vState.countLabel,
 								style = MaterialTheme.typography.labelSmall,
 								color = MaterialTheme.colorScheme.onSurfaceVariant,
 							)
@@ -480,14 +480,6 @@ private fun tileSubtitle(card: CardPrinting): String = buildList {
 	card.classification.rarity?.let { add(it) }
 	if (card.artwork.treatment != ArtworkTreatment.STANDARD) add(card.artwork.treatment.displayName)
 }.joinToString(" · ")
-
-/** "352 cards" or "12 of 352", so the count in the bar always means something exact. */
-private fun gridSubtitle(state: CardGridContract.UiState): String = when {
-	state.knownSetSize != null && state.cards.size != state.knownSetSize ->
-		"${state.cards.size} of ${state.knownSetSize}"
-	state.knownSetSize != null -> "${state.knownSetSize} cards"
-	else -> "${state.cards.size} cards"
-}
 
 /** Wide enough that a card's name and art stay legible on a phone. */
 private const val MIN_TILE_WIDTH = 108
