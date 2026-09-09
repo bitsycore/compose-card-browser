@@ -19,7 +19,7 @@ import org.jetbrains.compose.resources.DrawableResource
  *
  * Two different provenances, and the difference matters enough to keep straight.
  *
- * ### Five from Wikimedia Commons, licence-checked
+ * ### Four from Wikimedia Commons, licence-checked
  *
  * Commons accepts only freely-licensed media, which is what makes these bundleable. A logo merely
  * *shown* on Wikipedia usually lives on Wikipedia itself under a non-free fair-use rationale that
@@ -30,54 +30,54 @@ import org.jetbrains.compose.resources.DrawableResource
  * | --- | --- | --- |
  * | Pokémon | Public domain | Below the threshold of originality. Trademarked. |
  * | Magic | Public domain | Below the threshold of originality. Trademarked. |
- * | One Piece | Public domain | Below the threshold of originality. Trademarked. |
  * | Wuthering Waves | Public domain | Below the threshold of originality. Trademarked. |
  * | Cyberpunk | Public domain | Below the threshold of originality. Trademarked. |
  *
- * Yu-Gi-Oh! was in this table until the project owner supplied the official mark from Konami's
- * own site, which is a better likeness of the game as it is sold today. It moved to the group
- * below, and the CC BY credit it required moved out of the app with it.
+ * Yu-Gi-Oh! and One Piece were in this table until the project owner supplied each publisher's own
+ * current mark, which are better likenesses of the games as they are sold today. Both moved to the
+ * group below, and the CC BY credit Yu-Gi-Oh!'s Commons file required moved out of the app with it.
  *
  * "Public domain, trademarked" is the ordinary state of a wordmark: no one holds a *copyright* in
  * it, so redistributing the file is fine, while the *trademark* still belongs to its owner. Using
  * it to identify that owner's game -- the only thing the app does with it -- is what trademarks are
  * for. The app remains unaffiliated with every publisher named, and says so on the same screen.
  *
- * ### Five supplied by the project owner
+ * ### Six supplied by the project owner
  *
- * Riftbound, Altered, Disney Lorcana, the WoW TCG and Yu-Gi-Oh! are **not** in that table and are
- * not equivalent to it. The first four exist on neither Commons nor English Wikipedia under any
- * name searched, the only Wikipedia files being covers and card backs under non-free fair-use
- * rationales. Yu-Gi-Oh! is the odd one: a freely-licensed mark *was* available and was replaced on
- * request with the publisher's own current one, trading a verified licence for a better likeness.
+ * Riftbound, Altered, Disney Lorcana, the WoW TCG, Yu-Gi-Oh! and One Piece are **not** in that
+ * table and are not equivalent to it. The first four exist on neither Commons nor English Wikipedia
+ * under any name searched, the only Wikipedia files being covers and card backs under non-free
+ * fair-use rationales. Yu-Gi-Oh! and One Piece are the odd ones: a freely-licensed mark *was*
+ * available for each and was replaced on request with the publisher's own current one, trading a
+ * verified licence for a better likeness.
  *
- * All five were chosen and supplied by the owner of this project from third-party sites -- a card
- * shop's CDN, a retailer's blog, a community wiki, a storefront CDN and Konami's own image host --
- * and were downloaded and resized on request.
+ * All six were chosen and supplied by the owner of this project from third-party sites -- a card
+ * shop's CDN, a retailer's blog, a community wiki, a storefront CDN, and Konami's and Bandai's own
+ * image hosts -- and were downloaded and resized on request.
  *
- * So: no licence was verified for those five, because there is none to verify. They are the
+ * So: no licence was verified for those six, because there is none to verify. They are the
  * publishers' trademarks used to identify the publishers' own games, which is the ordinary
  * nominative use every card database relies on, but anyone redistributing this app should make
- * their own decision about them rather than assume they carry the same clearance as the five above.
+ * their own decision about them rather than assume they carry the same clearance as the four above.
  *
  * ## Artwork drawn for dark backgrounds
  *
- * Four of these logos have no dark outline: Altered is a near-white wordmark, One Piece is flat
- * yellow, Riftbound sets a white "LEAGUE OF LEGENDS" under its orange title, and Lorcana's name is
- * gold filigree. On the light theme they wash out -- measured as the share of visible pixels
- * falling below a 2:1 contrast ratio against a light tile, Altered loses 49% and One Piece 76%.
- * Riftbound's overall figure is a milder 31% and Lorcana's 33%, but both are *concentrated* rather
- * than spread: Riftbound's is entirely in the subtitle, and Lorcana's runs 0/0/36/48/2% by fifths
- * of the image, the middle bands being the word LORCANA itself. In each case what vanishes is the
- * part that names the game.
+ * Three of these logos have no dark outline: Altered is a near-white wordmark, Riftbound sets a
+ * white "LEAGUE OF LEGENDS" under its orange title, and Lorcana's name is gold filigree. On the
+ * light theme they wash out -- measured as the share of visible pixels falling below a 2:1 contrast
+ * ratio against a light tile, Altered loses 49%. Riftbound's overall figure is a milder 31% and
+ * Lorcana's 33%, but both are *concentrated* rather than spread: Riftbound's is entirely in the
+ * subtitle, and Lorcana's runs 0/0/36/48/2% by fifths of the image, the middle bands being the word
+ * LORCANA itself. In each case what vanishes is the part that names the game.
  *
- * Those four set [prefersDarkBackdrop], so the artwork sits on what it was drawn for.
+ * Those three set [prefersDarkBackdrop], so the artwork sits on what it was drawn for.
  *
  * Magic, Pokémon, Yu-Gi-Oh and the WoW TCG are *not* flagged despite comparable raw numbers -- the
- * WoW mark measures 18%, spread evenly at 19/14/29/14/9% by fifths -- because their dark outlines
- * carry the shape: they read correctly against a pale tile where an unoutlined wordmark does not.
- * That is a judgement from looking at all of them on both themes, with the measurement as
- * supporting evidence rather than as the rule.
+ * WoW mark measures 18% spread evenly at 19/14/29/14/9% by fifths, and the Yu-Gi-Oh one a startling
+ * 44% -- because their dark outlines carry the shape: they read correctly against a pale tile where
+ * an unoutlined wordmark does not. Yu-Gi-Oh is the clearest case that the number is evidence and
+ * not the rule; its 44% is counting the white *interiors* of outlined letters. That is a judgement
+ * from looking at all of them on both themes, with the measurement as supporting evidence.
  *
  * @property game the profile this art belongs to, so a registry can key on it without a table
  * @property logo the game's wordmark, bundled by the game's own module

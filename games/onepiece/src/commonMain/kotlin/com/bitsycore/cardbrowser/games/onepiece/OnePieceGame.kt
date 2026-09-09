@@ -80,9 +80,24 @@ object OnePieceArt : GameArt {
 
 	override val logo: DrawableResource = Res.drawable.game_logo_onepiece
 
+	/**
+	 * Kept from the previous mark, because this one supplies no colour to sample.
+	 *
+	 * The wordmark is pure black -- measured, 0% of its visible pixels carry any saturation -- so
+	 * there is nothing in the artwork to take an accent from. This blue is inherited rather than
+	 * measured, which is the honest description of it.
+	 */
 	override val accentArgb: Long = 0xFF3E8FD0
 
-	// A flat yellow wordmark with no dark outline: 76% of its visible pixels fall below a 2:1
-	// contrast ratio against a light tile.
-	override val prefersDarkBackdrop: Boolean = true
+	/**
+	 * A single-colour wordmark, so it is drawn in the theme's own foreground.
+	 *
+	 * The mark this replaced was flat yellow with no outline and lost 76% of its visible pixels to
+	 * a sub-2:1 contrast ratio on a light tile, which is why it used to ask for a dark backdrop.
+	 * The publisher's own mark is black: 0% low contrast against a light tile and 0% saturation.
+	 * That inverts the problem -- it is unreadable on the *dark* theme instead -- and tinting is
+	 * the answer to that, not a dark plate. The two flags are mutually exclusive and `AppModuleTest`
+	 * asserts it, so this had to change as a pair.
+	 */
+	override val tintLogo: Boolean = true
 }

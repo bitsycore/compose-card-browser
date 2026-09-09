@@ -584,7 +584,7 @@ This app is not affiliated with any game's publisher.
 All ten games show their real logo in the picker, and they do not all come from the same place —
 the difference matters.
 
-**Five from Wikimedia Commons**, which is what makes bundling them possible: Commons accepts only
+**Four from Wikimedia Commons**, which is what makes bundling them possible: Commons accepts only
 freely-licensed media, whereas a logo merely *shown* on Wikipedia normally lives there under a
 non-free fair-use rationale that does not permit redistribution. Each licence was checked
 individually through the Commons API:
@@ -593,7 +593,6 @@ individually through the Commons API:
 |---|---|---|
 | Pokémon | Public domain (trademarked) | not required |
 | Magic: The Gathering | Public domain (trademarked) | not required |
-| One Piece | Public domain (trademarked) | not required |
 | Wuthering Waves | Public domain (trademarked) | not required |
 | Cyberpunk TCG | Public domain (trademarked) | not required |
 
@@ -601,22 +600,24 @@ individually through the Commons API:
 the file may be redistributed, while the trademark still belongs to its owner. Using it to identify
 that owner's game is what a trademark is for.
 
-**Five supplied by the project owner.** Riftbound, Altered, Disney Lorcana, the WoW TCG and
-Yu-Gi-Oh! were chosen by the owner of this project from third-party sites (a card shop's CDN, a
-retailer's blog, a community wiki, a storefront CDN and Konami's own image host) and downloaded and
-resized on request. The first four exist on neither Commons nor English Wikipedia under any name
-searched, the only Wikipedia files being covers and card backs under non-free fair-use rationales.
+**Six supplied by the project owner.** Riftbound, Altered, Disney Lorcana, the WoW TCG, Yu-Gi-Oh!
+and One Piece were chosen by the owner of this project from third-party sites (a card shop's CDN, a
+retailer's blog, a community wiki, a storefront CDN, and Konami's and Bandai's own image hosts) and
+downloaded and resized on request. The first four exist on neither Commons nor English Wikipedia
+under any name searched, the only Wikipedia files being covers and card backs under non-free
+fair-use rationales.
 
-Yu-Gi-Oh! is the exception worth naming: a freely-licensed Commons mark *was* bundled and was
-replaced on request with Konami's own current logo — trading a verified licence for a better
-likeness of the game as it is sold today. **The CC BY credit to Kazuki Takahashi that the app used
-to show went with it**, because crediting an author whose work is no longer shipped would be a false
-statement. No bundled file now requires attribution.
+Yu-Gi-Oh! and One Piece are the exceptions worth naming: a freely-licensed Commons mark *was*
+bundled for each and was replaced on request with the publisher's own current logo — trading a
+verified licence for a better likeness of the game as it is sold today. **The CC BY credit to Kazuki
+Takahashi that the app used to show went with the Yu-Gi-Oh! file**, because crediting an author
+whose work is no longer shipped would be a false statement. No bundled file now requires
+attribution.
 
-**No licence was verified for those five, because there is none to verify.** They are publishers'
+**No licence was verified for those six, because there is none to verify.** They are publishers'
 trademarks used to identify the publishers' own games — the ordinary nominative use every card
 database relies on — but anyone redistributing this app should form their own view rather than
-assume they carry the clearance the five Commons files do.
+assume they carry the clearance the four Commons files do.
 
 Every bundled logo is trimmed to its alpha bounding box and resized to 480px wide, which is what the
 tile actually draws; leaving the padding in is what made the Altered mark look half-size. The two
@@ -625,16 +626,18 @@ newest are also colour-quantised, being gradient-heavy artwork that PNG stores b
 
 Two presentation rules, both driven by the artwork rather than by taste:
 
-- The Wuthering Waves mark is a solid black wordmark, so it is drawn in the theme's foreground
-  colour — its own black on the light theme, inverted to white on the dark one, which is how the
-  official mark is presented against dark backgrounds. Not the row accent: a teal Wuthering Waves
-  logo is not its logo.
-- Altered, One Piece, Riftbound and Lorcana have no dark outline and wash out on a light background
-  — of their visible pixels, 49%, 76%, 31% and 33% respectively fall below a 2:1 contrast ratio
-  against a pale tile. For Riftbound and Lorcana the loss is *concentrated* rather than spread:
+- The Wuthering Waves and One Piece marks are solid black wordmarks, so they are drawn in the
+  theme's foreground colour — their own black on the light theme, inverted to white on the dark one,
+  which is how both publishers present them against dark backgrounds. Not the row accent: a teal
+  Wuthering Waves logo is not its logo. One Piece measures 0% saturation and 0% low-contrast against
+  a light tile, so the problem it has is the opposite one — invisible on *dark* — and tinting is the
+  answer to that rather than a dark plate.
+- Altered, Riftbound and Lorcana have no dark outline and wash out on a light background — of their
+  visible pixels, 49%, 31% and 33% respectively fall below a 2:1 contrast ratio against a pale
+  tile. For Riftbound and Lorcana the loss is *concentrated* rather than spread:
   Riftbound's is entirely in its "League of Legends" subtitle, and Lorcana's runs 0/0/36/48/2% by
-  fifths of the image, those middle bands being the word LORCANA itself. Those four keep a dark tile
-  on both themes. Magic, Pokémon, Yu-Gi-Oh and the WoW TCG are not flagged despite comparable raw
+  fifths of the image, those middle bands being the word LORCANA itself. Those three keep a dark
+  tile on both themes. Magic, Pokémon, Yu-Gi-Oh and the WoW TCG are not flagged despite comparable raw
   figures — the WoW mark measures 18% and the Yu-Gi-Oh one 44% — because their dark outlines carry
   the shape. Yu-Gi-Oh is the clearest illustration that the number is evidence and not the rule: its
   44% is counting the white interiors of letters that each sit inside a heavy black outline, and it
