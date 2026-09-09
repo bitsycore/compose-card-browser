@@ -60,7 +60,7 @@ class GameListViewModel(
 
 			// Read back off the reduced state rather than recomputed here. `GameOrder` has already
 			// been applied by the reducer, and applying it twice is how the two would drift.
-			is GameListContract.Intent.GameMoved,
+			is GameListContract.Intent.GameMovedTo,
 			is GameListContract.Intent.GameVisibilityToggled,
 			is GameListContract.Intent.CustomisationReset,
 			-> {

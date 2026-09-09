@@ -71,8 +71,13 @@ object GameListContract :
 		/** The reorder and hide controls were shown or dismissed. */
 		data object EditingToggled : Intent
 
-		/** A game was moved by [delta] places. Off either end it is a no-op, not a wrap. */
-		data class GameMoved(val game: GameProfile, val delta: Int) : Intent
+		/**
+		 * A game was dragged to [toVisibleIndex] of the visible list.
+		 *
+		 * Indexed against what is on screen rather than the stored order, because that is what the
+		 * finger is over. Past either end it clamps rather than wrapping.
+		 */
+		data class GameMovedTo(val game: GameProfile, val toVisibleIndex: Int) : Intent
 
 		/** A game was hidden or brought back. Refused for the last visible game. */
 		data class GameVisibilityToggled(val game: GameProfile) : Intent
@@ -98,8 +103,14 @@ object GameListContract :
 
 		is Intent.EditingToggled -> state.copy(isEditing = !state.isEditing)
 
-		is Intent.GameMoved -> state.copy(
-			order = GameOrder.moved(state.allGames, state.order, intent.game, intent.delta),
+		is Intent.GameMovedTo -> state.copy(
+			order = GameOrder.movedTo(
+				games = state.allGames,
+				order = state.order,
+				hiddenIds = state.hiddenIds,
+				game = intent.game,
+				toVisibleIndex = intent.toVisibleIndex,
+			),
 		)
 
 		is Intent.GameVisibilityToggled -> state.copy(

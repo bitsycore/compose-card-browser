@@ -31,6 +31,10 @@ import com.bitsycore.cardbrowser.ui.games.GameListScreen
 import com.bitsycore.cardbrowser.ui.search.SearchScreen
 import com.bitsycore.cardbrowser.ui.sets.SetListScreen
 import com.bitsycore.cardbrowser.ui.settings.SettingsScreen
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.ui.theme.CardBrowserTheme
 import kotlinx.serialization.Serializable
 
@@ -95,7 +99,13 @@ sealed interface Route : NavKey {
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun App() {
-	CardBrowserTheme {
+	// Read here rather than inside a view model, because the theme wraps every screen and so has no
+	// screen of its own to belong to. `PreferencesStore` holds a `StateFlow`, so changing the mode
+	// in settings recolours the app under the settings screen rather than on the next launch.
+	val vPreferences = koinInject<PreferencesStore>()
+	val vPrefs by vPreferences.preferences.collectAsState()
+
+	CardBrowserTheme(useDarkTheme = vPrefs.themeMode.isDark(isSystemInDarkTheme())) {
 		// Before anything composes an image, so the first grid already uses the shared Ktor client
 		// and the bounded disk cache rather than Coil's defaults.
 		InstallImageLoader()

@@ -86,6 +86,10 @@ class SettingsViewModel(
 				mPreferences.update { it.copy(revalidateSetsOnLaunch = intent.isEnabled) }
 			}
 
+			is SettingsContract.Intent.ThemeModeChosen -> {
+				mPreferences.update { it.copy(themeMode = intent.mode) }
+			}
+
 			is SettingsContract.Intent.PromoteLanguage -> {
 				// The reducer has already reordered the list; this persists what it produced rather
 				// than recomputing the order in two places.

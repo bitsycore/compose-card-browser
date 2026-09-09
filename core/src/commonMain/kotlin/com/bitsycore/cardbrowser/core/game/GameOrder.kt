@@ -56,29 +56,46 @@ object GameOrder {
 	): List<GameProfile> = sorted(games, order).filter { it.id.value in hiddenIds }
 
 	/**
-	 * The order that results from moving [game] by [delta] places, or the order unchanged.
+	 * The order that results from moving [game] to [toVisibleIndex] of the *visible* list.
+	 *
+	 * Indexed against what is on screen, because that is what the user is dragging. Working in
+	 * full-list indices instead means a hidden game sitting between two visible ones silently
+	 * absorbs a move: the id order changes, nothing on screen does, and the gesture appears to have
+	 * been ignored.
+	 *
+	 * Hidden games therefore stay pinned to the slots they already occupy, and only the visible ids
+	 * are permuted among the remaining ones. That keeps an un-hidden game roughly where its owner
+	 * last saw it rather than dumping it at the end of the list.
 	 *
 	 * Returns a *complete* list of the ids this build offers rather than a patch of the old one.
-	 * Storing the whole thing is what makes the result stable: a partial order would leave the
-	 * moved game's new neighbours unpinned, so a later build that reordered its routing table could
-	 * shuffle them back out from under the move the user just made.
+	 * Storing the whole thing is what makes the result stable: a partial order would leave the moved
+	 * game's new neighbours unpinned, so a later build that reordered its routing table could
+	 * shuffle them back out from under the move just made.
 	 *
-	 * Moves across the whole list including hidden games, so a game hidden between two visible ones
-	 * does not swallow a press. At either end the move is a no-op rather than a wrap.
+	 * An index outside the visible list is clamped into it, so a drag past either end parks the row
+	 * at that end rather than wrapping or throwing.
 	 */
-	fun moved(
+	fun movedTo(
 		games: List<GameProfile>,
 		order: List<String>,
+		hiddenIds: Set<String>,
 		game: GameProfile,
-		delta: Int,
+		toVisibleIndex: Int,
 	): List<String> {
-		val vCurrent = sorted(games, order).map { it.id.value }.toMutableList()
-		val vFrom = vCurrent.indexOf(game.id.value)
-		if (vFrom < 0) return vCurrent
-		val vTo = vFrom + delta
-		if (vTo !in vCurrent.indices) return vCurrent
-		vCurrent.add(vTo, vCurrent.removeAt(vFrom))
-		return vCurrent
+		val vFull = sorted(games, order).map { it.id.value }.toMutableList()
+		// The slots the visible games occupy in the full order, and the ids in them.
+		val vSlots = vFull.indices.filter { vFull[it] !in hiddenIds }
+		val vVisible = vSlots.map { vFull[it] }.toMutableList()
+
+		val vFrom = vVisible.indexOf(game.id.value)
+		if (vFrom < 0) return vFull
+		val vTo = toVisibleIndex.coerceIn(0, vVisible.lastIndex)
+		if (vTo == vFrom) return vFull
+
+		vVisible.add(vTo, vVisible.removeAt(vFrom))
+		// Written back into the same slots, so every hidden id keeps its position.
+		vSlots.forEachIndexed { vIndex, vSlot -> vFull[vSlot] = vVisible[vIndex] }
+		return vFull
 	}
 
 	/**

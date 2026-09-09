@@ -276,10 +276,28 @@ the Japan line — so Korean is a *language of* the Japan region rather than a r
 lines a game has is declared by the game (`GameProfile.regions`); which line a set belongs to is
 tagged by the adapter, because that is a fact about how the source keys its data.
 
+### Light, dark, or the system's choice
+
+Settings carries a three-way theme control. Three values rather than a switch, because "follow the
+system" is a distinct answer and a boolean cannot hold it — it would have to freeze whatever the
+platform said at the moment the preference was written, and stop tracking sunset. `SYSTEM` is the
+default, and the app recolours immediately rather than on the next launch, because the theme reads
+`PreferencesStore`'s flow at the root of the composition rather than through a view model of its
+own.
+
 ### Reordering and hiding games
 
-The picker's tune button turns the list into an editor: up/down arrows on each row, an eye to hide a
+The picker's tune button turns the list into an editor: a drag handle on each row, an eye to hide a
 game, and hidden games listed below a divider so they can be brought back. Both settings persist.
+
+Reordering is a Material drag — the row lifts, follows the finger, and the others slide under it as
+it passes, rearranging live rather than on release. It is hand-rolled rather than pulled from a
+reorderable-list library: `LazyColumn` has no reorder support, but the two hard parts (animating the
+displaced rows, and keying items so they survive the drag) are already handled by
+`Modifier.animateItem()` and the `key` this list always had, leaving about sixty lines that are not
+worth a dependency on a list of ten rows. A drag is unreachable by a screen reader, so every row
+also carries "Move up" and "Move down" as custom accessibility actions — the same move by another
+route, not a second code path.
 
 Three decisions worth knowing:
 
@@ -297,9 +315,20 @@ Three decisions worth knowing:
   disabled rather than failing silently, and the reducer refuses it too, so the button cannot
   promise something that will not happen.
 
-Buttons rather than drag-and-drop, deliberately: a drag handle in a `LazyColumn` needs its own
-gesture plumbing and item animation to feel right, and on a ten-row list that barely scrolls two
-taps beat a drag you can drop in the wrong place.
+Two bugs in that drag are worth recording, because neither is visible in the code that fails:
+
+- **`pointerInput` keyed on the list cancels the drag it is tracking.** It restarts its block when a
+  key changes, and the list being dragged through changes on every reorder — so the first successful
+  move tore down the detector holding the finger and the drag died exactly one slot in. The key is
+  now the row's own id, with the list read through `rememberUpdatedState`.
+- **Pointer events outrun recomposition.** The two or three events landing between dispatching a
+  move and the reordered list coming back all measure against the stale one and fire the same move
+  again, so one crossing jumps the row several places. `ReorderState` holds the index it just aimed
+  at and ignores further moves until the list is seen to have caught up.
+
+A third trap, avoided rather than hit: `UiState.games` derives a fresh list on every access, so
+anything keyed on its identity re-runs constantly. The screen memoises it against the three fields
+it actually depends on.
 
 ### Changing the language of a set you are looking at
 

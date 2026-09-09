@@ -61,6 +61,30 @@ data class ImageDownloadRecord(
 fun imageDownloadKey(setId: String, language: CardLanguage?, kind: String): String =
 	setId + "|" + (language?.code ?: "-") + "|" + kind
 
+/**
+ * Which colour scheme the app uses.
+ *
+ * Three values rather than a `Boolean`, because "dark" and "not dark" cannot express the default
+ * anyone actually wants: a boolean has to pick a side at install time and then stops following the
+ * platform when the user changes it there. [SYSTEM] is a real answer -- "whatever the device says"
+ * -- and is not the same as either of the other two.
+ */
+@Serializable
+enum class ThemeMode(val label: String) {
+
+	/** Follow the platform, including when it switches at sunset. */
+	SYSTEM("System"),
+	LIGHT("Light"),
+	DARK("Dark");
+
+	/** Whether to use the dark scheme, given what the platform currently reports. */
+	fun isDark(isSystemDark: Boolean): Boolean = when (this) {
+		SYSTEM -> isSystemDark
+		LIGHT -> false
+		DARK -> true
+	}
+}
+
 @Serializable
 data class BrowsingPreferences(
 	val lastSetId: String? = null,
@@ -73,6 +97,8 @@ data class BrowsingPreferences(
 	 */
 	val lastGame: String? = null,
 	val preferredLanguages: List<CardLanguage> = CardLanguage.PREFERENCE_ORDER,
+	/** Which colour scheme to use. [ThemeMode.SYSTEM] follows the platform, and is the default. */
+	val themeMode: ThemeMode = ThemeMode.SYSTEM,
 	/**
 	 * The user's own order for the game picker, as `GameId` values. Empty means the routing order.
 	 *

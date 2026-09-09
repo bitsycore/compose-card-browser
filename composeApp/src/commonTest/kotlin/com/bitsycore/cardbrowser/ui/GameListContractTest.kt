@@ -44,14 +44,31 @@ class GameListContractTest {
 	}
 
 	@Test
-	fun `moving a game reorders the list`() {
+	fun `dragging a game reorders the list`() {
 		val vState = GameListContract.reduce(
 			loaded(),
-			GameListContract.Intent.GameMoved(MagicGame, delta = -1),
+			GameListContract.Intent.GameMovedTo(MagicGame, toVisibleIndex = 1),
 		)
 
 		assertEquals(listOf("riftbound", "magic", "pokemon", "lorcana"), ids(vState))
 		assertTrue(vState.isCustomised)
+	}
+
+	@Test
+	fun `a drag is indexed against the visible list even with a game hidden among them`() {
+		// The reducer has to pass the hidden set through, or dropping a row at the top lands it
+		// above a hidden row instead and nothing visibly moves.
+		var vState = GameListContract.reduce(
+			loaded(),
+			GameListContract.Intent.GameVisibilityToggled(PokemonGame),
+		)
+
+		vState = GameListContract.reduce(
+			vState,
+			GameListContract.Intent.GameMovedTo(MagicGame, toVisibleIndex = 0),
+		)
+
+		assertEquals(listOf("magic", "riftbound", "lorcana"), ids(vState))
 	}
 
 	@Test
@@ -108,7 +125,7 @@ class GameListContractTest {
 	fun `resetting clears both the order and the hidden list`() {
 		var vState = GameListContract.reduce(
 			loaded(),
-			GameListContract.Intent.GameMoved(LorcanaGame, delta = -2),
+			GameListContract.Intent.GameMovedTo(LorcanaGame, toVisibleIndex = 1),
 		)
 		vState = GameListContract.reduce(
 			vState,

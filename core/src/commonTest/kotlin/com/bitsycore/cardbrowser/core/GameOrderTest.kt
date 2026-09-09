@@ -75,42 +75,64 @@ class GameOrderTest {
 	}
 
 	@Test
-	fun `moving a game up swaps it with the one above`() {
-		val vMoved = GameOrder.moved(mGames, emptyList(), mGames[2], delta = -1)
+	fun `a game dragged up lands at the index it was dropped on`() {
+		val vMoved = GameOrder.movedTo(mGames, emptyList(), emptySet(), mGames[2], toVisibleIndex = 1)
 
 		assertEquals(listOf("riftbound", "magic", "pokemon", "lorcana"), vMoved)
 	}
 
 	@Test
-	fun `moving a game down swaps it with the one below`() {
-		val vMoved = GameOrder.moved(mGames, emptyList(), mGames[0], delta = 1)
+	fun `a game dragged down lands at the index it was dropped on`() {
+		val vMoved = GameOrder.movedTo(mGames, emptyList(), emptySet(), mGames[0], toVisibleIndex = 2)
 
-		assertEquals(listOf("pokemon", "riftbound", "magic", "lorcana"), vMoved)
+		assertEquals(listOf("pokemon", "magic", "riftbound", "lorcana"), vMoved)
 	}
 
 	@Test
-	fun `a move off either end does nothing rather than wrapping`() {
-		assertEquals(ids(mGames), GameOrder.moved(mGames, emptyList(), mGames.first(), delta = -1))
-		assertEquals(ids(mGames), GameOrder.moved(mGames, emptyList(), mGames.last(), delta = 1))
+	fun `a drop past either end parks the row there rather than wrapping`() {
+		assertEquals(
+			ids(mGames),
+			GameOrder.movedTo(mGames, emptyList(), emptySet(), mGames.first(), toVisibleIndex = -3),
+		)
+		assertEquals(
+			ids(mGames),
+			GameOrder.movedTo(mGames, emptyList(), emptySet(), mGames.last(), toVisibleIndex = 99),
+		)
 	}
 
 	@Test
 	fun `a move returns the whole order rather than a patch`() {
 		// A partial order would leave the moved game's new neighbours unpinned, so a later build
 		// that reordered its routing table could shuffle them back out from under the move.
-		val vMoved = GameOrder.moved(mGames, emptyList(), mGames[1], delta = 1)
+		val vMoved = GameOrder.movedTo(mGames, emptyList(), emptySet(), mGames[1], toVisibleIndex = 2)
 
 		assertEquals(mGames.size, vMoved.size, "Got $vMoved")
 		assertEquals(mGames.map { it.id.value }.toSet(), vMoved.toSet())
 	}
 
 	@Test
-	fun `a move steps over a hidden game rather than swallowing the press`() {
-		// The order covers every game, visible or not, so moving Magic up past a hidden Pokemon
-		// takes one press and not two -- and the second press is not a no-op the user cannot see.
-		val vMoved = GameOrder.moved(mGames, emptyList(), mGames[2], delta = -1)
+	fun `a hidden game between two visible ones does not swallow the move`() {
+		// The real hazard of indexing a reorder against the full list. Pokemon is hidden and sits
+		// between Riftbound and Magic; dragging Magic to the top has to put it above Riftbound, not
+		// merely above the row nobody can see -- which would change the stored order and nothing on
+		// screen, so the gesture would look ignored.
+		val vHidden = setOf("pokemon")
 
-		assertEquals(listOf("riftbound", "magic", "pokemon", "lorcana"), vMoved)
+		val vMoved = GameOrder.movedTo(mGames, emptyList(), vHidden, mGames[2], toVisibleIndex = 0)
+
+		assertEquals(listOf("magic", "riftbound", "lorcana"), ids(GameOrder.visible(mGames, vMoved, vHidden)))
+	}
+
+	@Test
+	fun `a hidden game keeps its slot when the visible ones are reordered around it`() {
+		// So un-hiding it puts it back roughly where its owner last saw it, rather than at the end.
+		val vHidden = setOf("pokemon")
+
+		val vMoved = GameOrder.movedTo(mGames, emptyList(), vHidden, mGames[3], toVisibleIndex = 0)
+
+		// Pokemon still occupies the second slot of the full order it started in.
+		assertEquals(1, vMoved.indexOf("pokemon"), "Got $vMoved")
+		assertEquals(listOf("lorcana", "riftbound", "magic"), ids(GameOrder.visible(mGames, vMoved, vHidden)))
 	}
 
 	@Test

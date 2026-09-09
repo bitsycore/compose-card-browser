@@ -212,26 +212,50 @@ fun SetListContent(
 						// A game whose module ships no logo, and the state before one loads.
 						Text(vState.game?.shortName.orEmpty())
 					} else {
-						Image(
-							painter = painterResource(vLogo),
-							// The title *is* the game name, so this carries it for a screen reader
-							// rather than being decorative.
-							contentDescription = vState.game?.displayName,
-							contentScale = ContentScale.Fit,
-							// Bounded both ways. Height is what normally binds, but these are
-							// wordmarks of wildly different aspect -- One Piece is 149 dp wide at
-							// 30 dp tall against Pokémon's 59 -- and without a width cap the
-							// widest of them crowds the three action buttons on a narrow phone.
-							// `Fit` then scales by whichever limit binds first.
-							modifier = Modifier.heightIn(max = 30.dp).widthIn(max = 132.dp),
-							// Same rule as the picker: a single-colour wordmark is drawn in the
-							// theme's foreground, colour artwork is never recoloured.
-							colorFilter = if (gameArt.tintLogo) {
-								ColorFilter.tint(MaterialTheme.colorScheme.onSurface)
-							} else {
-								null
-							},
-						)
+						val vLogoImage = @Composable {
+							Image(
+								painter = painterResource(vLogo),
+								// The title *is* the game name, so this carries it for a screen
+								// reader rather than being decorative.
+								contentDescription = vState.game?.displayName,
+								contentScale = ContentScale.Fit,
+								// Bounded both ways. Height is what normally binds, but these are
+								// wordmarks of wildly different aspect -- One Piece is 149 dp wide
+								// at 30 dp tall against Pokémon's 59 -- and without a width cap the
+								// widest of them crowds the three action buttons on a narrow phone.
+								// `Fit` then scales by whichever limit binds first.
+								modifier = Modifier.heightIn(max = 30.dp).widthIn(max = 132.dp),
+								// Same rule as the picker: a single-colour wordmark is drawn in the
+								// theme's foreground, colour artwork is never recoloured.
+								colorFilter = if (gameArt.tintLogo) {
+									ColorFilter.tint(MaterialTheme.colorScheme.onSurface)
+								} else {
+									null
+								},
+							)
+						}
+
+						// Artwork that declares a plate gets it here too, not only in the picker.
+						// Without it the mark is drawn straight onto the app bar, which is the one
+						// background it was never designed for: Cyberpunk's black wordmark vanishes
+						// on the dark theme, and Altered's near-white, Riftbound's subtitle and
+						// Lorcana's gold all vanish on the light one. The picker had a tile and
+						// this did not, so the same four logos were correct on one screen and
+						// invisible on the other.
+						val vBackdrop = gameArt.backdropArgb
+						if (vBackdrop == null) {
+							vLogoImage()
+						} else {
+							Box(
+								modifier = Modifier
+									.clip(RoundedCornerShape(8.dp))
+									.background(Color(vBackdrop.toInt()))
+									.padding(horizontal = 8.dp, vertical = 4.dp),
+								contentAlignment = Alignment.Center,
+							) {
+								vLogoImage()
+							}
+						}
 					}
 				},
 				actions = {

@@ -2,6 +2,7 @@ package com.bitsycore.cardbrowser.ui.games
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,13 +15,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Style
 import androidx.compose.material.icons.outlined.Tune
@@ -39,17 +41,28 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.games.api.GameArt
 import com.bitsycore.cardbrowser.games.lorcana.LorcanaGame
@@ -79,15 +92,18 @@ import org.koin.compose.viewmodel.koinViewModel
  *
  * ## Reordering and hiding
  *
- * The tune button turns the list into an editor: each row grows up/down arrows and an eye, and the
+ * The tune button turns the list into an editor: each row grows a drag handle and an eye, and the
  * games the user has hidden appear below a divider so they can be brought back. Both are display
  * choices layered over the routing table, which is untouched -- hiding a game does not unregister
  * its adapter or delete anything it downloaded. The one real cost it carries is that
  * `SetCatalogueWarmer` stops prefetching hidden games, which is rather the point of hiding one.
  *
- * Deliberately buttons rather than drag-and-drop. A drag handle in a `LazyColumn` needs its own
- * gesture plumbing and item-level animation to look right, and it is the worse control on a
- * ten-row list that barely scrolls -- two taps beat a drag you can drop in the wrong place.
+ * Reordering is a Material drag: the row lifts, follows the finger, and the rest slide under it as
+ * it passes, rearranging live rather than on release. See [ReorderState] for how that is done
+ * without a reorderable-list dependency, and why the handle is a grip rather than the whole row.
+ *
+ * A drag is unreachable by a screen reader, so every row also carries "Move up" and "Move down" as
+ * custom accessibility actions. They are the same move by another route, not a second code path.
  */
 @Composable
 fun GameListScreen(
@@ -152,23 +168,48 @@ fun GameListContent(
 			if (state.isLoading) {
 				LoadingState()
 			} else {
+				// Memoised, not read straight off the state. `UiState.games` derives a fresh list on
+				// every access, and a list whose identity changes each recomposition restarts any
+				// `pointerInput` keyed on it -- which is what made a drag stop dead after one slot.
+				val vVisible = remember(state.allGames, state.order, state.hiddenIds) { state.games }
+				val vListState = rememberLazyListState()
+				val vReorder = rememberReorder(vListState)
+				val vOnMove: (GameProfile, Int) -> Unit = { vGame, vTo ->
+					dispatch(GameListContract.Intent.GameMovedTo(vGame, vTo))
+				}
+
 				LazyColumn(
+					state = vListState,
 					contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
 					verticalArrangement = Arrangement.spacedBy(8.dp),
 				) {
-					val vVisible = state.games
 					itemsIndexed(vVisible, key = { _, vGame -> vGame.id.value }) { vIndex, vGame ->
+						val vIsDragging = vReorder.draggedId == vGame.id.value
 						GameRow(
 							game = vGame,
 							source = state.sources[vGame],
 							isLastOpened = vGame == state.lastGame,
 							isEditing = state.isEditing,
 							isHidden = false,
-							// Judged against the *visible* list, so an arrow greys out exactly when
-							// the row cannot move on screen. `GameOrder.moved` still steps over any
-							// hidden game underneath, so one press moves it one visible place.
-							canMoveUp = vIndex > 0,
-							canMoveDown = vIndex < vVisible.lastIndex,
+							isDragging = vIsDragging,
+							// The dragged row follows the finger, so it must not also be animated
+							// into place: the two fight and the row lags behind the pointer.
+							itemModifier = if (vIsDragging) Modifier else Modifier.animateItem(),
+							dragOffsetY = if (vIsDragging) vReorder.offsetY else 0f,
+							handleModifier = Modifier.dragHandle(vReorder, vGame, vVisible, vOnMove),
+							// A drag is unreachable by a screen reader, so the same two moves are
+							// offered as custom actions. Bounded by the visible list, which is what
+							// the index means.
+							onMoveUp = if (vIndex > 0) {
+								{ dispatch(GameListContract.Intent.GameMovedTo(vGame, vIndex - 1)) }
+							} else {
+								null
+							},
+							onMoveDown = if (vIndex < vVisible.lastIndex) {
+								{ dispatch(GameListContract.Intent.GameMovedTo(vGame, vIndex + 1)) }
+							} else {
+								null
+							},
 							canHide = state.canHideMore,
 							onClick = {
 								dispatch(GameListContract.Intent.GameOpened(vGame))
@@ -187,10 +228,14 @@ fun GameListContent(
 								isLastOpened = false,
 								isEditing = true,
 								isHidden = true,
-								// A hidden row has no position to move: it is out of the list the
-								// arrows act on, and bringing it back is all there is to do with it.
-								canMoveUp = false,
-								canMoveDown = false,
+								// A hidden row has no position to drag to: it is out of the list the
+								// order applies to, and bringing it back is all there is to do here.
+								isDragging = false,
+								itemModifier = Modifier.animateItem(),
+								dragOffsetY = 0f,
+								handleModifier = null,
+								onMoveUp = null,
+								onMoveDown = null,
 								canHide = true,
 								onClick = {},
 								dispatch = dispatch,
@@ -238,8 +283,12 @@ private fun GameRow(
 	isLastOpened: Boolean,
 	isEditing: Boolean,
 	isHidden: Boolean,
-	canMoveUp: Boolean,
-	canMoveDown: Boolean,
+	isDragging: Boolean,
+	itemModifier: Modifier,
+	dragOffsetY: Float,
+	handleModifier: Modifier?,
+	onMoveUp: (() -> Unit)?,
+	onMoveDown: (() -> Unit)?,
 	canHide: Boolean,
 	onClick: () -> Unit,
 	dispatch: (GameListContract.Intent) -> Unit,
@@ -250,26 +299,38 @@ private fun GameRow(
 	} else {
 		CardDefaults.cardColors()
 	}
-	// A hidden row is dimmed as a whole rather than greyed piece by piece, so its logo reads as
-	// "off" along with its text.
-	val vModifier = Modifier
+	val vMoveActions = buildList {
+		onMoveUp?.let { add(CustomAccessibilityAction("Move up") { it(); true }) }
+		onMoveDown?.let { add(CustomAccessibilityAction("Move down") { it(); true }) }
+	}
+	val vModifier = itemModifier
 		.fillMaxWidth()
-		.graphicsLayer { alpha = if (isHidden) HIDDEN_ROW_ALPHA else 1f }
+		// The lifted row rides above its neighbours while they slide underneath it.
+		.zIndex(if (isDragging) 1f else 0f)
+		.graphicsLayer {
+			translationY = dragOffsetY
+			// A hidden row is dimmed whole rather than greyed piece by piece, so its logo reads
+			// as "off" along with its text.
+			alpha = if (isHidden) HIDDEN_ROW_ALPHA else 1f
+		}
+		.then(
+			if (vMoveActions.isEmpty()) {
+				Modifier
+			} else {
+				Modifier.semantics { customActions = vMoveActions }
+			},
+		)
 
 	val vContent: @Composable () -> Unit = {
 		Row(
-			// Tighter while editing: a mark plus three controls is a lot for one phone-width row.
+			// Tighter while editing: a mark plus two controls is a lot for one phone-width row.
 			modifier = Modifier
 				.padding(horizontal = if (isEditing) 8.dp else 16.dp, vertical = 12.dp)
 				.fillMaxWidth(),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
 			if (isEditing) {
-				MoveButtons(
-					canMoveUp = canMoveUp,
-					canMoveDown = canMoveDown,
-					onMove = { vDelta -> dispatch(GameListContract.Intent.GameMoved(game, vDelta)) },
-				)
+				DragHandle(handleModifier)
 			}
 			GameMark(vArt)
 			Spacer(Modifier.size(14.dp))
@@ -318,33 +379,197 @@ private fun GameRow(
 		}
 	}
 
+	// The lift: Material raises the dragged item off the list rather than only moving it.
+	val vElevation = CardDefaults.cardElevation(
+		defaultElevation = if (isDragging) DRAGGED_ROW_ELEVATION else 0.dp,
+	)
+
 	if (isEditing) {
 		// Not clickable while editing: the row's job is to be rearranged, and opening a game from
-		// under a press aimed at an arrow is the obvious way to get that wrong.
-		Card(modifier = vModifier, colors = vColors) { vContent() }
+		// under a press that was aimed at the handle is the obvious way to get that wrong.
+		Card(modifier = vModifier, colors = vColors, elevation = vElevation) { vContent() }
 	} else {
 		Card(onClick = onClick, modifier = vModifier, colors = vColors) { vContent() }
+	}
+}
+
+// ==================
+// MARK: Drag to reorder
+// ==================
+
+/**
+ * The state of a drag in progress, and the arithmetic that turns it into a move.
+ *
+ * Hand-rolled rather than pulled from a library. `LazyColumn` has no reorder support of its own, and
+ * the two things that make one hard -- animating the displaced rows, and keying items so they are
+ * not recreated mid-drag -- are already solved by `Modifier.animateItem()` and the `key` this list
+ * has always had. What is left is the part below, which is small enough not to be worth a dependency
+ * on a list of ten rows.
+ *
+ * ## How a drag becomes a move
+ *
+ * The dragged row is drawn at an offset from where the list actually placed it, so the finger and
+ * the row stay together. Each move event asks whether the row's *centre* has crossed into another
+ * row's bounds; when it has, the reorder is dispatched immediately rather than on release, so the
+ * list rearranges live under the finger the way Material does it.
+ *
+ * The subtle part is the line marked below. Once the move is dispatched the list re-lays the row out
+ * at its new position, which would jump it out from under the pointer -- so the accumulated offset
+ * is reduced by exactly the distance it just travelled. Its position on screen does not change at
+ * the moment of the swap; only its index does.
+ */
+@Stable
+private class ReorderState(val listState: LazyListState) {
+
+	/** The `GameId` value of the row being dragged, or `null` when nothing is. */
+	var draggedId: String? by mutableStateOf(null)
+		private set
+
+	/** How far the dragged row is drawn from where the list placed it. */
+	var offsetY: Float by mutableFloatStateOf(0f)
+		private set
+
+	/**
+	 * The index the last dispatched move aimed at, until the list is seen to have caught up.
+	 *
+	 * Pointer events arrive faster than recomposition, so without this the two or three events that
+	 * land between dispatching a move and the reordered list coming back all measure against the
+	 * stale one and fire the same move again -- the row jumps two or three places from one crossing.
+	 */
+	private var mPending: Int? = null
+
+	fun start(game: GameProfile) {
+		draggedId = game.id.value
+		offsetY = 0f
+		mPending = null
+	}
+
+	fun stop() {
+		draggedId = null
+		offsetY = 0f
+		mPending = null
+	}
+
+	/**
+	 * Accumulates [delta] and reorders if the row has moved far enough to displace a neighbour.
+	 *
+	 * [onMove] is passed in per event rather than held on the state, so it cannot go stale: this
+	 * object is remembered across recompositions and the dispatcher it would have captured is not.
+	 */
+	fun drag(
+		delta: Float,
+		game: GameProfile,
+		visible: List<GameProfile>,
+		onMove: (GameProfile, Int) -> Unit,
+	) {
+		offsetY += delta
+		val vId = draggedId ?: return
+
+		// Wait for the list to reflect the move already dispatched before considering another.
+		val vIndex = visible.indexOfFirst { it.id.value == vId }
+		if (vIndex < 0) return
+		if (mPending != null && mPending != vIndex) return
+		mPending = null
+
+		val vItems = listState.layoutInfo.visibleItemsInfo
+		val vSelf = vItems.firstOrNull { it.key == vId } ?: return
+		val vCentre = vSelf.offset + vSelf.size / 2f + offsetY
+
+		val vKeys = visible.map { it.id.value }
+		val vTarget = vItems.firstOrNull { vOther ->
+			vOther.key != vId &&
+				vOther.key in vKeys &&
+				vCentre >= vOther.offset &&
+				vCentre <= vOther.offset + vOther.size
+		} ?: return
+
+		val vTo = vKeys.indexOf(vTarget.key as String)
+		if (vTo < 0) return
+		// Keeps the row under the finger across the swap: it is about to be re-placed at the
+		// target's offset, so the offset it is drawn at shrinks by the same distance.
+		offsetY += (vSelf.offset - vTarget.offset).toFloat()
+		mPending = vTo
+		onMove(game, vTo)
+
+		// Pin the viewport. A `LazyColumn` anchors its scroll position to the first visible item's
+		// *key*, so moving the top row down takes the anchor with it and the whole list appears to
+		// scroll under the finger. Re-requesting the position that is already showing re-anchors it
+		// to wherever that scroll offset now lands, which is what keeps the list still.
+		listState.requestScrollToItem(
+			listState.firstVisibleItemIndex,
+			listState.firstVisibleItemScrollOffset,
+		)
+	}
+}
+
+/** Remembers a [ReorderState] bound to this list. */
+@Composable
+private fun rememberReorder(listState: LazyListState): ReorderState =
+	remember(listState) { ReorderState(listState) }
+
+/**
+ * The drag gesture, attached to one row's handle.
+ *
+ * Not `detectDragGesturesAfterLongPress`: the handle exists precisely so the drag can start
+ * immediately, and making someone hold down a control that is already a grip is the worst of both.
+ *
+ * ## Why the key is the row and nothing else
+ *
+ * `pointerInput` restarts its block whenever a key changes, which cancels any gesture in flight.
+ * The list being dragged through changes on every reorder -- that is the whole point of it -- so
+ * keying on it means the first successful move tears down the detector that was tracking the
+ * finger, and the drag dies one slot in. That bug shipped once and looked exactly like a stuck row.
+ *
+ * So the key is the row's id, which is stable for as long as the row exists, and the two things
+ * that *do* change are read through [rememberUpdatedState] at the moment they are used.
+ */
+@Composable
+private fun Modifier.dragHandle(
+	reorder: ReorderState,
+	game: GameProfile,
+	visible: List<GameProfile>,
+	onMove: (GameProfile, Int) -> Unit,
+): Modifier {
+	val vVisible by rememberUpdatedState(visible)
+	val vOnMove by rememberUpdatedState(onMove)
+	return this.pointerInput(game.id.value) {
+		detectDragGestures(
+			onDragStart = { reorder.start(game) },
+			onDragEnd = { reorder.stop() },
+			onDragCancel = { reorder.stop() },
+			onDrag = { vChange, vDragged ->
+				vChange.consume()
+				reorder.drag(vDragged.y, game, vVisible, vOnMove)
+			},
+		)
 	}
 }
 
 /** How far a hidden row is faded. Enough to read as off, not so far it cannot be read. */
 private const val HIDDEN_ROW_ALPHA = 0.45f
 
-/** The up/down pair, greyed at the ends of the list rather than wrapping around it. */
+/** How far the dragged row lifts off the list. Material's own resting elevation for a dragged item. */
+private val DRAGGED_ROW_ELEVATION = 8.dp
+
+/**
+ * The grip a row is dragged by.
+ *
+ * A handle rather than the whole row, so a press that lands on the card still does nothing and the
+ * list can still be scrolled with a finger anywhere else. `null` for a hidden row, which has no
+ * position in the order to drag it to.
+ */
 @Composable
-private fun MoveButtons(
-	canMoveUp: Boolean,
-	canMoveDown: Boolean,
-	onMove: (Int) -> Unit,
-) {
-	Column {
-		IconButton(onClick = { onMove(-1) }, enabled = canMoveUp, modifier = Modifier.size(30.dp)) {
-			Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Move up")
-		}
-		IconButton(onClick = { onMove(1) }, enabled = canMoveDown, modifier = Modifier.size(30.dp)) {
-			Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "Move down")
-		}
-	}
+private fun DragHandle(handleModifier: Modifier?) {
+	Icon(
+		imageVector = Icons.Outlined.DragHandle,
+		// The gesture is on the handle; a screen reader gets the row's custom actions instead, so
+		// announcing this as a control it cannot use would be noise.
+		contentDescription = null,
+		tint = MaterialTheme.colorScheme.onSurfaceVariant,
+		modifier = (handleModifier ?: Modifier)
+			.padding(horizontal = 6.dp)
+			.size(24.dp),
+	)
 }
 
 /** Separates the hidden games from the listed ones, and says how many there are. */

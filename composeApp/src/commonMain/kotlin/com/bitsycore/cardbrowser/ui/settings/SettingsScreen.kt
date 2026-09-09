@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.data.settings.BrowsingPreferences
+import com.bitsycore.cardbrowser.data.settings.ThemeMode
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import org.koin.compose.viewmodel.koinViewModel
@@ -235,6 +236,22 @@ fun SettingsContent(
 					modifier = Modifier.weight(1f),
 				) { Text("Clear images") }
 			}
+
+			Spacer(Modifier.height(20.dp))
+			HorizontalDivider()
+			Spacer(Modifier.height(16.dp))
+
+			Text("Appearance", style = MaterialTheme.typography.titleSmall)
+
+			ChoiceRow(
+				label = "Theme",
+				note = "System follows the device, including when it switches itself in the " +
+					"evening. Light and dark override it for this app only.",
+				options = ThemeMode.entries,
+				selected = vState.themeMode,
+				render = { it.label },
+				onSelect = { dispatch(SettingsContract.Intent.ThemeModeChosen(it)) },
+			)
 
 			Spacer(Modifier.height(20.dp))
 			HorizontalDivider()

@@ -4,6 +4,7 @@ import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.data.cache.CacheManager
 import com.bitsycore.cardbrowser.data.cache.CacheUsage
 import com.bitsycore.cardbrowser.data.settings.BrowsingPreferences
+import com.bitsycore.cardbrowser.data.settings.ThemeMode
 import com.bitsycore.lib.pulse.container.ContainerContract
 
 /** Settings state: cache readings and the card-language preference order. */
@@ -17,6 +18,7 @@ object SettingsContract :
 		val imageBytes: Long = 0,
 		val imageLimitBytes: Long = CacheManager.DEFAULT_IMAGE_CACHE_MAX_BYTES,
 		val preferredLanguages: List<CardLanguage> = CardLanguage.PREFERENCE_ORDER,
+		val themeMode: ThemeMode = ThemeMode.SYSTEM,
 		/**
 		 * Every source the app is routed to, and its own notice.
 		 *
@@ -75,6 +77,9 @@ object SettingsContract :
 
 		data class RevalidateOnLaunchChanged(val isEnabled: Boolean) : Intent
 
+		/** Light, dark, or whatever the platform says. Applies immediately, not on next launch. */
+		data class ThemeModeChosen(val mode: ThemeMode) : Intent
+
 		data class AttributionRead(val credits: List<ProviderCredit>) : Intent
 
 		/** Moves a language to the front of the preference order. */
@@ -114,6 +119,7 @@ object SettingsContract :
 			imageLimitBytes = intent.preferences.imageCacheLimitBytes,
 			prefetchRadius = intent.preferences.prefetchRadius,
 			revalidateSetsOnLaunch = intent.preferences.revalidateSetsOnLaunch,
+			themeMode = intent.preferences.themeMode,
 		)
 
 		is Intent.ImageCacheLimitChosen -> state.copy(imageLimitBytes = intent.bytes)
@@ -123,6 +129,8 @@ object SettingsContract :
 		is Intent.PrefetchRadiusChosen -> state.copy(prefetchRadius = intent.radius)
 
 		is Intent.RevalidateOnLaunchChanged -> state.copy(revalidateSetsOnLaunch = intent.isEnabled)
+
+		is Intent.ThemeModeChosen -> state.copy(themeMode = intent.mode)
 
 		is Intent.AttributionRead -> state.copy(attributions = intent.credits)
 
