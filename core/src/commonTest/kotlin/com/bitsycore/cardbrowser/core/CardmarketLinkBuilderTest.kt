@@ -75,22 +75,64 @@ class CardmarketLinkBuilderTest {
 	}
 
 	@Test
-	fun `a multi-word set name yields no expansion slug and falls back to the game page`() {
+	fun `a set whose Cardmarket name cannot be derived still gets a game-wide search`() {
 		// "Origins: Proving Grounds" could be hyphenated, truncated or abbreviated on Cardmarket's
-		// side. Guessing would ship a 404, so the builder declines.
+		// side, so the expansion segment is still declined rather than guessed.
 		assertNull(CardmarketLinkBuilder.expansionSlug(TestCards.PROVING_GROUNDS))
 
 		val vLink = CardmarketLinkBuilder.linkFor(
 			game = TestGame,
-			printing = TestCards.printing(),
+			printing = TestCards.printing(name = "Renekton, Rage Fueled"),
 			set = TestCards.PROVING_GROUNDS,
 		)
 
-		val vHome = assertIs<CardmarketLink.GameHome>(vLink)
-		assertEquals("https://www.cardmarket.com/en/Riftbound", vHome.url)
-		// The label used to be the literal "Open Riftbound on Cardmarket", so every game's cards
-		// offered to open Riftbound -- including the six that are not it.
-		assertEquals("Open Test Game on Cardmarket", vHome.label)
+		// It used to fall all the way back to the game's front page, which left the user to find
+		// the card themselves. `/{Game}/Products/Singles` is a search page in its own right, so a
+		// name search across the whole game is available without knowing the expansion at all --
+		// far short of an exact link, but it lands on the card rather than on a catalogue.
+		val vSearch = assertIs<CardmarketLink.CardSearch>(vLink)
+		assertTrue(
+			vSearch.url.startsWith("https://www.cardmarket.com/en/Riftbound/Products/Singles?"),
+			vSearch.url,
+		)
+		assertTrue(vSearch.url.contains("searchString=Renekton%2C+Rage+Fueled"), vSearch.url)
+		// Empty rather than a made-up name, so the UI does not claim a scope the link lacks.
+		assertEquals("", vSearch.expansion)
+		// The two ways of scoping are independent, and this set has the better one: its provider
+		// supplies Cardmarket's own expansion id, so the search is still narrowed to the set even
+		// though its *name* could not be turned into a path segment.
+		assertTrue(vSearch.url.contains("idExpansion=6289"), vSearch.url)
+	}
+
+	@Test
+	fun `with neither an expansion name nor an id -- the search covers the whole game`() {
+		// The genuinely unscoped case: no derivable path segment and no id to fall back on. It is
+		// still a name search rather than a catalogue, which is the point of the game-wide form.
+		val vNoIds = TestCards.PROVING_GROUNDS.copy(externalIds = emptyMap())
+
+		val vLink = CardmarketLinkBuilder.linkFor(
+			game = TestGame,
+			printing = TestCards.printing(name = "Renekton, Rage Fueled"),
+			set = vNoIds,
+		)
+
+		val vSearch = assertIs<CardmarketLink.CardSearch>(vLink)
+		assertTrue(vSearch.url.contains("idExpansion=0"), vSearch.url)
+		assertEquals("", vSearch.expansion)
+	}
+
+	@Test
+	fun `a game with no category id gets no search -- because a wrong category returns nothing`() {
+		// The category is per game -- Riftbound 1655, Pokemon 51 -- and was once a single hardcoded
+		// constant, which silently sent every other game's search to Riftbound's category. A game
+		// that has not had its id read off a real URL declines rather than filters wrongly.
+		val vLink = CardmarketLinkBuilder.linkFor(
+			game = TestGameWithoutCategory,
+			printing = TestCards.printing(),
+			set = TestCards.ORIGINS,
+		)
+
+		assertIs<CardmarketLink.ExpansionSingles>(vLink)
 	}
 
 	@Test
@@ -111,8 +153,10 @@ class CardmarketLinkBuilderTest {
 			vSearch.url.startsWith("https://www.cardmarket.com/en/Riftbound/Products/Singles/Vendetta?"),
 		)
 		assertTrue(vSearch.url.contains("searchString=Renekton%2C+Rage+Fueled"), vSearch.url)
-		// The one parameter that genuinely could not be known is simply absent.
-		assertFalse(vSearch.url.contains("idExpansion"), vSearch.url)
+		// Sent as 0 rather than omitted. A real unscoped search URL from the site submits
+		// `idExpansion=0` -- that is the form's "every expansion", and matching what the form
+		// really sends beats leaving a parameter out and hoping the default agrees.
+		assertTrue(vSearch.url.contains("idExpansion=0"), vSearch.url)
 	}
 
 	@Test

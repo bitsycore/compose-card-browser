@@ -47,6 +47,9 @@ object RiftboundGame : GameProfile {
 	 * segment that lands on a 404 is worse than no button.
 	 */
 	override val cardmarketSlug: String = "Riftbound"
+
+	/** Read off a real search URL for this game. See [GameProfile.cardmarketCategoryId]. */
+	override val cardmarketCategoryId: Int = 1655
 	/**
 	 * The six domains plus colourless, in Riftcodex's own order of appearance.
 	 *

@@ -474,12 +474,24 @@ the inline image and the fullscreen viewer now decode at source resolution.
 - An expansion slug is only derived when the set name is a single word. "Origins: Proving Grounds"
   could be hyphenated, truncated or abbreviated on Cardmarket's side, so those sets fall back to the
   game page rather than guessing.
-- **The button appears for Riftbound only.** Cardmarket's per-game path segment could not be
-  verified for the other six, because 403 applies to every scripted request — including one for the
-  Riftbound path that is known to work. "Pokemon", "Magic" and "YuGiOh" are all plausible and all
-  unverified, and a plausible-looking button that lands on a 404 is worse than no button. Each is a
-  one-line change in `CardmarketLinkBuilder.gameSlug` the moment a real URL is seen. Wuthering Waves
-  is a separate case: Cardmarket has no section for it, because the game is Japan-only so far.
+- **`idCategory` is per game, not global.** Riftbound is 1655 and Pokémon is 51, both read off real
+  search URLs. It used to be a single hardcoded constant, so every game that gained a slug would
+  have searched Riftbound's category and matched nothing. It now lives on `GameProfile`, and a game
+  without a confirmed id declines to build a search rather than filtering by the wrong one.
+- **`idExpansion=0` means "every expansion".** The form submits it explicitly, so the builder does
+  too, rather than omitting the parameter and hoping the default agrees.
+- **A search no longer needs the expansion segment.** `/{Game}/Products/Singles` is itself a search
+  page, so a card whose set name cannot be turned into a path still gets a name search across the
+  game — far short of an exact link, but it lands on the card instead of on a catalogue. And where
+  the provider supplies Cardmarket's own expansion id, the search is still narrowed to the set even
+  though its name could not be.
+- **Slugs are confirmed for five games**, corroborated against real URLs: `Riftbound`, `Magic`,
+  `Pokemon`, `YuGiOh`, `OnePiece`. `Altered` is declared but never seen on a real page. Wuthering
+  Waves has no Cardmarket section at all, the game being Japan-only so far.
+
+  A working *search* additionally needs that game's `idCategory`, which today is known for Riftbound
+  and Pokémon only. The other games get a plain expansion listing until someone reads their id off a
+  real search URL — one line each on the game's profile.
 - Scryfall and TCGdex both publish Cardmarket *product ids*, and TCGdex's are per printing. They are
   stored on the card for provenance and no URL is built from them, because this app only constructs
   Cardmarket links from path shapes it has actually seen.

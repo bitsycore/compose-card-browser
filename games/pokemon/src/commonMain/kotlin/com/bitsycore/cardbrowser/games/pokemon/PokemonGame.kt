@@ -58,6 +58,9 @@ object PokemonGame : GameProfile {
 	 */
 	override val cardmarketSlug: String = "Pokemon"
 
+	/** Read off a real search URL for this game. See [GameProfile.cardmarketCategoryId]. */
+	override val cardmarketCategoryId: Int = 51
+
 	/**
 	 * Region keys, named here so the adapter that tags sets and the game that labels them cannot
 	 * drift apart on a spelling. They go into cache files, so they never change.

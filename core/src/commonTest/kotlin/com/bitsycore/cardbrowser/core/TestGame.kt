@@ -31,6 +31,9 @@ object TestGame : GameProfile {
 		listOf("Common", "Uncommon", "Rare", "Epic", "Showcase")
 
 	override val cardmarketSlug: String = "Riftbound"
+
+	/** Riftbound's real category id, so the search the tests assert on is the one users get. */
+	override val cardmarketCategoryId: Int = 1655
 }
 
 /** A game that states no Cardmarket segment, which must suppress the link entirely. */
@@ -43,4 +46,21 @@ object TestGameWithoutMarketplace : GameProfile {
 	override val vocabulary: GameVocabulary = GameVocabulary()
 
 	override val cardmarketSlug: String? = null
+}
+
+/**
+ * A game with a Cardmarket section but no known category id.
+ *
+ * Four of the seven are in this state: the slug is confirmed, the category id is not, and a search
+ * filtered by another game's category returns nothing at all.
+ */
+object TestGameWithoutCategory : GameProfile {
+
+	override val id: GameId = GameId("test-game-no-category")
+
+	override val displayName: String = "Uncategorised Game"
+
+	override val vocabulary: GameVocabulary = GameVocabulary()
+
+	override val cardmarketSlug: String = "Uncategorised"
 }

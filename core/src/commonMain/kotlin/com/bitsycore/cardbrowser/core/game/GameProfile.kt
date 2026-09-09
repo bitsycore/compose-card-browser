@@ -110,6 +110,18 @@ interface GameProfile {
 	 * a real page in a browser -- and an unconfirmed slug is left null rather than guessed.
 	 */
 	val cardmarketSlug: String? get() = null
+
+	/**
+	 * Cardmarket's numeric id for this game's "Cards" category, or `null` when it is not known.
+	 *
+	 * Per game, not global. Riftbound is 1655 and Pokémon is 51, both read off real search URLs --
+	 * so the single hardcoded constant this replaced was silently wrong for every game but the one
+	 * it came from, sending a Pokémon search to Riftbound's category.
+	 *
+	 * Without it there is no scoped search to build, and the link degrades to the game's section
+	 * rather than to a search filtered by the wrong category.
+	 */
+	val cardmarketCategoryId: Int? get() = null
 }
 
 /**

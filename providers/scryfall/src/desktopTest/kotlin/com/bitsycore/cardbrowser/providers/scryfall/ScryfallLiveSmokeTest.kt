@@ -156,7 +156,7 @@ class ScryfallLiveSmokeTest {
 	}
 
 	@Test
-	fun `Chinese comes back Chinese, under Scryfall's own spelling of it`() = runBlocking {
+	fun `Chinese comes back Chinese -- under Scryfall's own spelling of it`() = runBlocking {
 		// The one language where Scryfall's tag and the app's disagree: `zhs` against `zh-cn`. Asking
 		// for `lang:zh-cn` matches nothing, and Scryfall answers nothing with a 404 -- so a broken
 		// mapping here does not fail loudly, it silently falls back to English.

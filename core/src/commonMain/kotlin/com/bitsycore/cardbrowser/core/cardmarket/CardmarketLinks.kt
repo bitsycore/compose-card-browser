@@ -174,7 +174,12 @@ object CardmarketLinkBuilder {
 		}
 
 		val vExpansion = set?.let(::expansionSlug)
-		val vSinglesPath = vExpansion?.let { "$BASE_URL/$UI_LOCALE/$vGame/Products/Singles/$it" }
+		// Scoped to the expansion where its segment can be worked out, and to the whole game where
+		// it cannot -- `/{Game}/Products/Singles` is a search page in its own right, which is what
+		// makes a useful link possible for a set whose Cardmarket name we cannot derive.
+		val vSinglesPath = vExpansion
+			?.let { "$BASE_URL/$UI_LOCALE/$vGame/Products/Singles/$it" }
+			?: "$BASE_URL/$UI_LOCALE/$vGame/Products/Singles"
 
 		// 2. A name search scoped to the expansion.
 		//
@@ -186,14 +191,20 @@ object CardmarketLinkBuilder {
 		//    invented to replace it.
 		val vExpansionId = set?.externalIds?.get(ExternalIdKey.CARDMARKET_EXPANSION)?.firstOrNull()
 		val vTerms = searchTermsFor(printing)
-		if (vSinglesPath != null && vTerms.isNotBlank()) {
+		// No category id means no search that filters correctly -- sending another game's category
+		// would return nothing at all -- so those games fall through to a plain listing instead.
+		val vCategory = game.cardmarketCategoryId
+		if (vCategory != null && vTerms.isNotBlank()) {
 			val vQuery = buildList {
 				// Cardmarket's current search implementation. Sending v1 parameters to a v2 page
 				// silently returns the unfiltered listing.
 				add("searchMode=v2")
-				// The "Cards" product category, as opposed to sealed product or accessories.
-				add("idCategory=$CATEGORY_CARDS")
-				vExpansionId?.let { add("idExpansion=$it") }
+				// The "Cards" product category, as opposed to sealed product or accessories. Per
+				// game -- see `GameProfile.cardmarketCategoryId`.
+				add("idCategory=$vCategory")
+				// 0 is "every expansion", and is what the form submits when none is chosen. Sent
+				// explicitly rather than omitted, which is what a real unscoped search URL does.
+				add("idExpansion=${vExpansionId ?: 0}")
 				add("searchString=${formEncode(vTerms)}")
 				// 0 is "any rarity". Sent explicitly because the v2 form always submits it.
 				add("idRarity=0")
@@ -201,7 +212,9 @@ object CardmarketLinkBuilder {
 			}.joinToString("&")
 			return CardmarketLink.CardSearch(
 				url = "$vSinglesPath?$vQuery",
-				expansion = vExpansion,
+				// Empty when the search covers the whole game rather than one expansion, so the
+				// UI can say which it is instead of implying a scope it does not have.
+				expansion = vExpansion.orEmpty(),
 				terms = vTerms,
 			)
 		}
@@ -262,9 +275,6 @@ object CardmarketLinkBuilder {
 	}
 
 	private const val HEX = "0123456789ABCDEF"
-
-	/** Cardmarket's "Cards" category id, from a verified search URL. */
-	private const val CATEGORY_CARDS = 1655
 
 	/** Matches the `perSite` value the site's own search form submits. */
 	private const val RESULTS_PER_PAGE = 30
