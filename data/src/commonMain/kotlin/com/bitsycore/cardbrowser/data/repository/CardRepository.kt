@@ -679,10 +679,39 @@ class CardRepository(
 			}
 		}
 
+		// Its own cache entry, which it did not used to have. `CacheScope.CardDetail` was declared
+		// and never written, so this path -- a card opened without its set in hand, which is what a
+		// cold start into a deep link or a restored back stack does -- went to the network every
+		// single time, including immediately after the last time.
+		val vDetailKey = cardDetailKey(vProvider, id, vLanguage)
+		val vSerializer = CacheEnvelope.serializer(serializer<CardPrinting>())
+		mCache.read(vDetailKey, vSerializer)?.let { vCached ->
+			return DataSnapshot.cached(
+				value = vCached.payload,
+				fetchedAt = vCached.fetchedAtEpochMillis,
+				completeness = Completeness.COMPLETE,
+				isStale = vCached.isStale(mClock(), mCardsTtlMillis),
+			)
+		}
+
 		return try {
 			val vCard = vProvider.cardDetail(id, vLanguage)
 				?: return DataSnapshot.failed(ProviderError.BadRequest(404))
-			DataSnapshot.fresh(vCard, mClock())
+			val vFetchedAt = mClock()
+			mCache.write(
+				key = vDetailKey,
+				envelope = CacheEnvelope(
+					schemaVersion = CacheEnvelope.CURRENT_SCHEMA_VERSION,
+					provider = vProvider.id,
+					language = vLanguage,
+					scope = CacheScope.CardDetail(id.qualified),
+					fetchedAtEpochMillis = vFetchedAt,
+					completeness = Completeness.COMPLETE,
+					payload = vCard,
+				),
+				serializer = vSerializer,
+			)
+			DataSnapshot.fresh(vCard, vFetchedAt)
 		} catch (vError: ProviderError) {
 			DataSnapshot.failed(vError)
 		}
@@ -788,6 +817,15 @@ class CardRepository(
 
 	private fun setListKey(provider: CardProvider<GameProfile>, game: GameId, language: CardLanguage?) =
 		CacheKey.of("v${CacheEnvelope.CURRENT_SCHEMA_VERSION}", provider.id.value, "sets", game.value, language?.code ?: "-")
+
+	private fun cardDetailKey(provider: CardProvider<GameProfile>, id: SourceId, language: CardLanguage?) =
+		CacheKey.of(
+			"v${CacheEnvelope.CURRENT_SCHEMA_VERSION}",
+			provider.id.value,
+			"card",
+			id.qualified,
+			language?.code ?: "-",
+		)
 
 	private fun completeSetKey(provider: CardProvider<GameProfile>, setId: SourceId, language: CardLanguage?) =
 		CacheKey.of("v${CacheEnvelope.CURRENT_SCHEMA_VERSION}", provider.id.value, "set", setId.qualified, language?.code ?: "-")

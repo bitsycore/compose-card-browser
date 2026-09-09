@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -27,16 +28,19 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.data.settings.BrowsingPreferences
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
-import androidx.compose.ui.tooling.preview.Preview
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -109,6 +113,65 @@ fun SettingsContent(
 				style = MaterialTheme.typography.labelSmall,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
 			)
+
+			Spacer(Modifier.height(20.dp))
+			HorizontalDivider()
+			Spacer(Modifier.height(16.dp))
+
+			Row(verticalAlignment = Alignment.CenterVertically) {
+				Text(
+					text = "Network",
+					style = MaterialTheme.typography.titleSmall,
+					modifier = Modifier.weight(1f),
+				)
+				if (vState.apiCalls.isNotEmpty()) {
+					TextButton(onClick = { dispatch(SettingsContract.Intent.ResetApiCalls) }) {
+						Text("Reset")
+					}
+				}
+			}
+			Spacer(Modifier.height(4.dp))
+			Text(
+				text = "Requests sent since the app started, by host. Card data is cached, so " +
+					"browsing a set you have already opened should not move these numbers -- and " +
+					"if it does, that is a bug worth reporting.",
+				style = MaterialTheme.typography.bodySmall,
+				color = MaterialTheme.colorScheme.onSurfaceVariant,
+			)
+			Spacer(Modifier.height(8.dp))
+
+			if (vState.apiCalls.isEmpty()) {
+				Text(
+					// The honest reading of zero: everything on screen came off the disk.
+					text = "No requests yet this session.",
+					style = MaterialTheme.typography.bodyMedium,
+					color = MaterialTheme.colorScheme.onSurfaceVariant,
+				)
+			} else {
+				vState.apiCalls.forEach { (vHost, vCount) ->
+					Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+						Text(
+							text = vHost,
+							style = MaterialTheme.typography.bodyMedium,
+							maxLines = 1,
+							overflow = TextOverflow.Ellipsis,
+							modifier = Modifier.weight(1f),
+						)
+						Spacer(Modifier.width(12.dp))
+						Text(
+							text = vCount.toString(),
+							style = MaterialTheme.typography.bodyMedium,
+							fontWeight = FontWeight.Medium,
+						)
+					}
+				}
+				Spacer(Modifier.height(6.dp))
+				Text(
+					text = "${vState.apiCallTotal} in total.",
+					style = MaterialTheme.typography.labelSmall,
+					color = MaterialTheme.colorScheme.onSurfaceVariant,
+				)
+			}
 
 			Spacer(Modifier.height(20.dp))
 			HorizontalDivider()

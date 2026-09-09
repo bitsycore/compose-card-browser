@@ -20,11 +20,28 @@ object SettingsContract :
 		val providerAttribution: String? = null,
 		val prefetchRadius: Int = BrowsingPreferences.DEFAULT_PREFETCH_RADIUS,
 		val revalidateSetsOnLaunch: Boolean = true,
-	)
+		/**
+		 * Requests sent per host since launch, highest first.
+		 *
+		 * Here to make the caching claims checkable rather than merely stated: browse a set twice
+		 * and the number should not move the second time.
+		 */
+		val apiCalls: List<Pair<String, Int>> = emptyList(),
+	) {
+
+		/** Every request this session, across every host. */
+		val apiCallTotal: Int get() = apiCalls.sumOf { it.second }
+	}
 
 	sealed interface Intent {
 
 		data object Refresh : Intent
+
+		/** The request counters changed, or were read for the first time. */
+		data class ApiCallsRead(val counts: Map<String, Int>) : Intent
+
+		/** Zero the counters, so one interaction can be measured on its own. */
+		data object ResetApiCalls : Intent
 
 		data class UsageRead(val usage: CacheUsage) : Intent
 
@@ -56,6 +73,15 @@ object SettingsContract :
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
 
 		Intent.Refresh -> state
+
+		is Intent.ApiCallsRead -> state.copy(
+			apiCalls = intent.counts.entries
+				.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+				.map { it.key to it.value },
+		)
+
+		// The view model does the zeroing; the reducer only has to stop showing the old numbers.
+		Intent.ResetApiCalls -> state.copy(apiCalls = emptyList())
 
 		is Intent.UsageRead -> state.copy(
 			metadataBytes = intent.usage.metadataBytes,

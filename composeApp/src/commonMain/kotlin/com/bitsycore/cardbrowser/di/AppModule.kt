@@ -6,6 +6,7 @@ import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.CacheManager
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.net.ApiCallStats
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
 import com.bitsycore.cardbrowser.data.net.ProviderHttpPolicy
 import com.bitsycore.cardbrowser.data.repository.CardRepository
@@ -58,7 +59,11 @@ val appModule = module {
 	//  Infrastructure
 
 	single { HttpClientFactory.json }
-	single { HttpClientFactory.create() }
+
+	// One counter behind every client, so the stats screen reports what actually left the device.
+	single { ApiCallStats() }
+
+	single { HttpClientFactory.create(stats = get()) }
 
 	single { PreferencesStore(get(), get(), Dispatchers.Default) }
 
@@ -106,12 +111,12 @@ val appModule = module {
 	// shared client is also the image loader's -- throttling that would queue every thumbnail in a
 	// grid behind the gap. See `ProviderHttpPolicy.minRequestInterval`.
 	single {
-		ScryfallProvider(mClient = HttpClientFactory.create(ProviderHttpPolicy.SCRYFALL))
+		ScryfallProvider(mClient = HttpClientFactory.create(ProviderHttpPolicy.SCRYFALL, get()))
 	} bind CardProvider::class
 	single { OptcgProvider(mClient = get()) } bind CardProvider::class
 	single { AlteredProvider(mClient = get()) } bind CardProvider::class
 	single {
-		YgoprodeckProvider(mClient = HttpClientFactory.create(ProviderHttpPolicy.YGOPRODECK))
+		YgoprodeckProvider(mClient = HttpClientFactory.create(ProviderHttpPolicy.YGOPRODECK, get()))
 	} bind CardProvider::class
 	single { WuwaProvider() } bind CardProvider::class
 
@@ -172,7 +177,7 @@ val appModule = module {
 	viewModel { (vArgs: CardDetailArgs) ->
 		CardDetailViewModel(get(), get(), get(), get(), get(), vArgs)
 	}
-	viewModel { SettingsViewModel(get(), get(), get()) }
+	viewModel { SettingsViewModel(get(), get(), get(), get()) }
 	viewModel { (vArgs: SearchArgs) -> SearchViewModel(get(), get(), get(), vArgs) }
 }
 

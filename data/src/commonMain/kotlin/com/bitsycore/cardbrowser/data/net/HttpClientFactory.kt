@@ -51,7 +51,10 @@ object HttpClientFactory {
 	 * @param policy per-provider knobs. The default is deliberately conservative: providers here
 	 *   are free community APIs and the app is a browser, not a scraper
 	 */
-	fun create(policy: ProviderHttpPolicy = ProviderHttpPolicy()): HttpClient = HttpClient {
+	fun create(
+		policy: ProviderHttpPolicy = ProviderHttpPolicy(),
+		stats: ApiCallStats? = null,
+	): HttpClient = HttpClient {
 		// Let non-2xx statuses come back as responses rather than exceptions where a caller wants
 		// to read the code, and as exceptions where it does not. `mapProviderErrors` handles both.
 		expectSuccess = true
@@ -71,6 +74,10 @@ object HttpClientFactory {
 			// client owes them, and several community APIs ask for one explicitly.
 			agent = policy.userAgent
 		}
+
+		// Counted before anything else, so the number is what left the device rather than what a
+		// caller asked for -- retries included, because a retried timeout really did cost two.
+		if (stats != null) install(requestCounter(stats))
 
 		// A minimum gap between requests, where a provider documents one.
 		//
@@ -97,6 +104,11 @@ object HttpClientFactory {
 			policy.defaultHeaders.forEach { (vName, vValue) -> headers.append(vName, vValue) }
 		}
 	}
+}
+
+/** Counts every request this client sends, by host. See [ApiCallStats] for why by host. */
+private fun requestCounter(stats: ApiCallStats) = createClientPlugin("RequestCounter") {
+	onRequest { vRequest, _ -> stats.record(vRequest.url.host) }
 }
 
 /**

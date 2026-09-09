@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.cache.CacheManager
+import com.bitsycore.cardbrowser.data.net.ApiCallStats
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.lib.pulse.viewmodel.PulseViewModel
 import kotlinx.coroutines.launch
@@ -13,6 +14,7 @@ class SettingsViewModel(
 	private val mCacheManager: CacheManager,
 	private val mPreferences: PreferencesStore,
 	private val mRegistry: ProviderRegistry,
+	private val mApiCalls: ApiCallStats,
 ) : PulseViewModel<SettingsContract.UiState, SettingsContract.Intent, SettingsContract.Effect>(
 	initialState = SettingsContract.UiState(),
 	containerContract = SettingsContract,
@@ -31,8 +33,19 @@ class SettingsViewModel(
 		)
 	}
 
+	init {
+		// Collected rather than read once: the counters climb while the screen is open, which is
+		// exactly when someone is watching them to see whether something is re-fetching.
+		viewModelScope.launch {
+			mApiCalls.counts.collect { dispatch(SettingsContract.Intent.ApiCallsRead(it)) }
+		}
+	}
+
 	override suspend fun handleIntent(intent: SettingsContract.Intent) {
 		when (intent) {
+
+			is SettingsContract.Intent.ResetApiCalls -> mApiCalls.reset()
+
 			SettingsContract.Intent.Refresh -> readUsage()
 
 			SettingsContract.Intent.ClearMetadata -> {
