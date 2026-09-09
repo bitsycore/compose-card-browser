@@ -564,7 +564,34 @@ class CardRepository(
 
 		if (!vCanSearchRemotely) return@flow
 
-		// 2. The provider's answer, which supersedes it.
+		// 2. The same search, if it has been run before and is still fresh.
+		//
+		// A search used to be the one path that always hit the network -- every submit, every
+		// return to the screen, every back-navigation. Typing "dragon", opening a card and coming
+		// back cost two identical requests.
+		//
+		// Held for the same 24 hours as a set, and for the same reason: a card's printings do not
+		// change between one afternoon and the next, and a set released inside the window is
+		// findable the moment its own list is refreshed. A stale entry is still emitted first and
+		// then replaced, so the screen is never blank while the network is asked again.
+		val vSearchKey = searchKey(vProvider, vNeedle, vLanguage)
+		val vSearchSerializer = CacheEnvelope.serializer(serializer<CachedSearchPage>())
+		val vCachedSearch = mCache.read(vSearchKey, vSearchSerializer)
+		if (vCachedSearch != null) {
+			val vIsStale = vCachedSearch.isStale(mClock(), mCardsTtlMillis)
+			emit(
+				DataSnapshot(
+					value = searchResultsOf(vCachedSearch.payload, knownSets),
+					origin = DataOrigin.CACHE,
+					completeness = vCachedSearch.completeness,
+					fetchedAtEpochMillis = vCachedSearch.fetchedAtEpochMillis,
+					isStale = vIsStale,
+				),
+			)
+			if (!vIsStale) return@flow
+		}
+
+		// 3. The provider's answer, which supersedes both.
 		try {
 			currentCoroutineContext().ensureActive()
 			val vPage = vProvider.searchAllSets(
@@ -576,20 +603,33 @@ class CardRepository(
 				),
 			)
 			val vCards = dedupePrintings(vPage.cards)
+			val vFetchedAt = mClock()
+			// One page of a match list is not the whole match list, and the screen says so rather
+			// than letting the user assume they are looking at everything.
+			val vCompleteness = if (vPage.hasMore) Completeness.PARTIAL else Completeness.COMPLETE
+			val vPayload = CachedSearchPage(
+				cards = vCards,
+				totalCount = vPage.totalCount,
+				hasMore = vPage.hasMore,
+			)
+			mCache.write(
+				key = vSearchKey,
+				envelope = CacheEnvelope(
+					schemaVersion = CacheEnvelope.CURRENT_SCHEMA_VERSION,
+					provider = vProvider.id,
+					language = vLanguage,
+					scope = CacheScope.Search(needle = vNeedle.lowercase(), page = 1),
+					fetchedAtEpochMillis = vFetchedAt,
+					completeness = vCompleteness,
+					payload = vPayload,
+				),
+				serializer = vSearchSerializer,
+			)
 			emit(
 				DataSnapshot.fresh(
-					value = CardSearchResults(
-						cards = vCards,
-						scope = SearchScope.REMOTE_ALL_SETS,
-						searchedSetCount = vCards.map { it.setId }.distinct().size,
-						knownSetCount = knownSets.size,
-						totalCount = vPage.totalCount,
-						hasMore = vPage.hasMore,
-					),
-					fetchedAt = mClock(),
-					// One page of a match list is not the whole match list, and the screen says so
-					// rather than letting the user assume they are looking at everything.
-					completeness = if (vPage.hasMore) Completeness.PARTIAL else Completeness.COMPLETE,
+					value = searchResultsOf(vPayload, knownSets),
+					fetchedAt = vFetchedAt,
+					completeness = vCompleteness,
 				),
 			)
 		} catch (vError: ProviderError) {
@@ -817,6 +857,38 @@ class CardRepository(
 
 	private fun setListKey(provider: CardProvider<GameProfile>, game: GameId, language: CardLanguage?) =
 		CacheKey.of("v${CacheEnvelope.CURRENT_SCHEMA_VERSION}", provider.id.value, "sets", game.value, language?.code ?: "-")
+
+	/**
+	 * Turns a cached search page back into what the screen wants.
+	 *
+	 * `knownSetCount` is recomputed rather than stored: it describes how many sets the *caller*
+	 * has on disk right now, which changes as sets are downloaded and would be a lie if it came
+	 * out of a file written yesterday.
+	 */
+	private fun searchResultsOf(page: CachedSearchPage, knownSets: List<CardSet>) = CardSearchResults(
+		cards = page.cards,
+		scope = SearchScope.REMOTE_ALL_SETS,
+		searchedSetCount = page.cards.map { it.setId }.distinct().size,
+		knownSetCount = knownSets.size,
+		totalCount = page.totalCount,
+		hasMore = page.hasMore,
+	)
+
+	/**
+	 * The key for one search.
+	 *
+	 * Lower-cased and trimmed, so "Fury", "fury" and " fury " are one entry rather than three --
+	 * the provider is being asked the same question in each case. The language is in the key
+	 * because the answer is in that language.
+	 */
+	private fun searchKey(provider: CardProvider<GameProfile>, needle: String, language: CardLanguage?) =
+		CacheKey.of(
+			"v${CacheEnvelope.CURRENT_SCHEMA_VERSION}",
+			provider.id.value,
+			"search",
+			needle.trim().lowercase(),
+			language?.code ?: "-",
+		)
 
 	private fun cardDetailKey(provider: CardProvider<GameProfile>, id: SourceId, language: CardLanguage?) =
 		CacheKey.of(

@@ -96,6 +96,17 @@ sealed interface CacheScope {
 	/** One card's detail record. */
 	@Serializable
 	data class CardDetail(val cardId: String) : CacheScope
+
+	/**
+	 * One page of results for one cross-set search.
+	 *
+	 * The needle is part of the identity, normalised the same way the query is, so "Fury" and
+	 * " fury " share an entry and nothing else does. Never mistaken for a set: a search result is
+	 * a page of matches drawn from a hundred sets and is not complete-able, which is why it gets
+	 * its own scope rather than being filed as a `CardPage`.
+	 */
+	@Serializable
+	data class Search(val needle: String, val page: Int) : CacheScope
 }
 
 /**
