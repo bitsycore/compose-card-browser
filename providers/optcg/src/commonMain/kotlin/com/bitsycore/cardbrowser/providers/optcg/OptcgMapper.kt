@@ -8,11 +8,11 @@ import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.FinishCoverage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.LanguageCoverage
 import com.bitsycore.cardbrowser.core.model.LocalizedText
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
+import com.bitsycore.cardbrowser.games.onepiece.OnePieceGame
 
 /** Turns the OPTCG API's wire format into core's model. */
 internal object OptcgMapper {
@@ -24,7 +24,7 @@ internal object OptcgMapper {
 		if (dto.setId.isBlank()) return null
 		return CardSet(
 			id = SourceId(provider, dto.setId),
-			game = Game.ONE_PIECE,
+			game = OnePieceGame.id,
 			code = dto.setId.uppercase(),
 			name = dto.setName.ifBlank { dto.setId },
 			// The API states neither, and neither is guessed. A set list ordered by code is the
@@ -47,7 +47,7 @@ internal object OptcgMapper {
 			// API exposes. There is no separate record id.
 			id = SourceId(provider, dto.cardSetId),
 			printingKey = null,
-			game = Game.ONE_PIECE,
+			game = OnePieceGame.id,
 			setId = vSetId,
 			setCode = set?.code ?: vSetLocal.uppercase(),
 			setName = set?.name ?: dto.setName.ifBlank { vSetLocal },
@@ -81,9 +81,9 @@ internal object OptcgMapper {
 			),
 			attributes = CardAttributes(
 				// Cost arrives as a string and is blank on Leaders, which have no cost.
-				energy = dto.cardCost?.trim()?.toIntOrNull(),
-				might = dto.cardPower?.trim()?.toIntOrNull(),
-				power = dto.life,
+				cost = dto.cardCost?.trim()?.toIntOrNull(),
+				primary = dto.cardPower?.trim()?.toIntOrNull(),
+				secondary = dto.life,
 			),
 			classification = CardClassification(
 				type = dto.cardType?.ifBlank { null },

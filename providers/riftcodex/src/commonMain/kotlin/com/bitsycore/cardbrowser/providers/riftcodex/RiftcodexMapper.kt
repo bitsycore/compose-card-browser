@@ -10,11 +10,11 @@ import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.ExternalIdKey
 import com.bitsycore.cardbrowser.core.model.FinishCoverage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.LanguageCoverage
 import com.bitsycore.cardbrowser.core.model.LocalizedText
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import kotlinx.datetime.LocalDate
 
 /**
@@ -44,7 +44,7 @@ internal object RiftcodexMapper {
 			//
 			// The record id is kept below rather than thrown away.
 			id = SourceId(provider, vCode),
-			game = Game.RIFTBOUND,
+			game = RiftboundGame.id,
 			code = vCode,
 			name = dto.name.ifBlank { vCode },
 			cardCount = dto.cardCount,
@@ -89,7 +89,7 @@ internal object RiftcodexMapper {
 
 		return CardPrinting(
 			id = SourceId(provider, dto.id),
-			game = Game.RIFTBOUND,
+			game = RiftboundGame.id,
 			setId = SourceId(provider, dto.set.setId.uppercase()),
 			setCode = dto.set.setId.uppercase(),
 			setName = dto.set.label,
@@ -129,9 +129,11 @@ internal object RiftcodexMapper {
 				accessibilityText = dto.media.accessibilityText?.takeIf { it.isNotBlank() },
 			),
 			attributes = CardAttributes(
-				energy = dto.attributes.energy,
-				might = dto.attributes.might,
-				power = dto.attributes.power,
+				// The slot names are the model's, deliberately game-neutral; the field names on the
+				// right are Riftcodex's own. `RiftboundGame.vocabulary` is what labels them.
+				cost = dto.attributes.energy,
+				primary = dto.attributes.might,
+				secondary = dto.attributes.power,
 			),
 			classification = CardClassification(
 				type = dto.classification.type?.takeIf { it.isNotBlank() },

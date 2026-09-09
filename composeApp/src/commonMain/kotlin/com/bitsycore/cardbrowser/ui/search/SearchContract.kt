@@ -1,7 +1,7 @@
 package com.bitsycore.cardbrowser.ui.search
 
+import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.CardPrinting
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.cardbrowser.data.repository.SearchScope
@@ -26,7 +26,7 @@ object SearchContract :
 	 *   `results.size` whenever there are further pages
 	 */
 	data class UiState(
-		val game: Game = Game.RIFTBOUND,
+		val game: GameProfile? = null,
 		val query: String = "",
 		val submitted: String = "",
 		val results: List<CardPrinting> = emptyList(),
@@ -79,7 +79,7 @@ object SearchContract :
 		data object Submit : Intent
 
 		/** Which game is being searched, from the route. */
-		data class GameSet(val game: Game, val isProviderSearchable: Boolean) : Intent
+		data class GameSet(val game: GameProfile, val isProviderSearchable: Boolean) : Intent
 
 		/** Results arrived. [generation] identifies which search they belong to. */
 		data class Loaded(

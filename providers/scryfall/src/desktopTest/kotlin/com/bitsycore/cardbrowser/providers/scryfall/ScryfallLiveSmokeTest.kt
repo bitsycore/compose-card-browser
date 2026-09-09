@@ -1,19 +1,19 @@
 package com.bitsycore.cardbrowser.providers.scryfall
 
 import com.bitsycore.cardbrowser.core.model.CardLanguage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
+import com.bitsycore.cardbrowser.games.magic.MagicGame
 import io.ktor.client.request.head
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpStatusCode
-import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 /**
  * Talks to the real Scryfall API.
@@ -30,7 +30,7 @@ class ScryfallLiveSmokeTest {
 
 	@Test
 	fun `the set catalogue loads and excludes digital-only sets`() = runBlocking {
-		val vSets = provider().listSets(Game.MAGIC)
+		val vSets = provider().listSets()
 
 		assertTrue(vSets.size > 500, "Expected a large catalogue, got ${vSets.size}")
 
@@ -99,9 +99,7 @@ class ScryfallLiveSmokeTest {
 		// for `lang:zh-cn` matches nothing, and Scryfall answers nothing with a 404 -- so a broken
 		// mapping here does not fail loudly, it silently falls back to English.
 		val vPage = provider().searchAllSets(
-			CardSearchRequest(
-				game = Game.MAGIC,
-				text = "Lightning Bolt",
+			CardSearchRequest(text = "Lightning Bolt",
 				language = CardLanguage.SIMPLIFIED_CHINESE,
 			),
 		)
@@ -120,7 +118,7 @@ class ScryfallLiveSmokeTest {
 		val vProvider = provider()
 		for (vLanguage in vProvider.capabilities.data.languages) {
 			val vPage = vProvider.searchAllSets(
-				CardSearchRequest(game = Game.MAGIC, text = "Forest", language = vLanguage),
+				CardSearchRequest(text = "Forest", language = vLanguage),
 			)
 			assertTrue(
 				vPage.cards.any { it.text.language == vLanguage },
@@ -170,9 +168,7 @@ class ScryfallLiveSmokeTest {
 	@Test
 	fun `cross-set search spans printings from many sets`() = runBlocking {
 		val vPage = provider().searchAllSets(
-			CardSearchRequest(
-				game = Game.MAGIC,
-				text = "Lightning Bolt",
+			CardSearchRequest(text = "Lightning Bolt",
 				language = CardLanguage.ENGLISH,
 			),
 		)
@@ -206,7 +202,7 @@ class ScryfallLiveSmokeTest {
 	@Test
 	fun `every paper set carries a set symbol that actually loads`() = runBlocking<Unit> {
 		val vClient = HttpClientFactory.create()
-		val vSets = ScryfallProvider(vClient).listSets(Game.MAGIC)
+		val vSets = ScryfallProvider(vClient).listSets()
 
 		val vWithSymbol = vSets.count { it.symbol != null }
 		assertEquals(vSets.size, vWithSymbol, "Every paper set should publish an icon")

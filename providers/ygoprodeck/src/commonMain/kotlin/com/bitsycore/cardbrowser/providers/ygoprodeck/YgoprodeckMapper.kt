@@ -9,12 +9,12 @@ import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.ExternalIdKey
 import com.bitsycore.cardbrowser.core.model.FinishCoverage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.LanguageCoverage
 import com.bitsycore.cardbrowser.core.model.LocalizedText
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SetSymbol
 import com.bitsycore.cardbrowser.core.model.SourceId
+import com.bitsycore.cardbrowser.games.yugioh.YuGiOhGame
 import kotlinx.datetime.LocalDate
 
 /** Turns YGOPRODeck's wire format into core's model. */
@@ -32,7 +32,7 @@ internal object YgoprodeckMapper {
 			// Making the code the id would mean carrying a name-to-code map purely to undo it on
 			// every request. Names are unique in `cardsets.php` and are what the API keys on.
 			id = SourceId(provider, dto.setName),
-			game = Game.YU_GI_OH,
+			game = YuGiOhGame.id,
 			code = dto.setCode?.ifBlank { null } ?: dto.setName,
 			name = dto.setName,
 			cardCount = dto.numOfCards,
@@ -92,7 +92,7 @@ internal object YgoprodeckMapper {
 		return CardPrinting(
 			id = SourceId(provider, dto.id.toString()),
 			printingKey = null,
-			game = Game.YU_GI_OH,
+			game = YuGiOhGame.id,
 			setId = vSetId,
 			setCode = set?.code ?: vAppearance?.setCode?.substringBefore('-') ?: vSetId.local,
 			setName = set?.name ?: vAppearance?.setName?.ifBlank { null } ?: vSetId.local,
@@ -124,9 +124,9 @@ internal object YgoprodeckMapper {
 			attributes = CardAttributes(
 				// Level, which is the closest thing to a single cost number on a Yu-Gi-Oh card and
 				// is what `GameVocabulary` labels it. Spells and traps have none.
-				energy = dto.level,
-				might = dto.atk,
-				power = dto.def,
+				cost = dto.level,
+				primary = dto.atk,
+				secondary = dto.def,
 			),
 			classification = CardClassification(
 				type = dto.humanReadableCardType?.ifBlank { null } ?: dto.type?.ifBlank { null },

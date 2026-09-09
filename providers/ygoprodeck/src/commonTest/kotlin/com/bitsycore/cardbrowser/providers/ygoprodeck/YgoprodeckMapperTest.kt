@@ -3,9 +3,9 @@ package com.bitsycore.cardbrowser.providers.ygoprodeck
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.ExternalIdKey
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
+import com.bitsycore.cardbrowser.games.yugioh.YuGiOhGame
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -19,7 +19,7 @@ class YgoprodeckMapperTest {
 
 	private val mMetalRaiders = CardSet(
 		id = SourceId(mProvider, "Metal Raiders"),
-		game = Game.YU_GI_OH,
+		game = YuGiOhGame.id,
 		code = "MRD",
 		name = "Metal Raiders",
 		cardCount = 144,
@@ -123,7 +123,7 @@ class YgoprodeckMapperTest {
 		val vCard = YgoprodeckMapper.toPrinting(
 			card().copy(cardSets = listOf(YgoCardSetDto("Speed Duel", "SBC1-ENC09", "Common"))),
 			mProvider,
-			CardSet(SourceId(mProvider, "Speed Duel"), Game.YU_GI_OH, "SBC1", "Speed Duel", null, null),
+			CardSet(SourceId(mProvider, "Speed Duel"), YuGiOhGame.id, "SBC1", "Speed Duel", null, null),
 			CardLanguage.ENGLISH,
 		)
 
@@ -147,9 +147,9 @@ class YgoprodeckMapperTest {
 		val vCard = YgoprodeckMapper.toPrinting(card(), mProvider, mMetalRaiders, CardLanguage.ENGLISH)
 
 		assertNotNull(vCard)
-		assertEquals(4, vCard.attributes.energy)
-		assertEquals(1800, vCard.attributes.might)
-		assertEquals(800, vCard.attributes.power)
+		assertEquals(4, vCard.attributes.cost)
+		assertEquals(1800, vCard.attributes.primary)
+		assertEquals(800, vCard.attributes.secondary)
 		assertEquals(listOf("WATER"), vCard.classification.domains)
 	}
 

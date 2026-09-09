@@ -2,29 +2,29 @@ package com.bitsycore.cardbrowser.providers.riftcodex
 
 import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardLanguage
-import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardQuery
-import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
 import com.bitsycore.cardbrowser.data.repository.CardRepository
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.last
-import kotlinx.coroutines.runBlocking
-import okio.FileSystem
-import okio.Path.Companion.toPath
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import kotlin.random.Random
-import kotlin.time.Clock
-import kotlin.time.ExperimentalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Clock
+import kotlin.time.ExperimentalTime
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.last
+import kotlinx.coroutines.runBlocking
+import okio.FileSystem
+import okio.Path.Companion.toPath
 
 /**
  * Talks to the real Riftcodex API.
@@ -47,7 +47,7 @@ class RiftcodexLiveSmokeTest {
 
 	@Test
 	fun `the real set list loads and contains Origins`() = runBlocking {
-		val vSets = provider().listSets(Game.RIFTBOUND)
+		val vSets = provider().listSets()
 
 		assertTrue(vSets.isNotEmpty(), "Riftcodex returned no sets at all")
 
@@ -147,7 +147,7 @@ class RiftcodexLiveSmokeTest {
 				providers = listOf(provider()),
 				routes = listOf(
 					ProviderRoute(
-						Game.RIFTBOUND,
+						RiftboundGame.id,
 						RiftcodexProvider.PROVIDER_ID,
 					),
 				),
@@ -160,7 +160,7 @@ class RiftcodexLiveSmokeTest {
 
 			// 1. The set list, exactly as the first screen asks for it.
 			val vSets = assertNotNull(
-				vRepository.setList(Game.RIFTBOUND).last().value,
+				vRepository.setList(RiftboundGame.id).last().value,
 			)
 			val vProvingGrounds = assertNotNull(vSets.firstOrNull { it.code == "OGS" })
 
@@ -169,7 +169,7 @@ class RiftcodexLiveSmokeTest {
 			val vCards = assertNotNull(
 				vRepository.cards(
 						setId = vProvingGrounds.id,
-						game = Game.RIFTBOUND,
+						game = RiftboundGame.id,
 						query = CardQuery(),
 						knownSetSize = vProvingGrounds.cardCount,
 					).last().value,
@@ -182,7 +182,7 @@ class RiftcodexLiveSmokeTest {
 			val vEpics = assertNotNull(
 				vRepository.cards(
 						setId = vProvingGrounds.id,
-						game = Game.RIFTBOUND,
+						game = RiftboundGame.id,
 						query = CardQuery(rarities = setOf("Epic")),
 					).last().value,
 			)
@@ -198,7 +198,7 @@ class RiftcodexLiveSmokeTest {
 					),
 					routes = listOf(
 						ProviderRoute(
-							Game.RIFTBOUND,
+							RiftboundGame.id,
 							RiftcodexProvider.PROVIDER_ID,
 						),
 					),
@@ -213,7 +213,7 @@ class RiftcodexLiveSmokeTest {
 			)
 
 			val vOffline = assertNotNull(
-				vOfflineRepository.cards(vProvingGrounds.id, Game.RIFTBOUND, CardQuery()).last().value,
+				vOfflineRepository.cards(vProvingGrounds.id, RiftboundGame.id, CardQuery()).last().value,
 			)
 			assertEquals(
 				vCards.cards.size,
@@ -246,7 +246,7 @@ class RiftcodexLiveSmokeTest {
 			val vRepository = CardRepository(
 				mRegistry = ProviderRegistry(
 					providers = listOf(provider()),
-					routes = listOf(ProviderRoute(Game.RIFTBOUND, RiftcodexProvider.PROVIDER_ID)),
+					routes = listOf(ProviderRoute(RiftboundGame.id, RiftcodexProvider.PROVIDER_ID)),
 				),
 				mCache = MetadataCache(
 					mStorage = vStorage,
@@ -260,7 +260,7 @@ class RiftcodexLiveSmokeTest {
 			val vCards = assertNotNull(
 				vRepository.cards(
 					setId = SourceId(RiftcodexProvider.PROVIDER_ID, "VEN"),
-					game = Game.RIFTBOUND,
+					game = RiftboundGame.id,
 					query = CardQuery(),
 				).last().value,
 			).cards

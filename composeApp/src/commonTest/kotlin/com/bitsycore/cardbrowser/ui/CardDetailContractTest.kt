@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.ui
 
+import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.Artwork
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardClassification
@@ -8,11 +9,11 @@ import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.Finish
 import com.bitsycore.cardbrowser.core.model.FinishCoverage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.LanguageCoverage
 import com.bitsycore.cardbrowser.core.model.LocalizedText
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.ui.detail.CardDetailContract
 import com.bitsycore.cardbrowser.ui.detail.CardDetailContract.Intent
 import com.bitsycore.cardbrowser.ui.detail.CardDetailContract.UiState
@@ -39,7 +40,7 @@ class CardDetailContractTest {
 		identity: CardIdentity? = null,
 	) = CardPrinting(
 		id = SourceId(mProvider, "card-$number"),
-		game = Game.RIFTBOUND,
+		game = RiftboundGame.id,
 		setId = SourceId(mProvider, "OGN"),
 		setCode = "OGN",
 		setName = "Origins",

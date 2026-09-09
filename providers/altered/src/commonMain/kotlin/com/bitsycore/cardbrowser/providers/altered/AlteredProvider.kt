@@ -3,7 +3,6 @@ package com.bitsycore.cardbrowser.providers.altered
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.Attribution
@@ -16,6 +15,7 @@ import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
 import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
 import com.bitsycore.cardbrowser.data.net.mapProviderErrors
+import com.bitsycore.cardbrowser.games.altered.AlteredGame
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ClientRequestException
@@ -24,7 +24,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.appendPathSegments
 
 /**
- * The Altered adapter, serving [Game.ALTERED].
+ * The Altered adapter, serving [AlteredGame].
  *
  * ## Why this reads from a mirror rather than an API
  *
@@ -67,14 +67,15 @@ import io.ktor.http.appendPathSegments
 class AlteredProvider(
 	private val mClient: HttpClient,
 	private val mBaseUrl: String = DEFAULT_BASE_URL,
-) : CardProvider {
+) : CardProvider<AlteredGame> {
 
 	override val id: ProviderId = PROVIDER_ID
 
 	override val displayName: String = "Altered TCG Card Database"
 
+	override val game: AlteredGame = AlteredGame
+
 	override val capabilities: ProviderCapabilities = ProviderCapabilities(
-		games = setOf(Game.ALTERED),
 		filtering = FilterSupport(
 			// Static files. There is no server to ask, so everything is local by construction
 			// rather than by choice.
@@ -84,14 +85,14 @@ class AlteredProvider(
 				CardFilterField.DOMAIN,
 				CardFilterField.CARD_TYPE,
 				CardFilterField.RARITY,
-				CardFilterField.ENERGY_COST,
+				CardFilterField.COST,
 			),
 		),
 		sorting = setOf(
 			CardSortField.COLLECTOR_NUMBER,
 			CardSortField.NAME,
 			CardSortField.RARITY,
-			CardSortField.ENERGY_COST,
+			CardSortField.COST,
 		),
 		data = DataCapabilities(
 			languages = setOf(CardLanguage.FRENCH, CardLanguage.ENGLISH),
@@ -114,8 +115,7 @@ class AlteredProvider(
 	// ============
 	//  Sets
 
-	override suspend fun listSets(game: Game, language: CardLanguage?): List<CardSet> {
-		require(game == Game.ALTERED) { "This adapter serves Altered only, not $game" }
+	override suspend fun listSets(language: CardLanguage?): List<CardSet> {
 		val vLocale = localeFor(language)
 		return mapProviderErrors("Altered.listSets") {
 			val vIndex: AlteredSetIndexDto = mClient
@@ -157,7 +157,7 @@ class AlteredProvider(
 			// this is, so a minimal one is built rather than trusting a per-card field to agree.
 			val vSet = CardSet(
 				id = request.setId,
-				game = Game.ALTERED,
+				game = AlteredGame.id,
 				code = vCards.firstOrNull()?.collectorNumber?.substringBefore('-')?.ifBlank { null }
 					?: vSetRef.uppercase(),
 				name = vCards.firstOrNull()?.cardSet?.name?.ifBlank { null } ?: vSetRef,

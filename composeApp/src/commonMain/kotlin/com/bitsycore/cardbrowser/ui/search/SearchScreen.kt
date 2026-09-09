@@ -33,7 +33,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -42,12 +44,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import com.bitsycore.cardbrowser.core.model.CardPrinting
-import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.SearchScope
+import com.bitsycore.cardbrowser.games.altered.AlteredGame
+import com.bitsycore.cardbrowser.games.magic.MagicGame
+import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.ui.common.CardImage
 import com.bitsycore.cardbrowser.ui.common.EmptyState
 import com.bitsycore.cardbrowser.ui.common.ErrorState
@@ -71,7 +75,7 @@ import org.koin.core.parameter.parametersOf
  */
 @Composable
 fun SearchScreen(
-	game: Game,
+	game: GameId,
 	onBack: () -> Unit,
 	onOpenCard: (CardPrinting) -> Unit,
 	viewModel: SearchViewModel = koinViewModel { parametersOf(SearchArgs(game)) },
@@ -108,7 +112,7 @@ fun SearchContent(
 	Scaffold(
 		topBar = {
 			TopAppBar(
-				title = { Text("Search ${vState.game.shortName}") },
+				title = { Text("Search ${vState.game?.shortName.orEmpty()}") },
 				navigationIcon = {
 					IconButton(onClick = onBack) {
 						Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
@@ -155,9 +159,9 @@ fun SearchContent(
 
 					vState.isIdle -> EmptyState(
 						if (vState.isProviderSearchable) {
-							"Search every ${vState.game.shortName} set by card name."
+							"Search every ${vState.game?.shortName.orEmpty()} set by card name."
 						} else {
-							"Search the ${vState.game.shortName} sets you have already opened."
+							"Search the ${vState.game?.shortName.orEmpty()} sets you have already opened."
 						},
 					)
 
@@ -229,14 +233,14 @@ private fun CoverageNotice(
  */
 private fun emptyMessageFor(state: SearchContract.UiState): String = when {
 	state.scope == SearchScope.LOCAL_CACHED_SETS && state.searchedSetCount == 0 ->
-		"No ${state.game.shortName} sets have been downloaded yet, so there was nothing to " +
+		"No ${state.game?.shortName.orEmpty()} sets have been downloaded yet, so there was nothing to " +
 			"search. Open a set first."
 
 	state.scope == SearchScope.LOCAL_CACHED_SETS ->
 		"No card matching \"${state.submitted}\" in the ${state.searchedSetCount} " +
 			"${if (state.searchedSetCount == 1) "set" else "sets"} you have downloaded."
 
-	else -> "No ${state.game.shortName} card matches \"${state.submitted}\"."
+	else -> "No ${state.game?.shortName.orEmpty()} card matches \"${state.submitted}\"."
 }
 
 /** How many matched against how many are shown, when the provider says. */
@@ -302,7 +306,7 @@ private const val CARD_ASPECT = 0.716f
 private fun SearchResultsPreview() = PreviewFrame {
 	SearchContent(
 		state = SearchContract.UiState(
-			game = Game.RIFTBOUND,
+			game = RiftboundGame,
 			query = "annie",
 			submitted = "annie",
 			results = PreviewData.CARDS,
@@ -322,7 +326,7 @@ private fun SearchCacheLimitedPreview() = PreviewFrame {
 	// the game was looked at, and the screen says exactly how much.
 	SearchContent(
 		state = SearchContract.UiState(
-			game = Game.ALTERED,
+			game = AlteredGame,
 			query = "vaike",
 			submitted = "vaike",
 			results = PreviewData.CARDS.take(3),
@@ -341,7 +345,7 @@ private fun SearchNothingDownloadedPreview() = PreviewFrame(isDark = false) {
 	// An empty result that is *not* evidence the card does not exist.
 	SearchContent(
 		state = SearchContract.UiState(
-			game = Game.ALTERED,
+			game = AlteredGame,
 			query = "vaike",
 			submitted = "vaike",
 			scope = SearchScope.LOCAL_CACHED_SETS,
@@ -356,7 +360,7 @@ private fun SearchNothingDownloadedPreview() = PreviewFrame(isDark = false) {
 @Preview
 @Composable
 private fun SearchIdlePreview() = PreviewFrame {
-	SearchContent(state = SearchContract.UiState(game = Game.POKEMON), dispatch = {})
+	SearchContent(state = SearchContract.UiState(game = PokemonGame), dispatch = {})
 }
 
 @Preview
@@ -364,7 +368,7 @@ private fun SearchIdlePreview() = PreviewFrame {
 private fun SearchFailedPreview() = PreviewFrame {
 	SearchContent(
 		state = SearchContract.UiState(
-			game = Game.MAGIC,
+			game = MagicGame,
 			query = "bolt",
 			submitted = "bolt",
 			error = ProviderError.Offline(),

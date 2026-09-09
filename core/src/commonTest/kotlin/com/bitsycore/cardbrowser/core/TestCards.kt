@@ -9,7 +9,6 @@ import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.ExternalIdKey
 import com.bitsycore.cardbrowser.core.model.FinishCoverage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.LanguageCoverage
 import com.bitsycore.cardbrowser.core.model.LocalizedText
 import com.bitsycore.cardbrowser.core.model.ProviderId
@@ -30,7 +29,7 @@ object TestCards {
 	/** Origins, exactly as `/sets` reports it. */
 	val ORIGINS = CardSet(
 		id = SourceId(PROVIDER, "69bc5bf6e195be3e561d1eb1"),
-		game = Game.RIFTBOUND,
+		game = TestGame.id,
 		code = "OGN",
 		name = "Origins",
 		cardCount = 352,
@@ -44,7 +43,7 @@ object TestCards {
 	/** A set whose name is not one word, so no Cardmarket slug can be derived without guessing. */
 	val PROVING_GROUNDS = CardSet(
 		id = SourceId(PROVIDER, "69bc5bf6e195be3e561d1eb2"),
-		game = Game.RIFTBOUND,
+		game = TestGame.id,
 		code = "OGS",
 		name = "Origins: Proving Grounds",
 		cardCount = 24,
@@ -55,7 +54,7 @@ object TestCards {
 	/** A set with no release date, to prove those sort last rather than crashing. */
 	val UNDATED = CardSet(
 		id = SourceId(PROVIDER, "undated"),
-		game = Game.RIFTBOUND,
+		game = TestGame.id,
 		code = "PR",
 		name = "Riftbound Promotional Cards",
 		cardCount = 13,
@@ -85,7 +84,7 @@ object TestCards {
 		imageUrl: String = "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/abc-744x1039.png?accountingTag=RB",
 	): CardPrinting = CardPrinting(
 		id = SourceId(PROVIDER, id),
-		game = Game.RIFTBOUND,
+		game = TestGame.id,
 		setId = SourceId(PROVIDER, "OGN"),
 		setCode = "OGN",
 		setName = "Origins",
@@ -109,7 +108,7 @@ object TestCards {
 			language = CardLanguage.ENGLISH,
 			accessibilityText = "Riftbound Unit: $name.",
 		),
-		attributes = CardAttributes(energy = energy, might = might, power = power),
+		attributes = CardAttributes(cost = energy, primary = might, secondary = power),
 		classification = CardClassification(
 			type = type,
 			supertype = "Champion",

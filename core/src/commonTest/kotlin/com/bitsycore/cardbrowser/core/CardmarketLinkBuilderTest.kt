@@ -3,7 +3,6 @@ package com.bitsycore.cardbrowser.core
 import com.bitsycore.cardbrowser.core.cardmarket.CardmarketLink
 import com.bitsycore.cardbrowser.core.cardmarket.CardmarketLinkBuilder
 import com.bitsycore.cardbrowser.core.model.ExternalIdKey
-import com.bitsycore.cardbrowser.core.model.Game
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -24,6 +23,7 @@ class CardmarketLinkBuilderTest {
 		// The verified shape:
 		// /en/Riftbound/Products/Singles/Origins?searchMode=v2&idCategory=1655&idExpansion=6286...
 		val vLink = CardmarketLinkBuilder.linkFor(
+			game = TestGame,
 			printing = TestCards.printing(name = "Kai'Sa - Survivor"),
 			set = TestCards.ORIGINS,
 		)
@@ -43,6 +43,7 @@ class CardmarketLinkBuilderTest {
 	fun `the hyphen separator is dropped and the apostrophe is percent-encoded`() {
 		// Riftcodex writes `Kai'Sa - Survivor`; the working Cardmarket search was `Kai%27sa+Survivor`.
 		val vLink = CardmarketLinkBuilder.linkFor(
+			game = TestGame,
 			printing = TestCards.printing(name = "Kai'Sa - Survivor"),
 			set = TestCards.ORIGINS,
 		)
@@ -57,6 +58,7 @@ class CardmarketLinkBuilderTest {
 		// "(Signature)" is Riftcodex's own label, not part of the printed name; searching for it
 		// returns nothing.
 		val vLink = CardmarketLinkBuilder.linkFor(
+			game = TestGame,
 			printing = TestCards.printing(name = "Volibear - Relentless Storm (Signature)"),
 			set = TestCards.ORIGINS,
 		)
@@ -79,6 +81,7 @@ class CardmarketLinkBuilderTest {
 		assertNull(CardmarketLinkBuilder.expansionSlug(TestCards.PROVING_GROUNDS))
 
 		val vLink = CardmarketLinkBuilder.linkFor(
+			game = TestGame,
 			printing = TestCards.printing(),
 			set = TestCards.PROVING_GROUNDS,
 		)
@@ -95,6 +98,7 @@ class CardmarketLinkBuilderTest {
 		val vVendetta = TestCards.ORIGINS.copy(name = "Vendetta", externalIds = emptyMap())
 
 		val vLink = CardmarketLinkBuilder.linkFor(
+			game = TestGame,
 			printing = TestCards.printing(name = "Renekton, Rage Fueled"),
 			set = vVendetta,
 		)
@@ -111,6 +115,7 @@ class CardmarketLinkBuilderTest {
 	@Test
 	fun `a card with no usable name falls back to the expansion listing`() {
 		val vLink = CardmarketLinkBuilder.linkFor(
+			game = TestGame,
 			printing = TestCards.printing(name = "   "),
 			set = TestCards.ORIGINS,
 		)
@@ -122,6 +127,7 @@ class CardmarketLinkBuilderTest {
 	@Test
 	fun `a provider-supplied product path wins over any search`() {
 		val vLink = CardmarketLinkBuilder.linkFor(
+			game = TestGame,
 			printing = TestCards.printing(
 				externalIds = mapOf(ExternalIdKey.CARDMARKET_PRODUCT to listOf("Origins/KaiSa-Survivor-V1-Epic")),
 			),
@@ -139,19 +145,19 @@ class CardmarketLinkBuilderTest {
 	fun `a game with no checked slug produces no link at all`() {
 		// A guessed game segment is a dead button, so these produce nothing rather than something
 		// that looks plausible.
-		assertNull(CardmarketLinkBuilder.gameSlug(Game.MAGIC))
-		assertNull(CardmarketLinkBuilder.gameSlug(Game.POKEMON))
-		assertNull(CardmarketLinkBuilder.gameSlug(Game.ONE_PIECE))
 
-		val vMagicCard = TestCards.printing().copy(game = Game.MAGIC)
-		assertNull(CardmarketLinkBuilder.linkFor(vMagicCard, TestCards.ORIGINS))
+		val vCard = TestCards.printing().copy(game = TestGameWithoutMarketplace.id)
+		assertNull(
+			CardmarketLinkBuilder.linkFor(vCard, TestCards.ORIGINS, TestGameWithoutMarketplace),
+		)
+		assertNull(CardmarketLinkBuilder.expansionLink(TestCards.ORIGINS, TestGameWithoutMarketplace))
 	}
 
 	@Test
 	fun `no buying preference is ever added to a URL`() {
 		// Seller country, minimum condition, language and finish presets are all unverified, and
 		// buying preferences are a separate concern from browsing ones. None may appear.
-		val vLink = CardmarketLinkBuilder.linkFor(TestCards.printing(), TestCards.ORIGINS)!!
+		val vLink = CardmarketLinkBuilder.linkFor(TestCards.printing(), TestCards.ORIGINS, TestGame)!!
 
 		listOf("idLanguage", "minCondition", "sellerCountry", "isFoil", "sellerType").forEach { vParam ->
 			assertFalse(vLink.url.contains(vParam), "URL must not carry an unverified $vParam")
@@ -162,7 +168,7 @@ class CardmarketLinkBuilderTest {
 	fun `the expansion page is distinct from the singles listing`() {
 		assertEquals(
 			"https://www.cardmarket.com/en/Riftbound/Expansions/Origins",
-			CardmarketLinkBuilder.expansionLink(TestCards.ORIGINS),
+			CardmarketLinkBuilder.expansionLink(TestCards.ORIGINS, TestGame),
 		)
 	}
 }

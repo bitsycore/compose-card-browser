@@ -8,7 +8,9 @@ import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.FinishCoverage
-import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.game.GameProfile
+import com.bitsycore.cardbrowser.core.game.GameVocabulary
+import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.model.LanguageCoverage
 import com.bitsycore.cardbrowser.core.model.LocalizedText
 import com.bitsycore.cardbrowser.core.model.ProviderId
@@ -74,7 +76,7 @@ class CardRepositoryTest {
 		private val mRemoteFilters: Set<CardFilterField> = setOf(CardFilterField.TEXT),
 		private val mDelayByPage: Map<Int, Long> = emptyMap(),
 		private val mMaxPageSize: Int = 2,
-	) : CardProvider {
+	) : CardProvider<TestGame> {
 
 		var listCardsCallCount = 0
 			private set
@@ -85,7 +87,6 @@ class CardRepositoryTest {
 		override val displayName = "Fake"
 
 		override val capabilities = ProviderCapabilities(
-			games = setOf(Game.RIFTBOUND),
 			filtering = FilterSupport(
 				remote = mRemoteFilters,
 				localOnly = setOf(CardFilterField.RARITY, CardFilterField.DOMAIN),
@@ -104,7 +105,9 @@ class CardRepositoryTest {
 			maxPageSize = mMaxPageSize,
 		)
 
-		override suspend fun listSets(game: Game, language: CardLanguage?): List<CardSet> {
+		override val game: TestGame = TestGame
+
+		override suspend fun listSets(language: CardLanguage?): List<CardSet> {
 			mSetsError?.let { throw it }
 			return mSets
 		}
@@ -143,7 +146,7 @@ class CardRepositoryTest {
 	): CardPrinting = CardPrinting(
 		id = SourceId(mProviderId, "card-$number$idSuffix"),
 		printingKey = printingKey,
-		game = Game.RIFTBOUND,
+		game = TestGame.id,
 		setId = mSetId,
 		setCode = "OGN",
 		setName = "Origins",
@@ -159,14 +162,14 @@ class CardRepositoryTest {
 			treatment = treatment,
 			language = CardLanguage.ENGLISH,
 		),
-		attributes = CardAttributes(energy = number),
+		attributes = CardAttributes(cost = number),
 		classification = CardClassification(type = "Unit", rarity = rarity, domains = listOf("Fury")),
 		languages = LanguageCoverage.ENGLISH_ONLY,
 		finishes = FinishCoverage(),
 	)
 
 	private fun repositoryFor(
-		provider: CardProvider,
+		provider: CardProvider<GameProfile>,
 		fileSystem: FakeFileSystem = FakeFileSystem(),
 	): CardRepository {
 		val vStorage = AppStorage(fileSystem, "/cache".toPath(), "/prefs".toPath()).also { it.prepare() }
@@ -179,7 +182,7 @@ class CardRepositoryTest {
 		return CardRepository(
 			mRegistry = ProviderRegistry(
 				providers = listOf(provider),
-				routes = listOf(ProviderRoute(Game.RIFTBOUND, provider.id)),
+				routes = listOf(ProviderRoute(TestGame.id, provider.id)),
 			),
 			mCache = vCache,
 			mClock = { mNow },
@@ -195,13 +198,13 @@ class CardRepositoryTest {
 			id = mProviderId,
 			mPages = emptyList(),
 			mSets = listOf(
-				CardSet(SourceId(mProviderId, "a"), Game.RIFTBOUND, "OGN", "Origins", 352, LocalDate(2025, 10, 31)),
-				CardSet(SourceId(mProviderId, "b"), Game.RIFTBOUND, "VEN", "Vendetta", 358, LocalDate(2026, 7, 31)),
-				CardSet(SourceId(mProviderId, "c"), Game.RIFTBOUND, "PR", "Promos", 13, null),
+				CardSet(SourceId(mProviderId, "a"), TestGame.id, "OGN", "Origins", 352, LocalDate(2025, 10, 31)),
+				CardSet(SourceId(mProviderId, "b"), TestGame.id, "VEN", "Vendetta", 358, LocalDate(2026, 7, 31)),
+				CardSet(SourceId(mProviderId, "c"), TestGame.id, "PR", "Promos", 13, null),
 			),
 		)
 
-		val vResult = repositoryFor(vProvider).setList(Game.RIFTBOUND).toList().last()
+		val vResult = repositoryFor(vProvider).setList(TestGame.id).toList().last()
 
 		assertEquals(listOf("VEN", "OGN", "PR"), vResult.value?.map { it.code })
 	}
@@ -210,14 +213,14 @@ class CardRepositoryTest {
 	fun `a set list survives a restart and is served without a request`() = runTest {
 		val vFileSystem = FakeFileSystem()
 		val vSets = listOf(
-			CardSet(SourceId(mProviderId, "a"), Game.RIFTBOUND, "OGN", "Origins", 352, LocalDate(2025, 10, 31)),
+			CardSet(SourceId(mProviderId, "a"), TestGame.id, "OGN", "Origins", 352, LocalDate(2025, 10, 31)),
 		)
 		repositoryFor(FakeProvider(mProviderId, emptyList(), mSets = vSets), vFileSystem)
-			.setList(Game.RIFTBOUND).toList()
+			.setList(TestGame.id).toList()
 
 		// A brand new repository over the same disk, and a provider that would throw if asked.
 		val vOffline = FakeProvider(mProviderId, emptyList(), mSetsError = ProviderError.Offline())
-		val vResult = repositoryFor(vOffline, vFileSystem).setList(Game.RIFTBOUND).toList()
+		val vResult = repositoryFor(vOffline, vFileSystem).setList(TestGame.id).toList()
 
 		assertEquals(1, vResult.size, "a fresh cached list should not trigger a network call")
 		assertEquals(DataOrigin.CACHE, vResult.single().origin)
@@ -229,15 +232,15 @@ class CardRepositoryTest {
 	fun `a failed refresh keeps the cached set list and reports the error beside it`() = runTest {
 		val vFileSystem = FakeFileSystem()
 		val vSets = listOf(
-			CardSet(SourceId(mProviderId, "a"), Game.RIFTBOUND, "OGN", "Origins", 352, LocalDate(2025, 10, 31)),
+			CardSet(SourceId(mProviderId, "a"), TestGame.id, "OGN", "Origins", 352, LocalDate(2025, 10, 31)),
 		)
 		repositoryFor(FakeProvider(mProviderId, emptyList(), mSets = vSets), vFileSystem)
-			.setList(Game.RIFTBOUND).toList()
+			.setList(TestGame.id).toList()
 
 		// Time moves past the TTL, so a refresh is attempted -- and fails.
 		mNow += CardRepository.DEFAULT_SET_LIST_TTL_MILLIS + 1
 		val vOffline = FakeProvider(mProviderId, emptyList(), mSetsError = ProviderError.Offline())
-		val vResult = repositoryFor(vOffline, vFileSystem).setList(Game.RIFTBOUND).toList()
+		val vResult = repositoryFor(vOffline, vFileSystem).setList(TestGame.id).toList()
 
 		val vFinal = vResult.last()
 		assertNotNull(vFinal.value, "a failed refresh must not erase valid cached data")
@@ -250,7 +253,7 @@ class CardRepositoryTest {
 	fun `a first load with no cache and no network reports the failure with no value`() = runTest {
 		val vOffline = FakeProvider(mProviderId, emptyList(), mSetsError = ProviderError.Offline())
 
-		val vResult = repositoryFor(vOffline).setList(Game.RIFTBOUND).toList().last()
+		val vResult = repositoryFor(vOffline).setList(TestGame.id).toList().last()
 
 		assertNull(vResult.value)
 		assertIs<ProviderError.Offline>(vResult.error)
@@ -261,7 +264,7 @@ class CardRepositoryTest {
 	fun `a game with no route fails rather than silently using another provider`() = runTest {
 		val vRegistry = ProviderRegistry(
 			providers = listOf(FakeProvider(mProviderId, emptyList())),
-			routes = listOf(ProviderRoute(Game.RIFTBOUND, mProviderId)),
+			routes = listOf(ProviderRoute(TestGame.id, mProviderId)),
 		)
 		val vStorage = AppStorage(FakeFileSystem(), "/cache".toPath(), "/prefs".toPath()).also { it.prepare() }
 		val vRepository = CardRepository(
@@ -270,7 +273,7 @@ class CardRepositoryTest {
 			mClock = { mNow },
 		)
 
-		val vResult = vRepository.setList(Game.POKEMON).toList().last()
+		val vResult = vRepository.setList(GameId("not-routed")).toList().last()
 
 		assertNull(vResult.value)
 		assertNotNull(vResult.error)
@@ -288,7 +291,7 @@ class CardRepositoryTest {
 		)
 
 		val vResult = repositoryFor(vProvider)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery(), knownSetSize = 5)
+			.cards(mSetId, TestGame.id, CardQuery(), knownSetSize = 5)
 			.toList().last()
 
 		val vCards = assertNotNull(vResult.value)
@@ -309,7 +312,7 @@ class CardRepositoryTest {
 		)
 
 		val vResult = repositoryFor(vProvider)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery(), knownSetSize = 5)
+			.cards(mSetId, TestGame.id, CardQuery(), knownSetSize = 5)
 			.toList().last()
 
 		val vCards = assertNotNull(vResult.value)
@@ -333,7 +336,7 @@ class CardRepositoryTest {
 		)
 
 		val vResult = repositoryFor(vProvider)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery(rarities = setOf("Epic")), knownSetSize = 5)
+			.cards(mSetId, TestGame.id, CardQuery(rarities = setOf("Epic")), knownSetSize = 5)
 			.toList().last()
 
 		val vCards = assertNotNull(vResult.value)
@@ -348,7 +351,7 @@ class CardRepositoryTest {
 		val vProvider = FakeProvider(mProviderId, mPages = listOf(listOf(card(1))), mFailFromPage = 1)
 
 		val vResult = repositoryFor(vProvider)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery())
+			.cards(mSetId, TestGame.id, CardQuery())
 			.toList().last()
 
 		assertNull(vResult.value)
@@ -369,7 +372,7 @@ class CardRepositoryTest {
 		)
 
 		val vResult = repositoryFor(vProvider)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery(rarities = setOf("Epic")))
+			.cards(mSetId, TestGame.id, CardQuery(rarities = setOf("Epic")))
 			.toList().last()
 
 		// The only Epic is on the last page.
@@ -382,7 +385,7 @@ class CardRepositoryTest {
 		// Regression. A wrong `set_id` produced 200 OK, zero cards and `hasMore` false, which paged
 		// "successfully" to nothing and was then cached as a complete set -- so the empty set was
 		// served from disk on every later launch. The provider's own total is the cross-check.
-		val vProvider = object : CardProvider by FakeProvider(mProviderId, emptyList()) {
+		val vProvider = object : CardProvider<TestGame> by FakeProvider(mProviderId, emptyList()) {
 			override suspend fun listCards(request: CardPageRequest) = CardPage(
 				cards = emptyList(),
 				page = 1,
@@ -393,7 +396,7 @@ class CardRepositoryTest {
 		}
 
 		val vResult = repositoryFor(vProvider)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery(), knownSetSize = 352)
+			.cards(mSetId, TestGame.id, CardQuery(), knownSetSize = 352)
 			.toList().last()
 
 		val vCards = assertNotNull(vResult.value)
@@ -412,7 +415,7 @@ class CardRepositoryTest {
 		)
 
 		val vEmissions = repositoryFor(vProvider)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery(), knownSetSize = 5)
+			.cards(mSetId, TestGame.id, CardQuery(), knownSetSize = 5)
 			.toList()
 
 		assertTrue(vEmissions.size >= 2, "expected at least a partial paint then the complete set")
@@ -433,7 +436,7 @@ class CardRepositoryTest {
 		val vProvider = FakeProvider(mProviderId, mPages = listOf(listOf(card(1), card(2))))
 
 		val vEmissions = repositoryFor(vProvider)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery(), knownSetSize = 2)
+			.cards(mSetId, TestGame.id, CardQuery(), knownSetSize = 2)
 			.toList()
 
 		assertEquals(1, vEmissions.size)
@@ -451,7 +454,7 @@ class CardRepositoryTest {
 		)
 
 		val vResult = repositoryFor(vProvider)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery())
+			.cards(mSetId, TestGame.id, CardQuery())
 			.toList().last()
 
 		assertEquals(
@@ -472,7 +475,7 @@ class CardRepositoryTest {
 		)
 
 		val vEmissions = repositoryFor(vProvider)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery(), knownSetSize = 30)
+			.cards(mSetId, TestGame.id, CardQuery(), knownSetSize = 30)
 			.toList()
 
 		assertEquals(
@@ -496,7 +499,7 @@ class CardRepositoryTest {
 			mPages = listOf(listOf(card(1), card(2)), listOf(card(3))),
 		)
 
-		repositoryFor(vProvider).cards(mSetId, Game.RIFTBOUND, CardQuery()).toList()
+		repositoryFor(vProvider).cards(mSetId, TestGame.id, CardQuery()).toList()
 
 		assertTrue(
 			vProvider.requestedPageSizes.all { it == 2 },
@@ -516,7 +519,7 @@ class CardRepositoryTest {
 		)
 
 		val vCounts = repositoryFor(vProvider)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery(), knownSetSize = 250)
+			.cards(mSetId, TestGame.id, CardQuery(), knownSetSize = 250)
 			.toList()
 			.map { assertNotNull(it.value).cards.size }
 
@@ -543,7 +546,7 @@ class CardRepositoryTest {
 		)
 
 		val vResult = repositoryFor(vProvider)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery())
+			.cards(mSetId, TestGame.id, CardQuery())
 			.toList().last()
 
 		val vCards = assertNotNull(vResult.value)
@@ -561,7 +564,7 @@ class CardRepositoryTest {
 		)
 
 		val vResult = repositoryFor(vProvider)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery())
+			.cards(mSetId, TestGame.id, CardQuery())
 			.toList().last()
 
 		assertEquals(2, assertNotNull(vResult.value).cards.size)
@@ -588,7 +591,7 @@ class CardRepositoryTest {
 		)
 
 		val vResult = repositoryFor(vProvider)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery())
+			.cards(mSetId, TestGame.id, CardQuery())
 			.toList().last()
 
 		val vCard = assertNotNull(vResult.value).cards.single()
@@ -603,12 +606,12 @@ class CardRepositoryTest {
 		val vFileSystem = FakeFileSystem()
 		val vPages = listOf(listOf(card(1), card(2)), listOf(card(3)))
 		repositoryFor(FakeProvider(mProviderId, vPages), vFileSystem)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery()).toList()
+			.cards(mSetId, TestGame.id, CardQuery()).toList()
 
 		// Past the TTL, so a refresh runs -- but the cached copy must be emitted first.
 		mNow += CardRepository.DEFAULT_CARDS_TTL_MILLIS + 1
 		val vEmissions = repositoryFor(FakeProvider(mProviderId, vPages), vFileSystem)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery()).toList()
+			.cards(mSetId, TestGame.id, CardQuery()).toList()
 
 		assertEquals(2, vEmissions.size)
 		assertEquals(DataOrigin.CACHE, vEmissions[0].origin)
@@ -622,12 +625,12 @@ class CardRepositoryTest {
 		val vFileSystem = FakeFileSystem()
 		val vPages = listOf(listOf(card(1, "Epic"), card(2, "Common")), listOf(card(3, "Epic")))
 		repositoryFor(FakeProvider(mProviderId, vPages), vFileSystem)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery()).toList()
+			.cards(mSetId, TestGame.id, CardQuery()).toList()
 
 		// Same clock, so the cache is still fresh. Filtering must be instant and offline.
 		val vProvider = FakeProvider(mProviderId, vPages)
 		val vResult = repositoryFor(vProvider, vFileSystem)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery(rarities = setOf("Epic")))
+			.cards(mSetId, TestGame.id, CardQuery(rarities = setOf("Epic")))
 			.toList()
 
 		assertEquals(1, vResult.size)
@@ -640,13 +643,13 @@ class CardRepositoryTest {
 		val vFileSystem = FakeFileSystem()
 		val vPages = listOf(listOf(card(1), card(2)), listOf(card(3)))
 		repositoryFor(FakeProvider(mProviderId, vPages), vFileSystem)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery()).toList()
+			.cards(mSetId, TestGame.id, CardQuery()).toList()
 
 		// Later, past the TTL, with no network at all.
 		mNow += CardRepository.DEFAULT_CARDS_TTL_MILLIS + 1
 		val vOffline = FakeProvider(mProviderId, emptyList(), mFailFromPage = 1)
 		val vEmissions = repositoryFor(vOffline, vFileSystem)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery()).toList()
+			.cards(mSetId, TestGame.id, CardQuery()).toList()
 
 		val vFinal = vEmissions.last()
 		assertEquals(3, vFinal.value?.cards?.size, "cached cards must survive a failed refresh")
@@ -658,11 +661,11 @@ class CardRepositoryTest {
 		val vFileSystem = FakeFileSystem()
 		val vPages = listOf(listOf(card(1), card(2)), listOf(card(3)))
 		repositoryFor(FakeProvider(mProviderId, vPages), vFileSystem)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery()).toList()
+			.cards(mSetId, TestGame.id, CardQuery()).toList()
 
 		val vProvider = FakeProvider(mProviderId, vPages)
 		val vDetail = repositoryFor(vProvider, vFileSystem)
-			.cardDetail(SourceId(mProviderId, "card-2"), Game.RIFTBOUND, mSetId)
+			.cardDetail(SourceId(mProviderId, "card-2"), TestGame.id, mSetId)
 
 		assertEquals("Card 2", vDetail.value?.displayName)
 		assertEquals(DataOrigin.CACHE, vDetail.origin)
@@ -679,18 +682,18 @@ class CardRepositoryTest {
 		// A partial fetch must offer no facets: a rarity hiding on an unfetched page would be
 		// missing from the filter sheet with no way for the user to tell.
 		repositoryFor(FakeProvider(mProviderId, vPages, mFailFromPage = 2), vFileSystem)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery()).toList()
+			.cards(mSetId, TestGame.id, CardQuery()).toList()
 		assertTrue(
 			repositoryFor(FakeProvider(mProviderId, vPages), vFileSystem)
-				.facetsFor(mSetId, Game.RIFTBOUND).isEmpty,
+				.facetsFor(mSetId, TestGame.id).isEmpty,
 		)
 
 		// Once complete, every rarity in the set is offered.
 		val vCompleteFileSystem = FakeFileSystem()
 		repositoryFor(FakeProvider(mProviderId, vPages), vCompleteFileSystem)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery()).toList()
+			.cards(mSetId, TestGame.id, CardQuery()).toList()
 		val vFacets = repositoryFor(FakeProvider(mProviderId, vPages), vCompleteFileSystem)
-			.facetsFor(mSetId, Game.RIFTBOUND)
+			.facetsFor(mSetId, TestGame.id)
 
 		assertEquals(listOf("Common", "Epic", "Legendary"), vFacets.rarities)
 	}
@@ -721,7 +724,7 @@ class CardRepositoryTest {
 		)
 
 		val vFirst = repositoryFor(vProvider, vFileSystem)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery())
+			.cards(mSetId, TestGame.id, CardQuery())
 			.toList()
 			.last()
 		assertEquals(2, vFirst.value?.cards?.size, "The first load must collapse the duplicate")
@@ -730,7 +733,7 @@ class CardRepositoryTest {
 		// only possible source is the cache written above.
 		val vOffline = FakeProvider(mProviderId, emptyList(), mSetsError = ProviderError.Offline())
 		val vSecond = repositoryFor(vOffline, vFileSystem)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery())
+			.cards(mSetId, TestGame.id, CardQuery())
 			.toList()
 			.first()
 
@@ -750,10 +753,28 @@ class CardRepositoryTest {
 		)
 
 		val vResult = repositoryFor(vProvider)
-			.cards(mSetId, Game.RIFTBOUND, CardQuery())
+			.cards(mSetId, TestGame.id, CardQuery())
 			.toList()
 			.last()
 
 		assertEquals(2, vResult.value?.cards?.size, "Same number, different printings: two cards")
 	}
+}
+
+/**
+ * A game invented for these tests.
+ *
+ * `:data` sits below the `:games:*` modules, so it cannot depend on one -- and a repository test
+ * that only passed because Riftbound's ladder happened to suit it would not be testing the
+ * repository. The profile is the contract; this is an implementation of it.
+ */
+private object TestGame : GameProfile {
+
+	override val id: GameId = GameId("test-game")
+
+	override val displayName: String = "Test Game"
+
+	override val vocabulary: GameVocabulary = GameVocabulary(domain = "Domain", cost = "Energy")
+
+	override val rarityLadder: List<String> = listOf("Common", "Uncommon", "Rare", "Epic")
 }

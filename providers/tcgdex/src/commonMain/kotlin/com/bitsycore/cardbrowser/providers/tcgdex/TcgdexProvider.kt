@@ -3,7 +3,6 @@ package com.bitsycore.cardbrowser.providers.tcgdex
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.Attribution
@@ -17,6 +16,7 @@ import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
 import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
 import com.bitsycore.cardbrowser.data.net.mapProviderErrors
+import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ClientRequestException
@@ -32,7 +32,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.serialization.Serializable
 
 /**
- * The TCGdex adapter, serving [Game.POKEMON].
+ * The TCGdex adapter, serving [PokemonGame].
  *
  * TCGdex (https://tcgdex.dev) is an open, community-maintained Pokémon TCG database. No key, no
  * auth, no published rate limit.
@@ -62,20 +62,21 @@ import kotlinx.serialization.Serializable
  * - **Images**: a base URL with quality and extension appended. WebP at 19 KB (`low`) and 63 KB
  *   (`high`) against 55 KB and 257 KB for the PNG equivalents, so WebP throughout.
  * - **Rarity**: over a hundred distinct strings, varying by era *and* by locale. No ladder is
- *   defined for Pokémon in `RarityLadder` for exactly that reason.
+ *   defined for Pokémon in `PokemonGame` for exactly that reason.
  * - **Cross-set search**: `GET /{lang}/cards?name=like:{text}`, returning brief cards.
  */
 class TcgdexProvider(
 	private val mClient: HttpClient,
 	private val mBaseUrl: String = DEFAULT_BASE_URL,
-) : CardProvider {
+) : CardProvider<PokemonGame> {
 
 	override val id: ProviderId = PROVIDER_ID
 
 	override val displayName: String = "TCGdex"
 
+	override val game: PokemonGame = PokemonGame
+
 	override val capabilities: ProviderCapabilities = ProviderCapabilities(
-		games = setOf(Game.POKEMON),
 		filtering = FilterSupport(
 			// A set arrives whole in one request, so filtering it locally costs nothing and behaves
 			// identically for every field. Declaring TEXT as remote would send a second request to
@@ -88,7 +89,7 @@ class TcgdexProvider(
 				CardFilterField.RARITY,
 				CardFilterField.FINISH,
 			),
-			// ENERGY_COST is in neither: a Pokémon card's cost is per attack, not one number on the
+			// COST is in neither: a Pokémon card's cost is per attack, not one number on the
 			// card, so there is nothing honest to filter on. ARTWORK_TREATMENT likewise -- TCGdex
 			// issues one record per card and states no variant relationship.
 		),
@@ -136,8 +137,7 @@ class TcgdexProvider(
 	 *
 	 * A failed date request is not a failed set list. The catalogue is returned regardless.
 	 */
-	override suspend fun listSets(game: Game, language: CardLanguage?): List<CardSet> {
-		require(game == Game.POKEMON) { "TCGdex serves Pokémon only, not $game" }
+	override suspend fun listSets(language: CardLanguage?): List<CardSet> {
 		val vLocale = localeFor(language)
 		return mapProviderErrors("TCGdex.listSets") {
 			val vSets: List<TcgdexSetBriefDto> = mClient
@@ -233,7 +233,6 @@ class TcgdexProvider(
 	 * resolving 60 results to 60 set names would be 60 requests to fill in a subtitle.
 	 */
 	override suspend fun searchAllSets(request: CardSearchRequest): CardPage {
-		require(request.game == Game.POKEMON) { "TCGdex serves Pokémon only, not ${request.game}" }
 		val vLocale = localeFor(request.language)
 		val vLanguage = languageFor(request.language)
 		return mapProviderErrors("TCGdex.searchAllSets") {
@@ -255,7 +254,7 @@ class TcgdexProvider(
 					// the search row shows as-is rather than inventing a prettier one.
 					set = CardSet(
 						id = SourceId(id, vSetLocal),
-						game = Game.POKEMON,
+						game = PokemonGame.id,
 						code = vSetLocal.uppercase(),
 						name = vSetLocal,
 						cardCount = null,

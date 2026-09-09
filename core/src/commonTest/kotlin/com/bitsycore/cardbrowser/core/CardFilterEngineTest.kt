@@ -91,7 +91,7 @@ class CardFilterEngineTest {
 
 	@Test
 	fun `a card with no energy is excluded by an energy filter rather than counted as zero`() {
-		val vResult = CardFilterEngine.apply(mAll, CardQuery(energyCosts = setOf(5)))
+		val vResult = CardFilterEngine.apply(mAll, CardQuery(costs = setOf(5)))
 
 		assertEquals(setOf("a", "c"), vResult.map { it.id.local }.toSet())
 		assertFalse(vResult.contains(mEpee))
@@ -172,7 +172,7 @@ class CardFilterEngineTest {
 
 	@Test
 	fun `sorting by energy puts cards with no cost last -- not first`() {
-		val vResult = CardFilterEngine.apply(mAll, CardQuery(sortBy = CardSortField.ENERGY_COST))
+		val vResult = CardFilterEngine.apply(mAll, CardQuery(sortBy = CardSortField.COST))
 
 		// A card with no energy is not a zero-cost card.
 		assertEquals("11", vResult.last().collectorNumber)
@@ -196,7 +196,11 @@ class CardFilterEngineTest {
 		val vCards = listOf("Showcase", "Common", "Epic", "Uncommon", "Rare")
 			.mapIndexed { vIndex, vRarity -> TestCards.printing(id = "r$vIndex", rarity = vRarity) }
 
-		val vSorted = CardFilterEngine.apply(vCards, CardQuery(sortBy = CardSortField.RARITY))
+		val vSorted = CardFilterEngine.apply(
+vCards,
+CardQuery(sortBy = CardSortField.RARITY),
+TestGame.rarityLadder,
+)
 
 		assertEquals(
 			listOf("Common", "Uncommon", "Rare", "Epic", "Showcase"),
@@ -209,7 +213,11 @@ class CardFilterEngineTest {
 		val vCards = listOf("Epic", "Mythic Ultra", "Common")
 			.mapIndexed { vIndex, vRarity -> TestCards.printing(id = "r$vIndex", rarity = vRarity) }
 
-		val vSorted = CardFilterEngine.apply(vCards, CardQuery(sortBy = CardSortField.RARITY))
+		val vSorted = CardFilterEngine.apply(
+vCards,
+CardQuery(sortBy = CardSortField.RARITY),
+TestGame.rarityLadder,
+)
 
 		assertEquals(
 			listOf("Common", "Epic", "Mythic Ultra"),
@@ -237,7 +245,7 @@ class CardFilterEngineTest {
 
 		assertEquals(
 			listOf("Common", "Epic", "Showcase"),
-			CardFilterEngine.facetsOf(vCards).rarities,
+			CardFilterEngine.facetsOf(vCards, TestGame.rarityLadder).rarities,
 		)
 	}
 
@@ -246,13 +254,13 @@ class CardFilterEngineTest {
 
 	@Test
 	fun `facets list only what is present -- sorted`() {
-		val vFacets = CardFilterEngine.facetsOf(mAll)
+		val vFacets = CardFilterEngine.facetsOf(mAll, TestGame.rarityLadder)
 
 		assertEquals(listOf("Fury", "Order"), vFacets.domains)
 		assertEquals(listOf("Gear", "Spell", "Unit"), vFacets.cardTypes)
 		// Ladder order: Common, Uncommon, Rare, Epic, Showcase -- so Rare precedes Epic.
 		assertEquals(listOf("Common", "Rare", "Epic"), vFacets.rarities)
-		assertEquals(listOf(3, 5), vFacets.energyCosts)
+		assertEquals(listOf(3, 5), vFacets.costs)
 		assertEquals(
 			listOf(ArtworkTreatment.STANDARD, ArtworkTreatment.ALTERNATE_ART),
 			vFacets.treatments,

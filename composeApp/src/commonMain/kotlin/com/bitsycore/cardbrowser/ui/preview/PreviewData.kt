@@ -10,12 +10,13 @@ import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.ExternalIdKey
 import com.bitsycore.cardbrowser.core.model.FinishCoverage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.LanguageCoverage
 import com.bitsycore.cardbrowser.core.model.LocalizedText
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SetSymbol
 import com.bitsycore.cardbrowser.core.model.SourceId
+import com.bitsycore.cardbrowser.games.magic.MagicGame
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.ui.theme.CardBrowserTheme
 import kotlinx.datetime.LocalDate
 
@@ -38,7 +39,7 @@ object PreviewData {
 
 	val ORIGINS = CardSet(
 		id = SourceId(PROVIDER, "OGN"),
-		game = Game.RIFTBOUND,
+		game = RiftboundGame.id,
 		code = "OGN",
 		name = "Origins",
 		cardCount = 352,
@@ -47,19 +48,19 @@ object PreviewData {
 	)
 
 	val SETS: List<CardSet> = listOf(
-		CardSet(SourceId(PROVIDER, "VEN"), Game.RIFTBOUND, "VEN", "Vendetta", 358, LocalDate(2026, 7, 31)),
-		CardSet(SourceId(PROVIDER, "UNL"), Game.RIFTBOUND, "UNL", "Unleashed", 280, LocalDate(2026, 5, 8)),
-		CardSet(SourceId(PROVIDER, "SFD"), Game.RIFTBOUND, "SFD", "Spiritforged", 288, LocalDate(2026, 2, 13)),
+		CardSet(SourceId(PROVIDER, "VEN"), RiftboundGame.id, "VEN", "Vendetta", 358, LocalDate(2026, 7, 31)),
+		CardSet(SourceId(PROVIDER, "UNL"), RiftboundGame.id, "UNL", "Unleashed", 280, LocalDate(2026, 5, 8)),
+		CardSet(SourceId(PROVIDER, "SFD"), RiftboundGame.id, "SFD", "Spiritforged", 288, LocalDate(2026, 2, 13)),
 		ORIGINS,
 		CardSet(
 			id = SourceId(PROVIDER, "OGS"),
-			game = Game.RIFTBOUND,
+			game = RiftboundGame.id,
 			code = "OGS",
 			name = "Origins: Proving Grounds",
 			cardCount = 24,
 			releaseDate = LocalDate(2025, 10, 31),
 		),
-		CardSet(SourceId(PROVIDER, "PR"), Game.RIFTBOUND, "PR", "Riftbound Promotional Cards", 13, null),
+		CardSet(SourceId(PROVIDER, "PR"), RiftboundGame.id, "PR", "Riftbound Promotional Cards", 13, null),
 	)
 
 	/**
@@ -71,7 +72,7 @@ object PreviewData {
 	 */
 	val SET_WITH_SYMBOL: CardSet = CardSet(
 		id = SourceId(ProviderId("scryfall"), "blb"),
-		game = Game.MAGIC,
+		game = MagicGame.id,
 		code = "BLB",
 		name = "Bloomburrow",
 		cardCount = 398,
@@ -91,7 +92,7 @@ object PreviewData {
 	): CardPrinting = CardPrinting(
 		id = SourceId(PROVIDER, "card-$number"),
 		printingKey = "ogn-$number-298",
-		game = Game.RIFTBOUND,
+		game = RiftboundGame.id,
 		setId = SourceId(PROVIDER, "OGN"),
 		setCode = "OGN",
 		setName = "Origins",
@@ -118,7 +119,7 @@ object PreviewData {
 			language = CardLanguage.ENGLISH,
 			accessibilityText = "Riftbound Unit: $name.",
 		),
-		attributes = CardAttributes(energy = energy, might = 4, power = 1),
+		attributes = CardAttributes(cost = energy, primary = 4, secondary = 1),
 		classification = CardClassification(
 			type = type,
 			supertype = "Champion",

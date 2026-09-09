@@ -1,9 +1,9 @@
 package com.bitsycore.cardbrowser.ui.detail
 
 import androidx.lifecycle.viewModelScope
+import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
@@ -70,9 +70,12 @@ class CardDetailViewModel(
 		val vSetId = intent.setId?.let(SourceId::parse)
 
 		// The game comes from the card's own id. Every id here is source-qualified, so it names the
-		// provider that issued it, and the routing table turns that into a game -- which is why no
-		// game argument travels through navigation alongside the card id.
-		val vGame = mRegistry.gameFor(vCardId.provider) ?: Game.RIFTBOUND
+		// provider that issued it, and that provider names its game -- which is why no game argument
+		// travels through navigation alongside the card id.
+		//
+		// A card id naming a provider this build does not register has no game, and so nothing to
+		// load. Returning beats guessing at one, which is what the old `?: Game.RIFTBOUND` did.
+		val vGame = mRegistry.gameFor(vCardId.provider) ?: return
 
 		val vCards = siblingsFor(intent.setId, vSetId, vCardId, vGame)
 		val vIndex = vCards.indexOfFirst { it.id == vCardId }
@@ -84,13 +87,13 @@ class CardDetailViewModel(
 			vCards to vIndex
 		} else {
 			val vSingle = mRepository
-				.cardDetail(id = vCardId, game = vGame, setId = vSetId)
+				.cardDetail(id = vCardId, game = vGame.id, setId = vSetId)
 				.value
 			if (vSingle != null) listOf(vSingle) to 0 else emptyList<CardPrinting>() to 0
 		}
 
 		val vSet = if (vSetId != null) {
-			mRepository.setList(vGame).first().value?.firstOrNull { it.id == vSetId }
+			mRepository.setList(vGame.id).first().value?.firstOrNull { it.id == vSetId }
 		} else {
 			null
 		}
@@ -112,6 +115,7 @@ class CardDetailViewModel(
 				providerStatesFinishes = vProvider?.capabilities?.data?.finishes ?: false,
 				providerLanguages = vProvider?.capabilities?.data?.languages.orEmpty(),
 				providerDisplayName = vProvider?.displayName,
+				game = vGame,
 			),
 		)
 		mSession.focus(stateFlow.value.card?.id?.qualified)
@@ -176,13 +180,13 @@ class CardDetailViewModel(
 		rawSetId: String?,
 		setId: SourceId?,
 		cardId: SourceId,
-		game: Game,
+		game: GameProfile,
 	): List<CardPrinting> {
 		val vFromSession = mSession.cardsFor(rawSetId)
 		if (vFromSession.any { it.id == cardId }) return vFromSession
 		if (setId == null) return emptyList()
 		return mRepository
-			.cards(setId = setId, game = game, query = CardQuery())
+			.cards(setId = setId, game = game.id, query = CardQuery())
 			.first()
 			.value
 			?.cards

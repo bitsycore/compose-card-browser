@@ -2,8 +2,8 @@ package com.bitsycore.cardbrowser.ui.cards
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,9 +26,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.core.provider.CardQuery
-import com.bitsycore.cardbrowser.core.model.GameVocabulary
 import com.bitsycore.cardbrowser.core.provider.SortDirection
 import com.bitsycore.cardbrowser.ui.cards.CardGridContract.toggle
 
@@ -58,7 +58,7 @@ fun FilterSheet(
 			.padding(horizontal = 20.dp)
 			.padding(bottom = 32.dp),
 	) {
-		val vVocabulary = GameVocabulary.of(state.game)
+		val vVocabulary = (state.game?.vocabulary ?: GameVocabulary())
 
 		Row(verticalAlignment = Alignment.CenterVertically) {
 			Text("Filters", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
@@ -161,12 +161,12 @@ fun FilterSheet(
 			}
 		}
 
-		if (CardFilterField.ENERGY_COST in state.supportedFilters && state.facets.energyCosts.isNotEmpty()) {
-			Section(vVocabulary.energy ?: "Cost") {
-				state.facets.energyCosts.forEach { vCost ->
+		if (CardFilterField.COST in state.supportedFilters && state.facets.costs.isNotEmpty()) {
+			Section(vVocabulary.cost ?: "Cost") {
+				state.facets.costs.forEach { vCost ->
 					FilterChip(
-						selected = vCost in state.query.energyCosts,
-						onClick = { onQueryChanged(state.query.copy(energyCosts = state.query.energyCosts.toggle(vCost))) },
+						selected = vCost in state.query.costs,
+						onClick = { onQueryChanged(state.query.copy(costs = state.query.costs.toggle(vCost))) },
 						label = { Text("$vCost") },
 					)
 				}
@@ -265,9 +265,9 @@ fun ActiveFilterChips(
 		vQuery.rarities.forEach { vValue ->
 			RemovableChip(vValue) { onQueryChanged(vQuery.copy(rarities = vQuery.rarities - vValue)) }
 		}
-		vQuery.energyCosts.forEach { vValue ->
+		vQuery.costs.forEach { vValue ->
 			RemovableChip("$vValue energy") {
-				onQueryChanged(vQuery.copy(energyCosts = vQuery.energyCosts - vValue))
+				onQueryChanged(vQuery.copy(costs = vQuery.costs - vValue))
 			}
 		}
 		vQuery.treatments.forEach { vValue ->

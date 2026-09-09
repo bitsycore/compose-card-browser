@@ -1,9 +1,9 @@
 package com.bitsycore.cardbrowser.core.provider
 
+import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
 
@@ -18,10 +18,22 @@ import com.bitsycore.cardbrowser.core.model.SourceId
  * exposes upward is this interface and a [capabilities] description. Adding a provider is an
  * implementation of this, a Koin registration and a routing entry -- see docs/ARCHITECTURE.md.
  *
+ * ## The game is in the type
+ *
+ * `class RiftcodexProvider : CardProvider<RiftboundGame>` -- an adapter names the game it serves in
+ * its own declaration, and [game] hands the profile back. Every adapter in this project serves
+ * exactly one game, which used to be expressed by a `Set<Game>` in the capabilities plus a
+ * `require(game == RIFTBOUND)` guard at the top of every method: around twenty runtime checks
+ * restating something already true at compile time. Those are gone, along with the `game` parameter
+ * they were checking.
+ *
+ * [G] is covariant, so a `CardProvider<RiftboundGame>` *is* a `CardProvider<GameProfile>` and the
+ * registry can hold them all in one list without a star projection anywhere.
+ *
  * Every method suspends and must be cancellable. Cancellation is not a failure: implementations let
  * `CancellationException` propagate and never wrap it in a [ProviderError].
  */
-interface CardProvider {
+interface CardProvider<out G : GameProfile> {
 
 	/** Stable and never changed once shipped; it is baked into every id and every cache file. */
 	val id: ProviderId
@@ -29,17 +41,26 @@ interface CardProvider {
 	/** For the UI and for attribution notices. */
 	val displayName: String
 
+	/**
+	 * The game this adapter serves, and everything the app knows about it.
+	 *
+	 * The one authority on the pairing. The routing table says which provider answers for a game;
+	 * this says which game a provider is for, and `ProviderRegistry` checks the two agree at
+	 * startup rather than letting them drift.
+	 */
+	val game: G
+
 	/** What this provider can supply. Provider-wide -- an individual set may still offer less. */
 	val capabilities: ProviderCapabilities
 
 	/**
-	 * Every set this provider serves for [game], newest first where release dates are known.
+	 * Every set this provider serves, newest first where release dates are known.
 	 *
 	 * Not paginated: set catalogues are small (Riftbound has eight) and the set list wants them
 	 * all to sort and search over. A provider whose catalogue is large enough to need paging should
 	 * page internally and still return the whole list.
 	 */
-	suspend fun listSets(game: Game, language: CardLanguage? = null): List<CardSet>
+	suspend fun listSets(language: CardLanguage? = null): List<CardSet>
 
 	/**
 	 * One page of the cards in [request]'s set.
@@ -95,9 +116,10 @@ interface CardProvider {
  * This describes the *source*, not any particular set or printing. A provider that can carry French
  * says so here; whether a given printing exists in French is [com.bitsycore.cardbrowser.core.model.LanguageCoverage]
  * on that printing. Capability is the ceiling, coverage is the fact.
+ *
+ * Which *game* a provider serves is not here. That is `CardProvider.game`, and it is in the type.
  */
 data class ProviderCapabilities(
-	val games: Set<Game>,
 	val filtering: FilterSupport,
 	val sorting: Set<CardSortField>,
 	val data: DataCapabilities,
@@ -174,7 +196,9 @@ enum class CardFilterField {
 	DOMAIN,
 	CARD_TYPE,
 	RARITY,
-	ENERGY_COST,
+
+	/** The single play cost. `GameVocabulary.cost` is what each game calls it. */
+	COST,
 	ARTWORK_TREATMENT,
 	FINISH,
 	LANGUAGE,
@@ -185,7 +209,7 @@ enum class CardSortField {
 	COLLECTOR_NUMBER,
 	NAME,
 	RARITY,
-	ENERGY_COST,
+	COST,
 }
 
 /** Ascending or descending. */
@@ -205,7 +229,7 @@ data class CardQuery(
 	val domains: Set<String> = emptySet(),
 	val cardTypes: Set<String> = emptySet(),
 	val rarities: Set<String> = emptySet(),
-	val energyCosts: Set<Int> = emptySet(),
+	val costs: Set<Int> = emptySet(),
 	val treatments: Set<com.bitsycore.cardbrowser.core.model.ArtworkTreatment> = emptySet(),
 	val finishes: Set<com.bitsycore.cardbrowser.core.model.Finish> = emptySet(),
 	val languages: Set<CardLanguage> = emptySet(),
@@ -219,7 +243,7 @@ data class CardQuery(
 		if (domains.isNotEmpty()) add(CardFilterField.DOMAIN)
 		if (cardTypes.isNotEmpty()) add(CardFilterField.CARD_TYPE)
 		if (rarities.isNotEmpty()) add(CardFilterField.RARITY)
-		if (energyCosts.isNotEmpty()) add(CardFilterField.ENERGY_COST)
+		if (costs.isNotEmpty()) add(CardFilterField.COST)
 		if (treatments.isNotEmpty()) add(CardFilterField.ARTWORK_TREATMENT)
 		if (finishes.isNotEmpty()) add(CardFilterField.FINISH)
 		if (languages.isNotEmpty()) add(CardFilterField.LANGUAGE)
@@ -261,12 +285,13 @@ data class CardPageRequest(
  * same operation and conflating them is how a cross-set result ends up cached under a set key. A
  * set page is complete-able and cacheable; a search is neither, and nothing here pretends otherwise.
  *
- * Only [text] is carried. The structured filters exist to narrow a set the app already holds
- * whole, and applying them to a page of results drawn from a hundred sets would produce a list the
- * user would read as "every Fury card in the game" when it is nothing of the sort.
+ * No game is carried: the provider being asked serves exactly one, and it is in that provider's
+ * type. Only [text] is carried besides. The structured filters exist to narrow a set the app
+ * already holds whole, and applying them to a page of results drawn from a hundred sets would
+ * produce a list the user would read as "every Fury card in the game" when it is nothing of the
+ * sort.
  */
 data class CardSearchRequest(
-	val game: Game,
 	val text: String,
 	val language: CardLanguage? = null,
 	val page: Int = 1,

@@ -1,7 +1,7 @@
 package com.bitsycore.cardbrowser.ui.sets
 
+import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.CardSet
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.lib.pulse.container.ContainerContract
@@ -25,18 +25,18 @@ object SetListContract :
 		/**
 		 * The game being browsed.
 		 *
-		 * Riftbound is the initial value rather than "whatever is first" because it is the game
+		 * `null` until the registry answers, rather than a hardcoded game: this module no longer names
 		 * this app was built for; the stored preference replaces it as soon as it loads.
 		 */
-		val game: Game = Game.RIFTBOUND,
+		val game: GameProfile? = null,
 		/**
 		 * The games the app can actually serve, from the routing table.
 		 *
-		 * Never [Game.entries]. A game named in the enum but not routed to a registered adapter is
+		 * Whatever the registry routes. A game with no routed adapter is
 		 * not a game this app offers, and putting it in the switcher would produce a menu item that
 		 * leads to an empty screen. Cyberpunk TCG is exactly that case today.
 		 */
-		val availableGames: List<Game> = listOf(Game.RIFTBOUND),
+		val availableGames: List<GameProfile> = emptyList(),
 		val search: String = "",
 		val isLoading: Boolean = true,
 		val origin: DataOrigin = DataOrigin.NONE,
@@ -120,10 +120,10 @@ object SetListContract :
 		 * one game are not a stale view of another game's, they are simply the wrong data, and
 		 * leaving them on screen for the length of a load would show Pokémon sets under "Magic".
 		 */
-		data class GameChanged(val game: Game) : Intent
+		data class GameChanged(val game: GameProfile) : Intent
 
 		/** The routing table, and the remembered game, arrived from the registry and preferences. */
-		data class GamesRestored(val games: List<Game>, val game: Game) : Intent
+		data class GamesRestored(val games: List<GameProfile>, val game: GameProfile) : Intent
 
 		/** Which sets are on disk. Computed after a load, since it depends on the set list. */
 		data class SavedSetsResolved(val setIds: Set<String>) : Intent

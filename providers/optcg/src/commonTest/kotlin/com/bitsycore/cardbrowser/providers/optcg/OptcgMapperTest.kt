@@ -2,9 +2,9 @@ package com.bitsycore.cardbrowser.providers.optcg
 
 import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardLanguage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.ProviderId
-import com.bitsycore.cardbrowser.core.model.RarityLadder
+import com.bitsycore.cardbrowser.core.game.RarityLadder
+import com.bitsycore.cardbrowser.games.onepiece.OnePieceGame
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -46,7 +46,7 @@ class OptcgMapperTest {
 
 		assertNotNull(vSet)
 		assertEquals("OP-01", vSet.id.local)
-		assertEquals(Game.ONE_PIECE, vSet.game)
+		assertEquals(OnePieceGame.id, vSet.game)
 		assertNull(vSet.releaseDate)
 		assertNull(vSet.cardCount)
 	}
@@ -68,7 +68,7 @@ class OptcgMapperTest {
 		assertEquals("Common", OptcgMapper.expandRarity("C"))
 		assertEquals("Uncommon", OptcgMapper.expandRarity("UC"))
 		assertEquals("Secret Rare", OptcgMapper.expandRarity("SEC"))
-		assertTrue(RarityLadder.rankOf(Game.ONE_PIECE, "Uncommon") < RarityLadder.rankOf(Game.ONE_PIECE, "Rare"))
+		assertTrue(RarityLadder.rankOf(OnePieceGame.rarityLadder, "Uncommon") < RarityLadder.rankOf(OnePieceGame.rarityLadder, "Rare"))
 	}
 
 	@Test
@@ -76,8 +76,8 @@ class OptcgMapperTest {
 		// Neither is a power tier -- a Leader is a card role and a Promo is a distribution -- so
 		// they are named but rank last rather than being slotted in among the rarities.
 		assertEquals("Leader", OptcgMapper.expandRarity("L"))
-		assertEquals(Int.MAX_VALUE, RarityLadder.rankOf(Game.ONE_PIECE, "Leader"))
-		assertEquals(Int.MAX_VALUE, RarityLadder.rankOf(Game.ONE_PIECE, "Promo"))
+		assertEquals(Int.MAX_VALUE, RarityLadder.rankOf(OnePieceGame.rarityLadder, "Leader"))
+		assertEquals(Int.MAX_VALUE, RarityLadder.rankOf(OnePieceGame.rarityLadder, "Promo"))
 	}
 
 	@Test
@@ -113,7 +113,7 @@ class OptcgMapperTest {
 		val vCard = OptcgMapper.toPrinting(card(cost = "", rarity = "L"), mProvider, null)
 
 		assertNotNull(vCard)
-		assertNull(vCard.attributes.energy)
+		assertNull(vCard.attributes.cost)
 	}
 
 	@Test

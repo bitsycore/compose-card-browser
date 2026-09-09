@@ -2,16 +2,16 @@ package com.bitsycore.cardbrowser.providers.optcg
 
 import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardLanguage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
-import kotlinx.coroutines.runBlocking
+import com.bitsycore.cardbrowser.games.onepiece.OnePieceGame
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 /**
  * Talks to the real OPTCG API.
@@ -28,7 +28,7 @@ class OptcgLiveSmokeTest {
 
 	@Test
 	fun `the set list loads and contains Romance Dawn`() = runBlocking {
-		val vSets = provider().listSets(Game.ONE_PIECE)
+		val vSets = provider().listSets()
 
 		assertTrue(vSets.size > 5, "Expected the expansion list, got ${vSets.size}")
 
@@ -99,7 +99,7 @@ class OptcgLiveSmokeTest {
 	@Test
 	fun `cross-set search spans sets and pages client-side`() = runBlocking {
 		val vPage = provider().searchAllSets(
-			CardSearchRequest(game = Game.ONE_PIECE, text = "Luffy", pageSize = 10),
+			CardSearchRequest(text = "Luffy", pageSize = 10),
 		)
 
 		assertEquals(10, vPage.cards.size, "The client-side window should cap the page")

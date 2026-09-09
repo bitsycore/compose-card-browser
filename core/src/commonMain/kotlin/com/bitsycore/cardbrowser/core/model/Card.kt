@@ -21,7 +21,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class CardSet(
 	val id: SourceId,
-	val game: Game,
+	val game: GameId,
 	val code: String,
 	val name: String,
 	val cardCount: Int?,
@@ -161,12 +161,25 @@ data class FinishCoverage(
 // MARK: Card
 // ==================
 
-/** Game rules values a printing may carry. All nullable: a spell has no might, a token no rarity. */
+/**
+ * The numbers a printing carries, in three deliberately unnamed slots.
+ *
+ * Named `cost`, `primary` and `secondary` rather than after any one game's words. They used to be
+ * `energy`, `might` and `power` -- Riftbound's vocabulary -- which meant a Magic card's mana value
+ * lived in a field called `energy` and a Yu-Gi-Oh level did too. Three neutral slots plus a
+ * per-game label is the honest version of the same model, and `GameVocabulary` supplies the label.
+ *
+ * All nullable: a spell has no attack, a Pokémon card no single play cost.
+ *
+ * @property cost what you pay to play the card -- energy, mana value, level, hand cost
+ * @property primary the first stat -- might, power, ATK, HP, damage
+ * @property secondary the second stat -- power, toughness, DEF, life, speed
+ */
 @Serializable
 data class CardAttributes(
-	val energy: Int? = null,
-	val might: Int? = null,
-	val power: Int? = null,
+	val cost: Int? = null,
+	val primary: Int? = null,
+	val secondary: Int? = null,
 )
 
 /** How a printing is categorised by the game. */
@@ -223,7 +236,7 @@ data class CardIdentity(
 @Serializable
 data class CardPrinting(
 	val id: SourceId,
-	val game: Game,
+	val game: GameId,
 	val setId: SourceId,
 	val setCode: String,
 	val setName: String,

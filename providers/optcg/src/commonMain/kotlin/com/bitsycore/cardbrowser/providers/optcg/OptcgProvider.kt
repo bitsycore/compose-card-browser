@@ -3,7 +3,6 @@ package com.bitsycore.cardbrowser.providers.optcg
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.Attribution
@@ -17,6 +16,7 @@ import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
 import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
 import com.bitsycore.cardbrowser.data.net.mapProviderErrors
+import com.bitsycore.cardbrowser.games.onepiece.OnePieceGame
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ClientRequestException
@@ -26,7 +26,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.appendPathSegments
 
 /**
- * The OPTCG API adapter, serving [Game.ONE_PIECE].
+ * The OPTCG API adapter, serving [OnePieceGame].
  *
  * https://optcgapi.com -- a community database for the One Piece Card Game. No key, no auth.
  *
@@ -57,14 +57,15 @@ import io.ktor.http.appendPathSegments
 class OptcgProvider(
 	private val mClient: HttpClient,
 	private val mBaseUrl: String = DEFAULT_BASE_URL,
-) : CardProvider {
+) : CardProvider<OnePieceGame> {
 
 	override val id: ProviderId = PROVIDER_ID
 
 	override val displayName: String = "OPTCG API"
 
+	override val game: OnePieceGame = OnePieceGame
+
 	override val capabilities: ProviderCapabilities = ProviderCapabilities(
-		games = setOf(Game.ONE_PIECE),
 		filtering = FilterSupport(
 			// A set arrives whole in one request, so every filter is applied to data already held.
 			remote = emptySet(),
@@ -73,14 +74,14 @@ class OptcgProvider(
 				CardFilterField.DOMAIN,
 				CardFilterField.CARD_TYPE,
 				CardFilterField.RARITY,
-				CardFilterField.ENERGY_COST,
+				CardFilterField.COST,
 			),
 		),
 		sorting = setOf(
 			CardSortField.COLLECTOR_NUMBER,
 			CardSortField.NAME,
 			CardSortField.RARITY,
-			CardSortField.ENERGY_COST,
+			CardSortField.COST,
 		),
 		data = DataCapabilities(
 			// Empty, not `setOf(ENGLISH)`. The provider states no language anywhere, and this field
@@ -105,8 +106,7 @@ class OptcgProvider(
 	// ============
 	//  Sets
 
-	override suspend fun listSets(game: Game, language: CardLanguage?): List<CardSet> {
-		require(game == Game.ONE_PIECE) { "The OPTCG API serves One Piece only, not $game" }
+	override suspend fun listSets(language: CardLanguage?): List<CardSet> {
 		return mapProviderErrors("OPTCG.listSets") {
 			val vSets: List<OptcgSetDto> = mClient
 				.get(mBaseUrl) { url { appendPathSegments("api", "allSets", "") } }
@@ -159,9 +159,6 @@ class OptcgProvider(
 	 * fact about the response rather than a guess.
 	 */
 	override suspend fun searchAllSets(request: CardSearchRequest): CardPage {
-		require(request.game == Game.ONE_PIECE) {
-			"The OPTCG API serves One Piece only, not ${request.game}"
-		}
 		return mapProviderErrors("OPTCG.searchAllSets") {
 			val vCards: List<OptcgCardDto> = try {
 				mClient

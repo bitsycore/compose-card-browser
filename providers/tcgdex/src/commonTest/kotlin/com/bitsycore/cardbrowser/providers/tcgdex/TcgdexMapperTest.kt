@@ -4,15 +4,14 @@ import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.ExternalIdKey
 import com.bitsycore.cardbrowser.core.model.Finish
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
-import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.datetime.LocalDate
 
 /**
  * The TCGdex mapping, against DTOs shaped like real responses.
@@ -228,8 +227,8 @@ class TcgdexMapperTest {
 		)
 
 		assertNotNull(vCard)
-		assertNull(vCard.attributes.energy)
-		assertEquals(190, vCard.attributes.might)
+		assertNull(vCard.attributes.cost)
+		assertEquals(190, vCard.attributes.primary)
 	}
 
 	@Test

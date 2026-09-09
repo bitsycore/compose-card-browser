@@ -36,7 +36,7 @@ import okio.use
 data class BrowsingPreferences(
 	val lastSetId: String? = null,
 	/**
-	 * Which game the set list opens on, as a [com.bitsycore.cardbrowser.core.model.Game] name.
+	 * Which game the set list opens on, as a [com.bitsycore.cardbrowser.core.model.GameId] value.
 	 *
 	 * A string rather than the enum so that a preferences file written by a build that offered a
 	 * game this one does not -- or the reverse -- deserialises instead of throwing. An unrecognised

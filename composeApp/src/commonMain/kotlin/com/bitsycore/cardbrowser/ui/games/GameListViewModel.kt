@@ -1,7 +1,7 @@
 package com.bitsycore.cardbrowser.ui.games
 
 import androidx.lifecycle.viewModelScope
-import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.lib.pulse.viewmodel.PulseViewModel
@@ -22,9 +22,10 @@ class GameListViewModel(
 ) {
 
 	init {
-		// Ordered as `Game.entries` declares them rather than as the routes happen to be listed, so
-		// the picker's order is stable across builds and reorderings of the routing table.
-		val vGames = Game.entries.filter { it in mRegistry.games }
+		// Straight from the registry, which orders them as the routing table lists them. There is
+		// no enum to order by any more, and that is the point: the routing table is now the only
+		// statement anywhere of which games this build offers.
+		val vGames = mRegistry.games
 		val vSources = vGames.mapNotNull { vGame ->
 			mRegistry.resolve(vGame)?.let { vGame to it.displayName }
 		}.toMap()
@@ -32,7 +33,7 @@ class GameListViewModel(
 		viewModelScope.launch {
 			mPreferences.load()
 			val vLast = mPreferences.preferences.value.lastGame
-				?.let { vName -> vGames.firstOrNull { it.name == vName } }
+				?.let { vId -> vGames.firstOrNull { it.id.value == vId } }
 			dispatch(GameListContract.Intent.Loaded(vGames, vSources, vLast))
 		}
 	}
@@ -40,7 +41,7 @@ class GameListViewModel(
 	override suspend fun handleIntent(intent: GameListContract.Intent) {
 		when (intent) {
 			is GameListContract.Intent.GameOpened -> {
-				mPreferences.update { it.copy(lastGame = intent.game.name) }
+				mPreferences.update { it.copy(lastGame = intent.game.id.value) }
 			}
 			else -> Unit
 		}

@@ -10,12 +10,12 @@ import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.ExternalIdKey
 import com.bitsycore.cardbrowser.core.model.Finish
 import com.bitsycore.cardbrowser.core.model.FinishCoverage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.LanguageCoverage
 import com.bitsycore.cardbrowser.core.model.LocalizedText
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SetSymbol
 import com.bitsycore.cardbrowser.core.model.SourceId
+import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
 import kotlinx.datetime.LocalDate
 
 /**
@@ -57,7 +57,7 @@ internal object TcgdexMapper {
 		if (dto.id.isBlank()) return null
 		return CardSet(
 			id = SourceId(provider, dto.id),
-			game = Game.POKEMON,
+			game = PokemonGame.id,
 			// TCGdex's own set id doubles as the code -- `swsh3`, `base1`. The printed abbreviation
 			// ("DAA") exists only on the full set object, which the catalogue endpoint does not
 			// return, so using it here would cost 218 extra requests to save four characters.
@@ -77,7 +77,7 @@ internal object TcgdexMapper {
 		if (dto.id.isBlank()) return null
 		return CardSet(
 			id = SourceId(provider, dto.id),
-			game = Game.POKEMON,
+			game = PokemonGame.id,
 			code = dto.abbreviation?.official?.ifBlank { null } ?: dto.id.uppercase(),
 			name = dto.name.ifBlank { dto.id },
 			cardCount = dto.cardCount?.total ?: dto.cardCount?.official,
@@ -139,7 +139,7 @@ internal object TcgdexMapper {
 			// TCGdex issues exactly one record per printing and its id is that printing's name, so
 			// no separate key is needed and none is invented.
 			printingKey = null,
-			game = Game.POKEMON,
+			game = PokemonGame.id,
 			setId = set.id,
 			setCode = set.code,
 			setName = set.name,
@@ -166,7 +166,7 @@ internal object TcgdexMapper {
 		return CardPrinting(
 			id = SourceId(provider, dto.id),
 			printingKey = null,
-			game = Game.POKEMON,
+			game = PokemonGame.id,
 			setId = vSetId,
 			setCode = set?.code ?: vSetId.local.uppercase(),
 			setName = set?.name ?: dto.set?.name ?: vSetId.local,
@@ -188,7 +188,7 @@ internal object TcgdexMapper {
 				// Pokémon has no single play cost -- cost is per attack -- so `energy` stays null
 				// rather than being invented from the first attack's requirements. HP is the one
 				// number that is genuinely a property of the card, and it goes in `might`.
-				might = dto.hp,
+				primary = dto.hp,
 			),
 			classification = CardClassification(
 				type = dto.category?.ifBlank { null },

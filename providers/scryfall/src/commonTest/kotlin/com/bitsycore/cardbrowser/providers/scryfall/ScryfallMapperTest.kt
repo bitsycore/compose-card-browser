@@ -245,8 +245,8 @@ class ScryfallMapperTest {
 		val vStar = ScryfallMapper.toPrinting(card(power = "*"), mProvider, null, CardLanguage.ENGLISH)
 		val vPlain = ScryfallMapper.toPrinting(card(power = "3"), mProvider, null, CardLanguage.ENGLISH)
 
-		assertNull(vStar?.attributes?.might)
-		assertEquals(3, vPlain?.attributes?.might)
+		assertNull(vStar?.attributes?.primary)
+		assertEquals(3, vPlain?.attributes?.primary)
 	}
 
 	@Test

@@ -2,6 +2,8 @@ package com.bitsycore.cardbrowser.ui.detail
 
 import com.bitsycore.cardbrowser.core.cardmarket.CardmarketLink
 import com.bitsycore.cardbrowser.core.cardmarket.CardmarketLinkBuilder
+import com.bitsycore.cardbrowser.core.game.GameProfile
+import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardOrientation
@@ -9,7 +11,6 @@ import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.ExternalIdKey
 import com.bitsycore.cardbrowser.core.model.Finish
-import com.bitsycore.cardbrowser.core.model.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.LanguageResolution
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.lib.pulse.container.ContainerContract
@@ -49,6 +50,13 @@ object CardDetailContract :
 		val providerLanguages: Set<CardLanguage> = emptySet(),
 		/** The source's own name, for the details table. `null` before the load completes. */
 		val providerDisplayName: String? = null,
+		/**
+		 * The game these cards belong to, and everything the app knows about it.
+		 *
+		 * Its vocabulary is what labels the stat rows, and its Cardmarket segment is what decides
+		 * whether there is a marketplace link at all. `null` until the load resolves a provider.
+		 */
+		val game: GameProfile? = null,
 		/** True while a language change is being fetched, so the chips can say so. */
 		val isChangingLanguage: Boolean = false,
 		val attribution: String? = null,
@@ -145,7 +153,7 @@ object CardDetailContract :
 		 * while a swipe is in flight and each needs its own.
 		 */
 		fun cardmarketLinkFor(card: CardPrinting): CardmarketLink? =
-			CardmarketLinkBuilder.linkFor(card, set)
+			game?.let { CardmarketLinkBuilder.linkFor(card, set, it) }
 
 		/**
 		 * Everything the provider stated about one printing, as labelled rows.
@@ -159,7 +167,7 @@ object CardDetailContract :
 		 * that says "Energy" over a Magic mana value is wrong in the way users notice first.
 		 */
 		fun factsFor(card: CardPrinting): List<CardFact> {
-			val vWords = GameVocabulary.of(card.game)
+			val vWords = game?.vocabulary ?: GameVocabulary()
 			return buildList {
 				fact("Set", "${card.setName} (${card.setCode})")
 				fact("Number", card.collectorNumber)
@@ -174,9 +182,12 @@ object CardDetailContract :
 				vWords.domain?.let { vLabel ->
 					fact(vLabel, card.classification.domains.takeIf { it.isNotEmpty() }?.joinToString(", "))
 				}
-				vWords.energy?.let { vLabel -> fact(vLabel, card.attributes.energy?.toString()) }
-				fact("Might", card.attributes.might?.toString())
-				fact("Power", card.attributes.power?.toString())
+				// Labelled with the game's own word, and with a neutral one where the game states
+				// none. A value the provider supplied is not dropped for want of a name for it --
+				// that would hide real data behind a gap in a game module.
+				fact(vWords.cost ?: "Cost", card.attributes.cost?.toString())
+				fact(vWords.primaryStat ?: "Stat", card.attributes.primary?.toString())
+				fact(vWords.secondaryStat ?: "Second stat", card.attributes.secondary?.toString())
 				fact("Tags", card.tags.takeIf { it.isNotEmpty() }?.joinToString(", "))
 				fact("Artist", card.artwork.artist)
 				fact("Treatment", card.artwork.treatment.displayName)
@@ -266,6 +277,7 @@ object CardDetailContract :
 			val providerStatesFinishes: Boolean,
 			val providerLanguages: Set<CardLanguage> = emptySet(),
 			val providerDisplayName: String? = null,
+			val game: GameProfile? = null,
 		) : Intent
 
 		/** The pager settled on another card, or the preview strip was tapped. */
@@ -326,6 +338,7 @@ object CardDetailContract :
 			providerStatesFinishes = intent.providerStatesFinishes,
 			providerLanguages = intent.providerLanguages,
 			providerDisplayName = intent.providerDisplayName,
+			game = intent.game,
 			isLoading = false,
 		)
 

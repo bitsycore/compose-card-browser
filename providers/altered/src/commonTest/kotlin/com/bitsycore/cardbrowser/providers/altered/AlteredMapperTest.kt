@@ -3,9 +3,9 @@ package com.bitsycore.cardbrowser.providers.altered
 import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardSet
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
+import com.bitsycore.cardbrowser.games.altered.AlteredGame
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -19,7 +19,7 @@ class AlteredMapperTest {
 
 	private val mSet = CardSet(
 		id = SourceId(mProvider, "ALIZE"),
-		game = Game.ALTERED,
+		game = AlteredGame.id,
 		code = "TBF",
 		name = "Épreuve du froid",
 		cardCount = 327,
@@ -148,11 +148,11 @@ class AlteredMapperTest {
 		val vCard = AlteredMapper.toPrinting(card(), mProvider, mSet, CardLanguage.FRENCH, mImages)
 
 		assertNotNull(vCard)
-		assertEquals(2, vCard.attributes.energy)
-		assertEquals(2, vCard.attributes.might)
+		assertEquals(2, vCard.attributes.cost)
+		assertEquals(2, vCard.attributes.primary)
 		assertTrue(vCard.text.rules!!.startsWith("Vous pouvez jouer"))
 		// The three region powers cannot be collapsed into one number, so none is chosen.
-		assertNull(vCard.attributes.power)
+		assertNull(vCard.attributes.secondary)
 	}
 
 	@Test

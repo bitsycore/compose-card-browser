@@ -1,10 +1,9 @@
 package com.bitsycore.cardbrowser.core.filter
 
+import com.bitsycore.cardbrowser.core.game.RarityLadder
 import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CollectorNumberComparator
-import com.bitsycore.cardbrowser.core.model.Game
-import com.bitsycore.cardbrowser.core.model.RarityLadder
 import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.SortDirection
@@ -16,12 +15,24 @@ import com.bitsycore.cardbrowser.core.provider.SortDirection
  * has a complete set in hand. Whether running it is *legitimate* -- that is, whether the caller
  * really has the complete set rather than one page -- is the repository's business, not this
  * object's; see `CardRepository`.
+ *
+ * Knows no game. Sorting by rarity needs a game's ladder, so callers that have one pass it; a
+ * caller with none gets alphabetical order, which is the honest answer for a game that declares no
+ * ladder. This used to default to Riftbound's ladder when the list was empty, which quietly ranked
+ * every other game's rarities against Riftbound's words.
  */
 object CardFilterEngine {
 
-	/** Filters then sorts [cards]. Order matters: sorting a filtered list is cheaper. */
-	fun apply(cards: List<CardPrinting>, query: CardQuery): List<CardPrinting> =
-		sort(cards.filter { matches(it, query) }, query)
+	/**
+	 * Filters then sorts [cards]. Order matters: sorting a filtered list is cheaper.
+	 *
+	 * @param rarityLadder the game's `GameProfile.rarityLadder`, needed only to sort by rarity
+	 */
+	fun apply(
+		cards: List<CardPrinting>,
+		query: CardQuery,
+		rarityLadder: List<String> = emptyList(),
+	): List<CardPrinting> = sort(cards.filter { matches(it, query) }, query, rarityLadder)
 
 	/**
 	 * Whether one printing satisfies every active part of [query].
@@ -41,7 +52,7 @@ object CardFilterEngine {
 		if (query.cardTypes.isNotEmpty() && card.classification.type !in query.cardTypes) return false
 		if (query.rarities.isNotEmpty() && card.classification.rarity !in query.rarities) return false
 
-		if (query.energyCosts.isNotEmpty() && card.attributes.energy !in query.energyCosts) return false
+		if (query.costs.isNotEmpty() && card.attributes.cost !in query.costs) return false
 
 		if (query.treatments.isNotEmpty() && card.artwork.treatment !in query.treatments) return false
 
@@ -108,22 +119,24 @@ object CardFilterEngine {
 	)
 
 	/** Sorts by the query's field, falling back to collector order to keep ties stable. */
-	fun sort(cards: List<CardPrinting>, query: CardQuery): List<CardPrinting> {
+	fun sort(
+		cards: List<CardPrinting>,
+		query: CardQuery,
+		rarityLadder: List<String> = emptyList(),
+	): List<CardPrinting> {
 		val vComparator: Comparator<CardPrinting> = when (query.sortBy) {
 			CardSortField.COLLECTOR_NUMBER -> CollectorNumberComparator
 			CardSortField.NAME -> compareBy<CardPrinting> { fold(it.displayName) }
 				.then(CollectorNumberComparator)
 			// The game's own ladder, not alphabetical: sorting the strings would put Common
-			// between Uncommon and Epic. The ladder is knowledge about the game rather than about
-			// the provider, so it lives in `RarityLadder` and any provider for that game gets it.
-			CardSortField.RARITY -> RarityLadder.comparatorFor(
-				cards.firstOrNull()?.game ?: Game.RIFTBOUND,
-			)
-			// Cards with no energy cost sort last rather than as zero: a spell with no cost is not
-			// a zero-cost card.
-			CardSortField.ENERGY_COST -> compareBy<CardPrinting>(
-				{ it.attributes.energy == null },
-				{ it.attributes.energy ?: 0 },
+			// between Uncommon and Epic. The ladder is a fact about the game, so it arrives from
+			// that game's profile rather than being decided here.
+			CardSortField.RARITY -> RarityLadder.comparatorFor(rarityLadder)
+			// Cards with no cost sort last rather than as zero: a spell with no cost is not a
+			// zero-cost card.
+			CardSortField.COST -> compareBy<CardPrinting>(
+				{ it.attributes.cost == null },
+				{ it.attributes.cost ?: 0 },
 			).then(CollectorNumberComparator)
 		}
 		return if (query.sortDirection == SortDirection.DESCENDING) {
@@ -140,15 +153,18 @@ object CardFilterEngine {
 	 * the game has, and offering "Mythic" as a filter for a set with no mythics produces an empty
 	 * result the user cannot explain.
 	 */
-	fun facetsOf(cards: List<CardPrinting>): CardFacets = CardFacets(
+	fun facetsOf(
+		cards: List<CardPrinting>,
+		rarityLadder: List<String> = emptyList(),
+	): CardFacets = CardFacets(
 		domains = cards.flatMap { it.classification.domains }.distinct().sorted(),
 		cardTypes = cards.mapNotNull { it.classification.type }.distinct().sorted(),
 		// Ladder order, so the chips read Common → Showcase rather than alphabetically.
 		rarities = RarityLadder.sorted(
-			game = cards.firstOrNull()?.game ?: Game.RIFTBOUND,
+			ladder = rarityLadder,
 			rarities = cards.mapNotNull { it.classification.rarity }.distinct(),
 		),
-		energyCosts = cards.mapNotNull { it.attributes.energy }.distinct().sorted(),
+		costs = cards.mapNotNull { it.attributes.cost }.distinct().sorted(),
 		treatments = cards.map { it.artwork.treatment }.distinct().sortedBy { it.ordinal },
 	)
 }
@@ -158,12 +174,12 @@ data class CardFacets(
 	val domains: List<String> = emptyList(),
 	val cardTypes: List<String> = emptyList(),
 	val rarities: List<String> = emptyList(),
-	val energyCosts: List<Int> = emptyList(),
+	val costs: List<Int> = emptyList(),
 	val treatments: List<com.bitsycore.cardbrowser.core.model.ArtworkTreatment> = emptyList(),
 ) {
 
 	/** True when there is nothing to offer, so the filter sheet stays closed. */
 	val isEmpty: Boolean
 		get() = domains.isEmpty() && cardTypes.isEmpty() && rarities.isEmpty() &&
-			energyCosts.isEmpty() && treatments.isEmpty()
+			costs.isEmpty() && treatments.isEmpty()
 }

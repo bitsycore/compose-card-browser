@@ -11,11 +11,11 @@ import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.CollectorNumberComparator
 import com.bitsycore.cardbrowser.core.model.ExternalIdKey
 import com.bitsycore.cardbrowser.core.model.FinishCoverage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.LanguageCoverage
 import com.bitsycore.cardbrowser.core.model.LocalizedText
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
+import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesGame
 import com.bitsycore.cardbrowser.providers.wuwa.resources.Res
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -141,7 +141,7 @@ internal object WuwaCatalogue {
 			.mapValues { (vCode, vCards) ->
 				CardSet(
 					id = SourceId(provider, vCode),
-					game = Game.WUTHERING_WAVES,
+					game = WutheringWavesGame.id,
 					code = vCode,
 					// The code is the name, deliberately. `/web/goods/list` does publish product
 					// names that look like they line up -- スターターデッキ01 with `SD01` -- and the
@@ -175,7 +175,7 @@ internal object WuwaCatalogue {
 		return CardPrinting(
 			id = SourceId(provider, card.key),
 			printingKey = card.key,
-			game = Game.WUTHERING_WAVES,
+			game = WutheringWavesGame.id,
 			setId = vSet.id,
 			setCode = vSet.code,
 			setName = vSet.name,
@@ -196,9 +196,9 @@ internal object WuwaCatalogue {
 			),
 			artwork = artworkOf(snapshot, card, vShown, vText, provider),
 			attributes = CardAttributes(
-				energy = card.cost,
-				might = card.damage,
-				power = card.speed,
+				cost = card.cost,
+				primary = card.damage,
+				secondary = card.speed,
 			),
 			classification = CardClassification(
 				type = term(snapshot, "cardType", card.cardTypeId, language),

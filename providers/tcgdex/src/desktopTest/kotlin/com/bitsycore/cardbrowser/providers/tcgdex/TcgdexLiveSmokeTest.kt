@@ -2,20 +2,20 @@ package com.bitsycore.cardbrowser.providers.tcgdex
 
 import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardLanguage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
+import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
 import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.request.head
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpStatusCode
-import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 /**
  * Talks to the real TCGdex API.
@@ -35,7 +35,7 @@ class TcgdexLiveSmokeTest {
 
 	@Test
 	fun `the set catalogue loads and carries real release dates`() = runBlocking {
-		val vSets = provider().listSets(Game.POKEMON, CardLanguage.ENGLISH)
+		val vSets = provider().listSets(CardLanguage.ENGLISH)
 
 		assertTrue(vSets.size > 100, "Expected a large catalogue, got ${vSets.size}")
 
@@ -86,7 +86,7 @@ class TcgdexLiveSmokeTest {
 		// The threshold is deliberately low. `ko` carries 95 sets and the Chinese catalogues fewer
 		// still, so this asks whether the locale is real, not whether it is complete.
 		for (vLanguage in vProvider.capabilities.data.languages) {
-			val vSets = vProvider.listSets(Game.POKEMON, vLanguage)
+			val vSets = vProvider.listSets(vLanguage)
 			assertTrue(vSets.size > 3, "${vLanguage.code} returned only ${vSets.size} sets")
 		}
 	}
@@ -146,9 +146,7 @@ class TcgdexLiveSmokeTest {
 	@Test
 	fun `cross-set search finds a card across eras`() = runBlocking {
 		val vPage = provider().searchAllSets(
-			CardSearchRequest(
-				game = Game.POKEMON,
-				text = "Charizard",
+			CardSearchRequest(text = "Charizard",
 				language = CardLanguage.ENGLISH,
 				pageSize = 20,
 			),
@@ -168,7 +166,7 @@ class TcgdexLiveSmokeTest {
 	@Test
 	fun `set logos resolve -- and the advertised symbol still does not`() = runBlocking<Unit> {
 		val vClient = HttpClientFactory.create()
-		val vSets = TcgdexProvider(vClient).listSets(Game.POKEMON, CardLanguage.ENGLISH)
+		val vSets = TcgdexProvider(vClient).listSets(CardLanguage.ENGLISH)
 
 		val vWith = vSets.filter { it.symbol != null }
 		assertTrue(vWith.size > 100, "Expected most sets to carry a logo, got ${vWith.size}")

@@ -12,12 +12,12 @@ import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.ExternalIdKey
 import com.bitsycore.cardbrowser.core.model.Finish
 import com.bitsycore.cardbrowser.core.model.FinishCoverage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.LanguageCoverage
 import com.bitsycore.cardbrowser.core.model.LocalizedText
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SetSymbol
 import com.bitsycore.cardbrowser.core.model.SourceId
+import com.bitsycore.cardbrowser.games.magic.MagicGame
 import kotlinx.datetime.LocalDate
 
 /** Turns Scryfall's wire format into core's model. Pure functions, testable without a client. */
@@ -32,7 +32,7 @@ internal object ScryfallMapper {
 			// The set *code*, not the UUID. It is what `q=set:blb` takes, it is what is printed on
 			// the card, and it is stable across Scryfall database rebuilds in a way a UUID is not.
 			id = SourceId(provider, dto.code),
-			game = Game.MAGIC,
+			game = MagicGame.id,
 			code = dto.code.uppercase(),
 			name = dto.name.ifBlank { dto.code },
 			cardCount = dto.cardCount.takeIf { it > 0 },
@@ -85,7 +85,7 @@ internal object ScryfallMapper {
 			// Scryfall issues exactly one id per printing and never repeats it, so the record id
 			// is the printing key and no second one is invented.
 			printingKey = null,
-			game = Game.MAGIC,
+			game = MagicGame.id,
 			setId = vSetId,
 			setCode = set?.code ?: vSetLocal.uppercase(),
 			setName = set?.name ?: dto.setName.ifBlank { vSetLocal },
@@ -113,11 +113,11 @@ internal object ScryfallMapper {
 			attributes = CardAttributes(
 				// Mana value. `GameVocabulary` labels this "Mana value" for Magic, which is what
 				// the game calls it -- the shared field is a single play cost, not "energy".
-				energy = dto.cmc?.toInt(),
+				cost = dto.cmc?.toInt(),
 				// Power and toughness are strings because of `*` and `1+*`. Only a plain number is
 				// carried across; a variable power is not a number and is not pretended to be one.
-				might = dto.power?.toIntOrNull(),
-				power = dto.toughness?.toIntOrNull(),
+				primary = dto.power?.toIntOrNull(),
+				secondary = dto.toughness?.toIntOrNull(),
 			),
 			classification = CardClassification(
 				type = dto.printedTypeLine?.ifBlank { null }

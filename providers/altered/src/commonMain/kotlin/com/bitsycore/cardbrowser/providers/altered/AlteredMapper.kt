@@ -9,11 +9,11 @@ import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.ExternalIdKey
 import com.bitsycore.cardbrowser.core.model.FinishCoverage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.LanguageCoverage
 import com.bitsycore.cardbrowser.core.model.LocalizedText
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
+import com.bitsycore.cardbrowser.games.altered.AlteredGame
 
 /** Turns the Altered mirror's wire format into core's model. */
 internal object AlteredMapper {
@@ -27,7 +27,7 @@ internal object AlteredMapper {
 			// The set *reference* -- `ALIZE`, `CORE` -- because it is the path segment every data
 			// file and every image is stored under. The printed `code` is shown instead.
 			id = SourceId(provider, dto.reference),
-			game = Game.ALTERED,
+			game = AlteredGame.id,
 			code = dto.code.ifBlank { dto.reference }.uppercase(),
 			name = dto.name.ifBlank { dto.reference },
 			// Not in the index, and there is no way to know without downloading the set.
@@ -72,7 +72,7 @@ internal object AlteredMapper {
 			// collector numbers across 327 cards in ALIZE alone.
 			id = SourceId(provider, dto.reference),
 			printingKey = null,
-			game = Game.ALTERED,
+			game = AlteredGame.id,
 			setId = set.id,
 			setCode = set.code,
 			setName = set.name,
@@ -103,10 +103,10 @@ internal object AlteredMapper {
 			),
 			attributes = CardAttributes(
 				// Hand cost -- what you pay to play the card. `GameVocabulary` labels it.
-				energy = dto.elements[ELEMENT_MAIN_COST]?.trim()?.toIntOrNull(),
+				cost = dto.elements[ELEMENT_MAIN_COST]?.trim()?.toIntOrNull(),
 				// Reserve cost. Not a "might" in Altered's terms, but it is the card's second
 				// number and the model has two slots; the labels come from `GameVocabulary`.
-				might = dto.elements[ELEMENT_RECALL_COST]?.trim()?.toIntOrNull(),
+				primary = dto.elements[ELEMENT_RECALL_COST]?.trim()?.toIntOrNull(),
 				// The three region powers are separate values and cannot be collapsed into one, so
 				// none of them is put in `power` rather than one being chosen arbitrarily.
 			),

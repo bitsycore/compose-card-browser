@@ -1,7 +1,8 @@
 package com.bitsycore.cardbrowser.ui.sets
 
 import androidx.lifecycle.viewModelScope
-import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.game.GameProfile
+import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
@@ -12,7 +13,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /** Which game this set list is for. Passed at construction so the first frame already knows. */
-data class SetListArgs(val game: Game)
+data class SetListArgs(val game: GameId)
 
 /**
  * Loads the set list for the chosen game, and remembers both the game and the set last opened.
@@ -28,7 +29,7 @@ class SetListViewModel(
 ) : PulseViewModel<SetListContract.UiState, SetListContract.Intent, SetListContract.Effect>(
 	// Seeded at construction from the route, so the first frame already names the right game
 	// rather than showing "Riftbound" for a moment on the way to Pokémon.
-	initialState = SetListContract.UiState(game = mArgs.game),
+	initialState = SetListContract.UiState(game = mRegistry.profileFor(mArgs.game)),
 	containerContract = SetListContract,
 ) {
 
@@ -46,15 +47,14 @@ class SetListViewModel(
 			mPreferences.load()
 			val vPreferences = mPreferences.preferences.value
 
-			// Straight from the routing table, so a game with no registered adapter can never
-			// appear in the switcher. Ordered as `Game.entries` declares them rather than as the
-			// routes happen to be listed, which keeps the switcher stable.
-			val vGames = Game.entries.filter { it in mRegistry.games }
+			// Straight from the registry, which orders them as the routing table lists them. There
+			// is no enum to order by any more, and the routing table is now the only statement
+			// anywhere of which games this build offers.
+			val vGames = mRegistry.games
 			// The route wins over the remembered game: the user just picked one, and honouring a
-			// stale preference over an explicit choice would open the wrong game.
-			val vGame = mArgs.game.takeIf { it in vGames }
-				?: vGames.firstOrNull()
-				?: Game.RIFTBOUND
+			// stale preference over an explicit choice would open the wrong game. A route naming a
+			// game this build does not serve falls back to the first it does.
+			val vGame = vGames.firstOrNull { it.id == mArgs.game } ?: vGames.firstOrNull() ?: return@launch
 
 			dispatch(SetListContract.Intent.GamesRestored(games = vGames, game = vGame))
 			dispatch(SetListContract.Intent.LastOpenedSetRestored(vPreferences.lastSetId))
@@ -73,7 +73,7 @@ class SetListViewModel(
 			}
 
 			is SetListContract.Intent.GameChanged -> {
-				mPreferences.update { it.copy(lastGame = intent.game.name) }
+				mPreferences.update { it.copy(lastGame = intent.game.id.value) }
 				// The reducer has already bumped the generation and cleared the list; this starts
 				// the load for the game it moved to.
 				startLoad()
@@ -88,7 +88,9 @@ class SetListViewModel(
 		// Read after the reducer ran, so these are the generation and game this load owns.
 		val vState = stateFlow.value
 		val vGeneration = vState.requestGeneration
-		val vGame = vState.game
+		// Nothing to load until the registry has answered. A route naming an unrouted game leaves
+		// this null, and an empty set list is the honest outcome.
+		val vGame = vState.game ?: return
 		val vLanguage = mPreferences.preferences.value.primaryLanguage
 
 		mLoadJob?.cancel()
@@ -96,7 +98,7 @@ class SetListViewModel(
 			// collectLatest rather than collect: the repository emits cache then network, and if a
 			// newer refresh supersedes this one mid-flight the collector unwinds instead of
 			// finishing work nobody is waiting for.
-			mRepository.setList(vGame, vLanguage).collectLatest { vSnapshot ->
+			mRepository.setList(vGame.id, vLanguage).collectLatest { vSnapshot ->
 				dispatch(
 					SetListContract.Intent.Loaded(
 						generation = vGeneration,
@@ -119,7 +121,7 @@ class SetListViewModel(
 			if (stateFlow.value.requestGeneration == vGeneration && vSets.isNotEmpty()) {
 				dispatch(
 					SetListContract.Intent.SavedSetsResolved(
-						mRepository.savedSetIds(vGame, vSets, vLanguage),
+						mRepository.savedSetIds(vGame.id, vSets, vLanguage),
 					),
 				)
 			}

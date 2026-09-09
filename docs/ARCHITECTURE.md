@@ -9,24 +9,55 @@ How CardBrowser is laid out, and what it costs to add a provider.
 Five, chosen so that each boundary stops something specific from leaking. Not one per class.
 
 ```
-:core                    domain vocabulary + the provider contract.
-                         No Ktor. No Okio. No Compose.
+:core                    domain vocabulary + the provider contract + the GameProfile interface.
+                         Names no game. No Ktor. No Okio. No Compose.
    ↑
 :data                    HTTP stack, the two caches, preferences, repositories.
    ↑                     No Compose.
+:games:api               what a game module implements beyond GameProfile: GameArt.
+   ↑                     The one place Compose's resources runtime is allowed below the UI.
+:games:*                 one module per game: its vocabulary, rarity ladder, Cardmarket
+   ↑                     segment, logo and accent. riftbound, pokemon, magic, onepiece,
+                         altered, yugioh, wutheringwaves. Knows no endpoint.
 :providers:*             one module per adapter: endpoints, DTOs, mapping, its own quirks.
    ↑                     riftcodex, tcgdex, scryfall, optcg, altered, ygoprodeck, wuwa.
-                         None of them knows another exists.
+                         Each depends on exactly one :games:* module and names it in its
+                         own type. None of them knows another provider exists.
 :composeApp              Compose screens, Pulse view models, Koin wiring.
    ↑                     Targets android + desktop + iosArm64/iosSimulatorArm64.
 :androidApp              an Activity and an Application. Nothing else.
 ```
+
+**Games and providers are different axes, and the module graph says so.** A game is what the *rules*
+call things -- Riftbound's cost axis is Energy whoever supplies the data. A provider is where the
+data comes from. Splitting them is what lets a second Riftbound source inherit the ladder, the
+vocabulary and the marketplace slug for free, and it is why `:core` can hold the mechanisms without
+holding a list of games.
+
+**`:core` names no game.** There is no `Game` enum. A game's identity is a `GameId("riftbound")`
+string declared by its module, and what games *exist* is whatever the routing table routes. That
+replaced four separate tables keyed by a closed enum -- vocabulary, rarity ladders, Cardmarket
+slugs and logos -- living in `:core` and `:composeApp` and all needing to be found when a game was
+added. Three were exhaustive `when`s the compiler enforced; the fourth returned `null` for an
+unknown game and failed silently.
+
+The trade is stated plainly: dropping the enum drops compile-time exhaustiveness. What replaced it
+is that there is nothing left to be exhaustive *over* -- every per-game fact now lives in the game's
+own module, so a game cannot be half-added. The one thing a new module can still be left out of is
+the art list in `AppModule`, and `AppModuleTest` asserts that instead.
 
 `iosApp/` holds the Swift shell; the desktop entry point is `composeApp/src/desktopMain`.
 
 **Why `:core` has no dependencies worth speaking of.** A provider adapter compiles against `:core`
 and therefore inherits none of the app's transport or storage choices. A future adapter that wants a
 different HTTP client is not fighting the module graph to get one.
+
+**Why `:games:api` exists at all.** A game module bundles its own logo, and a bundled asset that
+works on JVM, Android *and* both iOS targets means Compose Multiplatform resources -- Kotlin
+Multiplatform has no standard resource API and a klib carries no files. That would drag the Compose
+runtime into `:core` if `GameProfile` carried a `DrawableResource`, so it does not: `GameProfile` is
+pure rules and lives in `:core`, and `GameArt` is presentation and lives here. It is a small module
+whose entire job is to confine one dependency.
 
 **Why `:androidApp` is separate.** AGP 9 refuses `com.android.application` in the same subproject as
 the Kotlin Multiplatform plugin, and `com.android.library` is deprecated for KMP and slated for
@@ -122,6 +153,27 @@ error would paint a failure over the screen they just opened.
 
 Four things. Nothing else, and in particular no change to any screen.
 
+### 0. The game, if it is new
+
+A game with no `:games:*` module gets one first: `settings.gradle.kts`, a build file copied from a
+sibling, and one object.
+
+```kotlin
+object RiftboundGame : GameProfile {
+	override val id = GameId("riftbound")
+	override val displayName = "Riftbound"
+	override val vocabulary = GameVocabulary(domain = "Domain", cost = "Energy", …)
+	override val rarityLadder = listOf("Common", "Uncommon", "Rare", "Epic", "Showcase")
+	override val cardmarketSlug = "Riftbound"
+}
+```
+
+Every default is a real answer rather than a placeholder. `rarityLadder` defaults to empty, which
+means "no honest order is known" -- Pokémon declares exactly that, and says why. `cardmarketSlug`
+defaults to `null`, which suppresses the marketplace link rather than shipping a guessed URL.
+
+A source that already serves an existing game skips this step entirely.
+
 ### 1. The adapter
 
 A new module under `providers/`, applying the same three plugins as
@@ -200,6 +252,18 @@ Two assertions have earned their place in every adapter's tests, because each ca
   `CardLanguage.fromCode` reads the source's spelling back through `aliases`. Nothing about one
   source's spelling reaches the enum.
 
+### What a provider no longer has to do
+
+Three things went away when the game moved into the type:
+
+- **`capabilities.games`.** A provider serves the game in its own type argument. The registry checks
+  the routing table agrees with it at construction, so a route pointing a game at the wrong adapter
+  is a startup failure with a clear message rather than a screen that loads forever.
+- **`require(game == …)` at the top of every method.** Around twenty of those, all restating
+  something the compiler already knew. The `game` parameter they checked is gone from `listSets`,
+  and `CardSearchRequest` no longer carries one either.
+- **Its own rarity ladder or vocabulary.** Those belong to the game, not the source.
+
 ### What you do *not* have to touch
 
 `SetListScreen`, `CardGridScreen`, `CardDetailScreen`, `FilterSheet`, `CardRepository`,
@@ -207,22 +271,17 @@ Two assertions have earned their place in every adapter's tests, because each ca
 `CardPrinting` and the same capabilities, and the filter sheet redraws itself from what the new
 provider declares.
 
-A **new game** needs three more small things, and no new screens:
+A **new game** needs a `:games:*` module and an entry in the art list. Nothing shared changes, and
+there is no table anywhere to forget to extend — every per-game fact is in that one module.
 
-1. An entry in the `Game` enum. Several `when` blocks over it are exhaustive on purpose —
-   `RarityLadder.forGame`, `GameVocabulary.of`, `CardmarketLinkBuilder.gameSlug`, `GameVisual.of` —
-   so the compiler lists exactly what a new game has to decide.
-2. A `RarityLadder` entry, or an explicit empty one. Empty is a real answer: Pokémon has no ladder
-   because TCGdex reports over a hundred rarity strings that vary by era and locale, and inventing
-   an order for those would look deliberate while being wrong.
-3. A `GameVocabulary` entry. Riftbound's "domain" and "energy" are Magic's "colour" and "mana
-   value", and the filter sheet reads the word from here. The *field* stays shared —
-   `CardFilterField` is an enum with one `DOMAIN`, not seven — because only the label differs, and a
-   per-game field would have to be threaded through the query type, the cache format and the filter
-   engine for no gain. A game with no such axis returns `null` and the sheet omits the section.
+The *fields* stay shared. `CardFilterField` has one `DOMAIN`, not seven, and `CardAttributes` has
+three deliberately unnamed numeric slots rather than a type per game, because only the *label*
+differs and a per-game field would have to be threaded through the query type, the cache format and
+the filter engine for no gain. `GameVocabulary` supplies the word; a game with no such axis leaves
+it `null` and the sheet omits the section.
 
-That is the whole cost. Six games were added this way without a line changing in `SetListScreen`,
-`CardGridScreen`, `CardDetailScreen` or `CardRepository`.
+Six games were added before this split, each touching four files across two modules. The seventh
+would touch one module.
 
 ---
 
@@ -231,11 +290,14 @@ That is the whole cost. Six games were added this way without a line changing in
 Two kinds of artwork, and they live in different places on purpose.
 
 **A game's logo belongs to the game.** Scryfall is not Magic, and TCGdex is not Pokémon; if a second
-provider started serving Pokémon, the logo would not change. So `GameVisual` is keyed on `Game`, in
-`:composeApp`, alongside `RarityLadder` and `GameVocabulary` — which are keyed on `Game` for exactly
-the same reason. It is in the UI module rather than `:core` only because it holds a `DrawableResource`,
-and `:core` has no Compose in it, which is what lets a provider adapter be written without
-inheriting the app's UI stack.
+provider started serving Pokémon, the logo would not change. So it lives in that game's own module,
+as a `GameArt` beside its `GameProfile`, with the image file next to both — the same place its
+rarity ladder and its vocabulary live, for the same reason.
+
+`GameArt` is declared in `:games:api` rather than `:core` only because it holds a
+`DrawableResource`, and `:core` has no Compose in it — which is what lets a provider adapter be
+written without inheriting the app's UI stack. `:composeApp` reaches the art through
+`GameArtRegistry`, and never enumerates games itself.
 
 **A set's symbol belongs to the provider**, because it is part of the set record. `CardSet.symbol`
 is populated by whichever mapper has one to give, and three of the seven do. That field carries an

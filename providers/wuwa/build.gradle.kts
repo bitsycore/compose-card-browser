@@ -44,6 +44,9 @@ kotlin {
 	sourceSets {
 		commonMain.dependencies {
 			api(project(":core"))
+			// The game this adapter serves, named in its own type: `CardProvider<WutheringWavesGame>`.
+			// `api` so a consumer can see the profile without depending on the game module too.
+			api(project(":games:wutheringwaves"))
 			// No Ktor and no `:data`. This adapter reads a bundled asset and parses it; the HTTP
 			// stack and the provider-error mapping it used to need went with the requests.
 			implementation(libs.kotlinx.serialization.json)

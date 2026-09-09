@@ -1,9 +1,9 @@
 package com.bitsycore.cardbrowser.core.cardmarket
 
+import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.ExternalIdKey
-import com.bitsycore.cardbrowser.core.model.Game
 
 // ==================
 // MARK: Link kinds
@@ -125,30 +125,6 @@ object CardmarketLinkBuilder {
 	private const val UI_LOCALE = "en"
 
 	/**
-	 * Cardmarket's per-game path segment.
-	 *
-	 * `null` for a game whose segment has not been checked against a real page, which suppresses
-	 * the link entirely rather than shipping a dead button.
-	 */
-	fun gameSlug(game: Game): String? = when (game) {
-		// Confirmed against real pages the user supplied, including a working scoped search URL.
-		Game.RIFTBOUND -> "Riftbound"
-		// Not confirmed, and deliberately not guessed.
-		//
-		// Cardmarket answers 403 to every non-browser request, including one for the Riftbound path
-		// that is known to work, so its slugs cannot be checked the way every other fact in this
-		// app was. "Pokemon", "Magic" and "YuGiOh" are all plausible and all unverified, and a
-		// plausible-looking button that lands on a 404 is exactly the kind of thing this codebase
-		// refuses to ship. Each becomes a one-line change the moment a real URL is seen.
-		//
-		// Wuthering Waves is a separate case: Cardmarket has no section for it at all, because the
-		// game is Japan-only so far.
-		Game.MAGIC, Game.POKEMON, Game.ONE_PIECE, Game.ALTERED, Game.YU_GI_OH,
-		Game.WUTHERING_WAVES,
-		-> null
-	}
-
-	/**
 	 * Cardmarket's path segment for a set, or `null` when it cannot be known without guessing.
 	 *
 	 * Two cases produce an answer:
@@ -176,9 +152,12 @@ object CardmarketLinkBuilder {
 	 *
 	 * @param set the printing's set, needed for the expansion segment. Pass `null` when it is not
 	 *   to hand and the link degrades to the game page rather than failing
+	 * @param game the printing's game, which is where the Cardmarket path segment comes from. A
+	 *   game whose segment has never been confirmed against a real page declares none, and this
+	 *   returns `null` rather than shipping a button that lands on a 404
 	 */
-	fun linkFor(printing: CardPrinting, set: CardSet?): CardmarketLink? {
-		val vGame = gameSlug(printing.game) ?: return null
+	fun linkFor(printing: CardPrinting, set: CardSet?, game: GameProfile): CardmarketLink? {
+		val vGame = game.cardmarketSlug ?: return null
 
 		// 1. An exact product path, if a provider ever supplies one.
 		val vProductPath = printing.externalIds[ExternalIdKey.CARDMARKET_PRODUCT]?.firstOrNull()
@@ -283,8 +262,8 @@ object CardmarketLinkBuilder {
 	private const val RESULTS_PER_PAGE = 30
 
 	/** The expansion's own page, as distinct from its singles listing. `null` if not derivable. */
-	fun expansionLink(set: CardSet): String? {
-		val vGame = gameSlug(set.game) ?: return null
+	fun expansionLink(set: CardSet, game: GameProfile): String? {
+		val vGame = game.cardmarketSlug ?: return null
 		val vExpansion = expansionSlug(set) ?: return null
 		return "$BASE_URL/$UI_LOCALE/$vGame/Expansions/$vExpansion"
 	}

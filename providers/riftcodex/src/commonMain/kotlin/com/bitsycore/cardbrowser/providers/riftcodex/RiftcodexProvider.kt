@@ -3,7 +3,6 @@ package com.bitsycore.cardbrowser.providers.riftcodex
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.Attribution
@@ -18,6 +17,7 @@ import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.core.provider.SortDirection
 import com.bitsycore.cardbrowser.data.net.mapProviderErrors
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ClientRequestException
@@ -30,7 +30,7 @@ import io.ktor.http.appendPathSegments
  * The Riftcodex adapter.
  *
  * Riftcodex (https://riftcodex.com) is an unofficial community database for Riftbound. It is the
- * authoritative route for [Game.RIFTBOUND] in this app.
+ * authoritative route for [RiftboundGame] in this app.
  *
  * ## Coverage, as verified against the live API
  *
@@ -72,14 +72,15 @@ import io.ktor.http.appendPathSegments
 class RiftcodexProvider(
 	private val mClient: HttpClient,
 	private val mBaseUrl: String = DEFAULT_BASE_URL,
-) : CardProvider {
+) : CardProvider<RiftboundGame> {
 
 	override val id: ProviderId = PROVIDER_ID
 
 	override val displayName: String = "Riftcodex"
 
+	override val game: RiftboundGame = RiftboundGame
+
 	override val capabilities: ProviderCapabilities = ProviderCapabilities(
-		games = setOf(Game.RIFTBOUND),
 		filtering = FilterSupport(
 			// Nothing is filtered remotely, including text -- see the note on `/cards/search` in
 			// the class doc. Every filter is honoured locally against the complete set, which the
@@ -93,7 +94,7 @@ class RiftcodexProvider(
 				CardFilterField.DOMAIN,
 				CardFilterField.CARD_TYPE,
 				CardFilterField.RARITY,
-				CardFilterField.ENERGY_COST,
+				CardFilterField.COST,
 				CardFilterField.ARTWORK_TREATMENT,
 			),
 			// FINISH and LANGUAGE appear in neither set: this provider cannot filter on them at
@@ -103,7 +104,7 @@ class RiftcodexProvider(
 			CardSortField.COLLECTOR_NUMBER,
 			CardSortField.NAME,
 			CardSortField.RARITY,
-			CardSortField.ENERGY_COST,
+			CardSortField.COST,
 		),
 		data = DataCapabilities(
 			// Not "English is all that exists" -- "English is all this provider describes".
@@ -126,8 +127,7 @@ class RiftcodexProvider(
 	// ============
 	//  Sets
 
-	override suspend fun listSets(game: Game, language: CardLanguage?): List<CardSet> {
-		require(game == Game.RIFTBOUND) { "Riftcodex serves Riftbound only, not $game" }
+	override suspend fun listSets(language: CardLanguage?): List<CardSet> {
 		// `language` is accepted and ignored on purpose: Riftcodex has no language dimension, so
 		// there is no per-language catalogue to ask for. Every record it returns says English.
 		return mapProviderErrors("Riftcodex.listSets") {
@@ -205,7 +205,7 @@ class RiftcodexProvider(
 		CardSortField.COLLECTOR_NUMBER -> "collector_number"
 		CardSortField.NAME -> "name"
 		CardSortField.RARITY -> "rarity"
-		CardSortField.ENERGY_COST -> "energy"
+		CardSortField.COST -> "energy"
 	}
 
 	companion object {

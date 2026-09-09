@@ -9,6 +9,7 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Density
 import com.bitsycore.cardbrowser.core.model.CardIdentity
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.Finish
 import com.bitsycore.cardbrowser.core.model.FinishCoverage
@@ -99,6 +100,7 @@ private fun riftboundState() = CardDetailContract.UiState(
 	isLoading = false,
 	providerLanguages = setOf(CardLanguage.ENGLISH),
 	providerDisplayName = "Riftcodex",
+	game = RiftboundGame,
 	attribution = "Card data from Riftcodex, an unofficial fan project not affiliated with Riot Games.",
 )
 

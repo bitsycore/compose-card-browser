@@ -1,20 +1,21 @@
 package com.bitsycore.cardbrowser.di
 
-import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.game.GameProfile
+import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
 import com.bitsycore.cardbrowser.core.provider.CardProvider
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
-import okio.Path.Companion.toPath
-import okio.fakefilesystem.FakeFileSystem
-import org.koin.core.context.startKoin
-import org.koin.core.context.stopKoin
-import org.koin.dsl.module
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import okio.Path.Companion.toPath
+import okio.fakefilesystem.FakeFileSystem
+import org.koin.core.context.startKoin
+import org.koin.core.context.stopKoin
+import org.koin.dsl.module
 
 /**
  * That the object graph actually assembles.
@@ -73,7 +74,7 @@ class AppModuleTest {
 
 	@Test
 	fun `every adapter is a distinct instance -- not the same one seven times`() {
-		val vProviders = graph().getAll<CardProvider>()
+		val vProviders = graph().getAll<CardProvider<GameProfile>>()
 
 		val vIds = vProviders.map { it.id.value }
 		assertEquals(vIds.size, vIds.distinct().size, "Duplicate provider ids: $vIds")
@@ -86,12 +87,14 @@ class AppModuleTest {
 
 		for (vGame in vRegistry.games) {
 			val vProvider = vRegistry.resolve(vGame)
-			assertNotNull(vProvider, "$vGame is offered but resolves to nothing")
-			// A route pointing at an adapter that does not claim the game would produce a screen
-			// that loads forever, or a `require` failure on the first request.
-			assertTrue(
-				vGame in vProvider.capabilities.games,
-				"${vProvider.id} is routed for $vGame but only serves ${vProvider.capabilities.games}",
+			assertNotNull(vProvider, "${vGame.id} is offered but resolves to nothing")
+			// A route pointing at an adapter that serves a different game would produce a screen
+			// that loads forever. The registry now rejects that at construction -- the provider's
+			// own type is the authority -- so this asserts the invariant that check protects.
+			assertEquals(
+				vGame.id,
+				vProvider.game.id,
+				"${vProvider.id} is routed for ${vGame.id} but serves ${vProvider.game.id}",
 			)
 		}
 	}
@@ -103,8 +106,12 @@ class AppModuleTest {
 		val vRegistry = graph().get<ProviderRegistry>()
 
 		for (vGame in vRegistry.games) {
-			val vProvider = vRegistry.require(vGame)
-			assertEquals(vGame, vRegistry.gameFor(vProvider.id), "${vProvider.id} traced wrongly")
+			val vProvider = vRegistry.require(vGame.id)
+			assertEquals(
+				vGame.id,
+				vRegistry.gameFor(vProvider.id)?.id,
+				"${vProvider.id} traced wrongly",
+			)
 		}
 	}
 
@@ -113,38 +120,33 @@ class AppModuleTest {
 		val vRegistry = graph().get<ProviderRegistry>()
 
 		// Cyberpunk TCG is deliberately absent -- the game is unreleased and no data source for it
-		// exists. It is in the `Game` enum so the routing table has something to name later, and
-		// the switcher must not show it in the meantime.
-		assertTrue(
-			Game.entries.any { it !in vRegistry.games } || vRegistry.games.size == Game.entries.size,
-			"This assertion only documents the mechanism",
-		)
+		// exists. There is no longer an enum for it to be absent *from*: a game exists because a
+		// `:games:*` module declares it and the routing table routes it, so an unserved game is
+		// simply a module nobody wrote, and the switcher cannot show it.
 		assertEquals(
 			providerRoutes.map { it.game }.toSet(),
-			vRegistry.games,
+			vRegistry.games.map { it.id }.toSet(),
 			"The offered games must be exactly the routed ones",
 		)
 	}
 
 	@Test
-	fun `every game has a fallback mark -- logo or not`() {
-		// `GameVisual.of` is exhaustive, so a new game cannot skip this by omission -- it fails to
-		// compile instead. What this checks is the invariant the class documents: the Material mark
-		// is always present, because only four of the seven games have a freely-licensed logo and
-		// the other three rely on the fallback permanently.
-		val vRegistry = graph().get<ProviderRegistry>()
+	fun `every offered game ships a mark`() {
+		// This is the check that replaced compile-time exhaustiveness. `GameVisual.of` was a total
+		// `when` over a closed enum, so a new game could not skip it; art now lives in the game
+		// modules and is gathered into a list in the Koin graph, which a new module *can* be left
+		// out of. So it is asserted instead.
+		// One `graph()` call: it starts Koin, and starting it twice throws.
+		val vGraph = graph()
+		val vRegistry = vGraph.get<ProviderRegistry>()
+		val vArt = vGraph.get<GameArtRegistry>()
 
 		for (vGame in vRegistry.games) {
-			val vVisual = com.bitsycore.cardbrowser.ui.games.GameVisual.of(vGame)
-			assertNotNull(vVisual.icon, "$vGame has no fallback mark")
-			// Neither presentation flag means anything without a logo to apply it to.
-			assertTrue(
-				!vVisual.tintLogo || vVisual.logo != null,
-				"$vGame is marked tintable but has no logo to tint",
-			)
+			val vVisual = assertNotNull(vArt.forGame(vGame), "${vGame.id} ships no art")
+			assertTrue(vVisual.accentArgb != 0L, "${vGame.id} has no accent colour")
 			assertTrue(
 				!vVisual.prefersDarkBackdrop || vVisual.logo != null,
-				"$vGame asks for a dark backdrop but has no logo to put on it",
+				"${vGame.id} asks for a dark backdrop but has no logo to put on it",
 			)
 			// Tinting recolours the whole image, so a logo that needs its own colours kept must
 			// not also be tinted -- the two flags answer different questions.

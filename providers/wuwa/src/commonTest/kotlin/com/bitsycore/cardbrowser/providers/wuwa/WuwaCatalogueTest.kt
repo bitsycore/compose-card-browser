@@ -4,17 +4,17 @@ import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.ExternalIdKey
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
-import kotlinx.coroutines.test.runTest
+import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesGame
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import kotlinx.coroutines.test.runTest
 
 /**
  * The bundled catalogue, and the adapter that serves it.
@@ -216,7 +216,7 @@ class WuwaCatalogueTest {
 
 	@Test
 	fun `sets are derived from card codes and count what they hold`() = runTest {
-		val vSets = mProvider.listSets(Game.WUTHERING_WAVES)
+		val vSets = mProvider.listSets()
 
 		assertEquals(listOf("BP01", "SD01", "SD02"), vSets.map { it.code })
 		assertTrue(vSets.all { it.name == it.code })
@@ -286,14 +286,14 @@ class WuwaCatalogueTest {
 	@Test
 	fun `search spans sets and matches names and codes alike`() = runTest {
 		val vByCode = mProvider.searchAllSets(
-			CardSearchRequest(game = Game.WUTHERING_WAVES, text = "SD01-003"),
+			CardSearchRequest(text = "SD01-003"),
 		)
 		assertTrue(vByCode.cards.isNotEmpty())
 		assertTrue(vByCode.cards.all { it.providerRawCollectorNumber == "SD01-003" })
 
 		val vName = assertNotNull(mProvider.cardDetail(id(SD01_003_BASE), CardLanguage.JAPANESE)).displayName
 		val vByName = mProvider.searchAllSets(
-			CardSearchRequest(game = Game.WUTHERING_WAVES, text = vName),
+			CardSearchRequest(text = vName),
 		)
 		assertTrue(vByName.cards.size > 1, "this character appears on several cards")
 	}
@@ -301,7 +301,7 @@ class WuwaCatalogueTest {
 	@Test
 	fun `a search matching nothing is an empty page rather than a failure`() = runTest {
 		val vPage = mProvider.searchAllSets(
-			CardSearchRequest(game = Game.WUTHERING_WAVES, text = "no such card anywhere"),
+			CardSearchRequest(text = "no such card anywhere"),
 		)
 
 		assertTrue(vPage.cards.isEmpty())

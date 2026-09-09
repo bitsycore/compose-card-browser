@@ -1,19 +1,19 @@
 package com.bitsycore.cardbrowser.providers.ygoprodeck
 
 import com.bitsycore.cardbrowser.core.model.CardLanguage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
+import com.bitsycore.cardbrowser.games.yugioh.YuGiOhGame
 import io.ktor.client.request.head
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpStatusCode
-import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 /**
  * Talks to the real YGOPRODeck API.
@@ -32,7 +32,7 @@ class YgoprodeckLiveSmokeTest {
 
 	@Test
 	fun `the set list loads with counts and dates`() = runBlocking<Unit> {
-		val vSets = provider().listSets(Game.YU_GI_OH)
+		val vSets = provider().listSets()
 
 		assertTrue(vSets.size > 500, "Expected a large catalogue, got ${vSets.size}")
 
@@ -134,7 +134,7 @@ class YgoprodeckLiveSmokeTest {
 		// The API answers 400 with an error body, not an empty list. Left unhandled that would put
 		// an error screen over a search that simply found nothing.
 		val vPage = provider().searchAllSets(
-			CardSearchRequest(game = Game.YU_GI_OH, text = "zzzzz no such card zzzzz"),
+			CardSearchRequest(text = "zzzzz no such card zzzzz"),
 		)
 
 		assertTrue(vPage.cards.isEmpty())
@@ -144,9 +144,7 @@ class YgoprodeckLiveSmokeTest {
 	@Test
 	fun `cross-set search finds a card and gives it a small image`() = runBlocking<Unit> {
 		val vPage = provider().searchAllSets(
-			CardSearchRequest(
-				game = Game.YU_GI_OH,
-				text = "Dark Magician",
+			CardSearchRequest(text = "Dark Magician",
 				language = CardLanguage.ENGLISH,
 				pageSize = 10,
 			),
@@ -166,7 +164,7 @@ class YgoprodeckLiveSmokeTest {
 	@Test
 	fun `sets that publish box art carry it as a symbol`() = runBlocking<Unit> {
 		val vClient = HttpClientFactory.create()
-		val vSets = YgoprodeckProvider(vClient).listSets(Game.YU_GI_OH)
+		val vSets = YgoprodeckProvider(vClient).listSets()
 
 		val vWith = vSets.filter { it.symbol != null }
 		assertTrue(vWith.isNotEmpty(), "Some sets should publish box art")

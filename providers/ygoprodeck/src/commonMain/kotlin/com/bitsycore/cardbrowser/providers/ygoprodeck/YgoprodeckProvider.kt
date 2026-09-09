@@ -3,7 +3,6 @@ package com.bitsycore.cardbrowser.providers.ygoprodeck
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.Attribution
@@ -17,6 +16,7 @@ import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
 import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
 import com.bitsycore.cardbrowser.data.net.mapProviderErrors
+import com.bitsycore.cardbrowser.games.yugioh.YuGiOhGame
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ClientRequestException
@@ -27,7 +27,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.appendPathSegments
 
 /**
- * The YGOPRODeck adapter, serving [Game.YU_GI_OH].
+ * The YGOPRODeck adapter, serving [YuGiOhGame].
  *
  * https://ygoprodeck.com -- a long-running community database. No key; a documented ceiling of
  * 20 requests per second, which this app is nowhere near.
@@ -65,14 +65,15 @@ import io.ktor.http.appendPathSegments
 class YgoprodeckProvider(
 	private val mClient: HttpClient,
 	private val mBaseUrl: String = DEFAULT_BASE_URL,
-) : CardProvider {
+) : CardProvider<YuGiOhGame> {
 
 	override val id: ProviderId = PROVIDER_ID
 
 	override val displayName: String = "YGOPRODeck"
 
+	override val game: YuGiOhGame = YuGiOhGame
+
 	override val capabilities: ProviderCapabilities = ProviderCapabilities(
-		games = setOf(Game.YU_GI_OH),
 		filtering = FilterSupport(
 			// `cardinfo.php` has parameters for type, attribute and level, and they are still not
 			// used. The repository fetches and caches a set whole for offline use, and filtering
@@ -83,14 +84,14 @@ class YgoprodeckProvider(
 				CardFilterField.DOMAIN,
 				CardFilterField.CARD_TYPE,
 				CardFilterField.RARITY,
-				CardFilterField.ENERGY_COST,
+				CardFilterField.COST,
 			),
 		),
 		sorting = setOf(
 			CardSortField.COLLECTOR_NUMBER,
 			CardSortField.NAME,
 			CardSortField.RARITY,
-			CardSortField.ENERGY_COST,
+			CardSortField.COST,
 		),
 		data = DataCapabilities(
 			languages = setOf(
@@ -121,8 +122,7 @@ class YgoprodeckProvider(
 	// ============
 	//  Sets
 
-	override suspend fun listSets(game: Game, language: CardLanguage?): List<CardSet> {
-		require(game == Game.YU_GI_OH) { "YGOPRODeck serves Yu-Gi-Oh! only, not $game" }
+	override suspend fun listSets(language: CardLanguage?): List<CardSet> {
 		// Set names are English whatever language the cards are requested in, so there is no
 		// per-language catalogue to select.
 		return mapProviderErrors("YGOPRODeck.listSets") {
@@ -153,7 +153,7 @@ class YgoprodeckProvider(
 				vSize = vSize,
 				vSet = CardSet(
 					id = request.setId,
-					game = Game.YU_GI_OH,
+					game = YuGiOhGame.id,
 					code = request.setId.local,
 					name = request.setId.local,
 					cardCount = null,
@@ -191,9 +191,6 @@ class YgoprodeckProvider(
 	}
 
 	override suspend fun searchAllSets(request: CardSearchRequest): CardPage {
-		require(request.game == Game.YU_GI_OH) {
-			"YGOPRODeck serves Yu-Gi-Oh! only, not ${request.game}"
-		}
 		val vLanguage = resolveLanguage(request.language) ?: CardLanguage.ENGLISH
 		return mapProviderErrors("YGOPRODeck.searchAllSets") {
 			fetchPage(

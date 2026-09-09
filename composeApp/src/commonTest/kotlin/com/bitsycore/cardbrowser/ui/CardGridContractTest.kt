@@ -1,12 +1,15 @@
 package com.bitsycore.cardbrowser.ui
 
-import com.bitsycore.cardbrowser.core.model.Game
-import com.bitsycore.cardbrowser.core.model.GameVocabulary
-import com.bitsycore.cardbrowser.core.provider.CardSortField
+import com.bitsycore.cardbrowser.core.game.GameProfile
+import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.core.provider.CardQuery
+import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
+import com.bitsycore.cardbrowser.games.magic.MagicGame
+import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.ui.cards.CardGridContract
 import com.bitsycore.cardbrowser.ui.cards.CardGridContract.Intent
 import com.bitsycore.cardbrowser.ui.cards.CardGridContract.UiState
@@ -54,7 +57,7 @@ class CardGridContractTest {
 				com.bitsycore.cardbrowser.core.model.ProviderId("riftcodex"),
 				"card-$number",
 			),
-			game = com.bitsycore.cardbrowser.core.model.Game.RIFTBOUND,
+			game = RiftboundGame.id,
 			setId = com.bitsycore.cardbrowser.core.model.SourceId(
 				com.bitsycore.cardbrowser.core.model.ProviderId("riftcodex"),
 				"OGN",
@@ -294,7 +297,7 @@ class CardGridContractTest {
 			UiState(),
 			Intent.CapabilitiesResolved(
 				supportedFilters = setOf(CardFilterField.TEXT, CardFilterField.RARITY),
-				game = Game.RIFTBOUND,
+				game = RiftboundGame,
 			),
 		)
 
@@ -310,23 +313,24 @@ class CardGridContractTest {
 		// words for every game.
 		val vState = reduce(
 			UiState(),
-			Intent.CapabilitiesResolved(supportedFilters = emptySet(), game = Game.MAGIC),
+			Intent.CapabilitiesResolved(supportedFilters = emptySet(), game = MagicGame),
 		)
 
-		assertEquals(Game.MAGIC, vState.game)
-		assertEquals("Colour", GameVocabulary.of(vState.game).domain)
-		assertEquals("Mana value", GameVocabulary.of(vState.game).energy)
+		assertEquals(MagicGame, vState.game)
+		// The words come from the game module now, not from a table in :core.
+		assertEquals("Colour", vState.game?.vocabulary?.domain)
+		assertEquals("Mana value", vState.game?.vocabulary?.cost)
 	}
 
 	@Test
 	fun `a game with no single cost number is not offered a cost sort`() {
 		// Pokémon costs are per attack, so there is no one number to sort on. Offering the option
 		// would produce a sort that leaves every card in place and looks broken.
-		val vPokemon = CardGridContract.sortOptions(Game.POKEMON).map { it.first }
-		val vMagic = CardGridContract.sortOptions(Game.MAGIC).map { it.first }
+		val vPokemon = CardGridContract.sortOptions(PokemonGame).map { it.first }
+		val vMagic = CardGridContract.sortOptions(MagicGame).map { it.first }
 
-		assertFalse(CardSortField.ENERGY_COST in vPokemon)
-		assertTrue(CardSortField.ENERGY_COST in vMagic)
+		assertFalse(CardSortField.COST in vPokemon)
+		assertTrue(CardSortField.COST in vMagic)
 	}
 
 	@Test

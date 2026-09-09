@@ -1,10 +1,10 @@
 package com.bitsycore.cardbrowser.ui.cards
 
 import com.bitsycore.cardbrowser.core.filter.CardFacets
+import com.bitsycore.cardbrowser.core.game.GameProfile
+import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardPrinting
-import com.bitsycore.cardbrowser.core.model.Game
-import com.bitsycore.cardbrowser.core.model.GameVocabulary
 import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.ProviderError
@@ -38,7 +38,7 @@ object CardGridContract :
 		 * Drives the filter sheet's wording -- "Colour" for Magic, "Faction" for Altered -- via
 		 * [GameVocabulary], and nothing else. Riftbound until the set is selected.
 		 */
-		val game: Game = Game.RIFTBOUND,
+		val game: GameProfile? = null,
 		val cards: List<CardPrinting> = emptyList(),
 		val facets: CardFacets = CardFacets(),
 		val query: CardQuery = CardQuery(),
@@ -146,7 +146,7 @@ object CardGridContract :
 		data class CapabilitiesResolved(
 			val supportedFilters: Set<com.bitsycore.cardbrowser.core.provider.CardFilterField>,
 			/** Which game's words the filter sheet should use. See [GameVocabulary]. */
-			val game: Game,
+			val game: GameProfile,
 		) : Intent
 	}
 
@@ -227,11 +227,11 @@ object CardGridContract :
 	 * Yu-Gi-Oh. A game with no single cost number -- Pokémon -- does not get the option at all,
 	 * rather than getting one that sorts every card equally.
 	 */
-	fun sortOptions(game: Game): List<Pair<CardSortField, String>> = buildList {
+	fun sortOptions(game: GameProfile?): List<Pair<CardSortField, String>> = buildList {
 		add(CardSortField.COLLECTOR_NUMBER to "Collector number")
 		add(CardSortField.NAME to "Name")
 		add(CardSortField.RARITY to "Rarity")
-		GameVocabulary.of(game).energy?.let { add(CardSortField.ENERGY_COST to it) }
+		game?.vocabulary?.cost?.let { add(CardSortField.COST to it) }
 	}
 
 	/** Human wording for a treatment chip. */

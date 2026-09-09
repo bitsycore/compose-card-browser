@@ -5,29 +5,25 @@ import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.ExternalIdKey
 import com.bitsycore.cardbrowser.core.model.Finish
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.respondError
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.request.HttpRequestData
 import io.ktor.client.request.HttpResponseData
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.async
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -35,6 +31,10 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runTest
 
 /**
  * The Riftcodex adapter, against captured responses.
@@ -67,7 +67,7 @@ class RiftcodexProviderTest {
 	fun `sets map with dates -- counts and both shapes of cardmarket id`() = runTest {
 		val vProvider = RiftcodexProvider(jsonClient(RiftcodexFixtures.SETS))
 
-		val vSets = vProvider.listSets(Game.RIFTBOUND)
+		val vSets = vProvider.listSets()
 
 		assertEquals(4, vSets.size)
 
@@ -96,7 +96,7 @@ class RiftcodexProviderTest {
 		// cards in it, and the empty result was then cached.
 		val vProvider = RiftcodexProvider(jsonClient(RiftcodexFixtures.SETS))
 
-		val vOrigins = vProvider.listSets(Game.RIFTBOUND).first { it.code == "OGN" }
+		val vOrigins = vProvider.listSets().first { it.code == "OGN" }
 
 		assertEquals("OGN", vOrigins.id.local)
 		assertEquals("riftcodex:OGN", vOrigins.id.qualified)
@@ -115,7 +115,7 @@ class RiftcodexProviderTest {
 			jsonClient("""{"items":[${RiftcodexFixtures.CARD_ORDINARY}],"total":1,"page":1,"size":100,"pages":1}"""),
 		)
 
-		val vOrigins = vSetProvider.listSets(Game.RIFTBOUND).first { it.code == "OGN" }
+		val vOrigins = vSetProvider.listSets().first { it.code == "OGN" }
 		val vCard = vCardProvider.listCards(request()).cards.single()
 
 		assertEquals(vOrigins.id.provider, vCard.setId.provider)
@@ -127,17 +127,10 @@ class RiftcodexProviderTest {
 	fun `set ids are qualified with the provider`() = runTest {
 		val vProvider = RiftcodexProvider(jsonClient(RiftcodexFixtures.SETS))
 
-		val vSets = vProvider.listSets(Game.RIFTBOUND)
+		val vSets = vProvider.listSets()
 
 		assertTrue(vSets.all { it.id.provider == RiftcodexProvider.PROVIDER_ID })
 		assertTrue(vSets.all { it.id.qualified.startsWith("riftcodex:") })
-	}
-
-	@Test
-	fun `asking Riftcodex for another game is a programming error`() = runTest {
-		val vProvider = RiftcodexProvider(jsonClient(RiftcodexFixtures.SETS))
-
-		assertFailsWith<IllegalArgumentException> { vProvider.listSets(Game.MAGIC) }
 	}
 
 	// ============
@@ -158,9 +151,9 @@ class RiftcodexProviderTest {
 		assertEquals("Unit", vCard.classification.type)
 		assertEquals("Champion", vCard.classification.supertype)
 		assertEquals(listOf("Fury"), vCard.classification.domains)
-		assertEquals(5, vCard.attributes.energy)
-		assertEquals(4, vCard.attributes.might)
-		assertEquals(1, vCard.attributes.power)
+		assertEquals(5, vCard.attributes.cost)
+		assertEquals(4, vCard.attributes.primary)
+		assertEquals(1, vCard.attributes.secondary)
 		assertEquals("Polar Engine Studio", vCard.artwork.artist)
 		assertEquals("Your spells and abilities deal 1 Bonus Damage.", vCard.text.rules)
 		assertEquals("I never play with matches.", vCard.text.flavour)
@@ -274,7 +267,7 @@ class RiftcodexProviderTest {
 		assertEquals("Mystery Card", vCard.displayName)
 		// No riftbound_id and no collector_number: the id is the last resort rather than a crash.
 		assertEquals("sparse-1", vCard.collectorNumber)
-		assertNull(vCard.attributes.energy)
+		assertNull(vCard.attributes.cost)
 		assertNull(vCard.text.rules)
 		assertNull(vCard.text.flavour)
 		assertNull(vCard.artwork.artist)
@@ -341,9 +334,12 @@ class RiftcodexProviderTest {
 
 	@Test
 	fun `declared capabilities match what the adapter actually does`() {
-		val vCapabilities = RiftcodexProvider(jsonClient("{}")).capabilities
+		val vProvider = RiftcodexProvider(jsonClient("{}"))
+		val vCapabilities = vProvider.capabilities
 
-		assertEquals(setOf(Game.RIFTBOUND), vCapabilities.games)
+		// The game is in the type now, not in a `Set<Game>` the capabilities carried.
+		assertEquals(RiftboundGame, vProvider.game)
+
 		assertEquals(100, vCapabilities.maxPageSize)
 		// Nothing is filtered remotely, text included: `/cards/search` is not a name search --
 		// see the class doc -- so every filter is honoured locally against the complete set.
@@ -363,7 +359,11 @@ class RiftcodexProviderTest {
 
 	@Test
 	fun `a rarity filter is reported as needing the complete set`() {
-		val vCapabilities = RiftcodexProvider(jsonClient("{}")).capabilities
+		val vProvider = RiftcodexProvider(jsonClient("{}"))
+		val vCapabilities = vProvider.capabilities
+
+		// The game is in the type now, not in a `Set<Game>` the capabilities carried.
+		assertEquals(RiftboundGame, vProvider.game)
 
 		assertTrue(
 			vCapabilities.filtering.requiresCompleteSet(CardQuery(rarities = setOf("Epic"))),
@@ -492,7 +492,7 @@ class RiftcodexProviderTest {
 		val vClient = clientOf { respondError(HttpStatusCode.InternalServerError) }
 
 		val vError = assertFailsWith<ProviderError.ServerError> {
-			RiftcodexProvider(vClient).listSets(Game.RIFTBOUND)
+			RiftcodexProvider(vClient).listSets()
 		}
 
 		assertTrue(vError.isTransient)
@@ -509,7 +509,7 @@ class RiftcodexProviderTest {
 		}
 
 		val vError = assertFailsWith<ProviderError.RateLimited> {
-			RiftcodexProvider(vClient).listSets(Game.RIFTBOUND)
+			RiftcodexProvider(vClient).listSets()
 		}
 
 		assertEquals(42, vError.retryAfterSeconds)
@@ -527,7 +527,7 @@ class RiftcodexProviderTest {
 		}
 
 		val vError = assertFailsWith<ProviderError.MalformedResponse> {
-			RiftcodexProvider(vClient).listSets(Game.RIFTBOUND)
+			RiftcodexProvider(vClient).listSets()
 		}
 
 		assertFalse(vError.isTransient)
@@ -544,7 +544,7 @@ class RiftcodexProviderTest {
 		}
 		val vProvider = RiftcodexProvider(vClient)
 
-		val vJob = async { vProvider.listSets(Game.RIFTBOUND) }
+		val vJob = async { vProvider.listSets() }
 		vJob.cancel()
 
 		assertFailsWith<CancellationException> { vJob.await() }

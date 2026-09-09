@@ -1,18 +1,18 @@
 package com.bitsycore.cardbrowser.providers.altered
 
 import com.bitsycore.cardbrowser.core.model.CardLanguage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
+import com.bitsycore.cardbrowser.games.altered.AlteredGame
 import io.ktor.client.request.head
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpStatusCode
-import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 /**
  * Talks to the real Altered mirror.
@@ -33,8 +33,8 @@ class AlteredLiveSmokeTest {
 
 	@Test
 	fun `the set index loads with localised names`() = runBlocking {
-		val vFrench = provider().listSets(Game.ALTERED, CardLanguage.FRENCH)
-		val vEnglish = provider().listSets(Game.ALTERED, CardLanguage.ENGLISH)
+		val vFrench = provider().listSets(CardLanguage.FRENCH)
+		val vEnglish = provider().listSets(CardLanguage.ENGLISH)
 
 		assertTrue(vFrench.size >= 20, "Expected ~20 sets, got ${vFrench.size}")
 		assertEquals(vFrench.size, vEnglish.size, "Both locales should list the same sets")
@@ -131,7 +131,7 @@ class AlteredLiveSmokeTest {
 		)
 
 		assertTrue(
-			vPage.cards.count { it.attributes.energy != null } > vPage.cards.size / 2,
+			vPage.cards.count { it.attributes.cost != null } > vPage.cards.size / 2,
 			"Most cards should have a hand cost",
 		)
 		assertTrue(

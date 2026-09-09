@@ -6,7 +6,8 @@ import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
-import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.game.GameProfile
+import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardProvider
@@ -75,7 +76,7 @@ class CardRepository(
 	 * replacing it -- losing a good set list because a request timed out would be a regression the
 	 * user feels immediately.
 	 */
-	fun setList(game: Game, language: CardLanguage? = null): Flow<DataSnapshot<List<CardSet>>> = flow {
+	fun setList(game: GameId, language: CardLanguage? = null): Flow<DataSnapshot<List<CardSet>>> = flow {
 		val vProvider = mRegistry.resolve(game, language)
 			?: run {
 				emit(DataSnapshot.failed<List<CardSet>>(ProviderError.Unknown("No provider serves $game")))
@@ -106,7 +107,7 @@ class CardRepository(
 		}
 
 		try {
-			val vSets = vProvider.listSets(game, language).sortedWith(SET_ORDER)
+			val vSets = vProvider.listSets(language).sortedWith(SET_ORDER)
 			val vFetchedAt = mClock()
 			mCache.write(
 				key = vKey,
@@ -114,7 +115,7 @@ class CardRepository(
 					schemaVersion = CacheEnvelope.CURRENT_SCHEMA_VERSION,
 					provider = vProvider.id,
 					language = language,
-					scope = CacheScope.SetList(game.name),
+					scope = CacheScope.SetList(game.value),
 					fetchedAtEpochMillis = vFetchedAt,
 					completeness = Completeness.COMPLETE,
 					payload = vSets,
@@ -159,7 +160,7 @@ class CardRepository(
 	 */
 	fun cards(
 		setId: SourceId,
-		game: Game,
+		game: GameId,
 		query: CardQuery,
 		language: CardLanguage? = null,
 		knownSetSize: Int? = null,
@@ -182,7 +183,13 @@ class CardRepository(
 			val vIsStale = vCachedComplete.isStale(vNow, mCardsTtlMillis)
 			emit(
 				DataSnapshot.cached(
-					value = cachedSetCards(vCachedComplete.payload, query, knownSetSize, vCachedComplete.completeness),
+					value = cachedSetCards(
+						payload = vCachedComplete.payload,
+						query = query,
+						knownSetSize = knownSetSize,
+						completeness = vCachedComplete.completeness,
+						rarityLadder = vProvider.game.rarityLadder,
+					),
 					fetchedAt = vCachedComplete.fetchedAtEpochMillis,
 					completeness = vCachedComplete.completeness,
 					isStale = vIsStale,
@@ -208,7 +215,13 @@ class CardRepository(
 			if (vCachedComplete != null) {
 				emit(
 					DataSnapshot(
-						value = cachedSetCards(vCachedComplete.payload, query, knownSetSize, vCachedComplete.completeness),
+						value = cachedSetCards(
+						payload = vCachedComplete.payload,
+						query = query,
+						knownSetSize = knownSetSize,
+						completeness = vCachedComplete.completeness,
+						rarityLadder = vProvider.game.rarityLadder,
+					),
 						origin = DataOrigin.CACHE,
 						completeness = vCachedComplete.completeness,
 						fetchedAtEpochMillis = vCachedComplete.fetchedAtEpochMillis,
@@ -235,10 +248,11 @@ class CardRepository(
 		query: CardQuery,
 		knownSetSize: Int?,
 		completeness: Completeness,
+		rarityLadder: List<String>,
 	): SetCards {
 		val vDeduped = dedupePrintings(payload)
 		return SetCards(
-			cards = CardFilterEngine.apply(vDeduped, query),
+			cards = CardFilterEngine.apply(vDeduped, query, rarityLadder),
 			isCompleteSet = completeness == Completeness.COMPLETE,
 			knownSetSize = knownSetSize,
 			cachedCardCount = vDeduped.size,
@@ -254,7 +268,7 @@ class CardRepository(
 	 * page propagates, because then there is nothing to be partial about.
 	 */
 	private suspend fun kotlinx.coroutines.flow.FlowCollector<DataSnapshot<SetCards>>.emitCompleteSet(
-		provider: CardProvider,
+		provider: CardProvider<GameProfile>,
 		setId: SourceId,
 		language: CardLanguage?,
 		query: CardQuery,
@@ -269,7 +283,11 @@ class CardRepository(
 			emit(
 				DataSnapshot(
 					value = SetCards(
-						cards = CardFilterEngine.apply(dedupePrintings(cards), query),
+						cards = CardFilterEngine.apply(
+							cards = dedupePrintings(cards),
+							query = query,
+							rarityLadder = provider.game.rarityLadder,
+						),
 						isCompleteSet = false,
 						knownSetSize = knownSetSize ?: total,
 						cachedCardCount = cards.size,
@@ -436,7 +454,7 @@ class CardRepository(
 		emit(
 			DataSnapshot(
 				value = SetCards(
-					cards = CardFilterEngine.apply(vDeduped, query),
+					cards = CardFilterEngine.apply(vDeduped, query, provider.game.rarityLadder),
 					isCompleteSet = vComplete,
 					knownSetSize = knownSetSize ?: vTotal,
 					cachedCardCount = vDeduped.size,
@@ -451,7 +469,7 @@ class CardRepository(
 
 	/** One provider-filtered page. Only used when the provider can honour the whole query. */
 	private suspend fun kotlinx.coroutines.flow.FlowCollector<DataSnapshot<SetCards>>.emitSinglePage(
-		provider: CardProvider,
+		provider: CardProvider<GameProfile>,
 		setId: SourceId,
 		language: CardLanguage?,
 		query: CardQuery,
@@ -469,7 +487,11 @@ class CardRepository(
 		emit(
 			DataSnapshot.fresh(
 				value = SetCards(
-					cards = CardFilterEngine.sort(dedupePrintings(vPage.cards), query),
+					cards = CardFilterEngine.sort(
+						cards = dedupePrintings(vPage.cards),
+						query = query,
+						rarityLadder = provider.game.rarityLadder,
+					),
 					// One page of a provider-filtered query covers the query completely only when
 					// the provider says there is no more.
 					isCompleteSet = !vPage.hasMore,
@@ -504,7 +526,7 @@ class CardRepository(
 	 *   know which cached sets to look in and to say how much of the game a local search covered
 	 */
 	fun searchAllSets(
-		game: Game,
+		game: GameId,
 		text: String,
 		knownSets: List<CardSet>,
 		language: CardLanguage? = null,
@@ -543,7 +565,6 @@ class CardRepository(
 			currentCoroutineContext().ensureActive()
 			val vPage = vProvider.searchAllSets(
 				CardSearchRequest(
-					game = game,
 					text = vNeedle,
 					language = language,
 					page = 1,
@@ -592,7 +613,7 @@ class CardRepository(
 	 * the UI reports stays a count of sets genuinely searched end to end.
 	 */
 	private suspend fun searchCachedSets(
-		provider: CardProvider,
+		provider: CardProvider<GameProfile>,
 		text: String,
 		knownSets: List<CardSet>,
 		language: CardLanguage?,
@@ -606,7 +627,7 @@ class CardRepository(
 			currentCoroutineContext().ensureActive()
 			val vCached = mCache.read(completeSetKey(provider, vSet.id, language), vSerializer) ?: continue
 			if (vCached.completeness == Completeness.COMPLETE) vComplete++
-			vHits += CardFilterEngine.apply(vCached.payload, vQuery)
+			vHits += CardFilterEngine.apply(vCached.payload, vQuery, provider.game.rarityLadder)
 		}
 
 		return CardSearchResults(
@@ -629,7 +650,7 @@ class CardRepository(
 	 */
 	suspend fun cardDetail(
 		id: SourceId,
-		game: Game,
+		game: GameId,
 		setId: SourceId?,
 		language: CardLanguage? = null,
 	): DataSnapshot<CardPrinting> {
@@ -674,7 +695,7 @@ class CardRepository(
 	 * Returns qualified ids so the UI can match without reconstructing [SourceId] values.
 	 */
 	suspend fun savedSetIds(
-		game: Game,
+		game: GameId,
 		sets: List<CardSet>,
 		language: CardLanguage? = null,
 	): Set<String> {
@@ -694,14 +715,14 @@ class CardRepository(
 	 * Returns empty facets when the set has not been fully fetched: offering filters derived from
 	 * three of four pages would hide values that exist in the fourth.
 	 */
-	suspend fun facetsFor(setId: SourceId, game: Game, language: CardLanguage? = null): CardFacets {
+	suspend fun facetsFor(setId: SourceId, game: GameId, language: CardLanguage? = null): CardFacets {
 		val vProvider = mRegistry.resolve(game, language) ?: return CardFacets()
 		val vCached = mCache.read(
 			completeSetKey(vProvider, setId, language),
 			CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>())),
 		) ?: return CardFacets()
 		if (vCached.completeness != Completeness.COMPLETE) return CardFacets()
-		return CardFilterEngine.facetsOf(vCached.payload)
+		return CardFilterEngine.facetsOf(vCached.payload, vProvider.game.rarityLadder)
 	}
 
 	/**
@@ -737,10 +758,10 @@ class CardRepository(
 	// ============
 	//  Keys
 
-	private fun setListKey(provider: CardProvider, game: Game, language: CardLanguage?) =
-		CacheKey.of("v${CacheEnvelope.CURRENT_SCHEMA_VERSION}", provider.id.value, "sets", game.name, language?.code ?: "-")
+	private fun setListKey(provider: CardProvider<GameProfile>, game: GameId, language: CardLanguage?) =
+		CacheKey.of("v${CacheEnvelope.CURRENT_SCHEMA_VERSION}", provider.id.value, "sets", game.value, language?.code ?: "-")
 
-	private fun completeSetKey(provider: CardProvider, setId: SourceId, language: CardLanguage?) =
+	private fun completeSetKey(provider: CardProvider<GameProfile>, setId: SourceId, language: CardLanguage?) =
 		CacheKey.of("v${CacheEnvelope.CURRENT_SCHEMA_VERSION}", provider.id.value, "set", setId.qualified, language?.code ?: "-")
 
 	companion object {

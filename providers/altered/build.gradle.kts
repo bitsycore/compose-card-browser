@@ -24,6 +24,9 @@ kotlin {
 	sourceSets {
 		commonMain.dependencies {
 			api(project(":core"))
+			// The game this adapter serves, named in its own type: `CardProvider<AlteredGame>`.
+			// `api` so a consumer can see the profile without depending on the game module too.
+			api(project(":games:altered"))
 			implementation(project(":data"))
 			implementation(libs.ktor.client.core)
 			implementation(libs.ktor.client.content.negotiation)

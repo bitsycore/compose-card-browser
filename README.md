@@ -184,7 +184,10 @@ anyway — they end up in the binary.)
 
 ## Games and providers
 
-Seven games, seven adapters, one authoritative source each. Every one was verified by hitting the
+Seven games, seven adapters, one authoritative source each. A game and a provider are separate
+modules: `:games:riftbound` declares what Riftbound *is* — its vocabulary, its rarity ladder, its
+Cardmarket segment, its logo — and `:providers:riftcodex` declares where the data comes from, naming
+the game in its own type as `CardProvider<RiftboundGame>`. `:core` names no game at all. Every one was verified by hitting the
 live endpoint and reading the real response — [`docs/PROVIDER_RESEARCH.md`](docs/PROVIDER_RESEARCH.md)
 records what each check found, including the two that changed the design.
 

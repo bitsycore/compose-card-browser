@@ -15,15 +15,15 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
-import androidx.navigation3.scene.Scene
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
+import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.ui.cards.CardGridScreen
 import com.bitsycore.cardbrowser.ui.common.InstallImageLoader
 import com.bitsycore.cardbrowser.ui.common.LocalSharedTransitionScope
 import com.bitsycore.cardbrowser.ui.detail.CardDetailScreen
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.ui.games.GameListScreen
 import com.bitsycore.cardbrowser.ui.search.SearchScreen
 import com.bitsycore.cardbrowser.ui.sets.SetListScreen
@@ -124,17 +124,18 @@ fun App() {
 
 					is Route.Games -> NavEntry(vRoute) {
 						GameListScreen(
-							onOpenGame = { vGame -> vBackStack.add(Route.Sets(vGame.name)) },
+							onOpenGame = { vGame -> vBackStack.add(Route.Sets(vGame.id.value)) },
 							onOpenSettings = { vBackStack.add(Route.Settings) },
 						)
 					}
 
 					is Route.Sets -> NavEntry(vRoute) {
 						SetListScreen(
-							// A route naming a game this build no longer routes falls back rather
-							// than crashing on a restored back stack.
-							game = Game.entries.firstOrNull { it.name == vRoute.game }
-								?: Game.RIFTBOUND,
+							// A route naming a game this build no longer routes resolves to null in
+							// the view model, which shows an error rather than crashing on a
+							// restored back stack -- and rather than silently opening Riftbound,
+							// which is what the old fallback did.
+							game = GameId(vRoute.game),
 							onBack = { vBackStack.removeLastOrNull() },
 							onOpenSet = { vSet ->
 								vBackStack.add(
@@ -146,16 +147,17 @@ fun App() {
 								)
 							},
 							onOpenSettings = { vBackStack.add(Route.Settings) },
-							onOpenSearch = { vGame -> vBackStack.add(Route.Search(vGame.name)) },
+							onOpenSearch = { vGame -> vBackStack.add(Route.Search(vGame.id.value)) },
 						)
 					}
 
 					is Route.Search -> NavEntry(vRoute) {
 						SearchScreen(
-							// A route naming a game this build no longer routes falls back rather
-							// than crashing on a restored back stack.
-							game = Game.entries.firstOrNull { it.name == vRoute.game }
-								?: Game.RIFTBOUND,
+							// A route naming a game this build no longer routes resolves to null in
+							// the view model, which shows an error rather than crashing on a
+							// restored back stack -- and rather than silently opening Riftbound,
+							// which is what the old fallback did.
+							game = GameId(vRoute.game),
 							onBack = { vBackStack.removeLastOrNull() },
 							onOpenCard = { vCard ->
 								vBackStack.add(

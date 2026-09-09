@@ -1,6 +1,6 @@
 package com.bitsycore.cardbrowser.di
 
-import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.provider.CardProvider
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.ProviderRoute
@@ -9,6 +9,21 @@ import com.bitsycore.cardbrowser.data.cache.MetadataCache
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundArt
+import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
+import com.bitsycore.cardbrowser.games.pokemon.PokemonArt
+import com.bitsycore.cardbrowser.games.magic.MagicGame
+import com.bitsycore.cardbrowser.games.magic.MagicArt
+import com.bitsycore.cardbrowser.games.onepiece.OnePieceGame
+import com.bitsycore.cardbrowser.games.onepiece.OnePieceArt
+import com.bitsycore.cardbrowser.games.altered.AlteredGame
+import com.bitsycore.cardbrowser.games.altered.AlteredArt
+import com.bitsycore.cardbrowser.games.yugioh.YuGiOhGame
+import com.bitsycore.cardbrowser.games.yugioh.YuGiOhArt
+import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesGame
+import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesArt
+import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
 import com.bitsycore.cardbrowser.providers.altered.AlteredProvider
 import com.bitsycore.cardbrowser.providers.optcg.OptcgProvider
 import com.bitsycore.cardbrowser.providers.riftcodex.RiftcodexProvider
@@ -20,9 +35,9 @@ import com.bitsycore.cardbrowser.ui.browse.BrowseSession
 import com.bitsycore.cardbrowser.ui.cards.CardGridViewModel
 import com.bitsycore.cardbrowser.ui.detail.CardDetailArgs
 import com.bitsycore.cardbrowser.ui.detail.CardDetailViewModel
+import com.bitsycore.cardbrowser.ui.games.GameListViewModel
 import com.bitsycore.cardbrowser.ui.search.SearchArgs
 import com.bitsycore.cardbrowser.ui.search.SearchViewModel
-import com.bitsycore.cardbrowser.ui.games.GameListViewModel
 import com.bitsycore.cardbrowser.ui.sets.SetListArgs
 import com.bitsycore.cardbrowser.ui.sets.SetListViewModel
 import com.bitsycore.cardbrowser.ui.settings.SettingsViewModel
@@ -92,9 +107,28 @@ val appModule = module {
 	single { YgoprodeckProvider(mClient = get()) } bind CardProvider::class
 	single { WuwaProvider() } bind CardProvider::class
 
+	// Every game's mark, gathered from the game modules themselves.
+	//
+	// The only place the app enumerates games, and it enumerates *art* rather than games: which
+	// games exist is still whatever the routing table below routes. A game module that ships a
+	// profile but no entry here simply draws no logo; it does not disappear.
+	single {
+		GameArtRegistry(
+			listOf(
+				RiftboundArt,
+				PokemonArt,
+				MagicArt,
+				OnePieceArt,
+				AlteredArt,
+				YuGiOhArt,
+				WutheringWavesArt,
+			),
+		)
+	}
+
 	single {
 		ProviderRegistry(
-			providers = getAll<CardProvider>(),
+			providers = getAll<CardProvider<GameProfile>>(),
 			routes = providerRoutes,
 		)
 	}
@@ -143,19 +177,19 @@ val appModule = module {
  * example a Korean-capable Riftbound source would be:
  *
  * ```kotlin
- * ProviderRoute(Game.RIFTBOUND, SomeProvider.PROVIDER_ID, language = CardLanguage.KOREAN)
+ * ProviderRoute(RiftboundGame.id, SomeProvider.PROVIDER_ID, language = CardLanguage.KOREAN)
  * ```
  *
  * Games with no entry are not offered by the app at all; there are no dead menu items.
  */
 val providerRoutes: List<ProviderRoute> = listOf(
-	ProviderRoute(game = Game.RIFTBOUND, provider = RiftcodexProvider.PROVIDER_ID),
-	ProviderRoute(game = Game.POKEMON, provider = TcgdexProvider.PROVIDER_ID),
-	ProviderRoute(game = Game.MAGIC, provider = ScryfallProvider.PROVIDER_ID),
-	ProviderRoute(game = Game.ONE_PIECE, provider = OptcgProvider.PROVIDER_ID),
-	ProviderRoute(game = Game.ALTERED, provider = AlteredProvider.PROVIDER_ID),
-	ProviderRoute(game = Game.YU_GI_OH, provider = YgoprodeckProvider.PROVIDER_ID),
-	ProviderRoute(game = Game.WUTHERING_WAVES, provider = WuwaProvider.PROVIDER_ID),
+	ProviderRoute(game = RiftboundGame.id, provider = RiftcodexProvider.PROVIDER_ID),
+	ProviderRoute(game = PokemonGame.id, provider = TcgdexProvider.PROVIDER_ID),
+	ProviderRoute(game = MagicGame.id, provider = ScryfallProvider.PROVIDER_ID),
+	ProviderRoute(game = OnePieceGame.id, provider = OptcgProvider.PROVIDER_ID),
+	ProviderRoute(game = AlteredGame.id, provider = AlteredProvider.PROVIDER_ID),
+	ProviderRoute(game = YuGiOhGame.id, provider = YgoprodeckProvider.PROVIDER_ID),
+	ProviderRoute(game = WutheringWavesGame.id, provider = WuwaProvider.PROVIDER_ID),
 	// Cyberpunk TCG has no entry, and that is the mechanism working rather than an omission: the
 	// game does not reach retail until November 2026 and no data source for it exists. Because
 	// `ProviderRegistry.games` is derived from this table, it simply does not appear in the game

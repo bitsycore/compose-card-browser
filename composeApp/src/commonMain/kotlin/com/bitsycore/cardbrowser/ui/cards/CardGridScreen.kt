@@ -28,23 +28,23 @@ import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Badge
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.MediumTopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -54,32 +54,32 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.bitsycore.cardbrowser.core.filter.CardFilterEngine
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardOrientation
 import com.bitsycore.cardbrowser.core.model.CardPrinting
-import com.bitsycore.cardbrowser.ui.common.CardImage
-import com.bitsycore.cardbrowser.ui.common.ImageVariant
-import com.bitsycore.cardbrowser.ui.common.sharedCardArt
-import com.bitsycore.cardbrowser.ui.common.EmptyState
-import com.bitsycore.cardbrowser.ui.common.ErrorState
-import com.bitsycore.cardbrowser.ui.common.LoadingState
-import com.bitsycore.cardbrowser.core.filter.CardFilterEngine
 import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.ProviderError
+import com.bitsycore.cardbrowser.ui.browse.BrowseSession
+import com.bitsycore.cardbrowser.ui.common.CardImage
+import com.bitsycore.cardbrowser.ui.common.EmptyState
+import com.bitsycore.cardbrowser.ui.common.ErrorState
+import com.bitsycore.cardbrowser.ui.common.ImageVariant
+import com.bitsycore.cardbrowser.ui.common.LoadingState
 import com.bitsycore.cardbrowser.ui.common.NoticeBanner
+import com.bitsycore.cardbrowser.ui.common.sharedCardArt
 import com.bitsycore.cardbrowser.ui.preview.PreviewData
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.distinctUntilChanged
-import com.bitsycore.cardbrowser.ui.browse.BrowseSession
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -487,7 +487,7 @@ private fun previewGridState(
 		CardFilterField.DOMAIN,
 		CardFilterField.CARD_TYPE,
 		CardFilterField.RARITY,
-		CardFilterField.ENERGY_COST,
+		CardFilterField.COST,
 	),
 	facets = CardFilterEngine.facetsOf(PreviewData.CARDS),
 )

@@ -74,34 +74,35 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.cardmarket.CardmarketLink
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
+import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardOrientation
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.Finish
-import com.bitsycore.cardbrowser.core.model.GameVocabulary
 import com.bitsycore.cardbrowser.core.provider.ProviderError
+import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.ui.common.CardImage
-import com.bitsycore.cardbrowser.ui.common.ImageVariant
 import com.bitsycore.cardbrowser.ui.common.ErrorState
 import com.bitsycore.cardbrowser.ui.common.FullscreenCardViewer
+import com.bitsycore.cardbrowser.ui.common.ImageVariant
 import com.bitsycore.cardbrowser.ui.common.LoadingState
-import com.bitsycore.cardbrowser.ui.preview.PreviewData
-import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
-import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.ui.common.PrefetchCardArt
 import com.bitsycore.cardbrowser.ui.common.sharedCardArt
+import com.bitsycore.cardbrowser.ui.preview.PreviewData
+import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import com.bitsycore.lib.pulse.compose.collectEffect
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import org.koin.core.parameter.parametersOf
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
 
 /**
  * One printing, in full, with the rest of the set a swipe away.
@@ -565,7 +566,7 @@ private fun CardDetailPage(
 			// The glance: what someone reads before the rules text. Everything the provider stated
 			// is in the details table further down, so a chip here is a repeat only of the handful
 			// worth seeing without scrolling. Each is omitted when the provider did not state it.
-			val vWords = remember(card.game) { GameVocabulary.of(card.game) }
+			val vWords = state.game?.vocabulary ?: GameVocabulary()
 			FlowRow(
 				horizontalArrangement = Arrangement.spacedBy(6.dp),
 				verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -576,11 +577,15 @@ private fun CardDetailPage(
 				card.classification.domains.forEach { StatChip(it) }
 				// Labelled with the game's own word: "Mana value 3" for Magic, "Level 4" for
 				// Yu-Gi-Oh. "3 energy" was Riftbound's word applied to all seven games.
-				card.attributes.energy?.let { vEnergy ->
-					StatChip(vWords.energy?.let { "$it $vEnergy" } ?: "$vEnergy")
+				card.attributes.cost?.let { vCost ->
+					StatChip(vWords.cost?.let { "$it $vCost" } ?: "$vCost")
 				}
-				card.attributes.might?.let { StatChip("Might $it") }
-				card.attributes.power?.let { StatChip("Power $it") }
+				card.attributes.primary?.let { vStat ->
+					StatChip(vWords.primaryStat?.let { "$it $vStat" } ?: "$vStat")
+				}
+				card.attributes.secondary?.let { vStat ->
+					StatChip(vWords.secondaryStat?.let { "$it $vStat" } ?: "$vStat")
+				}
 				if (card.artwork.treatment != ArtworkTreatment.STANDARD) {
 					StatChip(card.artwork.treatment.displayName)
 				}
@@ -1068,6 +1073,7 @@ private fun previewDetailState(
 	requestedLanguage = requestedLanguage,
 	providerLanguages = providerLanguages,
 	providerDisplayName = "Riftcodex",
+	game = RiftboundGame,
 	attribution = "Card data from Riftcodex, an unofficial fan project not affiliated with Riot Games.",
 )
 

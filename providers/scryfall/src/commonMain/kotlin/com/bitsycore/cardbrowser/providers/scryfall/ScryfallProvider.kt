@@ -3,7 +3,6 @@ package com.bitsycore.cardbrowser.providers.scryfall
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.Attribution
@@ -17,6 +16,7 @@ import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
 import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
 import com.bitsycore.cardbrowser.data.net.mapProviderErrors
+import com.bitsycore.cardbrowser.games.magic.MagicGame
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ClientRequestException
@@ -27,7 +27,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.appendPathSegments
 
 /**
- * The Scryfall adapter, serving [Game.MAGIC].
+ * The Scryfall adapter, serving [MagicGame].
  *
  * Scryfall (https://scryfall.com) is the reference Magic database. No key; it asks for an
  * identifying `User-Agent` and for roughly 50–100 ms between requests, both of which are honoured
@@ -58,20 +58,21 @@ import io.ktor.http.appendPathSegments
  *   `display`.
  * - **Cardmarket**: `cardmarket_id` is a product id, but it is a *number* and this app only builds
  *   Cardmarket URLs from path slugs it has seen. It is stored for provenance and no link is built
- *   from it -- see `CardmarketLinkBuilder.gameSlug`.
+ *   from it -- see `GameProfile.cardmarketSlug`.
  * - **Cross-set search**: the same `/cards/search` endpoint without a `set:` term.
  */
 class ScryfallProvider(
 	private val mClient: HttpClient,
 	private val mBaseUrl: String = DEFAULT_BASE_URL,
-) : CardProvider {
+) : CardProvider<MagicGame> {
 
 	override val id: ProviderId = PROVIDER_ID
 
 	override val displayName: String = "Scryfall"
 
+	override val game: MagicGame = MagicGame
+
 	override val capabilities: ProviderCapabilities = ProviderCapabilities(
-		games = setOf(Game.MAGIC),
 		filtering = FilterSupport(
 			// Scryfall's query language could express every one of these remotely, and they are
 			// still declared local. A Magic set is at most three requests and the repository caches
@@ -84,7 +85,7 @@ class ScryfallProvider(
 				CardFilterField.DOMAIN,
 				CardFilterField.CARD_TYPE,
 				CardFilterField.RARITY,
-				CardFilterField.ENERGY_COST,
+				CardFilterField.COST,
 				CardFilterField.ARTWORK_TREATMENT,
 				CardFilterField.FINISH,
 			),
@@ -93,7 +94,7 @@ class ScryfallProvider(
 			CardSortField.COLLECTOR_NUMBER,
 			CardSortField.NAME,
 			CardSortField.RARITY,
-			CardSortField.ENERGY_COST,
+			CardSortField.COST,
 		),
 		data = DataCapabilities(
 			languages = setOf(
@@ -129,8 +130,7 @@ class ScryfallProvider(
 	// ============
 	//  Sets
 
-	override suspend fun listSets(game: Game, language: CardLanguage?): List<CardSet> {
-		require(game == Game.MAGIC) { "Scryfall serves Magic only, not $game" }
+	override suspend fun listSets(language: CardLanguage?): List<CardSet> {
 		// Set names are English on Scryfall whatever language the cards are asked for, so there is
 		// no per-language catalogue and `language` has nothing to select.
 		return mapProviderErrors("Scryfall.listSets") {
@@ -205,7 +205,6 @@ class ScryfallProvider(
 		}
 
 	override suspend fun searchAllSets(request: CardSearchRequest): CardPage {
-		require(request.game == Game.MAGIC) { "Scryfall serves Magic only, not ${request.game}" }
 		val vLanguage = resolveLanguage(request.language) ?: CardLanguage.ENGLISH
 		return mapProviderErrors("Scryfall.searchAllSets") {
 			// Quoted, so a multi-word search is one name term rather than several loose ones that

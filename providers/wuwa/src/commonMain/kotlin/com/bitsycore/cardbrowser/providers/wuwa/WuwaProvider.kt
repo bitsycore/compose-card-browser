@@ -3,7 +3,6 @@ package com.bitsycore.cardbrowser.providers.wuwa
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.CardSet
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.Attribution
@@ -16,9 +15,10 @@ import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
 import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
+import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesGame
 
 /**
- * The Wuthering Waves TCG adapter, serving [Game.WUTHERING_WAVES] from a bundled snapshot.
+ * The Wuthering Waves TCG adapter, serving [WutheringWavesGame] from a bundled snapshot.
  *
  * ## Why there is no HTTP here
  *
@@ -58,14 +58,15 @@ import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
  * - **Finishes, artist, Cardmarket**: no fields anywhere. Unstated, not absent -- Cardmarket has no
  *   section for this game at all, it being Japan-only so far.
  */
-class WuwaProvider : CardProvider {
+class WuwaProvider : CardProvider<WutheringWavesGame> {
 
 	override val id: ProviderId = PROVIDER_ID
 
 	override val displayName: String = "UCP Wuthering Waves TCG"
 
+	override val game: WutheringWavesGame = WutheringWavesGame
+
 	override val capabilities: ProviderCapabilities = ProviderCapabilities(
-		games = setOf(Game.WUTHERING_WAVES),
 		filtering = FilterSupport(
 			// Nothing is remote because nothing is a request. The whole catalogue is in memory and
 			// complete, which is the one filtering situation with no trade-offs in it.
@@ -75,7 +76,7 @@ class WuwaProvider : CardProvider {
 				CardFilterField.CARD_TYPE,
 				CardFilterField.DOMAIN,
 				CardFilterField.RARITY,
-				CardFilterField.ENERGY_COST,
+				CardFilterField.COST,
 				CardFilterField.ARTWORK_TREATMENT,
 				CardFilterField.LANGUAGE,
 			),
@@ -84,7 +85,7 @@ class WuwaProvider : CardProvider {
 			CardSortField.COLLECTOR_NUMBER,
 			CardSortField.NAME,
 			CardSortField.RARITY,
-			CardSortField.ENERGY_COST,
+			CardSortField.COST,
 		),
 		data = DataCapabilities(
 			// Restated rather than read from the snapshot, because `capabilities` is a plain `val`
@@ -117,10 +118,7 @@ class WuwaProvider : CardProvider {
 	// ============
 	//  Sets
 
-	override suspend fun listSets(game: Game, language: CardLanguage?): List<CardSet> {
-		require(game == Game.WUTHERING_WAVES) {
-			"This adapter serves Wuthering Waves TCG only, not $game"
-		}
+	override suspend fun listSets(language: CardLanguage?): List<CardSet> {
 		return WuwaCatalogue.sets(languageFor(language), id)
 	}
 
@@ -152,9 +150,6 @@ class WuwaProvider : CardProvider {
 	 * first.
 	 */
 	override suspend fun searchAllSets(request: CardSearchRequest): CardPage {
-		require(request.game == Game.WUTHERING_WAVES) {
-			"This adapter serves Wuthering Waves TCG only, not ${request.game}"
-		}
 		val vNeedle = request.text.trim()
 		val vCards = WuwaCatalogue
 			.printings(languageFor(request.language), id)

@@ -1,8 +1,9 @@
 package com.bitsycore.cardbrowser.ui.search
 
 import androidx.lifecycle.viewModelScope
+import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.CardSet
-import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.repository.SearchScope
@@ -13,7 +14,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /** Which game to search. Passed at construction so the first frame already knows. */
-data class SearchArgs(val game: Game)
+data class SearchArgs(val game: GameId)
 
 /**
  * Runs cross-set searches and keeps the set list they need to hand.
@@ -29,7 +30,7 @@ class SearchViewModel(
 	private val mArgs: SearchArgs,
 ) : PulseViewModel<SearchContract.UiState, SearchContract.Intent, SearchContract.Effect>(
 	initialState = SearchContract.UiState(
-		game = mArgs.game,
+		game = mRegistry.profileFor(mArgs.game),
 		// Read synchronously from the registry, so the "only searching what you have already
 		// downloaded" notice is right on the first frame rather than appearing a moment later.
 		isProviderSearchable = mRegistry.resolve(mArgs.game)?.capabilities?.data?.crossSetSearch == true,

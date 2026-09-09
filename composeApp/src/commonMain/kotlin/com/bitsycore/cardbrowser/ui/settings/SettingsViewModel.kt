@@ -1,7 +1,7 @@
 package com.bitsycore.cardbrowser.ui.settings
 
 import androidx.lifecycle.viewModelScope
-import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.cache.CacheManager
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
@@ -23,7 +23,10 @@ class SettingsViewModel(
 		dispatch(SettingsContract.Intent.PreferencesRead(mPreferences.preferences.value))
 		dispatch(
 			SettingsContract.Intent.AttributionRead(
-				mRegistry.resolve(Game.RIFTBOUND)?.capabilities?.attribution?.text,
+				// The first routed game's source. One line, and this screen has room for one;
+				// every provider's own notice is shown on the card it supplied.
+				mRegistry.games.firstOrNull()?.let { mRegistry.resolve(it) }
+					?.capabilities?.attribution?.text,
 			),
 		)
 	}

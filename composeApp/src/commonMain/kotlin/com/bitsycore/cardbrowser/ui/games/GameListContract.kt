@@ -1,6 +1,6 @@
 package com.bitsycore.cardbrowser.ui.games
 
-import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.lib.pulse.container.ContainerContract
 
 /**
@@ -20,9 +20,9 @@ object GameListContract :
 	 * @property lastGame highlighted, so returning to the app lands where you left off
 	 */
 	data class UiState(
-		val games: List<Game> = emptyList(),
-		val sources: Map<Game, String> = emptyMap(),
-		val lastGame: Game? = null,
+		val games: List<GameProfile> = emptyList(),
+		val sources: Map<GameProfile, String> = emptyMap(),
+		val lastGame: GameProfile? = null,
 		val isLoading: Boolean = true,
 	)
 
@@ -30,13 +30,13 @@ object GameListContract :
 
 		/** The registry and preferences answered. */
 		data class Loaded(
-			val games: List<Game>,
-			val sources: Map<Game, String>,
-			val lastGame: Game?,
+			val games: List<GameProfile>,
+			val sources: Map<GameProfile, String>,
+			val lastGame: GameProfile?,
 		) : Intent
 
 		/** A game was chosen; remembered for next launch. */
-		data class GameOpened(val game: Game) : Intent
+		data class GameOpened(val game: GameProfile) : Intent
 	}
 
 	sealed interface Effect

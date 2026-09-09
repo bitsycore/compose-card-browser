@@ -1,9 +1,8 @@
 package com.bitsycore.cardbrowser.ui.sets
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,14 +13,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Style
 import androidx.compose.material.icons.outlined.OfflinePin
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Style
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -39,23 +39,25 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import coil3.compose.SubcomposeAsyncImage
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import coil3.compose.SubcomposeAsyncImage
+import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.CardSet
-import com.bitsycore.cardbrowser.core.model.Game
+import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.ui.common.EmptyState
 import com.bitsycore.cardbrowser.ui.common.ErrorState
 import com.bitsycore.cardbrowser.ui.common.LoadingState
 import com.bitsycore.cardbrowser.ui.common.NoticeBanner
 import com.bitsycore.cardbrowser.ui.preview.PreviewData
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
-import androidx.compose.ui.tooling.preview.Preview
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -68,11 +70,11 @@ import org.koin.core.parameter.parametersOf
  */
 @Composable
 fun SetListScreen(
-	game: Game,
+	game: GameId,
 	onBack: () -> Unit,
 	onOpenSet: (CardSet) -> Unit,
 	onOpenSettings: () -> Unit,
-	onOpenSearch: (Game) -> Unit,
+	onOpenSearch: (GameProfile) -> Unit,
 	viewModel: SetListViewModel = koinViewModel { parametersOf(SetListArgs(game)) },
 ) {
 	val vState by viewModel.collectAsStateWithLifecycle()
@@ -103,7 +105,7 @@ fun SetListContent(
 	onBack: () -> Unit = {},
 	onOpenSet: (CardSet) -> Unit,
 	onOpenSettings: () -> Unit,
-	onOpenSearch: (Game) -> Unit = {},
+	onOpenSearch: (GameProfile) -> Unit = {},
 ) {
 	val vState = state
 
@@ -122,11 +124,11 @@ fun SetListContent(
 							tint = MaterialTheme.colorScheme.primary,
 						)
 						Spacer(Modifier.size(10.dp))
-						Text(vState.game.shortName)
+						Text(vState.game?.shortName.orEmpty())
 					}
 				},
 				actions = {
-					IconButton(onClick = { onOpenSearch(vState.game) }) {
+					IconButton(onClick = { vState.game?.let(onOpenSearch) }) {
 						Icon(
 							Icons.Outlined.TravelExplore,
 							contentDescription = "Search cards across all sets",
@@ -213,9 +215,9 @@ fun SetListContent(
  */
 @Composable
 private fun GameSwitcher(
-	games: List<Game>,
-	selected: Game,
-	onSelect: (Game) -> Unit,
+	games: List<GameProfile>,
+	selected: GameProfile?,
+	onSelect: (GameProfile) -> Unit,
 ) {
 	val vScroll = rememberScrollState()
 	Row(
@@ -499,8 +501,8 @@ private fun SetListGameSwitcherPreview() = PreviewFrame {
 		state = SetListContract.UiState(
 			sets = PreviewData.SETS,
 			isLoading = false,
-			availableGames = Game.entries.toList(),
-			game = Game.RIFTBOUND,
+			availableGames = listOf(RiftboundGame),
+			game = RiftboundGame,
 		),
 		dispatch = {},
 		onOpenSet = {},

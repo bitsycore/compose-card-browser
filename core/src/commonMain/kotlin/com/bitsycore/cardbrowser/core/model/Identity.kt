@@ -4,29 +4,30 @@ import kotlin.jvm.JvmInline
 import kotlinx.serialization.Serializable
 
 // ==================
-// MARK: Game
+// MARK: Game identity
 // ==================
 
 /**
- * A trading card game.
+ * A game's stable identity.
  *
- * Listed here rather than discovered from providers so that game-specific filter definitions and
- * presentation can be written against a closed set. Being named here is not the same as being
- * offered: the UI reads `ProviderRegistry.games`, so a game with no routed adapter never appears as
- * a dead entry. See docs/PROVIDER_RESEARCH.md for what each one is served by, and why Cyberpunk TCG
- * is deliberately absent from this list rather than present and unroutable.
+ * A string rather than an enum, and that is the point: core does not name a single game. What games
+ * exist is decided by which `:games:*` modules are compiled in and routed, each of which declares a
+ * `GameProfile` carrying one of these. A closed enum here would mean every new game edited core,
+ * and every table keyed by game would live in core to stay exhaustive -- which is exactly the
+ * arrangement this replaced.
  *
- * @property shortName for the game switcher, where "Magic: The Gathering" does not fit
+ * The string is written into cache keys and into every `CardPrinting`, so a game picks one and keeps
+ * it: renaming it orphans every cached record for that game.
  */
+@JvmInline
 @Serializable
-enum class Game(val displayName: String, val shortName: String) {
-	RIFTBOUND("Riftbound", "Riftbound"),
-	POKEMON("Pokémon", "Pokémon"),
-	MAGIC("Magic: The Gathering", "Magic"),
-	ONE_PIECE("One Piece Card Game", "One Piece"),
-	ALTERED("Altered", "Altered"),
-	YU_GI_OH("Yu-Gi-Oh!", "Yu-Gi-Oh!"),
-	WUTHERING_WAVES("Wuthering Waves TCG", "Wuthering Waves"),
+value class GameId(val value: String) {
+
+	init {
+		require(value.isNotBlank()) { "A game id cannot be blank" }
+	}
+
+	override fun toString(): String = value
 }
 
 // ==================

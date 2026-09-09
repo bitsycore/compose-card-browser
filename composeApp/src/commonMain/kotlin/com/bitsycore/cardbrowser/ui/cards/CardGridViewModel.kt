@@ -1,8 +1,8 @@
 package com.bitsycore.cardbrowser.ui.cards
 
 import androidx.lifecycle.viewModelScope
+import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.CardLanguage
-import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.repository.CardRepository
@@ -97,7 +97,7 @@ class CardGridViewModel(
 
 			mRepository.cards(
 				setId = vSetId,
-				game = vGame,
+				game = vGame.id,
 				query = vQuery,
 				language = vLanguage,
 				knownSetSize = vSnapshot.knownSetSize,
@@ -130,7 +130,7 @@ class CardGridViewModel(
 				if (vCards?.isCompleteSet == true) {
 					dispatch(
 						CardGridContract.Intent.FacetsComputed(
-							mRepository.facetsFor(vSetId, vGame),
+							mRepository.facetsFor(vSetId, vGame.id),
 						),
 					)
 				}
@@ -147,7 +147,7 @@ class CardGridViewModel(
 	 * `null` when the id will not parse or names a provider this build does not route -- both of
 	 * which are reachable from a restored back stack, and neither of which should crash.
 	 */
-	private fun gameOf(qualifiedSetId: String): Game? =
+	private fun gameOf(qualifiedSetId: String): GameProfile? =
 		SourceId.parse(qualifiedSetId)?.let { mRegistry.gameFor(it.provider) }
 
 	companion object {

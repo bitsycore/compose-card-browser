@@ -42,8 +42,26 @@ include(":core")
 // saved preferences, and the repositories that decide between cache and network.
 include(":data")
 
-// One module per provider. Adding a game or a second source for an existing one adds a sibling here
-// and changes nothing above it. See docs/ARCHITECTURE.md.
+// One module per game: what the app knows about the game itself, as opposed to about any source
+// that serves it. Its vocabulary, its rarity ladder, its Cardmarket segment, its logo.
+//
+// These exist so :core can name no game at all. It holds the mechanisms -- how to rank a rarity,
+// how to label a stat, how to build a marketplace URL -- and every fact those mechanisms consume
+// arrives from one of these modules through a `GameProfile`. Adding a game is a module here plus a
+// routing entry; nothing shared changes, and there is no table anywhere to forget to extend.
+//
+// `:games:api` is where the Compose dependency a bundled logo needs is confined; see its build file.
+include(":games:api")
+include(":games:riftbound")
+include(":games:pokemon")
+include(":games:magic")
+include(":games:onepiece")
+include(":games:altered")
+include(":games:yugioh")
+include(":games:wutheringwaves")
+
+// One module per provider. A second source for an existing game adds a sibling here and changes
+// nothing above it. See docs/ARCHITECTURE.md.
 include(":providers:riftcodex")
 
 // The other six, in the order they were asked for. Each is one `CardProvider`, one Koin `single`
