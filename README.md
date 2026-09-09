@@ -686,11 +686,17 @@ Two presentation rules, both driven by the artwork rather than by taste:
   dark, which is how both publishers present them. Never the row accent: a teal Wuthering Waves logo
   is not its logo.
 
-  Cyberpunk is the same idea with a brand colour instead of the foreground. Its mark is published
-  both yellow-on-black and black-on-yellow, so it is drawn black on the light theme and in its own
-  yellow on the dark one — `GameArt.logoTintDarkArgb`. A plain foreground tint would turn it white
-  and lose the brand; a plate would put a saturated yellow block in the app bar for no reason. It
-  had that plate for one commit before the mark alone turned out to be the better answer.
+  Cyberpunk does both, and is the reason the plate and the tint are each theme-aware. Its mark is
+  published black-on-yellow *and* yellow-on-black, the brand using whichever suits what it sits
+  against, so the app does the same: a yellow plate with a near-black wordmark on the light theme,
+  and a near-black plate with the brand-yellow wordmark on the dark one. Both are the publisher's
+  own lockup rather than something invented to solve a contrast problem.
+
+  That also relaxed an invariant. `tintLogo` and `backdropArgb` used to be mutually exclusive,
+  because a mark tinted to the theme's *foreground* inverts while its fixed plate stays put —
+  black-on-yellow becoming white-on-yellow. Naming the dark tint removes the hazard, so the rule
+  narrowed to "tint over a plate only if you say what the dark theme gets", which `AppModuleTest`
+  asserts.
 - Altered, Riftbound and Lorcana have no dark outline and wash out on a light background — of their
   visible pixels, 49%, 31% and 33% respectively fall below a 2:1 contrast ratio against a pale
   tile. For Riftbound and Lorcana the loss is *concentrated* rather than spread:

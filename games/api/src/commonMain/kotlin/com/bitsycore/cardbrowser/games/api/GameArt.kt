@@ -76,16 +76,29 @@ import org.jetbrains.compose.resources.DrawableResource
  * was drawn for. All three are full-colour artwork, which is the reason they need a plate at all:
  * a mark that cannot be recoloured has to have its background changed instead.
  *
- * ## Artwork that can simply be painted
+ * ## Artwork that is painted rather than plated
  *
- * A single-colour mark needs no plate, because it can be drawn in whatever colour suits the
- * background. Wuthering Waves and One Piece are black wordmarks and follow the theme's foreground.
- * Cyberpunk is the interesting one: its mark is published both yellow-on-black and black-on-yellow,
- * so it is drawn black on the light theme and in its own `0xFFFEEC00` on the dark one, via
- * [logoTintDarkArgb]. Following the plain foreground would make it white and lose the brand.
+ * A single-colour mark can be drawn in whatever colour suits the background, so it does not have to
+ * have its background changed. Wuthering Waves and One Piece are black wordmarks and follow the
+ * theme's own foreground -- black on light, white on dark.
  *
- * It wore a yellow plate for one commit. That worked and was worse: a saturated block in the app
- * bar beside the back arrow, where the mark alone reads perfectly once painted correctly.
+ * ## Cyberpunk, which does both
+ *
+ * Its mark is published two ways, black-on-yellow and yellow-on-black, and the brand picks whichever
+ * suits what it sits against. The app does the same: on the light theme a yellow plate with the
+ * wordmark painted the theme's near-black, and on the dark theme a near-black plate with the
+ * wordmark painted its own `0xFFFEEC00`. Both pairs are the publisher's own lockup rather than an
+ * invention, and each is drawn against the colour it was drawn for.
+ *
+ * That is the case that made both properties theme-aware. It went through a plain yellow plate on
+ * both themes, then no plate at all, before landing here -- neither of those is wrong exactly, but
+ * only this one is the mark as its owner draws it on each background.
+ *
+ * It is also why [tintLogo] and [backdropArgb] are no longer mutually exclusive. The old rule was
+ * that a tinted mark on a fixed plate inverts with the theme while its plate stays put, leaving a
+ * white wordmark on a light plate. That is still true of a mark following the *foreground*, so the
+ * rule became narrower rather than disappearing: tint over a plate only where [logoTintDarkArgb]
+ * states what the dark theme gets. `AppModuleTest` asserts exactly that.
  *
  * Magic, Pokémon, Yu-Gi-Oh and the WoW TCG are *not* flagged despite comparable raw numbers -- the
  * WoW mark measures 18% spread evenly at 19/14/29/14/9% by fifths, and the Yu-Gi-Oh one a startling
@@ -106,6 +119,10 @@ import org.jetbrains.compose.resources.DrawableResource
  * @property tintLogo true only for a single-colour wordmark, which is then drawn in the theme's
  *   foreground colour so it stays legible on both themes. Never true for colour artwork -- tinting
  *   a full-colour logo flattens it to a silhouette, and a teal Wuthering Waves mark is not its mark
+ * @property backdropDarkArgb the plate on the dark theme, when it differs from [backdropArgb].
+ *   Defaults to it, which is what the three full-colour marks want: one fixed plate, the same on
+ *   both themes. Cyberpunk is the exception -- the brand puts its wordmark on yellow *or* on black
+ *   depending on what it sits against, so it names both and the pair swap with the theme
  * @property backdropArgb the plate this artwork was drawn for, as `0xAARRGGBB`, or `null` to tint
  *   the accent as usual. It used to be a `prefersDarkBackdrop` boolean, which could only say "put
  *   it on the dark one" -- fine while every flagged logo wanted the same dark grey, and useless the
@@ -125,6 +142,8 @@ interface GameArt {
 	val logoTintDarkArgb: Long? get() = null
 
 	val backdropArgb: Long? get() = null
+
+	val backdropDarkArgb: Long? get() = backdropArgb
 
 	companion object {
 

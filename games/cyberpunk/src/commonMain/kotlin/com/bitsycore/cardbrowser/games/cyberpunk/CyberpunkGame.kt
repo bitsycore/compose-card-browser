@@ -78,25 +78,28 @@ object CyberpunkArt : GameArt {
 	override val accentArgb: Long = 0xFFFEEC00
 
 	/**
-	 * A single-colour mark, so it is painted rather than plated.
+	 * The publisher's lockup, both ways round, each on the theme it suits.
 	 *
-	 * The publisher draws this two ways -- yellow on black and black on yellow -- and the bundled
-	 * artwork is one flat colour either way, which means the app can simply paint it to suit the
-	 * background instead of putting a background behind it. Black on the light theme, and its own
-	 * yellow on the dark one, where a plain foreground tint would make it white and lose the brand.
+	 * Cyberpunk draws this mark black-on-yellow and yellow-on-black and uses whichever fits what it
+	 * sits against. So the light theme gets the yellow plate with the wordmark painted near-black,
+	 * and the dark theme gets a near-black plate with the wordmark painted the brand yellow. The
+	 * bundled artwork is a single flat colour, so the same file serves both -- only the paint and
+	 * the plate change.
 	 *
-	 * That replaced a yellow plate with the black mark on it. The plate worked and was worse: it
-	 * put a saturated yellow block in the app bar next to the back arrow, when the mark on its own
-	 * reads perfectly well against both themes once it is painted the right colour. What it *did*
-	 * fix is real, though, and still applies to the three logos that cannot be recoloured because
-	 * they are full-colour artwork -- see [GameArt.backdropArgb].
-	 *
-	 * Measured on the yellow version of the artwork: 100% of its visible pixels fall below a 2:1
-	 * contrast ratio against a light tile, every fifth of the image alike. That is why the light
-	 * theme gets the black one rather than the yellow one, and not the other way around.
+	 * Neither half is arbitrary. Measured on the yellow version of the artwork, 100% of its visible
+	 * pixels fall below a 2:1 contrast ratio against a light tile, every fifth of the image alike,
+	 * with no dark outline anywhere to carry the shape -- so yellow needs something dark behind it
+	 * and near-black needs the yellow. Painting alone, with no plate on either theme, was tried and
+	 * reads fine; this is the closer likeness of how the brand is actually presented.
 	 */
 	override val tintLogo: Boolean = true
 
 	/** See [GameArt.logoTintDarkArgb]. The brand yellow, sampled from the supplied mark. */
 	override val logoTintDarkArgb: Long = 0xFFFEEC00
+
+	/** The yellow plate the black wordmark is published on. */
+	override val backdropArgb: Long = 0xFFFEEC00
+
+	/** The near-black plate the yellow wordmark is published on. Not pure black, which reads harsh. */
+	override val backdropDarkArgb: Long = 0xFF0B0B0D
 }

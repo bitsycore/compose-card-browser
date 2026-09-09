@@ -697,8 +697,21 @@ private fun GameMark(art: GameArt?) {
  */
 @Composable
 private fun backdropFor(art: GameArt?): Color =
-	art?.backdropArgb?.let { Color(it.toInt()) }
+	art?.let { logoBackdropFor(it) }
 		?: (art?.accent ?: MaterialTheme.colorScheme.primary).copy(alpha = 0.18f)
+
+/**
+ * The plate this mark states for the theme in force, or `null` if it states none.
+ *
+ * Shared with the set list's title bar so the two surfaces cannot drift -- which they did once
+ * already, when the picker had a tile and the title bar did not and three logos were invisible on
+ * one screen and fine on the other.
+ */
+@Composable
+internal fun logoBackdropFor(art: GameArt): Color? {
+	val vArgb = if (isDarkTheme()) art.backdropDarkArgb else art.backdropArgb
+	return vArgb?.let { Color(it.toInt()) }
+}
 
 /**
  * The fallback for a game whose module ships no logo.

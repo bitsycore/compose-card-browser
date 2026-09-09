@@ -57,6 +57,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import com.bitsycore.cardbrowser.games.api.GameArt
 import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
+import com.bitsycore.cardbrowser.ui.games.logoBackdropFor
 import com.bitsycore.cardbrowser.ui.games.logoTintFor
 import org.jetbrains.compose.resources.painterResource
 import androidx.compose.material.icons.outlined.CloudDownload
@@ -243,14 +244,14 @@ fun SetListContent(
 						// reason. Cyberpunk is the case that proved it -- it wore a yellow pill
 						// until it was pointed out that the mark alone, painted its own yellow, is
 						// what belongs on a dark bar.
-						val vBackdrop = gameArt.backdropArgb
+						val vBackdrop = logoBackdropFor(gameArt)
 						if (vBackdrop == null) {
 							vLogoImage()
 						} else {
 							Box(
 								modifier = Modifier
 									.clip(RoundedCornerShape(8.dp))
-									.background(Color(vBackdrop.toInt()))
+									.background(vBackdrop)
 									.padding(horizontal = 8.dp, vertical = 4.dp),
 								contentAlignment = Alignment.Center,
 							) {
