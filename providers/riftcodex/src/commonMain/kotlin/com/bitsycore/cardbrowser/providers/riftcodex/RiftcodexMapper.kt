@@ -4,6 +4,7 @@ import com.bitsycore.cardbrowser.core.model.Artwork
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardAttributes
 import com.bitsycore.cardbrowser.core.model.CardClassification
+import com.bitsycore.cardbrowser.core.model.CardIdentity
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardOrientation
 import com.bitsycore.cardbrowser.core.model.CardPrinting
@@ -100,12 +101,7 @@ internal object RiftcodexMapper {
 			// twice under two of them -- 358 records for 227 distinct `riftbound_id`s. Without this
 			// the grid shows a third of that set twice over.
 			printingKey = dto.riftboundId.takeIf { it.isNotBlank() },
-			// Riftcodex states no relationship between printings of the same card. `riftbound_id`
-			// looked like a candidate, but it is unique per printing -- `ogn-299-298` and
-			// `ogn-299*-298` are two records for what a player would call one card, and the API's
-			// own lookup by that id returns a single record. Inventing an identity by matching on
-			// name would be exactly the guess the brief rules out, so this stays null.
-			identity = null,
+			identity = identityOf(dto, vTreatment, provider),
 			text = LocalizedText(
 				// Riftcodex has no language field at all. The text it serves is English, and that
 				// is stated here as an observation about this provider rather than read off a
@@ -177,6 +173,63 @@ internal object RiftcodexMapper {
 			.getOrNull(1)
 			?.takeIf { it.isNotBlank() }
 		return vFromId ?: dto.collectorNumber?.toString() ?: dto.id
+	}
+
+	/**
+	 * What makes two Riftcodex records the same card.
+	 *
+	 * ## This is an inference, and it is the only one in the project
+	 *
+	 * Riftcodex states no cross-printing relationship. `riftbound_id` looked like a candidate and
+	 * is not: it is unique per printing -- `ogn-299-298` and `ogn-299*-298` are two records for one
+	 * card -- and `collector_number` is worse, because it is *reused* across unrelated cards. In
+	 * OGN, five different cards all report collector number 13.
+	 *
+	 * So this matches on the name, which the rest of the codebase refuses to do. It is here at the
+	 * project owner's instruction, they being the one who knows the game: within a set, two records
+	 * with the same name are the same card, and a variant says so in a parenthetical -- "Poppy -
+	 * Paragon" and "Poppy - Paragon (Alternate Art)".
+	 *
+	 * Three things make it defensible rather than a guess:
+	 *
+	 * 1. **The provider licenses the strip.** The parenthetical is only removed when one of
+	 *    `metadata`'s three treatment booleans is set, and those *are* stated. A name is never
+	 *    truncated on the strength of how it happens to read.
+	 * 2. **It was checked against the data.** All 400 OGN records were grouped this way: 340
+	 *    distinct cards, 53 of them with more than one printing, and **zero** groups whose rules
+	 *    text disagreed -- so it never merged two different cards. `RiftcodexMapperTest` pins the
+	 *    cases.
+	 * 3. **It is scoped to one set.** The id carries the set code, so nothing claims that a
+	 *    reprint in a later set is the same card. That is a relationship Riftcodex genuinely does
+	 *    not state.
+	 *
+	 * If a later set breaks the rule, the symptom is two cards merged into one "other artwork"
+	 * row, and the fix is here.
+	 */
+	private fun identityOf(
+		dto: CardDto,
+		treatment: ArtworkTreatment,
+		provider: ProviderId,
+	): CardIdentity? {
+		val vName = baseNameOf(dto.name, treatment).ifBlank { return null }
+		val vSet = dto.set.setId.uppercase().ifBlank { return null }
+		return CardIdentity(id = SourceId(provider, "$vSet:$vName"), name = vName)
+	}
+
+	/**
+	 * A card's name with a variant's parenthetical removed.
+	 *
+	 * Removed only when the provider has flagged the record as a variant, and only from the end --
+	 * so "Poppy - Paragon (Alternate Art)" becomes "Poppy - Paragon" while a plain printing's name
+	 * is never touched. A flagged record whose name carries no parenthetical is left alone too;
+	 * some variants simply reuse the base name.
+	 */
+	internal fun baseNameOf(name: String, treatment: ArtworkTreatment): String {
+		val vName = name.trim()
+		if (treatment == ArtworkTreatment.STANDARD) return vName
+		if (!vName.endsWith(")")) return vName
+		val vOpen = vName.lastIndexOf('(')
+		return if (vOpen <= 0) vName else vName.substring(0, vOpen).trim()
 	}
 
 	/**

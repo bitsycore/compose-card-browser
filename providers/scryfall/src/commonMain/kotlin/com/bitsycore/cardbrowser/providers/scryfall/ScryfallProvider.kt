@@ -30,8 +30,19 @@ import io.ktor.http.appendPathSegments
  * The Scryfall adapter, serving [MagicGame].
  *
  * Scryfall (https://scryfall.com) is the reference Magic database. No key; it asks for an
- * identifying `User-Agent` and for roughly 50–100 ms between requests, both of which are honoured
- * here and in the shared HTTP stack.
+ * identifying `User-Agent` and for roughly 50-100 ms between requests.
+ *
+ * Both are honoured, and the second one only recently: this doc claimed the gap was honoured "in
+ * the shared HTTP stack" when no throttle existed anywhere, so a three-page set went out as three
+ * back-to-back requests. It is real now -- `ProviderHttpPolicy.SCRYFALL` gives this adapter its own
+ * client with a 100 ms minimum interval, which is why it does not share the app's default one.
+ *
+ * Scryfall also publishes [bulk data](https://scryfall.com/docs/api/bulk-data) and points at it
+ * from the rate-limit page. This adapter deliberately does not use it: `all_cards`, the only file
+ * covering the eleven languages the app offers, is 374 MB compressed and over 2 GB expanded,
+ * against roughly 600 KB for the three requests a set actually costs. Bulk data is the right answer
+ * for a client that crawls the whole corpus and the wrong one for a browser that fetches a set on
+ * demand and caches it for a day.
  *
  * ## Coverage, as verified against the live API on 2026-09-08
  *

@@ -4,10 +4,17 @@ import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpRequestRetry
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.UserAgent
+import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 
 /**
  * The one HTTP stack the app has.
@@ -65,6 +72,15 @@ object HttpClientFactory {
 			agent = policy.userAgent
 		}
 
+		// A minimum gap between requests, where a provider documents one.
+		//
+		// Not installed at all when the interval is zero, which is the default -- and which the
+		// *shared* client keeps, because the image loader uses it. Throttling that would serialise
+		// every thumbnail in a grid behind a 100 ms queue.
+		if (policy.minRequestInterval > Duration.ZERO) {
+			install(requestThrottle(policy.minRequestInterval))
+		}
+
 		install(HttpRequestRetry) {
 			// Bounded, and only for failures where the same request could plausibly succeed later.
 			// A 4xx is never retried: it would be the same answer and wasted traffic against a
@@ -79,6 +95,31 @@ object HttpClientFactory {
 
 		defaultRequest {
 			policy.defaultHeaders.forEach { (vName, vValue) -> headers.append(vName, vValue) }
+		}
+	}
+}
+
+/**
+ * A plugin that keeps at least [minInterval] between the requests one client sends.
+ *
+ * Serialising is the point: requests queue through a mutex and each waits out whatever is left of
+ * the interval since the last one went. That is what a documented "please leave 100 ms between
+ * requests" asks for, and it cannot be done by delaying each request independently -- three
+ * coroutines each sleeping 100 ms in parallel still send three requests at once.
+ *
+ * Monotonic rather than wall-clock, so a clock adjustment cannot make the gap negative or enormous.
+ */
+private fun requestThrottle(minInterval: Duration) = createClientPlugin("RequestThrottle") {
+	val vLock = Mutex()
+	var vLastSentAt: TimeSource.Monotonic.ValueTimeMark? = null
+
+	onRequest { _, _ ->
+		vLock.withLock {
+			vLastSentAt?.let { vMark ->
+				val vRemaining = minInterval - vMark.elapsedNow()
+				if (vRemaining.isPositive()) delay(vRemaining)
+			}
+			vLastSentAt = TimeSource.Monotonic.markNow()
 		}
 	}
 }
@@ -99,11 +140,32 @@ data class ProviderHttpPolicy(
 	val maxRetries: Int = 2,
 	val retryBackoffBase: Double = 2.0,
 	val retryMaxDelayMillis: Long = 4_000,
+	/**
+	 * The least time to leave between two requests from the same client. Zero disables it.
+	 *
+	 * Only set by a provider whose terms ask for a gap. A client that carries one must not be the
+	 * shared client: the image loader uses that, and a grid of thumbnails would queue behind it.
+	 */
+	val minRequestInterval: Duration = Duration.ZERO,
 	val defaultHeaders: Map<String, String> = emptyMap(),
 ) {
 
 	companion object {
 
 		const val DEFAULT_USER_AGENT: String = "CardBrowser/1.0 (+https://github.com/bitsycore)"
+
+		/** Scryfall's documented ask: an identifying User-Agent and 50-100 ms between requests. */
+		val SCRYFALL: ProviderHttpPolicy = ProviderHttpPolicy(
+			userAgent = "CardBrowser/1.0 (github.com/bitsycore)",
+			minRequestInterval = 100.milliseconds,
+		)
+
+		/**
+		 * YGOPRODeck's documented ceiling is 20 requests per second.
+		 *
+		 * 50 ms is that ceiling exactly. The app is nowhere near it -- a set is one request per
+		 * page -- so this is a guard rather than a brake.
+		 */
+		val YGOPRODECK: ProviderHttpPolicy = ProviderHttpPolicy(minRequestInterval = 50.milliseconds)
 	}
 }

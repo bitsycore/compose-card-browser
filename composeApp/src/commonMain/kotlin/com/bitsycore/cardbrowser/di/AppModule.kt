@@ -7,6 +7,7 @@ import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.CacheManager
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
+import com.bitsycore.cardbrowser.data.net.ProviderHttpPolicy
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
@@ -101,10 +102,17 @@ val appModule = module {
 	// `getAll` see all seven.
 	single { RiftcodexProvider(mClient = get()) } bind CardProvider::class
 	single { TcgdexProvider(mClient = get()) } bind CardProvider::class
-	single { ScryfallProvider(mClient = get()) } bind CardProvider::class
+	// Their own clients, not the shared one, because these two carry a request throttle and the
+	// shared client is also the image loader's -- throttling that would queue every thumbnail in a
+	// grid behind the gap. See `ProviderHttpPolicy.minRequestInterval`.
+	single {
+		ScryfallProvider(mClient = HttpClientFactory.create(ProviderHttpPolicy.SCRYFALL))
+	} bind CardProvider::class
 	single { OptcgProvider(mClient = get()) } bind CardProvider::class
 	single { AlteredProvider(mClient = get()) } bind CardProvider::class
-	single { YgoprodeckProvider(mClient = get()) } bind CardProvider::class
+	single {
+		YgoprodeckProvider(mClient = HttpClientFactory.create(ProviderHttpPolicy.YGOPRODECK))
+	} bind CardProvider::class
 	single { WuwaProvider() } bind CardProvider::class
 
 	// Every game's mark, gathered from the game modules themselves.

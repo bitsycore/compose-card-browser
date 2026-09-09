@@ -29,6 +29,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CancellationException
@@ -313,13 +314,29 @@ class RiftcodexProviderTest {
 	}
 
 	@Test
-	fun `no card identity is invented`() = runTest {
+	fun `card identity is inferred from the name -- and scoped to one set`() = runTest {
+		// This used to assert the opposite -- that no identity was ever invented -- and the change
+		// is deliberate. Riftcodex states no cross-printing relationship, so the alternative was a
+		// detail screen that could never list a card's other artwork for the game the app was built
+		// for. The rule came from the project owner and was checked against all 400 OGN records
+		// before being taken: see `RiftcodexMapper.identityOf`.
 		val vProvider = RiftcodexProvider(jsonClient(RiftcodexFixtures.CARDS_SHARED_COLLECTOR_NUMBER))
 
-		// Two records for what a player calls one card, and the adapter still links neither,
-		// because the provider does not.
-		vProvider.listCards(request()).cards.forEach { assertNull(it.identity) }
+		val vCards = vProvider.listCards(request()).cards
+
+		vCards.forEach { vCard ->
+			val vIdentity = assertNotNull(vIdentity(vCard), "${vCard.displayName} has no identity")
+			// Set-scoped, so nothing claims a reprint in a later set is the same card -- which is
+			// a relationship Riftcodex genuinely does not state.
+			assertTrue(
+				vIdentity.startsWith("${vCard.setCode}:"),
+				"identity ${'$'}vIdentity is not scoped to a set",
+			)
+		}
 	}
+
+	private fun vIdentity(card: com.bitsycore.cardbrowser.core.model.CardPrinting) =
+		card.identity?.id?.local
 
 	@Test
 	fun `no cardmarket product id is ever produced`() = runTest {
@@ -352,7 +369,8 @@ class RiftcodexProviderTest {
 		assertFalse(CardFilterField.FINISH in vCapabilities.filtering.supported)
 		assertFalse(CardFilterField.LANGUAGE in vCapabilities.filtering.supported)
 		assertFalse(vCapabilities.data.finishes)
-		assertFalse(vCapabilities.data.cardIdentity)
+		// True, and inferred rather than stated -- the one place in the project that is allowed.
+		assertTrue(vCapabilities.data.cardIdentity)
 		assertFalse(vCapabilities.data.cardmarketProductMapping)
 		assertEquals(setOf(CardLanguage.ENGLISH), vCapabilities.data.languages)
 	}

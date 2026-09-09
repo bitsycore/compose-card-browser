@@ -99,7 +99,13 @@ class RiftcodexLiveSmokeTest {
 			// is the point. The app's honesty claims are only honest while they are true.
 			assertEquals(Availability.UNKNOWN, vCard.languages.availabilityOf(CardLanguage.FRENCH))
 			assertTrue(vCard.finishes.isUnstated, "the provider appears to have gained finish data")
-			assertNull(vCard.identity, "the provider appears to have gained card identity")
+			// Identity is *inferred* here, not stated, so this checks the inference rather than the
+			// provider: every printing gets one, and it is scoped to the printing's own set.
+			val vIdentity = assertNotNull(vCard.identity, "identity should be inferred for every card")
+			assertTrue(
+				vIdentity.id.local.startsWith("${vCard.setCode}:"),
+				"identity ${vIdentity.id.local} is not scoped to a set",
+			)
 		}
 	}
 

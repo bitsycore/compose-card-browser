@@ -111,7 +111,9 @@ class RiftcodexProvider(
 			languages = setOf(CardLanguage.ENGLISH),
 			localizedText = false,
 			localizedImages = false,
-			cardIdentity = false,
+			// Inferred, not stated -- see `RiftcodexMapper.identityOf`, which explains why that is
+			// allowed here and nowhere else, and what was checked before allowing it.
+			cardIdentity = true,
 			artworkVariants = true,
 			finishes = false,
 			cardmarketProductMapping = false,
