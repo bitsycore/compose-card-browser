@@ -190,8 +190,9 @@ Do not "fix" these without asking; each is a decision with a reason recorded nea
 - **Duel Masters is absent**, and it was asked for. TCGplayer has no category for it; the community
   `duel-masters-json` dataset has good text but **no images at all** and covers 12 of 100+ sets; the
   publisher's own site has art but no JSON and is Japanese-only. A picture-less card browser is not
-  one, so this is a decision for the project owner rather than a gap to fill quietly. Measured in
-  `docs/PROVIDER_RESEARCH.md`.
+  one. **Put to the project owner on 2026-09-09 with the three options measured, and the answer was
+  to leave it out** until a source with both images and coverage exists -- so this is settled, not
+  pending. Measured in `docs/PROVIDER_RESEARCH.md`.
 - **Cyberpunk TCG used to be absent and no longer is.** The recorded reason was "no data source
   exists", which was true when checked and stopped being true when TCGplayer opened category 92.
   Worth remembering as a pattern: a "deliberately not done" entry is a statement about a date, and
