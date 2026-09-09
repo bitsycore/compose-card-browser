@@ -210,16 +210,21 @@ In the same file:
 
 ```kotlin
 val providerRoutes = listOf(
-    ProviderRoute(game = Game.RIFTBOUND, provider = RiftcodexProvider.PROVIDER_ID),
-    ProviderRoute(game = Game.MAGIC,     provider = ScryfallProvider.PROVIDER_ID),
+    ProviderRoute(game = RiftboundGame.id, provider = RiftcodexProvider.PROVIDER_ID),
+    ProviderRoute(game = MagicGame.id,     provider = ScryfallProvider.PROVIDER_ID),
 )
 ```
+
+The game is named by its profile's `GameId`, not by an enum constant — there is no enum. The
+registry checks at construction that each route's game matches the profile the named provider
+actually declares, so a route pointing at the wrong adapter fails at startup rather than serving the
+wrong catalogue.
 
 A second source for a game that already has one, filling a language gap, is the same shape with a
 `language`:
 
 ```kotlin
-ProviderRoute(Game.RIFTBOUND, SomeKoreanSource.PROVIDER_ID, language = CardLanguage.KOREAN)
+ProviderRoute(RiftboundGame.id, SomeKoreanSource.PROVIDER_ID, language = CardLanguage.KOREAN)
 ```
 
 Resolution picks a language-specific route when one matches and the game-wide route otherwise.

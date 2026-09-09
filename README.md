@@ -21,6 +21,8 @@ in detail. No backend: the apps talk to each game's card database directly over 
 - [Chosen defaults](#chosen-defaults)
 - [Known limitations](#known-limitations)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Provider research](docs/PROVIDER_RESEARCH.md) — what each source was measured to supply
+- [Working on this project](CLAUDE.md) — conventions, layering rules and the traps
 
 ---
 
@@ -32,13 +34,15 @@ in detail. No backend: the apps talk to each game's card database directly over 
 | **Android** | Debug APK builds and runs on a real device. Game picker, set lists and card grids verified on screen. |
 | **iOS** | **Kotlin now compiles** for `iosArm64` and `iosSimulatorArm64`, from scratch, as part of `./gradlew build`. Linking the framework and building the Swift shell still need a Mac and have never been done. See [`iosApp/README.md`](iosApp/README.md). |
 
-216 deterministic tests pass on every target, plus 48 live-API smoke checks across the seven
-providers. See [Build, run, test](#build-run-test).
+**291 deterministic tests pass on every target** and `./gradlew build` is green end to end,
+including both iOS targets. See [Build, run, test](#build-run-test).
 
-`./gradlew build` is green end to end, which it previously was not: `compileCommonMainKotlinMetadata`
-failed on an unnecessary `coil3.disk.directory` import, and behind it the iOS test compilation
-failed on backtick test names containing commas, which Kotlin/Native forbids. Both are fixed, so the
-shared test suite now compiles for iOS as well.
+The live provider checks are a separate story: **60 of 63 pass**. The three failures are all
+Scryfall and all `429 Rate limited` — not assertion failures. The client paces itself at 150 ms and
+shares one mutex across a whole run, so it is not missing a brake; Scryfall's suite is simply the
+largest here at 12 checks and it exceeds what that host will accept in one burst. Re-running it
+alone after a short pause did **not** clear it, so this is not a transient I have seen recover.
+Treat a clean Scryfall live run as unconfirmed until someone gets one from a cold quota.
 
 ---
 
@@ -236,6 +240,29 @@ app had text declared as a *remote* filter, so the search box was wired to that 
 returned "no results" for most of what anyone typed. Text is now matched locally against the
 complete set the app already holds, which costs no extra request and actually works.
 
+### Product lines, where a game has more than one
+
+Pokémon does not print one catalogue. It prints an international line and a Japanese line that
+share neither set list nor numbering — `sv1a` has no international counterpart, and there is no
+Japanese edition of `swsh1`. Measured across all eleven locales there are **486 distinct Pokémon
+sets**, of which the English catalogue holds 218.
+
+Treating those as one list meant only ever showing part of itself, with which part decided by an
+unrelated language preference. The set list now merges every catalogue and offers region chips over
+it: International 221, Japan 180, Taiwan & HK 36, China 49.
+
+Korea is deliberately **not** a region. All 95 Korean set ids are Japanese set ids — Korea prints
+the Japan line — so Korean is a *language of* the Japan region rather than a region of its own. What
+lines a game has is declared by the game (`GameProfile.regions`); which line a set belongs to is
+tagged by the adapter, because that is a fact about how the source keys its data.
+
+### Changing the language of a set you are looking at
+
+The language preference picks a default; a set can also be switched in place, and only to languages
+that set was really printed in. `CardSet.languages` carries what the source stated, so the picker
+offers Japanese for a Japanese-line Pokémon set and does not offer Russian for a game that has none.
+A switch that fails says so rather than silently showing the previous language.
+
 ### Cross-set search
 
 Search every set of a game by card name. Five of the seven sources can search their whole catalogue;
@@ -275,15 +302,23 @@ instantly either way, and the cost of not asking is a set released this morning 
 tomorrow. Card data uses the full 24 hours before re-fetching, because re-checking a set is four
 requests rather than one.
 
-The refresh re-fetches the whole set rather than asking what changed, because it cannot do better:
-the API sends no `ETag`, no `Last-Modified` and no `Cache-Control`, so there is nothing to make a
-conditional request against.
+A refresh now asks *whether* anything changed rather than re-downloading blindly. Provider clients
+carry an HTTP response cache (`OkioHttpCacheStorage`, over the same Okio filesystem the rest of the
+app uses, because Ktor's own file storage is JVM-only and this has to run on iOS). Against an origin
+that sends an `ETag` — and all of these do — a revalidation comes back as an empty `304` instead of
+a body. 64 MB ceiling, oldest-written evicted first.
+
+This is measurable rather than asserted: **Settings shows a live count of requests sent per host
+since launch.** That counter is the point — the claims above about what is and is not re-fetched
+were previously unobservable, and a host whose count climbs while you sit still is a bug you can
+now see. Counted per host rather than per provider, because that is what actually leaves the device
+and it separates a provider's API host from its image CDN.
 | Grid tile minimum width | 108 dp | Columns adapt to the window; this keeps art legible on a phone. |
 | Search debounce | 300 ms | |
 | Retries | 2 extra attempts, exponential, transient failures only | A 4xx is never retried. |
 | Default sort | Natural collector number, ascending. Tapping the selected sort again reverses it |
 | Rarity order | Common → Uncommon → Rare → Epic → Showcase | Riftbound's own ladder. Providers supply rarity as a bare string with no ordering, and sorting those alphabetically puts Common between Uncommon and Epic. Unrecognised rarities sort last rather than being ranked. | |
-| Card language preference | French → Japanese → English → Korean | As specified. A preference, not a claim. |
+| Card language preference | French → Japanese → English → Korean, then the other seven | As specified for the first four. A preference, not a claim: what a given source can actually serve is its own capability, and the set list only offers languages that set was really printed in. |
 | Seller country, minimum condition | **Unset** | Buying preferences, deliberately not chosen. |
 
 ---
@@ -292,7 +327,7 @@ conditional request against.
 
 Things that are genuinely not done or not proven, stated plainly.
 
-### The provider CDN serves AVIF, and that broke images
+### Riftbound's CDN serves AVIF, and that broke images
 
 Riot's image CDN picks an output format per asset and **ignores the `Accept` header**. For a
 minority of Riftbound cards it answers the resized thumbnail URL with AVIF, which Skia cannot decode
@@ -308,7 +343,7 @@ large detail image, where there is room for it, a retry button appears if that a
 The full-resolution URL is untouched — it carries no resize parameter and the CDN always answers it
 with the original PNG.
 
-### The provider sends some printings twice
+### Riftcodex sends some printings twice
 
 Riftcodex's **Vendetta** returns 358 card records for 227 distinct `riftbound_id`s — 37% of the set
 is sent twice, each copy under its own database id, so nothing downstream can tell the copies apart
