@@ -85,5 +85,13 @@ object YuGiOhArt : GameArt {
 
 	override val logo: DrawableResource = Res.drawable.game_logo_yugioh
 
-	override val accentArgb: Long = 0xFF9B5FC0
+	/** The red of the flames, sampled from the artwork rather than chosen. */
+	override val accentArgb: Long = 0xFFE01020
+
+	// No dark backdrop, and this one is worth recording because the measurement says otherwise.
+	// 44% of its visible pixels fall below a 2:1 contrast ratio against a light tile -- close to
+	// Altered's flagged 49% -- and the loss is spread evenly rather than concentrated. Looking at
+	// it settles it: the figure is counting the *white interiors* of the letters, and every one of
+	// them sits inside a heavy black outline that carries the shape on either theme. This is the
+	// case `GameArt`'s doc means by "the measurement is supporting evidence rather than the rule".
 }

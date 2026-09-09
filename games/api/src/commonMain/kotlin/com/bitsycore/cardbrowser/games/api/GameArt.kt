@@ -19,7 +19,7 @@ import org.jetbrains.compose.resources.DrawableResource
  *
  * Two different provenances, and the difference matters enough to keep straight.
  *
- * ### Six from Wikimedia Commons, licence-checked
+ * ### Five from Wikimedia Commons, licence-checked
  *
  * Commons accepts only freely-licensed media, which is what makes these bundleable. A logo merely
  * *shown* on Wikipedia usually lives on Wikipedia itself under a non-free fair-use rationale that
@@ -30,28 +30,35 @@ import org.jetbrains.compose.resources.DrawableResource
  * | --- | --- | --- |
  * | Pokémon | Public domain | Below the threshold of originality. Trademarked. |
  * | Magic | Public domain | Below the threshold of originality. Trademarked. |
- * | Yu-Gi-Oh! | **CC BY 3.0** | Attribution required -- Kazuki Takahashi. Shown in the app. |
  * | One Piece | Public domain | Below the threshold of originality. Trademarked. |
  * | Wuthering Waves | Public domain | Below the threshold of originality. Trademarked. |
  * | Cyberpunk | Public domain | Below the threshold of originality. Trademarked. |
+ *
+ * Yu-Gi-Oh! was in this table until the project owner supplied the official mark from Konami's
+ * own site, which is a better likeness of the game as it is sold today. It moved to the group
+ * below, and the CC BY credit it required moved out of the app with it.
  *
  * "Public domain, trademarked" is the ordinary state of a wordmark: no one holds a *copyright* in
  * it, so redistributing the file is fine, while the *trademark* still belongs to its owner. Using
  * it to identify that owner's game -- the only thing the app does with it -- is what trademarks are
  * for. The app remains unaffiliated with every publisher named, and says so on the same screen.
  *
- * ### Four supplied by the project owner
+ * ### Five supplied by the project owner
  *
- * Riftbound, Altered, Disney Lorcana and the WoW TCG are **not** in that table and are not
- * equivalent to it. None exists on Commons, and the only English Wikipedia files are covers and
- * card backs under non-free fair-use rationales. The four bundled here were chosen and supplied by
- * the owner of this project from third-party sites -- a card shop's CDN, a retailer's blog, a
- * community wiki and a storefront CDN -- and were downloaded and resized on request.
+ * Riftbound, Altered, Disney Lorcana, the WoW TCG and Yu-Gi-Oh! are **not** in that table and are
+ * not equivalent to it. The first four exist on neither Commons nor English Wikipedia under any
+ * name searched, the only Wikipedia files being covers and card backs under non-free fair-use
+ * rationales. Yu-Gi-Oh! is the odd one: a freely-licensed mark *was* available and was replaced on
+ * request with the publisher's own current one, trading a verified licence for a better likeness.
  *
- * So: no licence was verified for those four, because there is none to verify. They are the
+ * All five were chosen and supplied by the owner of this project from third-party sites -- a card
+ * shop's CDN, a retailer's blog, a community wiki, a storefront CDN and Konami's own image host --
+ * and were downloaded and resized on request.
+ *
+ * So: no licence was verified for those five, because there is none to verify. They are the
  * publishers' trademarks used to identify the publishers' own games, which is the ordinary
  * nominative use every card database relies on, but anyone redistributing this app should make
- * their own decision about them rather than assume they carry the same clearance as the six above.
+ * their own decision about them rather than assume they carry the same clearance as the five above.
  *
  * ## Artwork drawn for dark backgrounds
  *
@@ -97,13 +104,18 @@ interface GameArt {
 	companion object {
 
 		/**
-		 * The credit the Yu-Gi-Oh! logo's CC BY 3.0 licence requires.
+		 * Where the bundled logos come from.
 		 *
-		 * Only the Commons files carry a licence at all, and of those only Yu-Gi-Oh! requires a
-		 * credit. It is shown on the game picker rather than buried in a settings page, because an
+		 * This used to carry a CC BY 3.0 credit to Kazuki Takahashi, which the Commons Yu-Gi-Oh!
+		 * file required. That file is no longer bundled -- the project owner supplied the official
+		 * one from Konami's site instead -- so the credit went with it. Removing it is the honest
+		 * move rather than the risky one: crediting an author whose work the app no longer ships
+		 * would be a false statement, and no other bundled file requires attribution.
+		 *
+		 * It is shown on the game picker rather than buried in a settings page, because an
 		 * attribution nobody sees is not an attribution.
 		 */
 		const val LOGO_ATTRIBUTION: String =
-			"Game logos from Wikimedia Commons. The Yu-Gi-Oh! logo is by Kazuki Takahashi, CC BY 3.0."
+			"Game logos are their publishers' trademarks, used to identify their own games."
 	}
 }

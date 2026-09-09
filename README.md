@@ -584,7 +584,7 @@ This app is not affiliated with any game's publisher.
 All ten games show their real logo in the picker, and they do not all come from the same place —
 the difference matters.
 
-**Six from Wikimedia Commons**, which is what makes bundling them possible: Commons accepts only
+**Five from Wikimedia Commons**, which is what makes bundling them possible: Commons accepts only
 freely-licensed media, whereas a logo merely *shown* on Wikipedia normally lives there under a
 non-free fair-use rationale that does not permit redistribution. Each licence was checked
 individually through the Commons API:
@@ -593,7 +593,6 @@ individually through the Commons API:
 |---|---|---|
 | Pokémon | Public domain (trademarked) | not required |
 | Magic: The Gathering | Public domain (trademarked) | not required |
-| Yu-Gi-Oh! | CC BY 3.0 | **required** — Kazuki Takahashi, credited in the app |
 | One Piece | Public domain (trademarked) | not required |
 | Wuthering Waves | Public domain (trademarked) | not required |
 | Cyberpunk TCG | Public domain (trademarked) | not required |
@@ -602,17 +601,22 @@ individually through the Commons API:
 the file may be redistributed, while the trademark still belongs to its owner. Using it to identify
 that owner's game is what a trademark is for.
 
-**Four supplied by the project owner.** Riftbound, Altered, Disney Lorcana and the WoW TCG exist on
-neither Commons nor English Wikipedia under any name searched — the first two are recent enough that
-no freely-licensed mark has been uploaded, and the only Wikipedia files are covers and card backs
-under non-free fair-use rationales. All four bundled here were chosen by the owner of this project
-from third-party sites (a card shop's CDN, a retailer's blog, a community wiki and a storefront CDN)
-and downloaded and resized on request.
+**Five supplied by the project owner.** Riftbound, Altered, Disney Lorcana, the WoW TCG and
+Yu-Gi-Oh! were chosen by the owner of this project from third-party sites (a card shop's CDN, a
+retailer's blog, a community wiki, a storefront CDN and Konami's own image host) and downloaded and
+resized on request. The first four exist on neither Commons nor English Wikipedia under any name
+searched, the only Wikipedia files being covers and card backs under non-free fair-use rationales.
 
-**No licence was verified for those four, because there is none to verify.** They are publishers'
+Yu-Gi-Oh! is the exception worth naming: a freely-licensed Commons mark *was* bundled and was
+replaced on request with Konami's own current logo — trading a verified licence for a better
+likeness of the game as it is sold today. **The CC BY credit to Kazuki Takahashi that the app used
+to show went with it**, because crediting an author whose work is no longer shipped would be a false
+statement. No bundled file now requires attribution.
+
+**No licence was verified for those five, because there is none to verify.** They are publishers'
 trademarks used to identify the publishers' own games — the ordinary nominative use every card
 database relies on — but anyone redistributing this app should form their own view rather than
-assume they carry the clearance the six Commons files do.
+assume they carry the clearance the five Commons files do.
 
 Every bundled logo is trimmed to its alpha bounding box and resized to 480px wide, which is what the
 tile actually draws; leaving the padding in is what made the Altered mark look half-size. The two
@@ -631,7 +635,10 @@ Two presentation rules, both driven by the artwork rather than by taste:
   Riftbound's is entirely in its "League of Legends" subtitle, and Lorcana's runs 0/0/36/48/2% by
   fifths of the image, those middle bands being the word LORCANA itself. Those four keep a dark tile
   on both themes. Magic, Pokémon, Yu-Gi-Oh and the WoW TCG are not flagged despite comparable raw
-  figures — the WoW mark measures 18%, evenly spread — because their dark outlines carry the shape.
+  figures — the WoW mark measures 18% and the Yu-Gi-Oh one 44% — because their dark outlines carry
+  the shape. Yu-Gi-Oh is the clearest illustration that the number is evidence and not the rule: its
+  44% is counting the white interiors of letters that each sit inside a heavy black outline, and it
+  reads correctly on either theme.
 - The Cyberpunk mark is the *franchise* wordmark rather than the card game's own lockup, the TCG
   having no freely-licensed mark of its own. Commons serves it as a monochrome glyph, so it is
   tinted to the theme foreground like the Wuthering Waves one.
