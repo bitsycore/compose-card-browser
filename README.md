@@ -433,7 +433,7 @@ This app is not affiliated with any game's publisher.
 
 ### Game logos
 
-Four of the seven games show their real logo in the picker. Every one came from **Wikimedia
+Five of the seven games show their real logo in the picker. Every one came from **Wikimedia
 Commons**, which is what makes bundling them possible: Commons accepts only freely-licensed media,
 whereas a logo merely *shown* on Wikipedia normally lives there under a non-free fair-use rationale
 that does not permit redistribution. Each file's licence was checked individually through the
@@ -444,13 +444,21 @@ Commons API:
 | Pokémon | Public domain (trademarked) | not required |
 | Magic: The Gathering | Public domain (trademarked) | not required |
 | Yu-Gi-Oh! | CC BY 3.0 | **required** — Kazuki Takahashi, credited in the app |
+| One Piece | Public domain (trademarked) | not required |
 | Wuthering Waves | Public domain (trademarked) | not required |
 
 "Public domain, trademarked" is the normal state of a wordmark: nobody holds a copyright in it, so
 the file may be redistributed, while the trademark still belongs to its owner. Using it to identify
 that owner's game is what a trademark is for.
 
-**Riftbound, One Piece and Altered keep a Material symbol**, because Commons holds no logo for any
-of them — all three are recent enough that no freely-licensed mark has been uploaded. The remaining
+**Riftbound and Altered keep a Material symbol.** Both were searched for on Commons *and* on
+English Wikipedia under several names: Commons holds nothing for either, and the only Wikipedia
+files are a cover and a card back uploaded under non-free fair-use rationales that do not permit
+redistribution. Both games are recent enough that no freely-licensed mark exists yet. The remaining
 options were scraping fan wikis for files of unknown provenance or hotlinking a publisher's CDN,
 and neither is worth doing to fill a tile.
+
+The Wuthering Waves mark is a solid black wordmark, so it is drawn in the theme's foreground colour
+— its own black on the light theme, inverted to white on the dark one, which is how the official
+mark is presented against dark backgrounds. Not the row's accent colour: a teal Wuthering Waves
+logo is not its logo.

@@ -211,9 +211,15 @@ private fun GameMark(visual: GameVisual) {
 				contentDescription = null,
 				contentScale = ContentScale.Fit,
 				modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 10.dp),
-				// Only for a single-colour silhouette; tinting full-colour artwork would flatten
-				// it to a blob. See `GameVisual.tintLogo`.
-				colorFilter = if (visual.tintLogo) ColorFilter.tint(visual.accent) else null,
+				// A monochrome wordmark is drawn in the theme's own foreground colour -- its
+				// original black on the light theme, inverted to white on the dark one so it does
+				// not vanish. Deliberately *not* the row accent: a teal Wuthering Waves logo is
+				// not its logo. Colour artwork is never tinted. See `GameVisual.tintLogo`.
+				colorFilter = if (visual.tintLogo) {
+					ColorFilter.tint(MaterialTheme.colorScheme.onSurface)
+				} else {
+					null
+				},
 			)
 		}
 	}
