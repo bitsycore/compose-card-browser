@@ -111,6 +111,8 @@ ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 # Images
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-ktor3 = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
+# Scryfall publishes every set symbol as an SVG and nothing else; without this they do not decode.
+coil-svg = { module = "io.coil-kt.coil3:coil-svg", version.ref = "coil" }
 
 # DI
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }

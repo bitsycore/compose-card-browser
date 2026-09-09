@@ -16,6 +16,7 @@ import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.LanguageCoverage
 import com.bitsycore.cardbrowser.core.model.LocalizedText
 import com.bitsycore.cardbrowser.core.model.ProviderId
+import com.bitsycore.cardbrowser.core.model.SetSymbol
 import com.bitsycore.cardbrowser.core.model.SourceId
 import kotlinx.datetime.LocalDate
 
@@ -39,6 +40,12 @@ internal object ScryfallMapper {
 			externalIds = buildMap {
 				put(ExternalIdKey.PROVIDER_RECORD, listOf(dto.id))
 				dto.tcgplayerId?.let { put(ExternalIdKey.TCGPLAYER, listOf(it.toString())) }
+			},
+			// The genuine set symbol, and every paper set has one -- 988 of 988. Scryfall's SVGs
+			// carry no `fill` attribute at all, so they render in the SVG default of black and
+			// have to be recoloured to survive a dark theme.
+			symbol = dto.iconSvgUri?.ifBlank { null }?.let {
+				SetSymbol(url = it, isMonochrome = true)
 			},
 		)
 	}

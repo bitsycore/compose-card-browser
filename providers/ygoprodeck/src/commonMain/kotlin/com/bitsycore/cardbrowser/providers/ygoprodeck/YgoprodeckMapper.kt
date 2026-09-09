@@ -13,6 +13,7 @@ import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.LanguageCoverage
 import com.bitsycore.cardbrowser.core.model.LocalizedText
 import com.bitsycore.cardbrowser.core.model.ProviderId
+import com.bitsycore.cardbrowser.core.model.SetSymbol
 import com.bitsycore.cardbrowser.core.model.SourceId
 import kotlinx.datetime.LocalDate
 
@@ -36,6 +37,10 @@ internal object YgoprodeckMapper {
 			name = dto.setName,
 			cardCount = dto.numOfCards,
 			releaseDate = parseDate(dto.tcgDate),
+			// Not every set has one, and those that do are full-colour JPEGs of the set's box art.
+			symbol = dto.setImage?.ifBlank { null }?.let {
+				SetSymbol(url = it, isMonochrome = false)
+			},
 		)
 	}
 

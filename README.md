@@ -320,14 +320,28 @@ Where two copies disagree — Vendetta ships `ven-019a` once flagged alternate a
 copy asserting a treatment wins, because `true` is a statement and `false` is indistinguishable from
 a field nobody filled in.
 
-### There are no set symbols, and the game marks are not logos
+### Set symbols exist for three games, and the game marks are not logos
 
-**Sets.** Not one of the seven sources publishes a set symbol — the only image in any of their
-schemas is a card's own art. The set list therefore shows each set's real short code (`OGN`, `SFD`)
-in a tile, tinted with a colour derived from that code so a catalogue of several hundred Magic sets
-is not a column of identical grey squares. The colour is a hash, not a symbol: it is derived rather
-than random, so a set looks the same on every launch and on every device, but it carries no meaning
-and is placeholder work until a source publishes real artwork.
+**Sets.** Three of the seven sources publish artwork for a set, and the set list uses it:
+
+| Source | What it publishes | Coverage |
+|---|---|---|
+| Scryfall | the real set symbol, as SVG | 988 of 988 paper sets |
+| TCGdex | the set's logo | 157 of 218 sets |
+| YGOPRODeck | the set's box art | many sets |
+
+Scryfall's symbols carry no `fill` at all, so they render in the SVG default of black and are
+recoloured to the theme's foreground or they vanish on a dark background. The other two are
+full-colour and are never recoloured. TCGdex also advertises a `symbol` URL, which would suit a
+small tile better than a wordmark — its CDN serves nothing for it, checked across several sets with
+`.png`, `.webp` and `.jpg`, and a live test asserts that so the mapper can switch the day it starts
+working.
+
+The other four sources publish nothing, and so do the sets those three skip. Those rows fall back
+to the set's short code (`OGN`, `SFD`) in a tile tinted with a colour derived from that code, so a
+catalogue of several hundred Magic sets is not a column of identical grey squares. The colour is a
+hash, not a symbol: derived rather than random, so a set looks the same on every launch and every
+device, but it carries no meaning.
 
 **Games.** The game picker uses Material symbols, not publisher logos. Every game here is somebody's
 trademark and this app is affiliated with none of them; shipping their brand assets would be both a

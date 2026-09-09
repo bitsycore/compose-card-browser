@@ -39,7 +39,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import coil3.compose.SubcomposeAsyncImage
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.model.CardSet
@@ -253,7 +256,7 @@ private fun SetRow(
 			modifier = Modifier.padding(16.dp).fillMaxWidth(),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
-			SetMonogram(set.code, isHighlighted = isLastOpened)
+			SetMark(set, isHighlighted = isLastOpened)
 			Spacer(Modifier.size(12.dp))
 			Column(Modifier.weight(1f)) {
 				Text(
@@ -288,6 +291,44 @@ private fun SetRow(
 				)
 			}
 		}
+	}
+}
+
+/**
+ * A set's own symbol where its provider publishes one, and its code where none exists.
+ *
+ * Three of the seven sources supply real artwork -- Scryfall a symbol for all 988 of its paper
+ * sets, TCGdex a logo for 157 of its 218, YGOPRODeck box art for many of its. The other four
+ * publish nothing at all, and so do the sets those three skip, which is why the coloured monogram
+ * below is a permanent fallback rather than a temporary one.
+ */
+@Composable
+private fun SetMark(set: CardSet, isHighlighted: Boolean) {
+	val vSymbol = set.symbol
+	if (vSymbol == null) {
+		SetMonogram(set.code, isHighlighted = isHighlighted)
+		return
+	}
+
+	Box(modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+		SubcomposeAsyncImage(
+			model = vSymbol.url,
+			contentDescription = null,
+			contentScale = ContentScale.Fit,
+			modifier = Modifier.fillMaxSize().padding(2.dp),
+			// A monochrome glyph has no colour of its own -- Scryfall's SVGs carry no `fill` and
+			// default to black, invisible against the dark theme -- so it is drawn in the theme's
+			// foreground. Full-colour artwork is never recoloured.
+			colorFilter = if (vSymbol.isMonochrome) {
+				ColorFilter.tint(MaterialTheme.colorScheme.onSurfaceVariant)
+			} else {
+				null
+			},
+			// The monogram, not a spinner and not a gap: a symbol that is slow or missing leaves a
+			// row that still identifies its set.
+			loading = { SetMonogram(set.code, isHighlighted = isHighlighted) },
+			error = { SetMonogram(set.code, isHighlighted = isHighlighted) },
+		)
 	}
 }
 

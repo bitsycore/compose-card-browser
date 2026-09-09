@@ -7,6 +7,10 @@ import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
+import io.ktor.client.plugins.ClientRequestException
+import io.ktor.client.request.head
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -160,6 +164,34 @@ class TcgdexLiveSmokeTest {
 		assertTrue(
 			vPage.cards.map { it.setId }.distinct().size > 1,
 			"Results should span several sets",
+		)
+	}
+	@Test
+	fun `set logos resolve -- and the advertised symbol still does not`() = runBlocking<Unit> {
+		val vClient = HttpClientFactory.create()
+		val vSets = TcgdexProvider(vClient).listSets(Game.POKEMON, CardLanguage.ENGLISH)
+
+		val vWith = vSets.filter { it.symbol != null }
+		assertTrue(vWith.size > 100, "Expected most sets to carry a logo, got ${vWith.size}")
+		assertTrue(vWith.all { it.symbol!!.url.endsWith(".webp") }, "The extension must be appended")
+
+		val vResponse: HttpResponse = vClient.head(vWith.first().symbol!!.url)
+		assertEquals(HttpStatusCode.OK, vResponse.status, "Set logo is not loading")
+
+		// Why `symbol` is unused: TCGdex advertises the field and its CDN serves nothing for it.
+		// If this ever starts returning 200, the mapper should switch -- a set symbol suits a small
+		// tile far better than a wordmark does.
+		// The shared client has `expectSuccess` on, so a 404 arrives as an exception rather than a
+		// status. Catching it is the assertion.
+		val vSymbolStatus = try {
+			vClient.head("https://assets.tcgdex.net/univ/base/base2/symbol.png").status
+		} catch (vError: ClientRequestException) {
+			vError.response.status
+		}
+		assertEquals(
+			HttpStatusCode.NotFound,
+			vSymbolStatus,
+			"TCGdex now serves set symbols -- prefer them over the wordmark logo",
 		)
 	}
 }

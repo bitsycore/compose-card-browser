@@ -87,6 +87,8 @@ kotlin {
 			// Coil over the app's own Ktor stack, so there is one HTTP client and one place that
 			// sets a User-Agent.
 			implementation(libs.coil.network.ktor3)
+			// Set symbols. Scryfall serves all 988 of its as SVG.
+			implementation(libs.coil.svg)
 
 			implementation(libs.kotlinx.coroutines.core)
 			implementation(libs.kotlinx.serialization.json)

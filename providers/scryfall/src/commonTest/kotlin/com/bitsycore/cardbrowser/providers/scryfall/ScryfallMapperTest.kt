@@ -81,6 +81,37 @@ class ScryfallMapperTest {
 		assertEquals(2024, vSet.releaseDate?.year)
 	}
 
+	@Test
+	fun `the set symbol is carried across and marked monochrome`() {
+		// Scryfall's set SVGs carry no `fill` attribute, so they render in the SVG default of black
+		// and vanish on a dark theme unless the UI recolours them. The flag is what tells it to.
+		val vSet = ScryfallMapper.toSet(
+			ScryfallSetDto(
+				id = "a2f58272-bba6-439d-871e-7a46686ac018",
+				code = "blb",
+				name = "Bloomburrow",
+				cardCount = 398,
+				iconSvgUri = "https://svgs.scryfall.io/sets/blb.svg",
+			),
+			mProvider,
+		)
+
+		assertNotNull(vSet)
+		assertEquals("https://svgs.scryfall.io/sets/blb.svg", vSet.symbol?.url)
+		assertTrue(vSet.symbol?.isMonochrome == true)
+	}
+
+	@Test
+	fun `a set with no icon gets no symbol rather than a blank one`() {
+		val vSet = ScryfallMapper.toSet(
+			ScryfallSetDto(id = "x", code = "xxx", name = "No Icon", cardCount = 1, iconSvgUri = ""),
+			mProvider,
+		)
+
+		assertNotNull(vSet)
+		assertNull(vSet.symbol)
+	}
+
 	// ============
 	//  Cards
 

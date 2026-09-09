@@ -6,6 +6,9 @@ import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
+import io.ktor.client.request.head
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -156,5 +159,17 @@ class YgoprodeckLiveSmokeTest {
 			vArtwork.thumbnailUrl?.contains("cards_small") == true,
 			"Grid art should use the small variant, got ${vArtwork.thumbnailUrl}",
 		)
+	}
+	@Test
+	fun `sets that publish box art carry it as a symbol`() = runBlocking<Unit> {
+		val vClient = HttpClientFactory.create()
+		val vSets = YgoprodeckProvider(vClient).listSets(Game.YU_GI_OH)
+
+		val vWith = vSets.filter { it.symbol != null }
+		assertTrue(vWith.isNotEmpty(), "Some sets should publish box art")
+		assertTrue(vWith.none { it.symbol!!.isMonochrome }, "These are full-colour JPEGs")
+
+		val vResponse: HttpResponse = vClient.head(vWith.first().symbol!!.url)
+		assertEquals(HttpStatusCode.OK, vResponse.status, "Set image is not loading")
 	}
 }

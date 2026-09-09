@@ -7,6 +7,7 @@ import coil3.compose.setSingletonImageLoaderFactory
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.ktor3.KtorNetworkFetcherFactory
+import coil3.svg.SvgDecoder
 import coil3.request.crossfade
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.cache.CacheManager
@@ -55,6 +56,9 @@ internal fun newImageLoader(
 ): ImageLoader = ImageLoader.Builder(context)
 	.components {
 		add(KtorNetworkFetcherFactory(httpClient = { client }))
+		// Set symbols. Scryfall publishes all 988 of its as SVG and nothing else, so without a
+		// decoder for them every Magic set falls back to its code in a tile.
+		add(SvgDecoder.Factory())
 	}
 	.memoryCache {
 		MemoryCache.Builder()

@@ -221,6 +221,28 @@ That is the whole cost. Six games were added this way without a line changing in
 
 ---
 
+## Branding: what belongs to a game, and what belongs to a provider
+
+Two kinds of artwork, and they live in different places on purpose.
+
+**A game's logo belongs to the game.** Scryfall is not Magic, and TCGdex is not Pokémon; if a second
+provider started serving Pokémon, the logo would not change. So `GameVisual` is keyed on `Game`, in
+`:composeApp`, alongside `RarityLadder` and `GameVocabulary` — which are keyed on `Game` for exactly
+the same reason. It is in the UI module rather than `:core` only because it holds a `DrawableResource`,
+and `:core` has no Compose in it, which is what lets a provider adapter be written without
+inheriting the app's UI stack.
+
+**A set's symbol belongs to the provider**, because it is part of the set record. `CardSet.symbol`
+is populated by whichever mapper has one to give, and three of the seven do. That field carries an
+`isMonochrome` flag alongside the URL, because whether an asset has a colour of its own is a fact
+about the asset that only the provider knows: Scryfall's SVGs have no `fill` and default to black,
+while TCGdex's logos are full-colour wordmarks that must never be recoloured.
+
+The test for which side a thing falls on is simple: if swapping the provider would change the
+image, it belongs to the provider.
+
+---
+
 ## Cross-set search, and why its scope is part of the answer
 
 `CardRepository.searchAllSets` returns a `CardSearchResults` carrying a `SearchScope`, and the

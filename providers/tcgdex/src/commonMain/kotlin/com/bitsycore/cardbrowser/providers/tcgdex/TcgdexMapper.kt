@@ -14,6 +14,7 @@ import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.LanguageCoverage
 import com.bitsycore.cardbrowser.core.model.LocalizedText
 import com.bitsycore.cardbrowser.core.model.ProviderId
+import com.bitsycore.cardbrowser.core.model.SetSymbol
 import com.bitsycore.cardbrowser.core.model.SourceId
 import kotlinx.datetime.LocalDate
 
@@ -67,6 +68,7 @@ internal object TcgdexMapper {
 			cardCount = dto.cardCount?.total ?: dto.cardCount?.official,
 			releaseDate = releaseDates[dto.id],
 			externalIds = emptyMap(),
+			symbol = symbolOf(dto.logo),
 		)
 	}
 
@@ -81,8 +83,25 @@ internal object TcgdexMapper {
 			cardCount = dto.cardCount?.total ?: dto.cardCount?.official,
 			releaseDate = parseDate(dto.releaseDate),
 			externalIds = emptyMap(),
+			symbol = symbolOf(dto.logo),
 		)
 	}
+
+	/**
+	 * A set's logo, or `null` for the 61 of 218 sets that have none.
+	 *
+	 * The `logo` field, not `symbol`, even though a set symbol would suit a small tile better: 169
+	 * sets advertise a `symbol` URL and **the CDN serves none of them** -- checked across several
+	 * sets with `.png`, `.webp` and `.jpg`, all 404, while the bare URL returns an HTML error page.
+	 * The logo is real and resolves, so that is what is used.
+	 *
+	 * Like card art, these URLs are a base that needs the extension appended.
+	 */
+	private fun symbolOf(logo: String?): SetSymbol? =
+		logo?.ifBlank { null }?.let {
+			// Full-colour wordmarks, so never recoloured.
+			SetSymbol(url = "$it.webp", isMonochrome = false)
+		}
 
 	/** TCGdex dates are plain `YYYY-MM-DD`. A date that will not parse loses the set no data. */
 	fun parseDate(raw: String?): LocalDate? {

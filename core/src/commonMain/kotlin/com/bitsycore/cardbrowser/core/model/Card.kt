@@ -27,11 +27,32 @@ data class CardSet(
 	val cardCount: Int?,
 	val releaseDate: LocalDate?,
 	val externalIds: Map<String, List<String>> = emptyMap(),
+	val symbol: SetSymbol? = null,
 ) {
 
 	/** The provider that supplied this record. Kept for provenance in the UI and in the cache. */
 	val provider: ProviderId get() = id.provider
 }
+
+/**
+ * A set's own artwork, where its provider publishes any.
+ *
+ * This is the one piece of *branding* a provider legitimately supplies. A game's logo does not
+ * belong to a provider -- Scryfall is not Magic -- but a set symbol is part of the set record, and
+ * three of the seven sources publish one. The rest state nothing, so this is null and the set list
+ * falls back to the set's code in a tinted tile.
+ *
+ * @property url a single image. Small: these are 4-10 KB glyphs, not card art
+ * @property isMonochrome true when the asset is a single-colour glyph with no palette of its own.
+ *   Scryfall's set symbols are SVGs with no `fill` at all, so they render in the SVG default of
+ *   black and are invisible on a dark theme unless recoloured. Stated by the provider that supplies
+ *   the asset, because whether artwork carries its own colour is a fact about the artwork
+ */
+@Serializable
+data class SetSymbol(
+	val url: String,
+	val isMonochrome: Boolean = false,
+)
 
 /** Keys used in [CardSet.externalIds] and [CardPrinting.externalIds]. */
 object ExternalIdKey {

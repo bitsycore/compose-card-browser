@@ -14,6 +14,7 @@ import com.bitsycore.cardbrowser.core.model.Game
 import com.bitsycore.cardbrowser.core.model.LanguageCoverage
 import com.bitsycore.cardbrowser.core.model.LocalizedText
 import com.bitsycore.cardbrowser.core.model.ProviderId
+import com.bitsycore.cardbrowser.core.model.SetSymbol
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.ui.theme.CardBrowserTheme
 import kotlinx.datetime.LocalDate
@@ -59,6 +60,23 @@ object PreviewData {
 			releaseDate = LocalDate(2025, 10, 31),
 		),
 		CardSet(SourceId(PROVIDER, "PR"), Game.RIFTBOUND, "PR", "Riftbound Promotional Cards", 13, null),
+	)
+
+	/**
+	 * A set that publishes a real symbol, which Riftbound's provider does not.
+	 *
+	 * Included so the set-list preview shows both branches of `SetMark` rather than only the
+	 * monogram. The URL is unreachable in a preview, which is the point -- the fallback is what
+	 * renders, and that is the path worth being able to see.
+	 */
+	val SET_WITH_SYMBOL: CardSet = CardSet(
+		id = SourceId(ProviderId("scryfall"), "blb"),
+		game = Game.MAGIC,
+		code = "BLB",
+		name = "Bloomburrow",
+		cardCount = 398,
+		releaseDate = LocalDate(2024, 8, 2),
+		symbol = SetSymbol(url = "https://example.invalid/blb.svg", isMonochrome = true),
 	)
 
 	/** One printing. Defaults match what Riftcodex really supplies for a Riftbound card. */

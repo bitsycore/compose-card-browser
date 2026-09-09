@@ -83,6 +83,25 @@ class YgoprodeckMapperTest {
 		assertNull(vSet.releaseDate)
 	}
 
+	@Test
+	fun `a set image becomes a full-colour symbol -- and its absence becomes none`() {
+		val vWith = YgoprodeckMapper.toSet(
+			YgoSetDto(setName = "Metal Raiders", setCode = "MRD", numOfCards = 144,
+				setImage = "https://images.ygoprodeck.com/images/sets/MRD.jpg"),
+			mProvider,
+		)
+		val vWithout = YgoprodeckMapper.toSet(
+			YgoSetDto(setName = "No Art", setCode = "NA", numOfCards = 5, setImage = null),
+			mProvider,
+		)
+
+		assertNotNull(vWith)
+		assertEquals("https://images.ygoprodeck.com/images/sets/MRD.jpg", vWith.symbol?.url)
+		assertEquals(false, vWith.symbol?.isMonochrome)
+		assertNotNull(vWithout)
+		assertNull(vWithout.symbol)
+	}
+
 	// ============
 	//  Cards
 

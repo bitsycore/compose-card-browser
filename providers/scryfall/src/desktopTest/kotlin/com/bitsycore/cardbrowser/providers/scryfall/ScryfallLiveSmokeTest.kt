@@ -6,6 +6,9 @@ import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
+import io.ktor.client.request.head
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -163,5 +166,22 @@ class ScryfallLiveSmokeTest {
 			vArtwork.displayUrl?.contains(".webp") == true,
 			"Display art should be WebP, got ${vArtwork.displayUrl}",
 		)
+	}
+	@Test
+	fun `every paper set carries a set symbol that actually loads`() = runBlocking<Unit> {
+		val vClient = HttpClientFactory.create()
+		val vSets = ScryfallProvider(vClient).listSets(Game.MAGIC)
+
+		val vWithSymbol = vSets.count { it.symbol != null }
+		assertEquals(vSets.size, vWithSymbol, "Every paper set should publish an icon")
+		assertTrue(vSets.all { it.symbol?.isMonochrome == true })
+
+		// The symbols are SVG and nothing else, so the app needs an SVG decoder registered or
+		// every Magic set silently falls back to its code.
+		val vUrl = vSets.first { it.symbol != null }.symbol!!.url
+		// Scryfall appends a cache-busting query, so the extension is not at the end of the string.
+		assertTrue(vUrl.substringBefore('?').endsWith(".svg"), "Expected an SVG, got $vUrl")
+		val vResponse: HttpResponse = vClient.head(vUrl)
+		assertEquals(HttpStatusCode.OK, vResponse.status, "Set symbol is not loading")
 	}
 }

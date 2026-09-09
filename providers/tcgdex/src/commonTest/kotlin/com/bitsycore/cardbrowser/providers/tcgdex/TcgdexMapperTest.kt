@@ -72,6 +72,40 @@ class TcgdexMapperTest {
 		assertEquals(201, mSet.cardCount)
 	}
 
+	@Test
+	fun `a set logo gets the extension appended and is not treated as monochrome`() {
+		// Like card art, the URL is a base. The bare form returns an HTML error page, not an image.
+		// The `symbol` field TCGdex also advertises is deliberately unused: its CDN 404s every form
+		// of it, checked across several sets with .png, .webp and .jpg.
+		val vSet = TcgdexMapper.toSet(
+			dto = TcgdexSetBriefDto(
+				id = "swsh3",
+				name = "Darkness Ablaze",
+				logo = "https://assets.tcgdex.net/en/swsh/swsh3/logo",
+				symbol = "https://assets.tcgdex.net/univ/swsh/swsh3/symbol",
+			),
+			provider = mProvider,
+			releaseDates = emptyMap(),
+		)
+
+		assertNotNull(vSet)
+		assertEquals("https://assets.tcgdex.net/en/swsh/swsh3/logo.webp", vSet.symbol?.url)
+		// Full-colour wordmarks; recolouring one would flatten it.
+		assertEquals(false, vSet.symbol?.isMonochrome)
+	}
+
+	@Test
+	fun `the 61 sets with no logo get no symbol`() {
+		val vSet = TcgdexMapper.toSet(
+			dto = TcgdexSetBriefDto(id = "B2A", name = "Paldean Wonders", logo = null),
+			provider = mProvider,
+			releaseDates = emptyMap(),
+		)
+
+		assertNotNull(vSet)
+		assertNull(vSet.symbol)
+	}
+
 	// ============
 	//  Cards
 
