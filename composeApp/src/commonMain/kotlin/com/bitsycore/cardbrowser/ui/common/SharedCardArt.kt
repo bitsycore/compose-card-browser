@@ -14,14 +14,19 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 
@@ -140,15 +145,48 @@ fun Modifier.sharedSetContainer(setId: String, expandsFromCorner: Dp? = null): M
 			// legible at row size for the first frames, which reads as a glitch rather than a grow.
 			enter = fadeIn(tween(CONTAINER_FADE_MILLIS)),
 			exit = fadeOut(tween(CONTAINER_FADE_MILLIS)),
-			// The overlay is where the element is actually drawn mid-flight, so the rounding has to
-			// be stated there as well as clipped below -- otherwise the content is rounded while
-			// the container it flies inside stays square, and the corners show through.
-			clipInOverlayDuringTransition = OverlayClip(
-				RoundedCornerShape(vCorner?.value ?: 0.dp),
-			),
-		).then(
-			if (vCorner == null) Modifier else Modifier.clip(RoundedCornerShape(vCorner.value)),
+			// Clipped in the *overlay*, which is the only place it can be done correctly here.
+			//
+			// A `clip` in the modifier chain applies to the child, and under `scaleToBounds` the
+			// child is measured once at its full stable size and then scaled. So a 12 dp radius
+			// clipped there is scaled along with everything else: by the time the container is row
+			// sized it is a couple of pixels, and the corners read as square. That was the first
+			// attempt, and it is why going back from the grid arrived at a rectangle.
+			//
+			// The overlay is where the element is actually drawn mid-flight, and its bounds are in
+			// screen space at the animated size -- so a radius applied there is the radius you see.
+			clipInOverlayDuringTransition = vCorner?.let { AnimatedCornerClip(it) }
+				?: OverlayClip(RectangleShape),
 		)
+	}
+}
+
+/**
+ * An overlay clip whose corner radius is read at draw time rather than baked in at composition.
+ *
+ * `OverlayClip(RoundedCornerShape(...))` would work too, but only by recomposing this modifier on
+ * every frame of the animation to hand it a new shape. Reading the animated value inside
+ * [getClipPath] keeps the whole thing to one composition and a path rebuild per frame, which is
+ * what the interface's own documentation recommends.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+private class AnimatedCornerClip(private val mCorner: State<Dp>) : SharedTransitionScope.OverlayClip {
+
+	// Reused rather than allocated per frame, as the interface asks.
+	private val mPath = Path()
+
+	override fun getClipPath(
+		sharedContentState: SharedTransitionScope.SharedContentState,
+		bounds: Rect,
+		layoutDirection: LayoutDirection,
+		density: Density,
+	): Path {
+		val vRadius = with(density) { mCorner.value.toPx() }
+		mPath.reset()
+		// `bounds` already carries the element's position in the shared scope, so a round rect built
+		// from it needs no further offsetting.
+		mPath.addRoundRect(RoundRect(rect = bounds, cornerRadius = CornerRadius(vRadius)))
+		return mPath
 	}
 }
 
