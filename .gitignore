@@ -64,3 +64,6 @@ tools/mapdata/data/overpass_raw.json
 
 # Scratch space for provider research: captured API responses and device screenshots.
 .research/
+
+# Built APKs kept outside build/ so a clean does not delete them. Binaries stay out of git.
+/dist/
