@@ -83,7 +83,7 @@ class DownloadManagerTest {
 	@Test
 	fun `the same set and kinds enqueued twice is one job`() = runTest {
 		// The button sits on a row. Tapping it twice must not fetch the set twice.
-		val vManager = DownloadManager(repositoryStub(), RecordingPrefetcher(), TestScope(testScheduler))
+		val vManager = managerWith(RecordingPrefetcher(), testScheduler)
 
 		val vFirst = vManager.enqueue(request())
 		val vSecond = vManager.enqueue(request())
@@ -95,7 +95,7 @@ class DownloadManagerTest {
 	@Test
 	fun `the same set with different kinds is a different job`() = runTest {
 		// Card info and card images are separate asks, so wanting both is two rows, not one.
-		val vManager = DownloadManager(repositoryStub(), RecordingPrefetcher(), TestScope(testScheduler))
+		val vManager = managerWith(RecordingPrefetcher(), testScheduler)
 
 		vManager.enqueue(request(kinds = setOf(DownloadKind.CARD_INFO)))
 		vManager.enqueue(request(kinds = setOf(DownloadKind.CARD_IMAGES)))
@@ -105,7 +105,7 @@ class DownloadManagerTest {
 
 	@Test
 	fun `cancelling a queued job takes it out of the queue`() = runTest {
-		val vManager = DownloadManager(repositoryStub(), RecordingPrefetcher(), TestScope(testScheduler))
+		val vManager = managerWith(RecordingPrefetcher(), testScheduler)
 		val vId = vManager.enqueue(request())
 
 		vManager.cancel(vId)
@@ -117,7 +117,7 @@ class DownloadManagerTest {
 
 	@Test
 	fun `cancelAll leaves finished jobs alone and stops the active ones`() = runTest {
-		val vManager = DownloadManager(repositoryStub(), RecordingPrefetcher(), TestScope(testScheduler))
+		val vManager = managerWith(RecordingPrefetcher(), testScheduler)
 		vManager.enqueue(request("OGN"))
 		vManager.enqueue(request("VEN"))
 
@@ -128,7 +128,7 @@ class DownloadManagerTest {
 
 	@Test
 	fun `clearFinished drops finished rows and keeps active ones`() = runTest {
-		val vManager = DownloadManager(repositoryStub(), RecordingPrefetcher(), TestScope(testScheduler))
+		val vManager = managerWith(RecordingPrefetcher(), testScheduler)
 		val vDone = vManager.enqueue(request("OGN"))
 		vManager.enqueue(request("VEN"))
 		vManager.cancel(vDone)
@@ -141,7 +141,7 @@ class DownloadManagerTest {
 
 	@Test
 	fun `re-running a finished download replaces its row rather than adding one`() = runTest {
-		val vManager = DownloadManager(repositoryStub(), RecordingPrefetcher(), TestScope(testScheduler))
+		val vManager = managerWith(RecordingPrefetcher(), testScheduler)
 		val vId = vManager.enqueue(request())
 		vManager.cancel(vId)
 
@@ -175,6 +175,28 @@ class DownloadManagerTest {
 		assertEquals(4, vStatus.imagesFailed)
 		assertFalse(vJob.isActive)
 	}
+
+	/** Builds a manager over throwaway collaborators, so a constructor change is one edit here. */
+	private fun managerWith(
+		prefetcher: ImagePrefetcher,
+		scheduler: kotlinx.coroutines.test.TestCoroutineScheduler,
+	) = DownloadManager(
+		mRepository = repositoryStub(),
+		mImagePrefetcher = prefetcher,
+		mPreferences = preferencesStub(),
+		mScope = TestScope(scheduler),
+	)
+
+	/** Preferences over a fake filesystem; the queue tests never read them back. */
+	private fun preferencesStub() = com.bitsycore.cardbrowser.data.settings.PreferencesStore(
+		com.bitsycore.cardbrowser.data.cache.AppStorage(
+			okio.fakefilesystem.FakeFileSystem(),
+			"/cache".toPath(),
+			"/prefs".toPath(),
+		).also { it.prepare() },
+		kotlinx.serialization.json.Json { ignoreUnknownKeys = true },
+		kotlinx.coroutines.Dispatchers.Unconfined,
+	)
 
 	/**
 	 * A repository that is never actually driven.

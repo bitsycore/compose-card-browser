@@ -6,6 +6,9 @@ import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.CardRepository
+import com.bitsycore.cardbrowser.data.settings.imageDownloadKey
+import com.bitsycore.cardbrowser.data.settings.PreferencesStore
+import com.bitsycore.cardbrowser.data.settings.ImageDownloadRecord
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -163,6 +166,7 @@ interface ImagePrefetcher {
 class DownloadManager(
 	private val mRepository: CardRepository,
 	private val mImagePrefetcher: ImagePrefetcher,
+	private val mPreferences: PreferencesStore,
 	private val mScope: CoroutineScope,
 ) {
 
@@ -325,6 +329,10 @@ class DownloadManager(
 				update(job.id) { DownloadStatus.Running(completed = vDone + vFailed, total = vUrls.size) }
 			}
 
+			// Recorded so the set list can say what came down, across restarts. A record of a
+			// download, not a claim that every file is still there -- see `imageDownloads`.
+			recordImages(vRequest, fetched = vDone, total = vUrls.size)
+
 			update(job.id) {
 				DownloadStatus.Completed(
 					cards = vCards.size,
@@ -339,6 +347,26 @@ class DownloadManager(
 			update(job.id) { DownloadStatus.Failed(vError.message ?: "The provider refused") }
 		} catch (vError: Exception) {
 			update(job.id) { DownloadStatus.Failed(vError.message ?: "Download failed") }
+		}
+	}
+
+	/**
+	 * Stores what an image download fetched.
+	 *
+	 * Written even when some failed, because a partial result is exactly what the set list wants to
+	 * be able to show honestly. Failures here are swallowed: a download that worked should not be
+	 * reported as failed because a preferences write did not.
+	 */
+	private suspend fun recordImages(request: DownloadRequest, fetched: Int, total: Int) {
+		if (total <= 0) return
+		runCatching {
+			val vKey = imageDownloadKey(request.setId.qualified, request.language)
+			mPreferences.update { vPreferences ->
+				vPreferences.copy(
+					imageDownloads = vPreferences.imageDownloads +
+						(vKey to ImageDownloadRecord(fetched = fetched, total = total)),
+				)
+			}
 		}
 	}
 

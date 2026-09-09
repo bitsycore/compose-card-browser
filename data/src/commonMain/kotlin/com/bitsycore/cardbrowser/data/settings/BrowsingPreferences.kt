@@ -32,6 +32,30 @@ import okio.use
  *   any provider serves all of them
  * @property gridColumnPreference `null` lets the layout choose from the window width
  */
+/**
+ * How much of one set's art a download actually brought down.
+ *
+ * @property fetched images that arrived
+ * @property total images attempted. `fetched < total` is a real outcome, not an error state -- a
+ *   CDN drops requests -- and the set list shows the percentage rather than rounding up to a tick
+ */
+@Serializable
+data class ImageDownloadRecord(
+	val fetched: Int,
+	val total: Int,
+) {
+
+	/** 0..100. Guards against a zero total rather than dividing by it. */
+	val percent: Int get() = if (total <= 0) 0 else (fetched * 100) / total
+
+	val isComplete: Boolean get() = total > 0 && fetched >= total
+}
+
+/** The key [BrowsingPreferences.imageDownloads] is stored under. Language included: a set in French
+ * and the same set in Japanese are different downloads of different files. */
+fun imageDownloadKey(setId: String, language: CardLanguage?): String =
+	setId + "|" + (language?.code ?: "-")
+
 @Serializable
 data class BrowsingPreferences(
 	val lastSetId: String? = null,
@@ -53,7 +77,28 @@ data class BrowsingPreferences(
 	val prefetchRadius: Int = DEFAULT_PREFETCH_RADIUS,
 	/** Whether the set list is checked for new sets in the background on launch. */
 	val revalidateSetsOnLaunch: Boolean = true,
+	/**
+	 * What an image download actually fetched, per set and language.
+	 *
+	 * Keyed by [imageDownloadKey]. Recorded because there is no cheap way to ask the question
+	 * directly: answering "are this set's images cached?" honestly would mean a disk lookup per
+	 * image -- around 700 for a large set, times every row on screen -- so what is stored instead
+	 * is the outcome of a download that really happened.
+	 *
+	 * That is a record of a *download*, not a guarantee of *presence*. The image cache is an LRU
+	 * with a ceiling, so a set downloaded months ago may since have been partly evicted, and the
+	 * OS may purge the whole directory on Android and iOS regardless. The set list therefore says
+	 * "images downloaded" rather than "images available", and that wording is the point.
+	 *
+	 * Images that arrive by ordinary browsing are not recorded here at all, so this under-claims
+	 * rather than over-claims -- the safe direction.
+	 */
+	val imageDownloads: Map<String, ImageDownloadRecord> = emptyMap(),
 ) {
+
+	/** What [imageDownloads] recorded for a set in a language, or `null` if never downloaded. */
+	fun imageDownloadFor(setId: String, language: CardLanguage?): ImageDownloadRecord? =
+		imageDownloads[imageDownloadKey(setId, language)]
 
 	/** The highest-priority language, used as the default request language. */
 	val primaryLanguage: CardLanguage

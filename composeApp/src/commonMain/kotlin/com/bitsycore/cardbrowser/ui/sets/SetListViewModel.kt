@@ -121,7 +121,16 @@ class SetListViewModel(
 			if (stateFlow.value.requestGeneration == vGeneration && vSets.isNotEmpty()) {
 				dispatch(
 					SetListContract.Intent.SavedSetsResolved(
-						mRepository.savedSetIds(vGame.id, vSets, vLanguage),
+						setIds = mRepository.savedSetIds(vGame.id, vSets, vLanguage),
+						// Read straight from preferences rather than measured: see
+						// `BrowsingPreferences.imageDownloads` for why the image side cannot be
+						// checked cheaply, and what the record therefore does and does not mean.
+						imageDownloads = mPreferences.preferences.value.let { vPreferences ->
+							vSets.mapNotNull { vSet ->
+								vPreferences.imageDownloadFor(vSet.id.qualified, vLanguage)
+									?.let { vSet.id.qualified to it }
+							}.toMap()
+						},
 					),
 				)
 			}

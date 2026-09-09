@@ -5,6 +5,7 @@ import com.bitsycore.cardbrowser.core.game.GameRegion
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
+import com.bitsycore.cardbrowser.data.settings.ImageDownloadRecord
 import com.bitsycore.lib.pulse.container.ContainerContract
 
 /**
@@ -58,6 +59,14 @@ object SetListContract :
 		 * mark in the row says saved and promises nothing about how much of the set is there.
 		 */
 		val savedSetIds: Set<String> = emptySet(),
+		/**
+		 * What an image download fetched, per set id, for the language being browsed.
+		 *
+		 * Absent means no download was ever recorded -- **not** that no images are cached. Art
+		 * arrives by browsing too, and that is not tracked, so this under-claims rather than
+		 * over-claims. See `BrowsingPreferences.imageDownloads`.
+		 */
+		val imageDownloads: Map<String, ImageDownloadRecord> = emptyMap(),
 		/**
 		 * Which product line to show, or `null` for all of them.
 		 *
@@ -168,7 +177,10 @@ object SetListContract :
 		data class GamesRestored(val games: List<GameProfile>, val game: GameProfile) : Intent
 
 		/** Which sets are on disk. Computed after a load, since it depends on the set list. */
-		data class SavedSetsResolved(val setIds: Set<String>) : Intent
+		data class SavedSetsResolved(
+			val setIds: Set<String>,
+			val imageDownloads: Map<String, ImageDownloadRecord> = emptyMap(),
+		) : Intent
 
 		/** A product line was picked, or `null` to see every line again. */
 		data class RegionSelected(val region: String?) : Intent
@@ -236,7 +248,10 @@ object SetListContract :
 			game = intent.game,
 		)
 
-		is Intent.SavedSetsResolved -> state.copy(savedSetIds = intent.setIds)
+		is Intent.SavedSetsResolved -> state.copy(
+			savedSetIds = intent.setIds,
+			imageDownloads = intent.imageDownloads,
+		)
 
 		// Purely a view of what is already loaded: every line arrives in one request, so narrowing
 		// to one of them is not a reload.

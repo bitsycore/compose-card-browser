@@ -212,6 +212,7 @@ val appModule = module {
 		DownloadManager(
 			mRepository = get(),
 			mImagePrefetcher = get<CoilImagePrefetcher>(),
+			mPreferences = get(),
 			mScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 		)
 	}

@@ -59,6 +59,9 @@ import com.bitsycore.cardbrowser.games.api.GameArt
 import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
 import org.jetbrains.compose.resources.painterResource
 import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Image
+import com.bitsycore.cardbrowser.data.settings.ImageDownloadRecord
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -319,6 +322,7 @@ fun SetListContent(
 									onOpenSet(vSet)
 								},
 								downloadStatus = downloads.firstOrNull { it.request.setId == vSet.id },
+								images = vState.imageDownloads[vSet.id.qualified],
 								onDownload = { vPendingSet = vSet },
 							)
 						}
@@ -436,6 +440,7 @@ private fun SetRow(
 	isSaved: Boolean,
 	onClick: () -> Unit,
 	downloadStatus: DownloadJob? = null,
+	images: ImageDownloadRecord? = null,
 	onDownload: () -> Unit = {},
 ) {
 	Card(
@@ -510,16 +515,53 @@ private fun SetRow(
 					}
 				}
 			}
-			if (isSaved) {
-				Spacer(Modifier.size(8.dp))
-				Icon(
-					imageVector = Icons.Outlined.OfflinePin,
-					// "Saved", not "complete". A set interrupted part-way through leaves a file
-					// behind too, and the mark must not promise more than that.
-					contentDescription = "Saved on this device",
-					tint = MaterialTheme.colorScheme.primary,
-					modifier = Modifier.size(20.dp),
-				)
+			// Two marks, because the two halves of a download are separately true: a set can have
+			// its records and none of its art, which is the common case after browsing it once.
+			if (isSaved || images != null) {
+				Spacer(Modifier.size(6.dp))
+				Row(verticalAlignment = Alignment.CenterVertically) {
+					if (isSaved) {
+						Icon(
+							imageVector = Icons.Outlined.Description,
+							// "Saved", not "complete". A set interrupted part-way through leaves a
+							// file behind too, and the mark must not promise more than that.
+							contentDescription = "Card info saved on this device",
+							tint = MaterialTheme.colorScheme.primary,
+							modifier = Modifier.size(18.dp),
+						)
+					}
+					if (images != null) {
+						if (isSaved) Spacer(Modifier.size(6.dp))
+						Icon(
+							imageVector = Icons.Outlined.Image,
+							// "Downloaded", not "available": the image cache is an LRU and the OS
+							// may purge it, so this records what came down rather than promising
+							// what is still there.
+							contentDescription = if (images.isComplete) {
+								"Card images downloaded"
+							} else {
+								"${images.percent}% of card images downloaded"
+							},
+							tint = if (images.isComplete) {
+								MaterialTheme.colorScheme.primary
+							} else {
+								// A partial download is not a tick. Same colour as the rest of the
+								// metadata line, so it reads as a qualification rather than a win.
+								MaterialTheme.colorScheme.onSurfaceVariant
+							},
+							modifier = Modifier.size(18.dp),
+						)
+						// The number only when it says something a tick does not.
+						if (!images.isComplete) {
+							Spacer(Modifier.size(2.dp))
+							Text(
+								text = "${images.percent}%",
+								style = MaterialTheme.typography.labelSmall,
+								color = MaterialTheme.colorScheme.onSurfaceVariant,
+							)
+						}
+					}
+				}
 			}
 			// "Last opened" is on the metadata line rather than out here. As an unweighted
 			// trailing sibling it was measured at its full intrinsic width before the weighted
@@ -785,3 +827,24 @@ private fun SetListSavedPreview() = PreviewFrame {
 private val SET_MARK_WIDTH = 68.dp
 
 private val SET_MARK_HEIGHT = 44.dp
+
+@Preview
+@Composable
+private fun SetListDownloadMarksPreview() = PreviewFrame {
+	// The four states the two marks exist to tell apart: nothing, records only, records plus a
+	// complete image download, and records plus a partial one.
+	SetListContent(
+		state = SetListContract.UiState(
+			sets = PreviewData.SETS,
+			isLoading = false,
+			savedSetIds = PreviewData.SETS.drop(1).map { it.id.qualified }.toSet(),
+			imageDownloads = mapOf(
+				PreviewData.SETS[1].id.qualified to ImageDownloadRecord(fetched = 560, total = 560),
+				PreviewData.SETS[2].id.qualified to ImageDownloadRecord(fetched = 412, total = 576),
+			),
+		),
+		dispatch = {},
+		onOpenSet = {},
+		onOpenSettings = {},
+	)
+}
