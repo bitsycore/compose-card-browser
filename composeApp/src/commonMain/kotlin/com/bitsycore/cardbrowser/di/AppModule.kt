@@ -27,7 +27,9 @@ import com.bitsycore.cardbrowser.games.yugioh.YuGiOhGame
 import com.bitsycore.cardbrowser.games.yugioh.YuGiOhArt
 import com.bitsycore.cardbrowser.games.cyberpunk.CyberpunkArt
 import com.bitsycore.cardbrowser.games.cyberpunk.CyberpunkGame
+import com.bitsycore.cardbrowser.games.lorcana.LorcanaArt
 import com.bitsycore.cardbrowser.games.lorcana.LorcanaGame
+import com.bitsycore.cardbrowser.games.wowtcg.WowTcgArt
 import com.bitsycore.cardbrowser.games.wowtcg.WowTcgGame
 import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesGame
 import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesArt
@@ -128,11 +130,11 @@ val appModule = module {
 
 	// Each is declared under its *own* type and then bound to `CardProvider`.
 	//
-	// Not `single<CardProvider> { ... }` seven times. That gives seven definitions with the same
+	// Not `single<CardProvider> { ... }` ten times. That gives ten definitions with the same
 	// primary type and no qualifier, so they overwrite one another and `getAll<CardProvider>()`
 	// finds only the last -- which the registry then rejects at startup with "routing table names
 	// providers that are not registered". Distinct primary types plus `bind` is what makes
-	// `getAll` see all seven.
+	// `getAll` see all ten.
 	single { RiftcodexProvider(mClient = get(named(PROVIDER_CLIENT))) } bind CardProvider::class
 	single { TcgdexProvider(mClient = get(named(PROVIDER_CLIENT))) } bind CardProvider::class
 	// Their own clients, not the shared one, because these two carry a request throttle and the
@@ -181,10 +183,8 @@ val appModule = module {
 				YuGiOhArt,
 				WutheringWavesArt,
 				CyberpunkArt,
-				// Lorcana and the WoW TCG ship no art yet: neither has a freely-licensed wordmark
-				// on Wikimedia Commons, and this project does not bundle a non-free one. They draw
-				// the generic mark until a logo is supplied, which is the fallback this list's
-				// being optional exists for.
+				LorcanaArt,
+				WowTcgArt,
 			),
 		)
 	}

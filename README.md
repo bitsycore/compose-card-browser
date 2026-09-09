@@ -581,8 +581,8 @@ This app is not affiliated with any game's publisher.
 
 ### Game logos
 
-Eight of the ten games show their real logo in the picker, and they do not all come from the same
-place — the difference matters.
+All ten games show their real logo in the picker, and they do not all come from the same place —
+the difference matters.
 
 **Six from Wikimedia Commons**, which is what makes bundling them possible: Commons accepts only
 freely-licensed media, whereas a logo merely *shown* on Wikipedia normally lives there under a
@@ -602,22 +602,22 @@ individually through the Commons API:
 the file may be redistributed, while the trademark still belongs to its owner. Using it to identify
 that owner's game is what a trademark is for.
 
-**Two supplied by the project owner.** Riftbound and Altered exist on neither Commons nor English
-Wikipedia under any name I searched — both games are recent enough that no freely-licensed mark has
-been uploaded, and the only Wikipedia files are a cover and a card back under non-free fair-use
-rationales. The two bundled here were chosen by the owner of this project from third-party sites (a
-card shop's CDN and a retailer's blog) and downloaded on request.
+**Four supplied by the project owner.** Riftbound, Altered, Disney Lorcana and the WoW TCG exist on
+neither Commons nor English Wikipedia under any name searched — the first two are recent enough that
+no freely-licensed mark has been uploaded, and the only Wikipedia files are covers and card backs
+under non-free fair-use rationales. All four bundled here were chosen by the owner of this project
+from third-party sites (a card shop's CDN, a retailer's blog, a community wiki and a storefront CDN)
+and downloaded and resized on request.
 
-**No licence was verified for those two, because there is none to verify.** They are publishers'
+**No licence was verified for those four, because there is none to verify.** They are publishers'
 trademarks used to identify the publishers' own games — the ordinary nominative use every card
 database relies on — but anyone redistributing this app should form their own view rather than
 assume they carry the clearance the six Commons files do.
 
-**Two games have no logo at all.** Lorcana and the WoW TCG have no freely-licensed wordmark on
-Commons, and this project does not bundle a non-free one on its own initiative. Both draw the
-generic mark in the picker until one is supplied — a game with no art is a missing logo rather than
-a missing game, which is why `GameArtRegistry` returns null instead of the list being exhaustive.
-`AppModuleTest` names those two explicitly, so the exception cannot silently spread to a third.
+Every bundled logo is trimmed to its alpha bounding box and resized to 480px wide, which is what the
+tile actually draws; leaving the padding in is what made the Altered mark look half-size. The two
+newest are also colour-quantised, being gradient-heavy artwork that PNG stores badly — 234 KB to
+55 KB for the WoW mark and 103 KB to 21 KB for Lorcana's, at a sampled RMSE of 5.8 and 3.9.
 
 Two presentation rules, both driven by the artwork rather than by taste:
 
@@ -625,11 +625,13 @@ Two presentation rules, both driven by the artwork rather than by taste:
   colour — its own black on the light theme, inverted to white on the dark one, which is how the
   official mark is presented against dark backgrounds. Not the row accent: a teal Wuthering Waves
   logo is not its logo.
-- Altered, One Piece and Riftbound have no dark outline and wash out on a light background — of
-  their visible pixels, 49%, 76% and 31% respectively fall below a 2:1 contrast ratio against a
-  pale tile, and Riftbound's are concentrated entirely in its "League of Legends" subtitle, which
-  vanishes. Those three keep a dark tile on both themes. Magic, Pokémon and Yu-Gi-Oh are not
-  flagged despite similar raw figures, because their dark outlines carry the shape.
+- Altered, One Piece, Riftbound and Lorcana have no dark outline and wash out on a light background
+  — of their visible pixels, 49%, 76%, 31% and 33% respectively fall below a 2:1 contrast ratio
+  against a pale tile. For Riftbound and Lorcana the loss is *concentrated* rather than spread:
+  Riftbound's is entirely in its "League of Legends" subtitle, and Lorcana's runs 0/0/36/48/2% by
+  fifths of the image, those middle bands being the word LORCANA itself. Those four keep a dark tile
+  on both themes. Magic, Pokémon, Yu-Gi-Oh and the WoW TCG are not flagged despite comparable raw
+  figures — the WoW mark measures 18%, evenly spread — because their dark outlines carry the shape.
 - The Cyberpunk mark is the *franchise* wordmark rather than the card game's own lockup, the TCG
   having no freely-licensed mark of its own. Commons serves it as a monochrome glyph, so it is
   tinted to the theme foreground like the Wuthering Waves one.

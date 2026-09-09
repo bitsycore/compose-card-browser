@@ -4,6 +4,10 @@ import com.bitsycore.cardbrowser.core.game.GameDomain
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.GameId
+import com.bitsycore.cardbrowser.games.api.GameArt
+import com.bitsycore.cardbrowser.games.lorcana.resources.Res
+import com.bitsycore.cardbrowser.games.lorcana.resources.game_logo_lorcana
+import org.jetbrains.compose.resources.DrawableResource
 
 /**
  * Disney Lorcana.
@@ -75,4 +79,26 @@ object LorcanaGame : GameProfile {
 	// No Cardmarket slug. The site does sell Lorcana, but this app only ships a path segment that
 	// has been seen on a real page -- Cardmarket answers 403 to every scripted request, so a
 	// browser is the only oracle and nobody has looked yet. See `GameProfile.cardmarketSlug`.
+}
+
+/** Lorcana's mark. See [GameArt] for where each logo came from and what may be done with it. */
+object LorcanaArt : GameArt {
+
+	override val game: GameProfile = LorcanaGame
+
+	override val logo: DrawableResource = Res.drawable.game_logo_lorcana
+
+	/** The gold of the wordmark itself, sampled from the artwork rather than chosen. */
+	override val accentArgb: Long = 0xFFC0A878
+
+	/**
+	 * The gold wordmark washes out on a pale tile.
+	 *
+	 * Measured the same way the other three flagged logos were: 33% of its visible pixels fall
+	 * below a 2:1 contrast ratio against a light tile, and the loss is not spread evenly -- by
+	 * fifths of the image it runs 0%, 0%, 36%, 48%, 2%. Those middle bands are "LORCANA" itself,
+	 * so what disappears is the name. The "Disney" script above it is fine, which is exactly the
+	 * shape of the Riftbound case.
+	 */
+	override val prefersDarkBackdrop: Boolean = true
 }
