@@ -17,13 +17,11 @@ import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -97,12 +95,19 @@ private val CARD_BOUNDS_TRANSFORM = BoundsTransform { _, _ ->
  * going back shrinks it home. Applied to the row in the set list and to the grid screen's root with
  * the same key, which is the set's source-qualified id.
  *
- * ## Why `ScaleToBounds` and not `RemeasureToBounds`
+ * ## Why `RemeasureToBounds` and not `scaleToBounds`
  *
- * The two ends are wildly different shapes -- a 72 dp row against a full screen -- and remeasuring
- * would lay the entire grid out afresh on every animation frame at every intermediate size, which
- * for a 350-card set means re-measuring a lazy grid a hundred times during a 300 ms transition.
- * Scaling draws it once and transforms it, which is what the pattern is for.
+ * Scaling was tried first, on the reasoning that remeasuring a lazy grid at every intermediate size
+ * is the expensive option. It is, and it is still the right one, because of what scaling actually
+ * looks like here: each side is measured at its *own* size and then transformed to the animated
+ * bounds, so the row is laid out at 72 dp tall and blown up to fill the screen. Its name and date
+ * become enormous for the length of the transition. The set row visibly magnifies rather than the
+ * screen growing.
+ *
+ * Remeasuring lays each side out at the size it currently occupies, so the type stays the size it
+ * is meant to be and the container simply expands -- which is the whole point of the gesture. The
+ * cost is real but smaller than it sounds: a lazy grid only composes what fits, so at the early,
+ * frequent, small sizes it is measuring a handful of tiles rather than a set of 350.
  *
  * Silently does nothing when either scope is missing, exactly as [sharedCardArt] does, so previews
  * and tests render normally.
@@ -137,13 +142,11 @@ fun Modifier.sharedSetContainer(setId: String, expandsFromCorner: Dp? = null): M
 			sharedContentState = rememberSharedContentState(key = "set-container:$setId"),
 			animatedVisibilityScope = vAnimatedScope,
 			boundsTransform = CARD_BOUNDS_TRANSFORM,
-			resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
-				contentScale = ContentScale.Crop,
-				alignment = Alignment.TopStart,
-			),
-			// The contents cross-fade while the container travels. Without this the grid's text is
-			// legible at row size for the first frames, which reads as a glitch rather than a grow.
-			enter = fadeIn(tween(CONTAINER_FADE_MILLIS)),
+			resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+			// The contents cross-fade while the container travels, and the outgoing side goes
+			// first. Both are short: the fade is there to cover the moment when one layout is
+			// replaced by a different one at the same size, not to be seen in its own right.
+			enter = fadeIn(tween(CONTAINER_FADE_MILLIS, delayMillis = CONTAINER_FADE_MILLIS)),
 			exit = fadeOut(tween(CONTAINER_FADE_MILLIS)),
 			// Clipped in the *overlay*, which is the only place it can be done correctly here.
 			//

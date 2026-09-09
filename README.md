@@ -285,9 +285,13 @@ Three different transitions, and the differences are deliberate rather than deco
   lateral move in the app, and that is what makes it mean something: a slide used everywhere says
   nothing about direction, while one used on a single hop reads as "into".
 - **Opening a set is a container transform.** The row grows into the grid screen and shrinks back
-  into the row on the way out, via `sharedBounds` keyed on the set's id. It scales rather than
-  remeasures — the two ends are a 72 dp row and a full screen, and remeasuring would lay a lazy grid
-  out afresh at every intermediate size, a hundred times during a 300 ms animation.
+  into the row on the way out, via `sharedBounds` keyed on the set's id. It **remeasures** rather
+  than scales, and that was not the first attempt: scaling is the cheaper option, but each side is
+  laid out at its own size and then transformed, so the row gets measured at 72 dp tall and blown up
+  to fill the screen — its name and date become enormous, and the row visibly magnifies instead of
+  the screen growing. Remeasuring keeps the type the size it is meant to be and the container simply
+  expands. The cost is smaller than it sounds: a lazy grid only composes what fits, so at the early,
+  frequent, small sizes it measures a handful of tiles rather than a set of 350.
 
   The **corner radius travels with the bounds**, from the row's 12 dp to the screen's zero. Without
   that the container is square from the first frame and the row's corners simply vanish, which reads
