@@ -398,17 +398,7 @@ private fun GameMark(art: GameArt?) {
 			// 960x275 logo into a smear; the icon rows simply centre their glyph in the space.
 			.size(width = 72.dp, height = 48.dp)
 			.clip(RoundedCornerShape(12.dp))
-			.background(
-				if (art?.prefersDarkBackdrop == true) {
-					// Artwork with no dark outline, drawn for dark backgrounds. It keeps one on
-					// both themes rather than washing out against a pale tile.
-					DARK_LOGO_BACKDROP
-				} else {
-					// Tinted rather than saturated, so seven of these in a column read as one
-					// list rather than as a paint chart.
-					(art?.accent ?: MaterialTheme.colorScheme.primary).copy(alpha = 0.18f)
-				},
-			),
+			.background(backdropFor(art)),
 		contentAlignment = Alignment.Center,
 	) {
 		val vLogo = art?.logo
@@ -437,13 +427,20 @@ private fun GameMark(art: GameArt?) {
 }
 
 /**
- * The tile behind a logo that was drawn for a dark background.
+ * The tile a game's mark sits on.
  *
- * A fixed colour rather than a theme one, because the point is that it does *not* follow the theme
- * -- see the note in [GameArt]. Close to the dark theme's own surface, so on that theme it is
- * nearly invisible and only the light theme sees a change.
+ * A logo drawn for a particular background states one, and keeps it on both themes rather than
+ * washing out against a pale tile. That is usually [GameArt.DARK_BACKDROP], and for Cyberpunk it is
+ * the brand's own yellow with a black wordmark on it -- which is exactly why `backdropArgb` is a
+ * colour rather than the "prefers dark" boolean it replaced.
+ *
+ * Everything else gets its accent, heavily tinted rather than saturated, so ten of these in a
+ * column read as one list rather than as a paint chart.
  */
-private val DARK_LOGO_BACKDROP = Color(0xFF201E26)
+@Composable
+private fun backdropFor(art: GameArt?): Color =
+	art?.backdropArgb?.let { Color(it.toInt()) }
+		?: (art?.accent ?: MaterialTheme.colorScheme.primary).copy(alpha = 0.18f)
 
 /**
  * The fallback for a game whose module ships no logo.

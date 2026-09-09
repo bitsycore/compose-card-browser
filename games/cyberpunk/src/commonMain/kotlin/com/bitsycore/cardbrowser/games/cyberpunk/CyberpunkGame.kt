@@ -63,21 +63,36 @@ object CyberpunkGame : GameProfile {
 	// No Cardmarket slug: the site has no section for this game yet, the first set being unreleased.
 }
 
-/** Cyberpunk's mark. See [GameArt] for where each logo came from and what may be done with it. */
+/**
+ * Cyberpunk's mark -- the card game's own, not the video game's.
+ *
+ * See [GameArt] for where each logo came from and what may be done with it.
+ */
 object CyberpunkArt : GameArt {
 
 	override val game: GameProfile = CyberpunkGame
 
 	override val logo: DrawableResource = Res.drawable.game_logo_cyberpunk
 
-	override val accentArgb: Long = 0xFFFCEE0A
+	/** The brand yellow, sampled off the supplied mark: `#FEEC00` over 80% of its opaque pixels. */
+	override val accentArgb: Long = 0xFFFEEC00
 
 	/**
-	 * A single-colour glyph, so it is drawn in the theme's foreground and reads on both themes.
+	 * The brand's own yellow plate, with the black wordmark on it.
 	 *
-	 * This is the *franchise* wordmark rather than the card game's own lockup -- the TCG has no
-	 * freely-licensed mark, and the game it is set in does. Commons serves it as a monochrome SVG,
-	 * which is exactly the case [GameArt.tintLogo] exists for.
+	 * The publisher publishes this mark two ways -- yellow on black, and black on yellow -- and the
+	 * second is what is bundled, at the project owner's suggestion. It sidesteps the problem the
+	 * first one has outright: measured, **100%** of the yellow version's visible pixels fall below a
+	 * 2:1 contrast ratio against a light tile, every fifth of the image alike, with no dark outline
+	 * anywhere to carry the shape and the "TRADING CARD GAME" line gone completely.
+	 *
+	 * A dark grey plate would have fixed that too, and this is better: the tile is the game's colour
+	 * rather than a neutral one, and the mark is drawn exactly as its owner draws it. Being able to
+	 * say so is why [GameArt.backdropArgb] is a colour and not the boolean it replaced.
+	 *
+	 * Not [GameArt.tintLogo], despite the artwork now being single-colour. Tinting means "follow the
+	 * theme's foreground", which on the dark theme would turn this white -- and white on yellow is
+	 * the thing being avoided. The plate is fixed, so the mark on it must be too.
 	 */
-	override val tintLogo: Boolean = true
+	override val backdropArgb: Long = 0xFFFEEC00
 }

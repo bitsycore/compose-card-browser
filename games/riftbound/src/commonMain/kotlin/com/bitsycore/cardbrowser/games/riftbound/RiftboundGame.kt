@@ -78,5 +78,5 @@ object RiftboundArt : GameArt {
 	override val accentArgb: Long = 0xFF7C6BF5
 
 	// The white "LEAGUE OF LEGENDS" subtitle disappears entirely on a light tile.
-	override val prefersDarkBackdrop: Boolean = true
+	override val backdropArgb: Long = GameArt.DARK_BACKDROP
 }

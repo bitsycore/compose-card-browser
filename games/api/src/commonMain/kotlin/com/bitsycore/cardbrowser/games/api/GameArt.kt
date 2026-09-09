@@ -19,7 +19,7 @@ import org.jetbrains.compose.resources.DrawableResource
  *
  * Two different provenances, and the difference matters enough to keep straight.
  *
- * ### Four from Wikimedia Commons, licence-checked
+ * ### Three from Wikimedia Commons, licence-checked
  *
  * Commons accepts only freely-licensed media, which is what makes these bundleable. A logo merely
  * *shown* on Wikipedia usually lives on Wikipedia itself under a non-free fair-use rationale that
@@ -31,46 +31,52 @@ import org.jetbrains.compose.resources.DrawableResource
  * | Pokémon | Public domain | Below the threshold of originality. Trademarked. |
  * | Magic | Public domain | Below the threshold of originality. Trademarked. |
  * | Wuthering Waves | Public domain | Below the threshold of originality. Trademarked. |
- * | Cyberpunk | Public domain | Below the threshold of originality. Trademarked. |
  *
- * Yu-Gi-Oh! and One Piece were in this table until the project owner supplied each publisher's own
- * current mark, which are better likenesses of the games as they are sold today. Both moved to the
- * group below, and the CC BY credit Yu-Gi-Oh!'s Commons file required moved out of the app with it.
+ * Yu-Gi-Oh!, One Piece and Cyberpunk were in this table until the project owner supplied each
+ * publisher's own current mark, which are better likenesses of the games as they are sold today.
+ * All three moved to the group below, and the CC BY credit Yu-Gi-Oh!'s Commons file required moved
+ * out of the app with it. Cyberpunk's case was the weakest of the three from the start: the Commons
+ * file was the *Cyberpunk 2077* wordmark standing in for a card game that had no free mark, so it
+ * identified the setting rather than the game.
  *
  * "Public domain, trademarked" is the ordinary state of a wordmark: no one holds a *copyright* in
  * it, so redistributing the file is fine, while the *trademark* still belongs to its owner. Using
  * it to identify that owner's game -- the only thing the app does with it -- is what trademarks are
  * for. The app remains unaffiliated with every publisher named, and says so on the same screen.
  *
- * ### Six supplied by the project owner
+ * ### Seven supplied by the project owner
  *
- * Riftbound, Altered, Disney Lorcana, the WoW TCG, Yu-Gi-Oh! and One Piece are **not** in that
- * table and are not equivalent to it. The first four exist on neither Commons nor English Wikipedia
- * under any name searched, the only Wikipedia files being covers and card backs under non-free
- * fair-use rationales. Yu-Gi-Oh! and One Piece are the odd ones: a freely-licensed mark *was*
+ * Riftbound, Altered, Disney Lorcana, the WoW TCG, Yu-Gi-Oh!, One Piece and Cyberpunk are **not**
+ * in that table and are not equivalent to it. The first four exist on neither Commons nor English
+ * Wikipedia under any name searched, the only Wikipedia files being covers and card backs under
+ * non-free fair-use rationales. The last three are the odd ones: a freely-licensed mark *was*
  * available for each and was replaced on request with the publisher's own current one, trading a
  * verified licence for a better likeness.
  *
- * All six were chosen and supplied by the owner of this project from third-party sites -- a card
- * shop's CDN, a retailer's blog, a community wiki, a storefront CDN, and Konami's and Bandai's own
- * image hosts -- and were downloaded and resized on request.
+ * All seven were chosen and supplied by the owner of this project from third-party sites -- a card
+ * shop's CDN, a retailer's blog, a community wiki, a storefront CDN, and Konami's, Bandai's and the
+ * Cyberpunk TCG's own image hosts -- and were downloaded and resized on request.
  *
- * So: no licence was verified for those six, because there is none to verify. They are the
+ * So: no licence was verified for those seven, because there is none to verify. They are the
  * publishers' trademarks used to identify the publishers' own games, which is the ordinary
  * nominative use every card database relies on, but anyone redistributing this app should make
- * their own decision about them rather than assume they carry the same clearance as the four above.
+ * their own decision about them rather than assume they carry the same clearance as the three above.
  *
  * ## Artwork drawn for dark backgrounds
  *
- * Three of these logos have no dark outline: Altered is a near-white wordmark, Riftbound sets a
- * white "LEAGUE OF LEGENDS" under its orange title, and Lorcana's name is gold filigree. On the
- * light theme they wash out -- measured as the share of visible pixels falling below a 2:1 contrast
- * ratio against a light tile, Altered loses 49%. Riftbound's overall figure is a milder 31% and
+ * Four of these logos have no dark outline: Cyberpunk is flat yellow, Altered a near-white
+ * wordmark, Riftbound sets a white "LEAGUE OF LEGENDS" under its orange title, and Lorcana's name
+ * is gold filigree. On the light theme they wash out -- measured as the share of visible pixels
+ * falling below a 2:1 contrast ratio against a light tile, the yellow Cyberpunk mark loses
+ * **100%**, every pixel of it, and Altered 49%. Riftbound's overall figure is a milder 31% and
  * Lorcana's 33%, but both are *concentrated* rather than spread: Riftbound's is entirely in the
  * subtitle, and Lorcana's runs 0/0/36/48/2% by fifths of the image, the middle bands being the word
  * LORCANA itself. In each case what vanishes is the part that names the game.
  *
- * Those three set [prefersDarkBackdrop], so the artwork sits on what it was drawn for.
+ * Those four set [backdropArgb], so the artwork sits on what it was drawn for. Three take
+ * [DARK_BACKDROP]; Cyberpunk is the one that wanted something else, and is the reason that property
+ * is a colour instead of a boolean -- its mark is published in black on the brand's yellow, so it
+ * carries a black wordmark and puts `0xFFFEEC00` behind it rather than hiding yellow on grey.
  *
  * Magic, Pokémon, Yu-Gi-Oh and the WoW TCG are *not* flagged despite comparable raw numbers -- the
  * WoW mark measures 18% spread evenly at 19/14/29/14/9% by fifths, and the Yu-Gi-Oh one a startling
@@ -86,8 +92,11 @@ import org.jetbrains.compose.resources.DrawableResource
  * @property tintLogo true only for a single-colour wordmark, which is then drawn in the theme's
  *   foreground colour so it stays legible on both themes. Never true for colour artwork -- tinting
  *   a full-colour logo flattens it to a silhouette, and a teal Wuthering Waves mark is not its mark
- * @property prefersDarkBackdrop true for artwork drawn for dark backgrounds, which then keeps a
- *   dark tile on the light theme too
+ * @property backdropArgb the plate this artwork was drawn for, as `0xAARRGGBB`, or `null` to tint
+ *   the accent as usual. It used to be a `prefersDarkBackdrop` boolean, which could only say "put
+ *   it on the dark one" -- fine while every flagged logo wanted the same dark grey, and useless the
+ *   moment a mark wanted its own brand colour behind it. A colour says everything the boolean did
+ *   and one thing more, so [DARK_BACKDROP] is now a value rather than a hidden default
  */
 interface GameArt {
 
@@ -99,9 +108,18 @@ interface GameArt {
 
 	val tintLogo: Boolean get() = false
 
-	val prefersDarkBackdrop: Boolean get() = false
+	val backdropArgb: Long? get() = null
 
 	companion object {
+
+		/**
+		 * The plate for artwork drawn for dark backgrounds.
+		 *
+		 * Close to the dark theme's own surface, so on that theme it is nearly invisible and only
+		 * the light theme sees a change. A fixed value rather than a theme colour, because the whole
+		 * point is that it does *not* follow the theme.
+		 */
+		const val DARK_BACKDROP: Long = 0xFF201E26
 
 		/**
 		 * Where the bundled logos come from.

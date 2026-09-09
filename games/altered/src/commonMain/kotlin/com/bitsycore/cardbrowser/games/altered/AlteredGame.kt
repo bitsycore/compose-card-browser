@@ -73,5 +73,5 @@ object AlteredArt : GameArt {
 
 	// A near-white wordmark: 49% of its visible pixels fall below a 2:1 contrast ratio against a
 	// light tile.
-	override val prefersDarkBackdrop: Boolean = true
+	override val backdropArgb: Long = GameArt.DARK_BACKDROP
 }

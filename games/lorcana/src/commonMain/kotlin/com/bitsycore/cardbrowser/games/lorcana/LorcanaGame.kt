@@ -100,5 +100,5 @@ object LorcanaArt : GameArt {
 	 * so what disappears is the name. The "Disney" script above it is fine, which is exactly the
 	 * shape of the Riftbound case.
 	 */
-	override val prefersDarkBackdrop: Boolean = true
+	override val backdropArgb: Long = GameArt.DARK_BACKDROP
 }

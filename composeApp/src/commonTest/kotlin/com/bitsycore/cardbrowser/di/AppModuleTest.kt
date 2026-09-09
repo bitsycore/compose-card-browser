@@ -181,15 +181,19 @@ class AppModuleTest {
 		for (vGame in vRegistry.games) {
 			val vVisual = assertNotNull(vArt.forGame(vGame), "${vGame.id} ships no art")
 			assertTrue(vVisual.accentArgb != 0L, "${vGame.id} has no accent colour")
+			// Tinting means "follow the theme's foreground", which only makes sense against a
+			// plate that follows the theme too. A fixed backdrop plus tinting would invert the
+			// mark on the dark theme while its plate stayed put -- Cyberpunk's black-on-yellow
+			// turning white-on-yellow is the concrete version of that.
 			assertTrue(
-				!vVisual.prefersDarkBackdrop || vVisual.logo != null,
-				"${vGame.id} asks for a dark backdrop but has no logo to put on it",
+				!(vVisual.tintLogo && vVisual.backdropArgb != null),
+				"$vGame is both recoloured and given a fixed plate; pick one",
 			)
-			// Tinting recolours the whole image, so a logo that needs its own colours kept must
-			// not also be tinted -- the two flags answer different questions.
+			// A plate is a statement about artwork. Declaring one with nothing to put on it means
+			// a coloured rectangle with a generic glyph in the middle.
 			assertTrue(
-				!(vVisual.tintLogo && vVisual.prefersDarkBackdrop),
-				"$vGame is both recoloured and given a dark plate; pick one",
+				vVisual.backdropArgb == null || vVisual.logo != null,
+				"${vGame.id} asks for a backdrop but has no logo to put on it",
 			)
 		}
 	}

@@ -609,7 +609,7 @@ This app is not affiliated with any game's publisher.
 All ten games show their real logo in the picker, and they do not all come from the same place —
 the difference matters.
 
-**Four from Wikimedia Commons**, which is what makes bundling them possible: Commons accepts only
+**Three from Wikimedia Commons**, which is what makes bundling them possible: Commons accepts only
 freely-licensed media, whereas a logo merely *shown* on Wikipedia normally lives there under a
 non-free fair-use rationale that does not permit redistribution. Each licence was checked
 individually through the Commons API:
@@ -619,22 +619,23 @@ individually through the Commons API:
 | Pokémon | Public domain (trademarked) | not required |
 | Magic: The Gathering | Public domain (trademarked) | not required |
 | Wuthering Waves | Public domain (trademarked) | not required |
-| Cyberpunk TCG | Public domain (trademarked) | not required |
 
 "Public domain, trademarked" is the normal state of a wordmark: nobody holds a copyright in it, so
 the file may be redistributed, while the trademark still belongs to its owner. Using it to identify
 that owner's game is what a trademark is for.
 
-**Six supplied by the project owner.** Riftbound, Altered, Disney Lorcana, the WoW TCG, Yu-Gi-Oh!
-and One Piece were chosen by the owner of this project from third-party sites (a card shop's CDN, a
-retailer's blog, a community wiki, a storefront CDN, and Konami's and Bandai's own image hosts) and
-downloaded and resized on request. The first four exist on neither Commons nor English Wikipedia
-under any name searched, the only Wikipedia files being covers and card backs under non-free
-fair-use rationales.
+**Seven supplied by the project owner.** Riftbound, Altered, Disney Lorcana, the WoW TCG,
+Yu-Gi-Oh!, One Piece and Cyberpunk were chosen by the owner of this project from third-party sites
+(a card shop's CDN, a retailer's blog, a community wiki, a storefront CDN, and Konami's, Bandai's
+and the Cyberpunk TCG's own image hosts) and downloaded and resized on request. The first four exist
+on neither Commons nor English Wikipedia under any name searched, the only Wikipedia files being
+covers and card backs under non-free fair-use rationales.
 
-Yu-Gi-Oh! and One Piece are the exceptions worth naming: a freely-licensed Commons mark *was*
-bundled for each and was replaced on request with the publisher's own current logo — trading a
-verified licence for a better likeness of the game as it is sold today. **The CC BY credit to Kazuki
+Yu-Gi-Oh!, One Piece and Cyberpunk are the exceptions worth naming: a freely-licensed Commons mark
+*was* bundled for each and was replaced on request with the publisher's own current logo — trading a
+verified licence for a better likeness of the game as it is sold today. Cyberpunk's replacement also
+fixed a mistake: the Commons file was the *Cyberpunk 2077* wordmark, which identified the setting
+rather than the card game. **The CC BY credit to Kazuki
 Takahashi that the app used to show went with the Yu-Gi-Oh! file**, because crediting an author
 whose work is no longer shipped would be a false statement. No bundled file now requires
 attribution.
@@ -642,7 +643,7 @@ attribution.
 **No licence was verified for those six, because there is none to verify.** They are publishers'
 trademarks used to identify the publishers' own games — the ordinary nominative use every card
 database relies on — but anyone redistributing this app should form their own view rather than
-assume they carry the clearance the four Commons files do.
+assume they carry the clearance the three Commons files do.
 
 Every bundled logo is trimmed to its alpha bounding box and resized to 480px wide, which is what the
 tile actually draws; leaving the padding in is what made the Altered mark look half-size. The two
@@ -657,16 +658,17 @@ Two presentation rules, both driven by the artwork rather than by taste:
   Wuthering Waves logo is not its logo. One Piece measures 0% saturation and 0% low-contrast against
   a light tile, so the problem it has is the opposite one — invisible on *dark* — and tinting is the
   answer to that rather than a dark plate.
-- Altered, Riftbound and Lorcana have no dark outline and wash out on a light background — of their
-  visible pixels, 49%, 31% and 33% respectively fall below a 2:1 contrast ratio against a pale
-  tile. For Riftbound and Lorcana the loss is *concentrated* rather than spread:
+- Cyberpunk, Altered, Riftbound and Lorcana have no dark outline and wash out on a light background
+  — of their visible pixels, 100%, 49%, 31% and 33% respectively fall below a 2:1 contrast ratio
+  against a pale tile. The yellow Cyberpunk mark is the worst case in the app: every pixel of it
+  fails, and its "TRADING CARD GAME" line disappears completely. For Riftbound and Lorcana the loss is *concentrated* rather than spread:
   Riftbound's is entirely in its "League of Legends" subtitle, and Lorcana's runs 0/0/36/48/2% by
-  fifths of the image, those middle bands being the word LORCANA itself. Those three keep a dark
-  tile on both themes. Magic, Pokémon, Yu-Gi-Oh and the WoW TCG are not flagged despite comparable raw
+  fifths of the image, those middle bands being the word LORCANA itself. Those four state the plate
+  they were drawn for and keep it on both themes — three of them a near-black grey, and Cyberpunk
+  the brand's own yellow, since the publisher also draws that mark in black and yellow suits it far
+  better than hiding it on grey. That is why `GameArt.backdropArgb` is a colour rather than the
+  "prefers dark" boolean it grew out of: a boolean could only pick the one plate everybody shared. Magic, Pokémon, Yu-Gi-Oh and the WoW TCG are not flagged despite comparable raw
   figures — the WoW mark measures 18% and the Yu-Gi-Oh one 44% — because their dark outlines carry
   the shape. Yu-Gi-Oh is the clearest illustration that the number is evidence and not the rule: its
   44% is counting the white interiors of letters that each sit inside a heavy black outline, and it
   reads correctly on either theme.
-- The Cyberpunk mark is the *franchise* wordmark rather than the card game's own lockup, the TCG
-  having no freely-licensed mark of its own. Commons serves it as a monochrome glyph, so it is
-  tinted to the theme foreground like the Wuthering Waves one.
