@@ -107,6 +107,9 @@ class OptcgProvider(
 	//  Sets
 
 	override suspend fun listSets(language: CardLanguage?): List<CardSet> {
+		// `language` is accepted and ignored on purpose. This source states no language at all --
+		// `DataCapabilities.languages` is empty -- so there is no per-language catalogue to select
+		// and nothing here may claim one. Silence is not a claim of English; see the class doc.
 		return mapProviderErrors("OPTCG.listSets") {
 			val vSets: List<OptcgSetDto> = mClient
 				.get(mBaseUrl) { url { appendPathSegments("api", "allSets", "") } }

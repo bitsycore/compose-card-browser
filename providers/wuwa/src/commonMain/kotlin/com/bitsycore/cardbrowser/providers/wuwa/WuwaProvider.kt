@@ -119,7 +119,9 @@ class WuwaProvider : CardProvider<WutheringWavesGame> {
 	//  Sets
 
 	override suspend fun listSets(language: CardLanguage?): List<CardSet> {
-		return WuwaCatalogue.sets(languageFor(language), id)
+		// The catalogue's set records carry no localised strings, so the requested language has
+		// nothing to select here. See `WuwaCatalogue.sets`.
+		return WuwaCatalogue.sets(id)
 	}
 
 	// ============

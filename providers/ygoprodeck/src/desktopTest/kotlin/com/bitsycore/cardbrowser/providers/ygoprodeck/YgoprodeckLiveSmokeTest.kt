@@ -5,6 +5,7 @@ import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
+import com.bitsycore.cardbrowser.data.net.ProviderHttpPolicy
 import com.bitsycore.cardbrowser.games.yugioh.YuGiOhGame
 import io.ktor.client.request.head
 import io.ktor.client.statement.HttpResponse
@@ -26,7 +27,16 @@ import kotlinx.coroutines.runBlocking
  */
 class YgoprodeckLiveSmokeTest {
 
-	private fun provider() = YgoprodeckProvider(HttpClientFactory.create())
+	/**
+	 * The provider on the **same throttled client the app uses**.
+	 *
+	 * YGOPRODeck asks for no more than twenty requests a second and this class makes a burst of
+	 * them; a plain `create()` ignores the app's own policy, which is both discourteous to a free
+	 * API and a way to make every test here fail with `RateLimited` at once.
+	 */
+	private fun provider() = YgoprodeckProvider(
+		HttpClientFactory.create(policy = ProviderHttpPolicy.YGOPRODECK),
+	)
 
 	private val mMetalRaiders = SourceId(YgoprodeckProvider.PROVIDER_ID, "Metal Raiders")
 
@@ -163,7 +173,7 @@ class YgoprodeckLiveSmokeTest {
 	}
 	@Test
 	fun `sets that publish box art carry it as a symbol`() = runBlocking<Unit> {
-		val vClient = HttpClientFactory.create()
+		val vClient = HttpClientFactory.create(policy = ProviderHttpPolicy.YGOPRODECK)
 		val vSets = YgoprodeckProvider(vClient).listSets()
 
 		val vWith = vSets.filter { it.symbol != null }

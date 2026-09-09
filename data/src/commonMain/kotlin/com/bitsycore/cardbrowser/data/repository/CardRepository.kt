@@ -917,8 +917,15 @@ class CardRepository(
 	 */
 	suspend fun languagesFor(setId: SourceId, game: GameId): Set<CardLanguage> {
 		val vProvider = mRegistry.byId(setId.provider) ?: return emptySet()
+		// A set that states its own languages narrows the candidates; one that states none starts
+		// from everything the source can serve. Either way the provider still gets to confirm them.
+		//
+		// It used to return early in the second case, which quietly meant only a provider that
+		// described its sets per language could ever be confirmed -- so Scryfall went on offering
+		// ten languages for a 1993 set printed only in English, even once it could say otherwise.
 		val vCandidates = setRecord(setId, game)?.languages?.takeIf { it.isNotEmpty() }
-			?: return vProvider.capabilities.data.languages
+			?: vProvider.capabilities.data.languages
+		if (vCandidates.isEmpty()) return emptySet()
 
 		val vKey = setLanguagesKey(vProvider, setId)
 		val vSerializer = CacheEnvelope.serializer(SetSerializer(serializer<CardLanguage>()))

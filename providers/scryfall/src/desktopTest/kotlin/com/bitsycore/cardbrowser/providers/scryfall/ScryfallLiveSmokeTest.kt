@@ -5,6 +5,7 @@ import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
+import com.bitsycore.cardbrowser.data.net.ProviderHttpPolicy
 import com.bitsycore.cardbrowser.games.magic.MagicGame
 import io.ktor.client.request.head
 import io.ktor.client.statement.HttpResponse
@@ -26,7 +27,68 @@ import kotlinx.coroutines.runBlocking
  */
 class ScryfallLiveSmokeTest {
 
-	private fun provider() = ScryfallProvider(HttpClientFactory.create())
+	/**
+	 * The provider on **one throttled client shared by every test here**.
+	 *
+	 * Both halves matter, and neither was true before.
+	 *
+	 * *Throttled*, because a plain `create()` ignores the app's own policy, which is no way to
+	 * treat a free API and is how this class earned a 60-second rate-limit and a warning that
+	 * repeating it would get the network blocked.
+	 *
+	 * *Shared*, because the throttle is per client: it holds a mutex and the timestamp of the last
+	 * request it sent, so a fresh client per test -- and the test runner builds a new instance of
+	 * this class per test method -- means N independent budgets and no spacing at all between one
+	 * test's last request and the next test's first.
+	 */
+	private fun provider() = ScryfallProvider(mClient)
+
+	// ============
+	//  Per-set languages
+
+	@Test
+	fun `a set states only the languages it was really printed in`() = runBlocking {
+		// Scryfall serves eleven languages, so the language menu offered eleven for every set --
+		// including Alpha, printed in 1993 in English only. Nine of those then fell back to English
+		// and the screen had to explain itself, once per language the user tried.
+		//
+		val vProvider = provider()
+
+		// Three candidates rather than all eleven, so this costs six requests instead of
+		// twenty-two. Chosen to cover every distinct case exactly once: a language the set has, a
+		// language it does not, and one whose Scryfall tag differs from this app's.
+		//
+		// Kept deliberately small because Scryfall means what it says about rate limits. An
+		// earlier version of this class ran unthrottled and earned a sustained refusal from which
+		// even correctly paced requests came back 429 -- so a live test here has to be frugal, not
+		// merely compliant.
+		val vCandidates = setOf(
+			CardLanguage.ENGLISH,
+			CardLanguage.JAPANESE,
+			CardLanguage.SIMPLIFIED_CHINESE,
+		)
+
+		val vAlpha = vProvider.confirmLanguages(
+			setId = SourceId(ScryfallProvider.PROVIDER_ID, "lea"),
+			candidates = vCandidates,
+		)
+		// Limited Edition Alpha, 1993: English, and nothing else, ever. This is the assertion that
+		// would have failed before -- the menu offered all eleven for it.
+		assertEquals(setOf(CardLanguage.ENGLISH), vAlpha)
+
+		val vDominaria = vProvider.confirmLanguages(
+			setId = SourceId(ScryfallProvider.PROVIDER_ID, "dom"),
+			candidates = vCandidates,
+		)
+		// A modern set really is printed widely, so confirmation must not throw away what exists.
+		assertEquals(vCandidates, vDominaria)
+		// And Simplified Chinese only passes if `zhs` is being sent rather than this app's own
+		// `zh-cn`, which Scryfall does not know and would answer 404 for -- reading as "absent".
+		assertTrue(
+			CardLanguage.SIMPLIFIED_CHINESE in vDominaria,
+			"the Scryfall language tag mapping is wrong: $vDominaria",
+		)
+	}
 
 	@Test
 	fun `the set catalogue loads and excludes digital-only sets`() = runBlocking {
@@ -201,7 +263,7 @@ class ScryfallLiveSmokeTest {
 	}
 	@Test
 	fun `every paper set carries a set symbol that actually loads`() = runBlocking<Unit> {
-		val vClient = HttpClientFactory.create()
+		val vClient = mClient
 		val vSets = ScryfallProvider(vClient).listSets()
 
 		val vWithSymbol = vSets.count { it.symbol != null }
@@ -215,5 +277,11 @@ class ScryfallLiveSmokeTest {
 		assertTrue(vUrl.substringBefore('?').endsWith(".svg"), "Expected an SVG, got $vUrl")
 		val vResponse: HttpResponse = vClient.head(vUrl)
 		assertEquals(HttpStatusCode.OK, vResponse.status, "Set symbol is not loading")
+	}
+
+	private companion object {
+
+		/** One per JVM, so the throttle spans the class rather than one test method. */
+		val mClient by lazy { HttpClientFactory.create(policy = ProviderHttpPolicy.SCRYFALL) }
 	}
 }

@@ -215,6 +215,53 @@ class ScryfallProvider(
 			}
 		}
 
+	/**
+	 * Which of [candidates] Magic was actually printed in for this set.
+	 *
+	 * The gap this closes is wide. Scryfall serves eleven languages, so the language menu offered
+	 * eleven for every set -- including Alpha, printed in 1993 in English only. Nine of those
+	 * eleven then fell back to English and the screen had to explain itself, once per language the
+	 * user tried.
+	 *
+	 * The probe is `/cards/random?q=set:X lang:Y`, which answers 200 with one card when any such
+	 * printing exists and 404 when none does. Chosen over the obvious `/cards/search` because the
+	 * cost is not close: measured on Dominaria in Japanese, **5 KB against 949 KB**, and a
+	 * language that does not exist costs 145 bytes. It is a strange thing to ask a `random`
+	 * endpoint for, but "is there any card matching this query" is exactly the question it answers,
+	 * and it answers it in one card rather than in a page of 175.
+	 *
+	 * Sequential rather than parallel, deliberately: Scryfall asks for no more than ten requests a
+	 * second and this client already spaces them, so firing eleven at once would only queue behind
+	 * the throttle. The whole thing happens once per set and is then cached.
+	 *
+	 * A probe that fails for any reason other than 404 keeps its language: absence has to be stated
+	 * by the source, not inferred from a timeout.
+	 */
+	override suspend fun confirmLanguages(
+		setId: SourceId,
+		candidates: Set<CardLanguage>,
+	): Set<CardLanguage> = mapProviderErrors("Scryfall.confirmLanguages") {
+		candidates.filterTo(mutableSetOf()) { vLanguage -> hasPrintings(setId.local, vLanguage) }
+	}
+
+	/** True when Scryfall holds at least one printing of this set in this language, or cannot say. */
+	private suspend fun hasPrintings(setLocal: String, language: CardLanguage): Boolean = try {
+		mClient
+			.get(mBaseUrl) {
+				url { appendPathSegments("cards", "random") }
+				parameter("q", "set:$setLocal lang:${scryfallTag(language)}")
+				identify()
+			}
+			.let { true }
+	} catch (vError: ClientRequestException) {
+		// 404 is Scryfall's "nothing matches", and the only answer that removes a language.
+		if (vError.response.status == HttpStatusCode.NotFound) false else throw vError
+	} catch (vError: kotlinx.coroutines.CancellationException) {
+		throw vError
+	} catch (vError: Exception) {
+		true
+	}
+
 	override suspend fun searchAllSets(request: CardSearchRequest): CardPage {
 		val vLanguage = resolveLanguage(request.language) ?: CardLanguage.ENGLISH
 		return mapProviderErrors("Scryfall.searchAllSets") {

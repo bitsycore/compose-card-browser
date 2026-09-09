@@ -201,10 +201,22 @@ data class ProviderHttpPolicy(
 
 		const val DEFAULT_USER_AGENT: String = "CardBrowser/1.0 (+https://github.com/bitsycore)"
 
-		/** Scryfall's documented ask: an identifying User-Agent and 50-100 ms between requests. */
+		/**
+		 * Scryfall's documented ask: an identifying User-Agent and 50-100 ms between requests.
+		 *
+		 * 150 ms rather than 100. Scryfall's wording is "less than 10 requests per second", and
+		 * 100 ms is *exactly* ten -- no margin at all for scheduling jitter or for two throttled
+		 * clients existing at once, and their 429 body is explicit that repeating it risks a
+		 * network block. Verified the hard way: a run that sat on the boundary was rate-limited
+		 * with a 60-second cooldown.
+		 *
+		 * Costs almost nothing. The heaviest thing the app asks of Scryfall is a set, which is
+		 * three pages, and the widest is a per-set language check at one request per language --
+		 * under two seconds either way, once, and then cached.
+		 */
 		val SCRYFALL: ProviderHttpPolicy = ProviderHttpPolicy(
 			userAgent = "CardBrowser/1.0 (github.com/bitsycore)",
-			minRequestInterval = 100.milliseconds,
+			minRequestInterval = 150.milliseconds,
 		)
 
 		/**

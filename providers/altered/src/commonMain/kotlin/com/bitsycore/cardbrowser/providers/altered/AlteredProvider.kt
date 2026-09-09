@@ -95,7 +95,20 @@ class AlteredProvider(
 			CardSortField.COST,
 		),
 		data = DataCapabilities(
-			languages = setOf(CardLanguage.FRENCH, CardLanguage.ENGLISH),
+			// Five, not two. The mirror publishes `CORE_DE.json`, `CORE_ES.json` and
+			// `CORE_IT.json` alongside EN and FR, all 550 cards and all genuinely translated --
+			// "Mechanical Training" is "Maschinentraining", "Addestramento Meccanico",
+			// "Entrenamiento de mecánica". Declaring only two hid three working languages.
+			//
+			// The set *names* in `META/card_sets_{de,es,it}.json` are still the English strings,
+			// which is a gap in the mirror rather than a reason to withhold the card text.
+			languages = setOf(
+				CardLanguage.FRENCH,
+				CardLanguage.ENGLISH,
+				CardLanguage.GERMAN,
+				CardLanguage.SPANISH,
+				CardLanguage.ITALIAN,
+			),
 			localizedText = true,
 			localizedImages = true,
 			cardIdentity = false,
@@ -118,11 +131,32 @@ class AlteredProvider(
 	override suspend fun listSets(language: CardLanguage?): List<CardSet> {
 		val vLocale = localeFor(language)
 		return mapProviderErrors("Altered.listSets") {
-			val vIndex: AlteredSetIndexDto = mClient
-				.get(mBaseUrl) { url { appendPathSegments("META", "card_sets_$vLocale.json") } }
-				.body()
+			val vIndex: AlteredSetIndexDto = fetchMirrored("META", "card_sets_$vLocale.json")
 			vIndex.members.mapNotNull { AlteredMapper.toSet(it, id) }
 		}
+	}
+
+	/**
+	 * One file from the mirror, from the CDN if it will serve it and from GitHub if it will not.
+	 *
+	 * The fallback is not defensive padding, it is required. jsDelivr refuses any repository over
+	 * **50 MB** and this one is 5.2 GB, so it answers `403 Package size exceeded the configured
+	 * limit of 50 MB` for files it has not already taken -- and which those are is not something
+	 * this app can predict. Measured today: `CORE_EN`, `CORE_FR`, `CORE_DE` and `CORE_IT` are
+	 * served and `CORE_ES` is refused, while raw GitHub returns all five.
+	 *
+	 * So the CDN stays the first choice -- it is faster and has the cache headers -- and raw
+	 * GitHub, which is the origin the CDN is mirroring anyway, answers when it declines. A 404 is
+	 * *not* retried: that means the mirror genuinely has no such file, and asking a second host
+	 * the same question wastes a request to get the same answer.
+	 */
+	private suspend inline fun <reified T> fetchMirrored(
+		vararg segments: String,
+	): T = try {
+		mClient.get(mBaseUrl) { url { appendPathSegments(*segments) } }.body()
+	} catch (vError: ClientRequestException) {
+		if (vError.response.status == HttpStatusCode.NotFound) throw vError
+		mClient.get(FALLBACK_BASE_URL) { url { appendPathSegments(*segments) } }.body()
 	}
 
 	// ============
@@ -137,15 +171,13 @@ class AlteredProvider(
 		val vSetRef = request.setId.local
 		return mapProviderErrors("Altered.listCards") {
 			val vCards: List<AlteredCardDto> = try {
-				mClient
-					.get(mBaseUrl) {
-						url {
-							// `SETS/ALIZE/ALIZE_FR.json` -- the locale suffix is upper case in the
-							// filename while the directory under IMAGES is lower case.
-							appendPathSegments("SETS", vSetRef, "${vSetRef}_${vLanguage.code.uppercase()}.json")
-						}
-					}
-					.body()
+				// `SETS/ALIZE/ALIZE_FR.json` -- the locale suffix is upper case in the filename
+				// while the directory under IMAGES is lower case.
+				fetchMirrored(
+					"SETS",
+					vSetRef,
+					"${vSetRef}_${vLanguage.code.uppercase()}.json",
+				)
 			} catch (vError: ClientRequestException) {
 				// A set the mirror lists but has not published a file for yet. An empty page with
 				// `hasMore` false is the truth, and the repository records it as a complete set of
@@ -198,8 +230,20 @@ class AlteredProvider(
 	private fun languageFor(language: CardLanguage?): CardLanguage =
 		resolveLanguage(language) ?: CardLanguage.FRENCH
 
-	/** Where the mirrored card images live, since the official bucket answers 403. */
-	private fun imageBaseUrl(): String = "$mBaseUrl/IMAGES"
+	/**
+	 * Where the mirrored card images live, since the official bucket answers 403.
+	 *
+	 * **Raw GitHub, not the CDN**, unlike the JSON. An image URL is handed to the image loader and
+	 * never passes through [fetchMirrored], so there is nowhere to fall back to once it is built --
+	 * a 403 is simply a blank tile. And jsDelivr does refuse them: measured, it answers
+	 * `403 Forbidden` for `IMAGES/fr/ALIZE/ALT_ALIZE_A_AX_35_C.jpg` and for `en/CORE` art while
+	 * serving the `fr/CORE` equivalent, because the repository is 5.2 GB against its 50 MB package
+	 * limit and which files it has taken is not predictable.
+	 *
+	 * The CDN would be the better host if it would serve them. Losing it costs little here: card
+	 * art is fetched once and then lives in the image loader's own disk cache.
+	 */
+	private fun imageBaseUrl(): String = "$FALLBACK_BASE_URL/IMAGES"
 
 	companion object {
 
@@ -207,7 +251,7 @@ class AlteredProvider(
 		val PROVIDER_ID: ProviderId = ProviderId("altered-db")
 
 		/**
-		 * jsDelivr rather than `raw.githubusercontent.com`.
+		 * jsDelivr first, `raw.githubusercontent.com` when it refuses. See [fetchMirrored].
 		 *
 		 * Both serve the same bytes -- verified, identical content length -- but raw GitHub is file
 		 * hosting with request limits and short cache headers, while jsDelivr is a CDN built for
@@ -215,6 +259,15 @@ class AlteredProvider(
 		 */
 		const val DEFAULT_BASE_URL: String =
 			"https://cdn.jsdelivr.net/gh/PolluxTroy0/Altered-TCG-Card-Database@main"
+
+		/**
+		 * The origin the CDN mirrors, used when the CDN will not serve a file. See [fetchMirrored].
+		 *
+		 * Not the first choice: raw GitHub is file hosting with request limits and short cache
+		 * headers rather than a CDN. But it is the only host that has every file.
+		 */
+		const val FALLBACK_BASE_URL: String =
+			"https://raw.githubusercontent.com/PolluxTroy0/Altered-TCG-Card-Database/main"
 
 		/** Larger than the largest set file, because there is no paging to bound. */
 		const val MAX_PAGE_SIZE: Int = 1000

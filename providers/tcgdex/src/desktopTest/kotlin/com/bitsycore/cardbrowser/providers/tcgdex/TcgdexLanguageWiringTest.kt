@@ -6,6 +6,7 @@ import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.net.ApiCallStats
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
@@ -93,6 +94,38 @@ class TcgdexLanguageWiringTest {
 
 		// And the answer survives a restart, so the probes are paid for once.
 		assertEquals(vOffered, vRepository.languagesFor(vBaseId, PokemonGame.id))
+	}
+
+	@Test
+	fun `switching language does not refetch the catalogues`() = runBlocking {
+		// The catalogues are 202 KB across 12 requests and TCGdex answers all of them `no-store`,
+		// so the HTTP cache cannot help. None of it depends on the language asked for -- only the
+		// merge does -- but the repository keys its set-list cache by language, so a language
+		// switch used to pay the whole thing again to re-merge identical inputs.
+		val vStats = ApiCallStats()
+		val vProvider = TcgdexProvider(HttpClientFactory.create(stats = vStats))
+
+		val vEnglish = vProvider.listSets(CardLanguage.ENGLISH)
+		val vFirstCallRequests = vStats.total
+		assertTrue(vFirstCallRequests > 1, "expected a request per catalogue, saw $vFirstCallRequests")
+
+		val vFrench = vProvider.listSets(CardLanguage.FRENCH)
+
+		assertEquals(
+			vFirstCallRequests,
+			vStats.total,
+			"the second language cost ${vStats.total - vFirstCallRequests} more requests",
+		)
+		// And it is genuinely the same catalogue, re-merged rather than re-fetched: the same sets,
+		// with French names where French has one.
+		assertEquals(vEnglish.map { it.id }.toSet(), vFrench.map { it.id }.toSet())
+		val vBaseEnglish = assertNotNull(vEnglish.firstOrNull { it.id.local == "base1" })
+		val vBaseFrench = assertNotNull(vFrench.firstOrNull { it.id.local == "base1" })
+		assertEquals("Base Set", vBaseEnglish.name)
+		assertTrue(
+			vBaseFrench.name != vBaseEnglish.name,
+			"the merge did not use the requested language: ${vBaseFrench.name}",
+		)
 	}
 
 	@Test

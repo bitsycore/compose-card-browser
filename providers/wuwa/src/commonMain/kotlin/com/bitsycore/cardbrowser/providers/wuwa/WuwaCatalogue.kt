@@ -94,8 +94,14 @@ internal object WuwaCatalogue {
 	suspend fun printings(language: CardLanguage, provider: ProviderId): List<CardPrinting> =
 		mLock.withLock { printingsLocked(language, provider) }
 
-	/** The sets, with the number of printings each holds. */
-	suspend fun sets(language: CardLanguage, provider: ProviderId): List<CardSet> = mLock.withLock {
+	/**
+	 * The sets, with the number of printings each holds and the languages each is published in.
+	 *
+	 * No `language` parameter, because there is nothing here for one to select. A set's name is its
+	 * own code -- see [setsByCode] for why -- so every locale produces byte-identical records, and
+	 * taking a language only to discard it invited the reader to believe otherwise.
+	 */
+	suspend fun sets(provider: ProviderId): List<CardSet> = mLock.withLock {
 		setsByCode(loaded(), provider).values.sortedBy { it.code }
 	}
 
@@ -143,6 +149,15 @@ internal object WuwaCatalogue {
 					id = SourceId(provider, vCode),
 					game = WutheringWavesGame.id,
 					code = vCode,
+					// Stated rather than left silent, so a language menu is built from what this
+					// set has rather than from what the source serves overall. They agree today --
+					// all three products carry all three locales -- and the point is that the app
+					// no longer has to assume they do. Individual *cards* already vary: the
+					// Japanese catalogue holds 123 collector numbers, Korean 127 and Simplified
+					// Chinese 107.
+					languages = vCards
+						.flatMap { it.printings.keys }
+						.mapNotNullTo(mutableSetOf()) { CardLanguage.fromCode(it) },
 					// The code is the name, deliberately. `/web/goods/list` does publish product
 					// names that look like they line up -- スターターデッキ01 with `SD01` -- and the
 					// `goods_id` filter that would confirm it returns zero cards for every product

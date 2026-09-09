@@ -32,8 +32,14 @@ import io.ktor.http.contentType
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.LocalDate
 import kotlinx.serialization.Serializable
+import kotlin.time.Duration
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * The TCGdex adapter, serving [PokemonGame].
@@ -79,6 +85,11 @@ class TcgdexProvider(
 	override val displayName: String = "TCGdex"
 
 	override val game: PokemonGame = PokemonGame
+
+	private val mCatalogueLock = Mutex()
+
+	/** Guarded by [mCatalogueLock]. See [catalogues]. */
+	private var mCatalogues: Catalogues? = null
 
 	override val capabilities: ProviderCapabilities = ProviderCapabilities(
 		filtering = FilterSupport(
@@ -163,19 +174,53 @@ class TcgdexProvider(
 	override suspend fun listSets(language: CardLanguage?): List<CardSet> {
 		val vRequested = languageFor(language)
 		return mapProviderErrors("TCGdex.listSets") {
-			coroutineScope {
-				val vCatalogues = CATALOGUE_LINES
-					.flatMap { vLine -> vLine.languages }
-					.map { vLanguage -> async { vLanguage to catalogueOf(vLanguage) } }
-					.awaitAll()
-					.toMap()
-				// Every locale failing is a failure; one of eleven failing is not.
-				if (vCatalogues.values.all { it == null }) {
-					throw ProviderError.Unknown("TCGdex served no set catalogue in any locale")
-				}
-				merge(vCatalogues, vRequested, releaseDates())
-			}
+			val vSnapshot = catalogues()
+			// Only the merge depends on the requested language, and it is pure.
+			merge(vSnapshot.byLanguage, vRequested, vSnapshot.dates)
 		}
+	}
+
+	/**
+	 * The eleven catalogues and the date table, fetched at most once per [CATALOGUE_MEMO].
+	 *
+	 * Worth holding for two reasons, both measured. The inputs are **202 KB across 12 requests**,
+	 * and TCGdex answers every one of them `Cache-Control: no-cache, no-store, must-revalidate` --
+	 * it sends an `ETag` too, but `no-store` makes it unusable, so the HTTP cache cannot help and
+	 * every request re-downloads in full.
+	 *
+	 * And none of it depends on the language asked for. The repository keys its set-list cache by
+	 * language, quite rightly since the *names* differ, so switching preferred language used to pay
+	 * the whole 202 KB again to re-merge identical inputs. Now it costs nothing.
+	 *
+	 * The window is deliberately short -- no longer than the repository's own set-list revalidate
+	 * interval -- so this never hides a newly published set for any longer than the layer above
+	 * would have anyway.
+	 *
+	 * Fetching under the lock also coalesces concurrent callers: two screens asking at once make
+	 * one set of requests rather than two.
+	 */
+	private suspend fun catalogues(): Catalogues = mCatalogueLock.withLock {
+		mCatalogues
+			?.takeIf { it.readAt.elapsedNow() < CATALOGUE_MEMO }
+			?: fetchCatalogues().also { mCatalogues = it }
+	}
+
+	private suspend fun fetchCatalogues(): Catalogues = coroutineScope {
+		val vByLanguage = CATALOGUE_LINES
+			.flatMap { vLine -> vLine.languages }
+			.map { vLanguage -> async { vLanguage to catalogueOf(vLanguage) } }
+			.awaitAll()
+			.toMap()
+		// Every locale failing is a failure; one of eleven failing is not. Not memoised either --
+		// `fetchCatalogues` throws before there is anything to hold, so the next call retries.
+		if (vByLanguage.values.all { it == null }) {
+			throw ProviderError.Unknown("TCGdex served no set catalogue in any locale")
+		}
+		Catalogues(
+			byLanguage = vByLanguage,
+			dates = releaseDates(),
+			readAt = TimeSource.Monotonic.markNow(),
+		)
 	}
 
 	/**
@@ -469,6 +514,21 @@ class TcgdexProvider(
 	@Serializable
 	private data class GraphQlQuery(val query: String)
 
+	/**
+	 * The raw inputs to [merge], as read from the network.
+	 *
+	 * A locale maps to `null` when its request failed, which is deliberately not the same as an
+	 * empty catalogue -- see [catalogueOf].
+	 *
+	 * Monotonic rather than wall-clock, so a device whose clock jumps cannot make this look either
+	 * fresh forever or permanently stale.
+	 */
+	private class Catalogues(
+		val byLanguage: Map<CardLanguage, List<TcgdexSetBriefDto>?>,
+		val dates: Map<String, LocalDate>,
+		val readAt: TimeMark,
+	)
+
 	companion object {
 
 		/** Never changed: it is written into every id and every cache file this adapter produces. */
@@ -484,6 +544,14 @@ class TcgdexProvider(
 		 * truth: one request is always enough.
 		 */
 		const val MAX_PAGE_SIZE: Int = 1000
+
+		/**
+		 * How long the fetched catalogues stand in for a fresh read.
+		 *
+		 * Matched to `CardRepository.DEFAULT_SET_LIST_REVALIDATE_MILLIS`, so holding them cannot
+		 * delay a new set appearing by longer than the repository already does.
+		 */
+		private val CATALOGUE_MEMO: Duration = 5.minutes
 
 		/** Ids and dates for every set, which the REST catalogue does not carry. */
 		private const val RELEASE_DATE_QUERY = "{ sets { id releaseDate } }"

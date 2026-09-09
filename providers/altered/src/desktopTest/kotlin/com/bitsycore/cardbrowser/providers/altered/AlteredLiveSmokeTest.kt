@@ -8,6 +8,7 @@ import com.bitsycore.cardbrowser.games.altered.AlteredGame
 import io.ktor.client.request.head
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpStatusCode
+import com.bitsycore.cardbrowser.core.provider.CardQuery
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -30,6 +31,71 @@ import kotlinx.coroutines.runBlocking
 class AlteredLiveSmokeTest {
 
 	private fun provider() = AlteredProvider(HttpClientFactory.create())
+
+	// ============
+	//  Languages and the mirror's two hosts
+
+	@Test
+	fun `every declared language really is translated`() = runBlocking {
+		// The adapter used to declare French and English only, and the mirror publishes five. Each
+		// one is checked by reading the same card in it: a locale that merely *exists* and returns
+		// the English strings would be a language the app claims and cannot deliver.
+		val vProvider = provider()
+		val vNames = mutableMapOf<CardLanguage, String>()
+
+		for (vLanguage in vProvider.capabilities.data.languages) {
+			val vPage = vProvider.listCards(
+				CardPageRequest(
+					setId = SourceId(AlteredProvider.PROVIDER_ID, "CORE"),
+					query = CardQuery(),
+					page = 1,
+					pageSize = AlteredProvider.MAX_PAGE_SIZE,
+					language = vLanguage,
+				),
+			)
+			assertTrue(
+				vPage.cards.size > 400,
+				"$vLanguage returned ${vPage.cards.size} cards of CORE",
+			)
+			val vCard = assertNotNull(
+				vPage.cards.firstOrNull { it.collectorNumber.isNotBlank() },
+				"$vLanguage returned no usable card",
+			)
+			vNames[vLanguage] = vCard.text.name
+			// The record has to say which language it really is, not which was asked for.
+			assertEquals(vLanguage, vCard.text.language, "$vLanguage mislabelled its text")
+		}
+
+		// Five declared languages, five distinct renderings of the same set. If any locale were
+		// quietly serving English, two of these would collide.
+		assertEquals(
+			vProvider.capabilities.data.languages.size,
+			vNames.values.distinct().size,
+			"two locales returned the same name, so one is not really translated: $vNames",
+		)
+	}
+
+	@Test
+	fun `a file the CDN refuses is still fetched`() = runBlocking {
+		// jsDelivr caps a repository at 50 MB and this one is 5.2 GB, so it answers
+		// `403 Package size exceeded` for files it has not taken -- measured, `CORE_ES.json` is
+		// refused while EN, FR, DE and IT are served, and which is which is not predictable. Raw
+		// GitHub has all five, so the adapter falls back to it.
+		//
+		// Spanish is therefore the case that only passes because of the fallback.
+		val vSpanish = provider().listCards(
+			CardPageRequest(
+				setId = SourceId(AlteredProvider.PROVIDER_ID, "CORE"),
+				query = CardQuery(),
+				page = 1,
+				pageSize = AlteredProvider.MAX_PAGE_SIZE,
+				language = CardLanguage.SPANISH,
+			),
+		)
+
+		assertTrue(vSpanish.cards.size > 400, "Spanish CORE did not load: ${vSpanish.cards.size}")
+		assertEquals(CardLanguage.SPANISH, vSpanish.cards.first().text.language)
+	}
 
 	@Test
 	fun `the set index loads with localised names`() = runBlocking {
@@ -117,8 +183,17 @@ class AlteredLiveSmokeTest {
 
 		// The official bucket answers 403 for every one of these; the mirror is the only thing
 		// making this game browsable at all, so this asserts it directly.
-		val vResponse: HttpResponse = vClient.head(vPage.cards.first().artwork.imageUrl)
-		assertEquals(HttpStatusCode.OK, vResponse.status, "Mirrored card art is not loading")
+		//
+		// Several, not one, because the failure this caught is per *file*: jsDelivr caps a
+		// repository at 50 MB and this one is 5.2 GB, so it refuses whichever files it has not
+		// taken -- `fr/ALIZE` art and `en/CORE` art were both 403 while `fr/CORE` was fine. One
+		// sample would have passed for a subset and left the rest as blank tiles.
+		val vSamples = vPage.cards.take(5).map { it.artwork.imageUrl }
+		assertEquals(5, vSamples.size, "not enough cards to sample")
+		for (vUrl in vSamples) {
+			val vResponse: HttpResponse = vClient.head(vUrl)
+			assertEquals(HttpStatusCode.OK, vResponse.status, "Mirrored card art is not loading: $vUrl")
+		}
 	}
 
 	@Test
