@@ -288,6 +288,16 @@ class DownloadManager(
 	/** One job, start to finish. */
 	private suspend fun run(job: DownloadJob) {
 		val vRequest = job.request
+		// Marked *before* the fetch, not after it.
+		//
+		// Writing a record runs a trim, so a set large enough to push the cache over its ceiling
+		// could be evicted by the very write that stored it -- and a pin applied afterwards would
+		// be protecting something already gone. The marker is independent of the record, so it can
+		// be laid down first and simply waits for it.
+		val vPinsRecords = DownloadKind.CARD_INFO in vRequest.kinds
+		if (vPinsRecords) {
+			mRepository.setPinned(vRequest.game, vRequest.setId, vRequest.language, isPinned = true)
+		}
 		try {
 			// 1. The card records. Needed even for an images-only download, because the image URLs
 			//    are on them -- but for images-only this is nearly always already a cache hit, so
@@ -308,6 +318,11 @@ class DownloadManager(
 			currentCoroutineContext().ensureActive()
 
 			if (vCards.isEmpty()) {
+				// Nothing was stored, so the mark protects nothing and is swept up rather than
+				// left behind as a permanent exemption for a set that is not there.
+				if (vPinsRecords) {
+					mRepository.setPinned(vRequest.game, vRequest.setId, vRequest.language, false)
+				}
 				update(job.id) { DownloadStatus.Failed("No cards came back for this set") }
 				return
 			}

@@ -1125,6 +1125,21 @@ class CardRepository(
 			language?.code ?: "-",
 		)
 
+	/**
+	 * Protects a downloaded set's records from cache eviction, or releases them.
+	 *
+	 * Here rather than on the cache because the key is built here -- it folds in the schema version,
+	 * the provider and the resolved language, none of which the download queue knows or should.
+	 *
+	 * Silently does nothing for a game with no routed provider, which is the same thing every other
+	 * path here does with one.
+	 */
+	suspend fun setPinned(game: GameId, setId: SourceId, language: CardLanguage?, isPinned: Boolean) {
+		val vProvider = mRegistry.resolve(game, language) ?: return
+		val vKey = completeSetKey(vProvider, setId, effectiveLanguage(vProvider, language))
+		if (isPinned) mCache.pin(vKey) else mCache.unpin(vKey)
+	}
+
 	private fun completeSetKey(provider: CardProvider<GameProfile>, setId: SourceId, language: CardLanguage?) =
 		CacheKey.of("v${CacheEnvelope.CURRENT_SCHEMA_VERSION}", provider.id.value, "set", setId.qualified, language?.code ?: "-")
 

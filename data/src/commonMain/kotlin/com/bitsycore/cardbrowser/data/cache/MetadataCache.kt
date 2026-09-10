@@ -162,11 +162,11 @@ class MetadataCache(
 
 	/** Total bytes the metadata cache currently occupies. */
 	suspend fun sizeInBytes(): Long = withContext(mIoDispatcher) {
-		entriesOnDisk().sumOf { it.sizeBytes }
+		recordsOnDisk().sumOf { it.sizeBytes }
 	}
 
 	/** How many records are held. */
-	suspend fun entryCount(): Int = withContext(mIoDispatcher) { entriesOnDisk().size }
+	suspend fun entryCount(): Int = withContext(mIoDispatcher) { recordsOnDisk().size }
 
 	/**
 	 * Deletes every metadata record.
@@ -181,6 +181,68 @@ class MetadataCache(
 				mAccessTimes.clear()
 			}
 		}
+	}
+
+	// ==================
+	// MARK: Pinning
+	// ==================
+
+	/**
+	 * Marks a record as deliberately downloaded, so eviction leaves it alone.
+	 *
+	 * ## Why this exists
+	 *
+	 * Without it the download feature is a promise the cache does not keep. Everything in here was
+	 * evicted by one rule -- least recently used, until the total fits -- which makes no distinction
+	 * between a set the user idly tapped and one they explicitly downloaded to have on a flight.
+	 * The second is exactly the thing that must survive, and it was the likeliest to go: a
+	 * downloaded set is big, and browsing anything else pushed the total over the ceiling.
+	 *
+	 * It was worse than that in practice. [mAccessTimes] lives in memory, so after a relaunch every
+	 * record sorts equally old and the eviction order collapses to whatever order the filesystem
+	 * lists in. A set downloaded last week and a set opened yesterday were indistinguishable.
+	 *
+	 * ## Why a marker file
+	 *
+	 * Trimming must decide what to keep without reading anything: it works from a directory listing
+	 * and file sizes, and parsing every record to look for a flag inside it would turn a cheap
+	 * sweep into a full deserialisation of the cache. A zero-byte sibling is visible in the same
+	 * listing, costs a directory entry, and -- unlike anything held in memory -- survives a restart,
+	 * which is the whole point.
+	 */
+	suspend fun pin(key: CacheKey) {
+		withContext(mIoDispatcher) {
+			mWriteLock.withLock {
+				try {
+					mFileSystem.createDirectories(mDirectory)
+					mFileSystem.sink(markerFor(key)).buffer().use { }
+				} catch (vIo: IOException) {
+					// A pin that cannot be written is not worth failing a download over. The set is
+					// still cached; it is merely evictable, which is where it started.
+				}
+			}
+		}
+	}
+
+	/** Removes the mark, returning the record to ordinary eviction. */
+	suspend fun unpin(key: CacheKey) {
+		withContext(mIoDispatcher) { mWriteLock.withLock { deleteQuietly(markerFor(key)) } }
+	}
+
+	/** Whether [key] is protected from eviction. */
+	suspend fun isPinned(key: CacheKey): Boolean = withContext(mIoDispatcher) {
+		mFileSystem.exists(markerFor(key))
+	}
+
+	/**
+	 * What the pinned records occupy.
+	 *
+	 * Reported separately because it is the part of the cache the ceiling cannot reclaim, and a
+	 * settings screen that shows a limit should be able to say how much of it is spoken for.
+	 */
+	suspend fun pinnedBytes(): Long = withContext(mIoDispatcher) {
+		val vPinned = pinnedNames()
+		recordsOnDisk().filter { it.path.name in vPinned }.sumOf { it.sizeBytes }
 	}
 
 	/** Evicts least-recently-used records until the cache fits its ceiling. */
@@ -203,6 +265,11 @@ class MetadataCache(
 			}
 		}
 
+		// Marker files are bookkeeping, not records. They are zero bytes, but they must not be
+		// treated as evictable entries or a pin would delete itself.
+		val vPinnedNames = pinnedNames()
+		vEntries.removeAll { it.path.name.endsWith(PIN_SUFFIX) }
+
 		val vCeiling = mMaxBytes()
 		var vTotal = vEntries.sumOf { it.sizeBytes }
 		if (vTotal <= vCeiling) return
@@ -212,6 +279,11 @@ class MetadataCache(
 		vEntries.sortBy { mAccessTimes[it.path.name] ?: 0L }
 		for (vEntry in vEntries) {
 			if (vTotal <= vCeiling) break
+			// A deliberately downloaded record is never evicted, even when that leaves the cache
+			// over its ceiling. The alternative is deleting the thing the user explicitly asked to
+			// keep in order to honour a number they set to bound *incidental* browsing -- so the
+			// ceiling gives way, and `pinnedBytes` exists so a screen can say why.
+			if (vEntry.path.name in vPinnedNames) continue
 			deleteQuietly(vEntry.path)
 			mAccessTimes.remove(vEntry.path.name)
 			vTotal -= vEntry.sizeBytes
@@ -236,6 +308,27 @@ class MetadataCache(
 	}
 
 	private fun pathFor(key: CacheKey): Path = mDirectory / key.fileName
+
+	private fun markerFor(key: CacheKey): Path = mDirectory / (key.fileName + PIN_SUFFIX)
+
+	/** The record names that carry a pin marker, from one listing. */
+	private fun pinnedNames(): Set<String> = entriesOnDisk()
+		.asSequence()
+		.map { it.path.name }
+		.filter { it.endsWith(PIN_SUFFIX) }
+		.map { it.removeSuffix(PIN_SUFFIX) }
+		.toSet()
+
+	/**
+	 * The cached records, without the bookkeeping.
+	 *
+	 * A pin marker and a half-written temp file are both real files in the directory and neither is
+	 * a record. Counting them makes `entryCount` report more than is held and lets a trim consider
+	 * deleting a marker -- which would quietly unprotect the very thing it marks.
+	 */
+	private fun recordsOnDisk(): List<DiskEntry> = entriesOnDisk().filterNot {
+		it.path.name.endsWith(PIN_SUFFIX) || it.path.name.endsWith(TEMP_SUFFIX)
+	}
 
 	private fun entriesOnDisk(): List<DiskEntry> = try {
 		if (!mFileSystem.exists(mDirectory)) {
@@ -277,7 +370,10 @@ class MetadataCache(
 		 */
 		const val DEFAULT_MAX_BYTES: Long = 256L * 1024 * 1024
 
-		private const val TEMP_SUFFIX = ".tmp"
+		private /** Marks a record as deliberately downloaded. A zero-byte sibling of the record itself. */
+		const val PIN_SUFFIX: String = ".pin"
+
+		const val TEMP_SUFFIX = ".tmp"
 	}
 }
 
