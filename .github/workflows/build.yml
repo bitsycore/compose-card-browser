@@ -1,0 +1,52 @@
+name: Build
+
+# The deterministic suite on every push and pull request.
+#
+# Deliberately *not* the live provider checks. Those hit seven volunteer-run APIs, and a scheduled
+# job that does so on every push is exactly the behaviour this project asks contributors to avoid --
+# it would also make the build red whenever somebody else's server has a bad afternoon, which says
+# nothing about the change being tested. They stay opt-in, one Gradle task each.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A newer push supersedes an older one on the same branch; there is no value in finishing it.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Ubuntu builds the JVM, Android and both iOS *Kotlin* targets. Linking the iOS framework and
+    # the Swift shell still need a Mac, and are still unverified -- see the README.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and test
+        # `-x lint` matches what the project documents as its own command. Lint is a separate
+        # concern and is not what this gate is for.
+        run: ./gradlew build -x lint --stacktrace
+
+      - name: Upload test reports
+        # On failure the reports are the only way to see which assertion went, since the logs
+        # truncate long Kotlin stack traces.
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: '**/build/reports/tests/**'
+          retention-days: 7

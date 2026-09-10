@@ -137,7 +137,11 @@ class WuwaCatalogueTest {
 	@Test
 	fun `coverage names the catalogues that actually carry a printing`() = runTest {
 		val vCards = mProvider.listCards(
-			CardPageRequest(setId = id("BP01"), language = CardLanguage.JAPANESE),
+			CardPageRequest(
+				setId = id("BP01"),
+				language = CardLanguage.JAPANESE,
+				pageSize = WuwaProvider.MAX_PAGE_SIZE,
+			),
 		).cards
 
 		// Coverage is read off the snapshot, so it must match it printing by printing rather than
@@ -160,10 +164,21 @@ class WuwaCatalogueTest {
 			vNotKorean.all { it.languages.availabilityOf(CardLanguage.KOREAN) == Availability.UNKNOWN },
 			"a missing catalogue entry is not evidence the printing does not exist",
 		)
-		// And the set is not filtered to the requested language: five printings are in UCP's Chinese
-		// catalogue only, and leaving them out of a Japanese browse would make the set look short.
+		// And the set is not filtered to the requested language. Asserted against Chinese, which is
+		// the catalogue that lags: Japanese used to be missing a few printings and, after a refresh
+		// that added a whole set, is no longer missing any -- so testing it against Japanese was
+		// testing a passing fact about one snapshot rather than the behaviour.
+		val vChinese = mProvider.listCards(
+			CardPageRequest(
+				setId = id("BP01"),
+				language = CardLanguage.SIMPLIFIED_CHINESE,
+				pageSize = WuwaProvider.MAX_PAGE_SIZE,
+			),
+		).cards
 		assertTrue(
-			vCards.any { it.languages.availabilityOf(CardLanguage.JAPANESE) != Availability.AVAILABLE },
+			vChinese.any {
+				it.languages.availabilityOf(CardLanguage.SIMPLIFIED_CHINESE) != Availability.AVAILABLE
+			},
 			"expected at least one printing that Japanese does not carry",
 		)
 	}
@@ -221,14 +236,22 @@ class WuwaCatalogueTest {
 		assertEquals(listOf("BP01", "SD01", "SD02"), vSets.map { it.code })
 		assertTrue(vSets.all { it.name == it.code })
 		for (vSet in vSets) {
-			val vCards = mProvider.listCards(CardPageRequest(setId = vSet.id)).cards
+			// The provider's own maximum, which is what `CardRepository` passes. The default of 100
+			// is nobody's real request, and asserting against it made this test fail the day BP01
+			// grew past a hundred cards -- a fact about the catalogue, not about the adapter.
+			val vCards = mProvider
+				.listCards(CardPageRequest(setId = vSet.id, pageSize = WuwaProvider.MAX_PAGE_SIZE))
+				.cards
 			assertEquals(vSet.cardCount, vCards.size, "${vSet.code} count disagrees with its cards")
 		}
 	}
 
 	@Test
 	fun `a set arrives complete in one page`() = runTest {
-		val vPage = mProvider.listCards(CardPageRequest(setId = id("BP01")))
+		// At the provider's stated maximum, which is the size the repository asks for.
+		val vPage = mProvider.listCards(
+			CardPageRequest(setId = id("BP01"), pageSize = WuwaProvider.MAX_PAGE_SIZE),
+		)
 
 		assertFalse(vPage.hasMore)
 		assertEquals(vPage.cards.size, vPage.totalCount)

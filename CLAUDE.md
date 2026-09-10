@@ -92,7 +92,7 @@ Follow the user's global conventions (Spirtech prefixes, tabs, KDoc). Specifical
 
 ```bash
 ./gradlew build -x lint          # everything, all four targets, including both iOS ones
-./gradlew desktopTest            # the deterministic suite (651 tests)
+./gradlew desktopTest            # the deterministic suite (752 tests)
 ./gradlew :androidApp:assembleDebug
 ./gradlew :composeApp:run        # desktop
 ```
@@ -103,7 +103,8 @@ Live provider checks are **excluded from the ordinary run** and have one task ea
 ./gradlew :providers:scryfall:liveProviderTest
 ```
 
-They need a network and hit someone else's server. Do not add them to CI-style runs.
+They need a network and hit someone else's server. Do not add them to CI-style runs -- the GitHub
+Actions workflow deliberately runs `build -x lint` and nothing else, for that reason.
 
 ---
 
@@ -142,8 +143,17 @@ Two results already bought with someone's time — do not spend it again:
   the slug path is what identifies the product.
 
 **Scryfall's live suite trips its own rate limit.** 12 checks in one run exceeds what the host
-accepts, and re-running alone after a pause did not clear it. Three failures there are expected
-today; anything else is not.
+accepts, and re-running alone after a pause did not clear it. Five failures there were the state on
+2026-09-10; anything outside Scryfall is not rate limiting and is worth reading.
+
+**The Wuthering Waves snapshot goes stale, and a test says so.** It is a bundled file, so the game
+gaining cards is invisible until `:providers:wuwa:liveProviderTest` fails -- which it did on
+2026-09-10, with the live catalogue 68 cards ahead of the snapshot. The fix is one command,
+`python providers/wuwa/tools/scrape_wuwa.py --refresh`, and then re-running the deterministic suite:
+tests that assert facts about the old snapshot will fail, and some of those assertions are about the
+*catalogue* rather than the adapter. Prefer asserting a property that survives growth over a number
+that does not -- and request `WuwaProvider.MAX_PAGE_SIZE`, which is what the repository does, rather
+than the default page size.
 
 **TCGCSV answers with two different content types.** `text/json` for some responses and
 `application/json` for others, within the same category -- category 13's products are the first and

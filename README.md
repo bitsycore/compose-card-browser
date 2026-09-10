@@ -34,10 +34,10 @@ in detail. No backend: the apps talk to each game's card database directly over 
 | **Android** | Debug APK builds and runs on a real device. Game picker, set lists and card grids verified on screen. |
 | **iOS** | **Kotlin now compiles** for `iosArm64` and `iosSimulatorArm64`, from scratch, as part of `./gradlew build`. Linking the framework and building the Swift shell still need a Mac and have never been done. See [`iosApp/README.md`](iosApp/README.md). |
 
-**291 deterministic tests pass on every target** and `./gradlew build` is green end to end,
+**752 deterministic tests pass on every target** and `./gradlew build` is green end to end,
 including both iOS targets. See [Build, run, test](#build-run-test).
 
-The live provider checks are a separate story: **60 of 63 pass**. The three failures are all
+The live provider checks are a separate story: **63 of 68 pass**. The five failures are all
 Scryfall and all `429 Rate limited` — not assertion failures. The client paces itself at 150 ms and
 shares one mutex across a whole run, so it is not missing a brake; Scryfall's suite is simply the
 largest here at 12 checks and it exceeds what that host will accept in one burst. Re-running it
