@@ -249,6 +249,40 @@ class SetCardCountTest {
 	}
 
 	@Test
+	fun `a set held only in a language nobody browses in still counts as saved`() = runTest {
+		// The bulk-import bug, in miniature. An import files each set under the language its own
+		// records state -- English, for Scryfall's `default_cards` -- while the user browses in
+		// French. Everything that answers "is this on disk?" used to look only for the browsing
+		// language, so importing the whole of Magic left not one set marked as saved and the
+		// download dialog went on offering card info it already had.
+		val vRepository = repository(english = 24, french = 4)
+
+		vRepository.cards(mSetId, CountTestGame.id, CardQuery(), CardLanguage.ENGLISH).toList()
+
+		assertEquals(
+			setOf(mSetId.qualified),
+			vRepository.savedSetIds(CountTestGame.id, sets(), CardLanguage.FRENCH),
+			"an English copy on disk is still a copy on disk",
+		)
+		assertEquals(
+			setOf(CardLanguage.ENGLISH),
+			vRepository.savedLanguages(CountTestGame.id, sets(), CardLanguage.FRENCH)[mSetId.qualified],
+			"and the dialog has to be told which edition it is",
+		)
+	}
+
+	@Test
+	fun `a set on disk in no language at all is not saved`() = runTest {
+		// The other half, or the widened search would report everything as held.
+		val vRepository = repository(english = 24, french = 4)
+
+		assertEquals(
+			emptySet(),
+			vRepository.savedSetIds(CountTestGame.id, sets(), CardLanguage.FRENCH),
+		)
+	}
+
+	@Test
 	fun `an unknown game has nothing to say`() = runTest {
 		assertNull(
 			repository(english = 24, french = 4)

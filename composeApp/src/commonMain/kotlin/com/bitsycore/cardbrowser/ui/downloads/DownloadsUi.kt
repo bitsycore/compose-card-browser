@@ -48,6 +48,7 @@ import com.bitsycore.cardbrowser.data.download.DownloadJob
 import com.bitsycore.cardbrowser.data.download.DownloadKind
 import com.bitsycore.cardbrowser.data.download.DownloadRequest
 import com.bitsycore.cardbrowser.data.download.DownloadStatus
+import com.bitsycore.cardbrowser.data.download.ProgressUnit
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 
 // ==================
@@ -466,6 +467,21 @@ internal fun infoIsComplete(
  * Omitted when the source states no language at all, which is most of them: naming one there would
  * be inventing it.
  */
+private fun progressText(status: DownloadStatus.Running): String = when (status.unit) {
+	// No denominator yet. For a set that means the card list has not landed, so the image count
+	// is genuinely unknown; for the read phase of an import there is no total to have.
+	ProgressUnit.IMAGES ->
+		if (status.total <= 0) "Fetching card list" else "${status.completed} of ${status.total} images"
+	ProgressUnit.KILOBYTES ->
+		if (status.total <= 0) {
+			"${status.completed / 1024} MB downloaded"
+		} else {
+			"${status.completed / 1024} of ${status.total / 1024} MB"
+		}
+	ProgressUnit.CARDS -> "Reading ${status.completed} cards"
+	ProgressUnit.SETS -> "Saving ${status.completed} of ${status.total} sets"
+}
+
 internal fun describe(job: DownloadJob): String {
 	val vWhat = job.request.kinds.sortedBy { it.ordinal }.joinToString(" + ") {
 		when (it) {
@@ -477,12 +493,7 @@ internal fun describe(job: DownloadJob): String {
 	val vSuffix = if (vWhere == null) vWhat else "$vWhat · $vWhere"
 	return when (val vStatus = job.status) {
 		is DownloadStatus.Queued -> "Waiting · $vSuffix"
-		is DownloadStatus.Running ->
-			if (vStatus.total <= 0) {
-				"Fetching card list · $vSuffix"
-			} else {
-				"${vStatus.completed} of ${vStatus.total} images · $vSuffix"
-			}
+		is DownloadStatus.Running -> "${progressText(vStatus)} · $vSuffix"
 		is DownloadStatus.Completed -> buildString {
 			// Zero is a real answer, not a failure, and says which of the two it is. A source can
 			// list a set and hold no singles for it -- a marketplace catalogue filing a booster box

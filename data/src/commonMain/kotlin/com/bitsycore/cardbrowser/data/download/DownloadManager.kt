@@ -106,11 +106,19 @@ sealed interface DownloadStatus {
 	/**
 	 * Running.
 	 *
-	 * @property completed units finished, where a unit is a card record batch or one image
-	 * @property total units known so far. Zero until the card list arrives, because the image
-	 *   count is not knowable before then -- this is a real "unknown", not a zero-length job
+	 * @property completed how many [unit] are done
+	 * @property total how many there are, or zero when that is not known yet -- a real "unknown",
+	 *   not a zero-length job. The image count cannot be known before the card list lands
+	 * @property unit what is being counted. Stated rather than assumed: this used to carry two
+	 *   bare numbers that the queue rendered as "images", which was right for a set download and
+	 *   wrong for a whole-game import -- so a card-info import reported "544 of 1111 images"
+	 *   while writing sets and having fetched no image at all
 	 */
-	data class Running(val completed: Int, val total: Int) : DownloadStatus
+	data class Running(
+		val completed: Int,
+		val total: Int,
+		val unit: ProgressUnit = ProgressUnit.IMAGES,
+	) : DownloadStatus
 
 	/**
 	 * Finished.
@@ -126,6 +134,28 @@ sealed interface DownloadStatus {
 
 	/** Cancelled by the user. Whatever had already been written stays written. */
 	data object Cancelled : DownloadStatus
+}
+
+/**
+ * What a running job's two numbers are counting.
+ *
+ * A whole-game import passes through three phases with nothing in common -- it downloads a file,
+ * reads cards out of it, then writes sets -- so one label cannot describe all of them, and the
+ * bar restarts at each rather than pretending they are one scale.
+ */
+enum class ProgressUnit {
+
+	/** Card images, the only thing a per-set download counts once it has its card list. */
+	IMAGES,
+
+	/** Kilobytes of a bulk file. Kilobytes rather than bytes so the count fits in an `Int`. */
+	KILOBYTES,
+
+	/** Cards read out of a bulk file. */
+	CARDS,
+
+	/** Sets written to the cache from a bulk file. */
+	SETS,
 }
 
 /**
@@ -329,11 +359,18 @@ class DownloadManager(
 						is BulkImportProgress.Downloading -> DownloadStatus.Running(
 							completed = (vProgress.bytes / 1024).toInt(),
 							total = ((vProgress.total ?: 0L) / 1024).toInt(),
+							unit = ProgressUnit.KILOBYTES,
 						)
-						is BulkImportProgress.Reading ->
-							DownloadStatus.Running(completed = vProgress.cards, total = 0)
-						is BulkImportProgress.Writing ->
-							DownloadStatus.Running(completed = vProgress.sets, total = vProgress.total)
+						is BulkImportProgress.Reading -> DownloadStatus.Running(
+							completed = vProgress.cards,
+							total = 0,
+							unit = ProgressUnit.CARDS,
+						)
+						is BulkImportProgress.Writing -> DownloadStatus.Running(
+							completed = vProgress.sets,
+							total = vProgress.total,
+							unit = ProgressUnit.SETS,
+						)
 					}
 				}
 			}

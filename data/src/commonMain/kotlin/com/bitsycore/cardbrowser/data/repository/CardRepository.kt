@@ -871,23 +871,50 @@ class CardRepository(
 	 *
 	 * *Any*, rather than the caller's preferred one, because "saved" is a statement about this
 	 * device holding the set and not about which translation it holds. Insisting on one language
-	 * was a real bug twice over: it looked for a French copy of a set published only in Japanese,
-	 * so a fully downloaded Japan-line set never showed as saved, and it also had to agree exactly
-	 * with whichever language the grid chose -- two rules in two layers that could only ever drift.
+	 * was a real bug three times over: it looked for a French copy of a set published only in
+	 * Japanese, so a fully downloaded Japan-line set never showed as saved; it had to agree
+	 * exactly with whichever language the grid chose, which is two rules in two layers that could
+	 * only ever drift; and -- the one that brought this back -- a bulk import writes each set
+	 * under the language its *records* state, which for Scryfall's `default_cards` is
+	 * overwhelmingly English. A user browsing in French imported the whole of Magic and not one
+	 * set showed as saved, because nothing ever looked for the English copy that had just been
+	 * written.
 	 *
-	 * The language the set would actually open in is checked first, so the ordinary case is one
-	 * file-existence check and stops there.
+	 * So the candidates are [languageCandidatesFor], and the language the set would actually open
+	 * in is checked first: the ordinary case is still one file-existence check and stops there.
 	 */
 	private suspend fun isSaved(
 		provider: CardProvider<GameProfile>,
 		set: CardSet,
 		preferred: CardLanguage?,
-	): Boolean {
-		val vFirst = effectiveLanguage(provider, set.languageFor(preferred))
-		val vRest = set.languages.map { effectiveLanguage(provider, it) }
-		return (listOf(vFirst) + vRest)
+	): Boolean = languageCandidatesFor(provider, set, preferred)
+		.any { mCache.exists(completeSetKey(provider, set.id, it)) }
+
+	/**
+	 * Every language a copy of [set] could plausibly be filed under, best guess first.
+	 *
+	 * Three sources, in order: the one the set would open in, the ones the set itself states, and
+	 * -- only when the set states none -- everything the provider can serve.
+	 *
+	 * That last fallback is the point. Most sources say nothing per set, and without it the only
+	 * candidate is the language being browsed in, which silently assumes every copy on disk was
+	 * put there by this user's own preference. A bulk import breaks that assumption by design: it
+	 * files cards under whatever language they state.
+	 *
+	 * The cost is bounded and lazy. It is a sequence, callers use `any`, and the likeliest answer
+	 * is first -- so a set held in the browsing language is one stat, and only a set held in
+	 * *some other* language pays for the rest. Eleven stats is the worst case per set.
+	 */
+	private fun languageCandidatesFor(
+		provider: CardProvider<GameProfile>,
+		set: CardSet,
+		preferred: CardLanguage?,
+	): Sequence<CardLanguage?> {
+		val vStated = set.languages.ifEmpty { provider.capabilities.data.languages }
+		return (listOf(set.languageFor(preferred)) + vStated)
+			.asSequence()
+			.map { effectiveLanguage(provider, it) }
 			.distinct()
-			.any { mCache.exists(completeSetKey(provider, set.id, it)) }
 	}
 
 	/**
@@ -915,12 +942,15 @@ class CardRepository(
 		val vResult = mutableMapOf<String, Set<CardLanguage>>()
 		for (vSet in sets) {
 			currentCoroutineContext().ensureActive()
-			val vCandidates = (vSet.languages + setOfNotNull(vSet.languageFor(language)))
-				.mapNotNull { effectiveLanguage(vProvider, it) }
-				.distinct()
-			val vHeld = vCandidates.filterTo(mutableSetOf()) {
-				mCache.exists(completeSetKey(vProvider, vSet.id, it))
-			}
+			// The same candidates `isSaved` uses, and for the same reason: a set that states no
+			// languages of its own may still hold a copy in one the user does not browse in --
+			// which is exactly what a bulk import leaves behind. Every candidate is checked here
+			// rather than short-circuited, because the question is *which* editions are held.
+			val vHeld = languageCandidatesFor(vProvider, vSet, language)
+				.filterNotNull()
+				.filterTo(mutableSetOf()) {
+					mCache.exists(completeSetKey(vProvider, vSet.id, it))
+				}
 			if (vHeld.isNotEmpty()) vResult[vSet.id.qualified] = vHeld
 		}
 		return vResult
