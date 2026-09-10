@@ -245,6 +245,64 @@ class MetadataCache(
 		recordsOnDisk().filter { it.path.name in vPinned }.sumOf { it.sizeBytes }
 	}
 
+	// ==================
+	// MARK: Counting
+	// ==================
+
+	/**
+	 * Remembers how many cards a record turned out to hold.
+	 *
+	 * ## Why the count is stored rather than derived
+	 *
+	 * The set list wants to say how many cards a set has *in the language it will open in*, and no
+	 * source answers that. A set's stated size is one number for the set -- YGOPRODeck's
+	 * `num_of_cards`, Scryfall's `card_count` -- and it counts the English printing. Ask the same
+	 * source for the same set in French and it serves only the cards that have been translated:
+	 * measured 2026-09-10, Magnificent Maestros is 24 cards and 4 of them in French, and Beyond the
+	 * Brave is 8 and none. Printing "24 cards" above a grid of 4 is the app stating something it
+	 * does not know.
+	 *
+	 * What it *does* know is what a source actually served, once it has served it. That is a
+	 * measurement, and this is where it is kept.
+	 *
+	 * ## Why a sibling file
+	 *
+	 * The same reason as a pin: the set list runs this per set, and for Magic that is 988 of them.
+	 * Reading the count out of the record would mean deserialising every cached set to render a
+	 * list of subtitles. A few bytes next to the record is one small read.
+	 *
+	 * Only ever written for a record known to be complete. A partial fetch's size is not the set's
+	 * size, and recording it would replace an over-count with an under-count.
+	 */
+	suspend fun recordCardCount(key: CacheKey, count: Int) {
+		withContext(mIoDispatcher) {
+			mWriteLock.withLock {
+				try {
+					mFileSystem.createDirectories(mDirectory)
+					mFileSystem.sink(countFor(key)).buffer().use { it.writeUtf8(count.toString()) }
+				} catch (vIo: IOException) {
+					// A count that cannot be written costs a subtitle, not a screen.
+				}
+			}
+		}
+	}
+
+	/**
+	 * How many cards [key] held when it was last written, or `null` if that was never recorded.
+	 *
+	 * `null` is not zero and the difference matters: "never counted" means fall back to whatever the
+	 * source states, while zero means a source was asked and answered with nothing.
+	 */
+	suspend fun cardCount(key: CacheKey): Int? = withContext(mIoDispatcher) {
+		val vPath = countFor(key)
+		try {
+			if (!mFileSystem.exists(vPath)) return@withContext null
+			mFileSystem.source(vPath).buffer().use { it.readUtf8() }.trim().toIntOrNull()
+		} catch (vIo: IOException) {
+			null
+		}
+	}
+
 	/** Evicts least-recently-used records until the cache fits its ceiling. */
 	suspend fun trim() {
 		withContext(mIoDispatcher) { mWriteLock.withLock { trimLocked() } }
@@ -265,10 +323,10 @@ class MetadataCache(
 			}
 		}
 
-		// Marker files are bookkeeping, not records. They are zero bytes, but they must not be
-		// treated as evictable entries or a pin would delete itself.
+		// Marker files are bookkeeping, not records. They are a few bytes at most, but they must not
+		// be treated as evictable entries or a pin would delete itself.
 		val vPinnedNames = pinnedNames()
-		vEntries.removeAll { it.path.name.endsWith(PIN_SUFFIX) }
+		vEntries.removeAll { it.path.name.endsWith(PIN_SUFFIX) || it.path.name.endsWith(COUNT_SUFFIX) }
 
 		val vCeiling = mMaxBytes()
 		var vTotal = vEntries.sumOf { it.sizeBytes }
@@ -311,6 +369,8 @@ class MetadataCache(
 
 	private fun markerFor(key: CacheKey): Path = mDirectory / (key.fileName + PIN_SUFFIX)
 
+	private fun countFor(key: CacheKey): Path = mDirectory / (key.fileName + COUNT_SUFFIX)
+
 	/** The record names that carry a pin marker, from one listing. */
 	private fun pinnedNames(): Set<String> = entriesOnDisk()
 		.asSequence()
@@ -327,7 +387,9 @@ class MetadataCache(
 	 * deleting a marker -- which would quietly unprotect the very thing it marks.
 	 */
 	private fun recordsOnDisk(): List<DiskEntry> = entriesOnDisk().filterNot {
-		it.path.name.endsWith(PIN_SUFFIX) || it.path.name.endsWith(TEMP_SUFFIX)
+		it.path.name.endsWith(PIN_SUFFIX) ||
+			it.path.name.endsWith(COUNT_SUFFIX) ||
+			it.path.name.endsWith(TEMP_SUFFIX)
 	}
 
 	private fun entriesOnDisk(): List<DiskEntry> = try {
@@ -370,8 +432,17 @@ class MetadataCache(
 		 */
 		const val DEFAULT_MAX_BYTES: Long = 256L * 1024 * 1024
 
-		private /** Marks a record as deliberately downloaded. A zero-byte sibling of the record itself. */
-		const val PIN_SUFFIX: String = ".pin"
+		/** Marks a record as deliberately downloaded. A zero-byte sibling of the record itself. */
+		private const val PIN_SUFFIX: String = ".pin"
+
+		/**
+		 * Holds how many cards a record turned out to contain. A few bytes beside the record.
+		 *
+		 * Deliberately outlives eviction. The count is a measurement of what a source served, not
+		 * a property of the cached copy, so it stays true after the cards themselves are trimmed
+		 * away -- and a set list that has evicted a set can still say how big it is.
+		 */
+		private const val COUNT_SUFFIX: String = ".n"
 
 		const val TEMP_SUFFIX = ".tmp"
 	}

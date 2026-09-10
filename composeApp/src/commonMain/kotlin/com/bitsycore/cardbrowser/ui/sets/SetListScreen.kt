@@ -652,6 +652,9 @@ private fun LazyListScope.setRows(
 				dispatch(SetListContract.Intent.SetOpened(vId))
 				onOpenSet(vSet)
 			},
+			// Absent until the set has been fetched in the language it opens in, and the row then
+			// falls back to the figure the source states. See `UiState.confirmedCardCounts`.
+			confirmedCardCount = state.confirmedCardCounts[vId],
 			downloadStatus = downloads.firstOrNull { it.request.setId == vSet.id },
 			images = state.imageDownloads[vId],
 			onDownload = { onDownload(vSet) },
@@ -699,6 +702,7 @@ private fun SetRow(
 	isLastOpened: Boolean,
 	isSaved: Boolean,
 	onClick: () -> Unit,
+	confirmedCardCount: Int? = null,
 	downloadStatus: DownloadJob? = null,
 	images: SetImageStatus? = null,
 	onDownload: () -> Unit = {},
@@ -758,7 +762,7 @@ private fun SetRow(
 						Spacer(Modifier.size(6.dp))
 					}
 					Text(
-						text = setSubtitle(set, isLastOpened),
+						text = setSubtitle(set, isLastOpened, confirmedCardCount),
 						style = MaterialTheme.typography.bodySmall,
 						color = MaterialTheme.colorScheme.onSurfaceVariant,
 						maxLines = 2,
@@ -1057,10 +1061,21 @@ private const val MONOGRAM_LIGHTNESS = 0.62f
  *
  * A missing release date shows nothing rather than "Unknown date": the row is not the place to
  * discuss what the provider does not know.
+ *
+ * [confirmedCardCount] wins over the set's own figure when there is one, because it is the count
+ * for the language this row will actually open in. A source states one size per set and it is the
+ * English printing's: YGOPRODeck says Magnificent Maestros is 24 cards, and serves 4 of them in
+ * French. The row said 24 and the grid showed 4, which is the app claiming a number it never
+ * checked. The language is not named here -- a subtitle is not the place to explain translation
+ * coverage, and the number simply being right is what was wanted.
  */
-private fun setSubtitle(set: CardSet, isLastOpened: Boolean = false): String = buildList {
+private fun setSubtitle(
+	set: CardSet,
+	isLastOpened: Boolean = false,
+	confirmedCardCount: Int? = null,
+): String = buildList {
 	add(set.code)
-	set.cardCount?.let { add("$it cards") }
+	(confirmedCardCount ?: set.cardCount)?.let { add(if (it == 1) "1 card" else "$it cards") }
 	set.releaseDate?.let { add("${monthName(it.month.ordinal)} ${it.year}") }
 	if (isLastOpened) add("last opened")
 }.joinToString(" · ")

@@ -527,6 +527,11 @@ class CardRepository(
 			),
 			serializer = CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>())),
 		)
+		// Only when the fetch proved complete: a partial set's size is not the set's size, and the
+		// set list would then under-count instead of over-counting.
+		if (vCompleteness == Completeness.COMPLETE) {
+			mCache.recordCardCount(completeSetKey(provider, setId, language), vDeduped.size)
+		}
 
 		emit(
 			DataSnapshot(
@@ -922,6 +927,41 @@ class CardRepository(
 		return vResult
 	}
 
+	/**
+	 * How many cards each of [sets] really holds in the language it would open in, where that has
+	 * been measured.
+	 *
+	 * A source states one size per set and it is the size of the English printing. Ask for the same
+	 * set in another language and it serves only what has been translated -- measured on YGOPRODeck
+	 * on 2026-09-10, Magnificent Maestros is 24 cards and 4 of them in French, and Beyond the Brave
+	 * is 8 and none at all. So the number a set list prints beside a row is not the number of cards
+	 * that row will open onto, and printing it anyway is the app claiming something it never checked.
+	 *
+	 * This is the part it *has* checked: what a source actually served, recorded when the set was
+	 * cached whole. A set absent from the map has never been fetched in that language, and the
+	 * caller should keep showing the source's figure -- that is still the only number available, and
+	 * an absent entry is not a count of zero.
+	 *
+	 * Cheap for the same reason [savedSetIds] is: one tiny sibling file per set, never the record.
+	 */
+	suspend fun confirmedCardCounts(
+		game: GameId,
+		sets: List<CardSet>,
+		language: CardLanguage? = null,
+	): Map<String, Int> {
+		val vProvider = mRegistry.resolve(game, language) ?: return emptyMap()
+		val vResult = mutableMapOf<String, Int>()
+		for (vSet in sets) {
+			currentCoroutineContext().ensureActive()
+			// The language the row would actually open in, which is not always the one asked for:
+			// a set published only in Japanese opens in Japanese whatever the preference says.
+			val vLanguage = effectiveLanguage(vProvider, vSet.languageFor(language))
+			val vCount = mCache.cardCount(completeSetKey(vProvider, vSet.id, vLanguage)) ?: continue
+			vResult[vSet.id.qualified] = vCount
+		}
+		return vResult
+	}
+
 	// ============
 	//  One set's record
 
@@ -1235,6 +1275,7 @@ class CardRepository(
 				// and a set large enough to breach the ceiling would otherwise be evicted by the
 				// very write that stored it.
 				val vKey = completeSetKey(vProvider, vSetId, vLanguage)
+				val vDedupedBucket = dedupePrintings(vPrintings)
 				mCache.pin(vKey)
 				mCache.write(
 					key = vKey,
@@ -1247,10 +1288,11 @@ class CardRepository(
 						// The bulk file is the whole catalogue by definition, so a set drawn from
 						// it is complete in a way a paged fetch has to prove.
 						completeness = Completeness.COMPLETE,
-						payload = dedupePrintings(vPrintings),
+						payload = vDedupedBucket,
 					),
 					serializer = CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>())),
 				)
+				mCache.recordCardCount(vKey, vDedupedBucket.size)
 				vSetsWritten++
 				onProgress(BulkImportProgress.Writing(vSetsWritten, vBuckets.size))
 			}

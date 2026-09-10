@@ -122,6 +122,17 @@ object SetListContract :
 		 */
 		val savedLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
 		/**
+		 * How many cards each set really holds in the language it opens in, by qualified set id.
+		 *
+		 * Overrides the count a source states, which is the English printing's and is the wrong
+		 * number to print beside a row that will open in French. See
+		 * `CardRepository.confirmedCardCounts`.
+		 *
+		 * A set absent here has simply never been fetched in that language, so the row keeps
+		 * showing the source's figure. Absent is not zero.
+		 */
+		val confirmedCardCounts: Map<String, Int> = emptyMap(),
+		/**
 		 * Which product line to show, or `null` for all of them.
 		 *
 		 * Pokemon ships four -- see `GameProfile.regions` -- and they are different products rather
@@ -277,6 +288,7 @@ object SetListContract :
 			val setIds: Set<String>,
 			val imageDownloads: Map<String, SetImageStatus> = emptyMap(),
 			val savedLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
+			val confirmedCardCounts: Map<String, Int> = emptyMap(),
 		) : Intent
 
 		/** A product line was picked, or `null` to see every line again. */
@@ -358,6 +370,7 @@ object SetListContract :
 					// ids happen to collide, and briefly claim the wrong sets are downloaded.
 					savedSetIds = emptySet(),
 					savedLanguages = emptyMap(),
+					confirmedCardCounts = emptyMap(),
 					search = "",
 					isLoading = true,
 					error = null,
@@ -374,6 +387,7 @@ object SetListContract :
 			savedSetIds = intent.setIds,
 			imageDownloads = intent.imageDownloads,
 			savedLanguages = intent.savedLanguages,
+			confirmedCardCounts = intent.confirmedCardCounts,
 		)
 
 		// Purely a view of what is already loaded: every line arrives in one request, so narrowing

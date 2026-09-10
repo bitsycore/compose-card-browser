@@ -197,6 +197,10 @@ class SetListViewModel(
 				// Per language as well as per set, because the dialog's question is "do I have the
 				// edition I am about to fetch?" and `setIds` only answers "is any of it here?".
 				savedLanguages = mRepository.savedLanguages(game, vSets, language),
+				// What each set really holds in the language it opens in, where a fetch has
+				// established it. The source's own figure counts the English printing and is the
+				// wrong number to print beside a row that will open in French.
+				confirmedCardCounts = mRepository.confirmedCardCounts(game, vSets, language),
 				// Read straight from preferences rather than measured: see
 				// `BrowsingPreferences.imageDownloads` for why the image side cannot be checked
 				// cheaply, and what the record therefore does and does not mean.
