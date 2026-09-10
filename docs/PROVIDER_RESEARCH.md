@@ -22,6 +22,50 @@ is not shipped and the reason is recorded here rather than papered over with a s
 | World of Warcraft TCG | TCGCSV category 13 | 2026-09-09 | none stated | yes |
 | Duel Masters | — | 2026-09-09 | — | **no** |
 
+## Bulk endpoints — every source, checked 2026-09-10
+
+Downloading a whole game costs one request per set, which for Magic is 988 of them against a
+service run on donations. Some sources publish a periodic dump precisely so that clients stop doing
+that. Every source here was asked whether it has one; these are the answers, and the negatives are
+worth as much as the positives because each one is a thing not to go looking for again.
+
+| Source | Whole catalogue in one call? | Measured |
+| --- | --- | --- |
+| Scryfall | **yes** — `/bulk-data`, `default_cards` | 74.6 MB gzipped, 598 MB JSONL |
+| YGOPRODeck | **yes** — `cardinfo.php` with no selector | 21.2 MB English, 18.7 MB `language=fr` |
+| TCGdex | partial — `/v2/{lang}/cards` is briefs only | 2.4 MB, id + name + image only |
+| TCGCSV | n/a — already one request per set | `/tcgplayer/13/products` → 404 |
+| Riftcodex | no — paged, `size` capped at 100 | 15 requests for 1451 cards |
+| OPTCG API | no | `/api/allCards/` → 404 |
+| Altered mirror | no — one JSON file *per card* | `CARDS/{lang}/{set}/{faction}/…` |
+| Wuthering Waves | n/a — ships as a bundled snapshot | — |
+
+Two are real, and they are not the same shape:
+
+- **Scryfall's dump is a file and is self-describing.** It carries whatever languages it carries,
+  each record stating its own, which is why `BulkCatalogue.streamAll` deliberately takes no language
+  parameter. Implemented — see `ScryfallBulk`.
+- **YGOPRODeck's is a query with the selector left off**, so it is per-language: one 21.2 MB request
+  gives the whole database in English and `language=fr` gives the whole thing again in French. All
+  seven languages would be seven calls and ~140 MB. Not implemented yet, and it does not fit the
+  current interface without a decision — see below.
+
+`GET https://db.ygoprodeck.com/api/v7/cardinfo.php` answered `200`, `application/json`,
+`21,238,702` bytes in 0.4 s; with `?language=fr`, `18,663,298` bytes. That is one request against
+roughly 200 sets × several pages each, so the saving is the largest of any source here after Magic.
+
+What blocks it is that the dump is English-only unless a language is named, while `streamAll` has no
+language parameter — and that absence is load-bearing, because passing `null` through
+`resolveLanguage` is what once made an English file import as French. Fetching all seven languages
+unasked to preserve the signature would mean ~140 MB by default, which is worse than the problem.
+Resolving it means either a `languages` hint on `streamAll` (each card still stating its own
+language, so the honesty property survives) or a second, per-language interface. Not decided.
+
+Everything else genuinely has nothing. In particular the Altered mirror stores **one file per card**
+under `CARDS/{lang}/{set}/{faction}/`, so it is the opposite of a dump; and TCGCSV rejects a
+category-wide product listing with 404, which is fine because its unit is already the group — a set
+there is one request, the same as a bulk file would cost per set.
+
 ## Pokémon — TCGdex
 
 `https://api.tcgdex.net/v2/{lang}/…`, no key, no auth.

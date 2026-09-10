@@ -523,10 +523,6 @@ fun SetListContent(
 				.reduceOrNull { vAcc, vNext -> vAcc intersect vNext }
 				.orEmpty(),
 			bulkBytes = vState.bulkSummary?.compressedBytes,
-			onBulk = {
-				dispatch(SetListContract.Intent.BulkImportRequested)
-				vPendingAll = false
-			},
 			// Every language any of these sets states. A language only some of them have is still
 			// worth offering -- the enqueue skips it for the sets that were never printed in it.
 			languages = vSets.flatMap { it.languages }.distinct(),
@@ -539,7 +535,25 @@ fun SetListContent(
 				.orEmpty(),
 			onDismiss = { vPendingAll = false },
 			onConfirm = { vKinds, vLanguages ->
-				vSets.forEach { vSet -> onDownload(vSet, vKinds, vLanguages) }
+				// Where the source publishes a dump, the whole game's records come from it and
+				// there is no path here that fetches them a set at a time. That is not a
+				// preference: the file exists so clients stop walking somebody else's API, and
+				// choosing 988 requests over one download is not a choice worth offering.
+				//
+				// Art is unaffected. It is not in the file, it comes from a CDN rather than the
+				// API, and it is still fetched per set.
+				val vBulkHandlesInfo = vState.bulkSummary != null
+				if (vBulkHandlesInfo && DownloadKind.CARD_INFO in vKinds) {
+					dispatch(SetListContract.Intent.BulkImportRequested)
+				}
+				val vPerSet = if (vBulkHandlesInfo) {
+					vKinds - DownloadKind.CARD_INFO
+				} else {
+					vKinds
+				}
+				if (vPerSet.isNotEmpty()) {
+					vSets.forEach { vSet -> onDownload(vSet, vPerSet, vLanguages) }
+				}
 				vPendingAll = false
 				onOpenDownloads()
 			},

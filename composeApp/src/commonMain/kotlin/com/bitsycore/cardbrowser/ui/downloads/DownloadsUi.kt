@@ -144,7 +144,6 @@ fun DownloadKindDialog(
 	 * request it would replace. `null` hides the option rather than showing a disabled one.
 	 */
 	bulkBytes: Long? = null,
-	onBulk: (() -> Unit)? = null,
 ) {
 	// Ticking is a fresh decision each time the dialog opens, so it is keyed on what is already
 	// held: reopening after a download must not restore a tick for something now on disk.
@@ -203,6 +202,13 @@ fun DownloadKindDialog(
 					detail = buildString {
 						append(
 							when {
+								// When the source publishes a dump, the whole game comes as one
+								// file and there is no per-set option to weigh against it -- so
+								// this describes what will happen rather than offering a choice.
+								bulkBytes != null && setCount > 1 ->
+									"The whole catalogue in one file, about " +
+										"${bulkBytes / 1_000_000} MB. Names, numbers, rarities " +
+										"and rules text, in every language the file carries."
 								setCount > 1 && cardCount != null ->
 									"About $cardCount cards across $setCount sets. Names, " +
 										"numbers, rarities and rules text."
@@ -298,23 +304,21 @@ fun DownloadKindDialog(
 					}
 				}
 
-				if (bulkBytes != null && onBulk != null && setCount > 1) {
-					Spacer(Modifier.height(14.dp))
-					HorizontalDivider()
-					Spacer(Modifier.height(10.dp))
-					Text("All at once", style = MaterialTheme.typography.labelLarge)
+				if (bulkBytes != null && setCount > 1) {
+					Spacer(Modifier.height(12.dp))
 					Text(
-						// Both halves of the comparison, honestly. It is one transfer instead of
-						// hundreds, and it is only the records -- the art is untouched, and the art
-						// is where the bytes actually are.
-						text = "This game's source publishes its whole catalogue as one file: " +
-							"${bulkBytes / 1_000_000} MB, one download instead of $setCount. " +
-							"Card info only — art is not included and is still fetched per set.",
+						// Stated, not offered. The source publishes this file so that clients stop
+						// walking its API a set at a time, and it is not our API to decide to
+						// hammer instead -- so where a dump exists it is the only way the whole
+						// game's records are fetched, and there is no control here to opt out.
+						// Per-set fetching is untouched for a single set, where one request is
+						// obviously cheaper than 75 MB.
+						text = "Card info for the whole game arrives as a single file rather " +
+							"than $setCount separate requests, because that is what the source " +
+							"publishes it for. Art is not in the file and is still fetched per set.",
 						style = MaterialTheme.typography.bodySmall,
 						color = MaterialTheme.colorScheme.onSurfaceVariant,
 					)
-					Spacer(Modifier.height(6.dp))
-					TextButton(onClick = onBulk) { Text("Get card info in one file") }
 				}
 
 				Spacer(Modifier.height(12.dp))
