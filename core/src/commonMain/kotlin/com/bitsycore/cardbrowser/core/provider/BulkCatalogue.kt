@@ -33,13 +33,20 @@ import kotlinx.datetime.LocalDate
 interface BulkCatalogue {
 
 	/**
-	 * What a bulk import would cost, or `null` when the source has no dump available right now.
+	 * The dumps this source publishes that the app can use, cheapest first. Empty when none.
 	 *
-	 * Fetched separately from the data so the size can be shown *before* anything is downloaded.
-	 * A dialog that says "this is 75 MB" is the difference between an informed choice and a
-	 * surprise on a phone bill.
+	 * A list rather than one, because Scryfall publishes two the app can use and they are a very
+	 * different purchase: 78 MB of one printing per card in its printed language, or 393 MB of
+	 * every card in every language. Measured 2026-09-11.
+	 *
+	 * Fetched separately from the data, so a size can be shown *before* anything is downloaded.
+	 * A dialog that says "this is 78 MB" is the difference between an informed choice and a
+	 * surprise on a phone bill -- and where there are two, saying which is which is the
+	 * difference between a choice and a lottery.
+	 *
+	 * Cheapest first is the order a menu should offer, and the first entry is the default.
 	 */
-	suspend fun bulkSummary(): BulkSummary?
+	suspend fun bulkVariants(): List<BulkSummary>
 
 	/**
 	 * Every card the source holds, one at a time, in whatever order the file supplies.
@@ -58,12 +65,15 @@ interface BulkCatalogue {
 	 * cached and reported as French. Measured on Scryfall's `default_cards`: 8780 English records
 	 * in the first sample against 92 Spanish, 47 Japanese, 27 French and a handful of others.
 	 *
+	 * @param variantId which dump, by [BulkSummary.id]. An unknown id fetches nothing rather
+	 *   than silently falling back to another, because the two differ by 315 MB
 	 * @param onCard called once per card. Suspending, so a caller can write to disk without
 	 *   buffering, and back-pressure is simply the callback taking its time
 	 * @param onBytes called as the transfer progresses, with bytes so far and the total when the
-	 *   source states one. A 75 MB download with no progress is indistinguishable from a hang
+	 *   source states one. A 78 MB download with no progress is indistinguishable from a hang
 	 */
 	suspend fun streamAll(
+		variantId: String,
 		onBytes: (downloaded: Long, total: Long?) -> Unit = { _, _ -> },
 		onCard: suspend (CardPrinting) -> Unit,
 	)
@@ -77,7 +87,19 @@ interface BulkCatalogue {
  * @property description the source's own words, shown rather than paraphrased
  */
 data class BulkSummary(
+	/** The source's own name for this dump, passed back to [BulkCatalogue.streamAll]. */
+	val id: String,
+	/** Short enough for a radio button. The source's own words go in [description]. */
+	val label: String,
 	val compressedBytes: Long,
 	val updatedAt: LocalDate?,
 	val description: String,
+	/**
+	 * Whether this dump carries every language the source has, or one printing per card.
+	 *
+	 * The distinction a user is actually choosing between, and it is not derivable from the
+	 * size: Scryfall's smaller file is "English, or the printed language where there is no
+	 * English printing", which reads as multilingual and is 97% English in practice.
+	 */
+	val coversAllLanguages: Boolean = false,
 )

@@ -27,6 +27,22 @@ import okio.use
  * @property total images attempted. `fetched < total` is a real outcome, not an error state -- a
  *   CDN drops requests -- and the set list shows the percentage rather than rounding up to a tick
  */
+/**
+ * Which dump of a game has been imported, and when the source last rebuilt it.
+ *
+ * Both, because "already imported" has to mean "the same file". Scryfall publishes an English
+ * dump and an every-language one; having taken the first is no reason to stop offering the
+ * second, and a bare flag could not tell them apart. The date catches the other case -- Scryfall
+ * rebuilds daily, so last week's import is worth offering again.
+ *
+ * @property updatedAt the source's own rebuild day as an ISO date, or `"-"` where it states none
+ */
+@Serializable
+data class BulkImportRecord(
+	val variantId: String,
+	val updatedAt: String,
+)
+
 @Serializable
 data class ImageDownloadRecord(
 	val fetched: Int,
@@ -169,7 +185,7 @@ data class BrowsingPreferences(
 	 * The date rather than a flag, so a source rebuilding its file makes the import worth
 	 * offering again. Scryfall rebuilds daily.
 	 */
-	val bulkImports: Map<String, String> = emptyMap(),
+	val bulkImports: Map<String, BulkImportRecord> = emptyMap(),
 ) {
 
 	/** What [imageDownloads] recorded for one rendition, or `null` if it was never downloaded. */

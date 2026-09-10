@@ -1380,12 +1380,25 @@ class CardRepository(
 	 */
 	suspend fun importBulk(
 		game: GameId,
+		variantId: String? = null,
 		language: CardLanguage? = null,
 		onProgress: (BulkImportProgress) -> Unit = {},
 	): BulkImportResult? {
 		val vStorage = mStorage ?: return null
 		val vProvider = mRegistry.resolve(game, language) ?: return null
 		val vBulk = vProvider as? BulkCatalogue ?: return null
+		// Resolved once, here, so the stream and the record of what was imported cannot disagree
+		// about which file was read. Null means the default, which is the cheapest.
+		val vVariants = vBulk.bulkVariants()
+		// A named variant that does not exist imports nothing. It must not fall through to the
+		// cheapest: Scryfall's two differ by 315 MB, and spending that on a typo -- or worse,
+		// *not* spending it and reporting the every-language import as done -- is the kind of
+		// silent substitution this codebase exists to avoid. Null means "the default".
+		val vVariant = if (variantId == null) {
+			vVariants.firstOrNull()
+		} else {
+			vVariants.firstOrNull { it.id == variantId }
+		} ?: return null
 		val vLanguage = effectiveLanguage(vProvider, language)
 
 		// One request, for the names and codes. The bulk records carry a set *code* but not the
@@ -1401,6 +1414,7 @@ class CardRepository(
 		try {
 			vStorage.fileSystem.createDirectories(vScratch)
 			vBulk.streamAll(
+				variantId = vVariant.id,
 				onBytes = { vDone, vTotal ->
 					onProgress(BulkImportProgress.Downloading(vDone, vTotal))
 				},
@@ -1471,19 +1485,25 @@ class CardRepository(
 			// Named so a screen can say "988 sets" against what the catalogue actually lists,
 			// rather than implying the import covered sets it never saw.
 			knownSets = vSetsById.size,
+			// From the variant resolved at the top, so this names the file actually read rather
+			// than whatever the manifest happens to say by the time the import finishes.
+			variantId = vVariant.id,
+			dumpUpdatedAt = vVariant.updatedAt,
 		)
 	}
 
 	/**
-	 * What a bulk import of [game] would cost, or `null` when its source publishes no dump.
+	 * What a bulk import of [game] would cost, cheapest first, or empty when its source
+	 * publishes no dump.
 	 *
-	 * Cheap -- a manifest request, not the file -- so a screen can state the size before anything
-	 * large is fetched.
+	 * Cheap -- a manifest request, not the file -- so a screen can state the sizes before
+	 * anything large is fetched. A list, because a source may publish more than one worth
+	 * offering and Scryfall does: 78 MB of one printing per card, or 393 MB of every language.
 	 */
-	suspend fun bulkSummary(game: GameId, language: CardLanguage? = null): BulkSummary? {
-		if (mStorage == null) return null
-		val vProvider = mRegistry.resolve(game, language) ?: return null
-		return (vProvider as? BulkCatalogue)?.bulkSummary()
+	suspend fun bulkVariants(game: GameId, language: CardLanguage? = null): List<BulkSummary> {
+		if (mStorage == null) return emptyList()
+		val vProvider = mRegistry.resolve(game, language) ?: return emptyList()
+		return (vProvider as? BulkCatalogue)?.bulkVariants().orEmpty()
 	}
 
 	/** Reads one set's scratch file back into printings, skipping any line that will not parse. */
@@ -1621,6 +1641,15 @@ data class BulkImportResult(
 	val sets: Int,
 	/** How many sets the catalogue lists, so a screen can say what share was covered. */
 	val knownSets: Int,
+	/**
+	 * Which dump was read, by [BulkSummary.id], and the day the source last rebuilt it.
+	 *
+	 * Reported so the queue can record what was imported. That record is the only way to answer
+	 * "have I already done this?" -- the sets on disk cannot, because a dump holds no cards for
+	 * every set a catalogue lists.
+	 */
+	val variantId: String? = null,
+	val dumpUpdatedAt: LocalDate? = null,
 )
 
 /** Where a bulk import has got to. Three phases, because they have very different durations. */

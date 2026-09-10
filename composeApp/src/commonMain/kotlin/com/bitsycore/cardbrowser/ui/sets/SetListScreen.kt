@@ -489,7 +489,9 @@ fun SetListContent(
 			languages = vSet.languages.toList(),
 			defaultLanguage = preferredLanguage,
 			infoLanguages = vState.savedLanguages[vSet.id.qualified].orEmpty(),
-			onConfirm = { vKinds, vLanguages ->
+			// One set, so no dump is involved and there is nothing to choose: a 78 MB file to
+			// fill one set is far worse than the request it would replace. See `BulkCatalogue`.
+			onConfirm = { vKinds, vLanguages, _ ->
 				onDownload(vSet, vKinds, vLanguages)
 				vPendingSet = null
 				// Straight to the queue, so the download is visibly a thing that now exists rather
@@ -520,7 +522,7 @@ fun SetListContent(
 				}
 				.reduceOrNull { vAcc, vNext -> vAcc intersect vNext }
 				.orEmpty(),
-			bulkBytes = vState.bulkSummary?.compressedBytes,
+			bulkVariants = vState.bulkVariants,
 			// Every language any of these sets states. A language only some of them have is still
 			// worth offering -- the enqueue skips it for the sets that were never printed in it.
 			languages = vSets.flatMap { it.languages }.distinct(),
@@ -533,8 +535,8 @@ fun SetListContent(
 				.orEmpty(),
 			onDismiss = { vPendingAll = false },
 			isImportingGame = vIsImportingGame,
-			isGameImported = state.isGameImported,
-			onConfirm = { vKinds, vLanguages ->
+			importedVariantIds = state.importedVariantIds,
+			onConfirm = { vKinds, vLanguages, vVariantId ->
 				// Where the source publishes a dump, the whole game's records come from it and
 				// there is no path here that fetches them a set at a time. That is not a
 				// preference: the file exists so clients stop walking somebody else's API, and
@@ -542,9 +544,9 @@ fun SetListContent(
 				//
 				// Art is unaffected. It is not in the file, it comes from a CDN rather than the
 				// API, and it is still fetched per set.
-				val vBulkHandlesInfo = vState.bulkSummary != null
+				val vBulkHandlesInfo = vState.bulkVariants.isNotEmpty()
 				if (vBulkHandlesInfo && DownloadKind.CARD_INFO in vKinds) {
-					dispatch(SetListContract.Intent.BulkImportRequested)
+					dispatch(SetListContract.Intent.BulkImportRequested(vVariantId))
 				}
 				val vPerSet = if (vBulkHandlesInfo) {
 					vKinds - DownloadKind.CARD_INFO

@@ -9,6 +9,7 @@ import com.bitsycore.cardbrowser.data.repository.BulkImportProgress
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.settings.imageDownloadKey
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
+import com.bitsycore.cardbrowser.data.settings.BulkImportRecord
 import com.bitsycore.cardbrowser.data.settings.ImageDownloadRecord
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -89,6 +90,13 @@ data class DownloadRequest(
 	val kinds: Set<DownloadKind>,
 	val language: CardLanguage? = null,
 	val isWholeGameImport: Boolean = false,
+	/**
+	 * Which dump to read, by `BulkSummary.id`, or `null` for the source's cheapest.
+	 *
+	 * Part of the job's identity, so choosing the every-language file after taking the English
+	 * one queues a second import rather than being deduplicated against the first.
+	 */
+	val bulkVariantId: String? = null,
 ) {
 
 	init {
@@ -350,7 +358,7 @@ class DownloadManager(
 	 */
 	private suspend fun runWholeGameImport(job: DownloadJob) {
 		val vResult = runCatching {
-			mRepository.importBulk(job.request.game) { vProgress ->
+			mRepository.importBulk(job.request.game, job.request.bulkVariantId) { vProgress ->
 				// Bytes while downloading, then cards, then sets. Three different units for one
 				// bar, which is honest about the three phases having nothing in common: the bar
 				// restarts rather than pretending the download and the write are one scale.
@@ -376,6 +384,24 @@ class DownloadManager(
 			}
 		}
 		val vImport = vResult.getOrNull()
+		if (vImport?.variantId != null) {
+			// Written here rather than in the repository because it is a statement about what
+			// this device has done, which is what preferences hold -- the repository's business
+			// is the cards. Without it nothing records that an import happened, and the
+			// download-all dialog goes on offering one that would fetch nothing new.
+			runCatching {
+				mPreferences.update { vPreferences ->
+					vPreferences.copy(
+						bulkImports = vPreferences.bulkImports + (
+							job.request.game.value to BulkImportRecord(
+								variantId = vImport.variantId,
+								updatedAt = vImport.dumpUpdatedAt?.toString() ?: "-",
+							)
+						),
+					)
+				}
+			}
+		}
 		update(job.id) {
 			when {
 				vResult.isFailure -> DownloadStatus.Failed(
@@ -574,7 +600,7 @@ class DownloadManager(
 	 * It only stopped mattering because nothing offered a choice of language until now.
 	 */
 	private fun idOf(request: DownloadRequest): String = buildString {
-		if (request.isWholeGameImport) append("bulk:")
+		if (request.isWholeGameImport) append("bulk:${request.bulkVariantId ?: "default"}:")
 		append(request.setId?.qualified ?: request.game.value)
 		append('|')
 		append(request.kinds.map { it.name }.sorted().joinToString(","))

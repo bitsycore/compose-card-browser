@@ -69,8 +69,9 @@ class SetListViewModel(
 			// A 3 KB question asked once, so the download-all dialog can state the size before
 			// anything large is fetched. Silent on failure: a source that will not answer about
 			// its bulk file simply does not offer one, which is the same as not having one.
-			runCatching { mRepository.bulkSummary(vGame.id) }
+			runCatching { mRepository.bulkVariants(vGame.id) }
 				.getOrNull()
+				?.takeIf { it.isNotEmpty() }
 				?.let { dispatch(SetListContract.Intent.BulkAvailable(it)) }
 			// Started only once the game is known, so the first request is not fired against
 			// whichever game the initial state happened to name.
@@ -113,7 +114,7 @@ class SetListViewModel(
 
 			// Read back off the reduced state rather than recomputed here: `SetFavourites` has
 			// already been applied by the reducer, and applying it twice is how the two would drift.
-			SetListContract.Intent.BulkImportRequested -> {
+			is SetListContract.Intent.BulkImportRequested -> {
 				// Onto the download queue, which is the one scope that outlives this screen.
 				//
 				// It used to run here, in `viewModelScope`, and Navigation 3 scopes a view model
@@ -127,6 +128,7 @@ class SetListViewModel(
 						setName = stateFlow.value.game?.displayName ?: mArgs.game.value,
 						kinds = setOf(DownloadKind.CARD_INFO),
 						isWholeGameImport = true,
+						bulkVariantId = intent.variantId,
 					),
 				)
 			}
@@ -215,9 +217,20 @@ class SetListViewModel(
 				availableLanguages = mRepository.availableLanguages(game, vSets, language),
 				// The recorded import against what the source is currently publishing. Equal
 				// means there is nothing to fetch; different -- or absent -- means there is.
-				isGameImported = vPreferences.bulkImports[game.value]
-					?.let { it == (stateFlow.value.bulkSummary?.updatedAt?.toString() ?: "-") }
-					?: false,
+				// The recorded import against what the source is currently publishing, matched on
+				// *both* the file and its edition. Taking the English dump is no reason to stop
+				// offering the every-language one, and last week's edition of either is worth
+				// taking again -- Scryfall rebuilds daily.
+				importedVariantIds = vPreferences.bulkImports[game.value]
+					?.let { vRecord ->
+						stateFlow.value.bulkVariants
+							.filter {
+								it.id == vRecord.variantId &&
+									(it.updatedAt?.toString() ?: "-") == vRecord.updatedAt
+							}
+							.mapTo(mutableSetOf()) { it.id }
+					}
+					.orEmpty(),
 				// Read straight from preferences rather than measured: see
 				// `BrowsingPreferences.imageDownloads` for why the image side cannot be checked
 				// cheaply, and what the record therefore does and does not mean.

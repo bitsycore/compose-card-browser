@@ -357,13 +357,14 @@ class ScryfallProvider(
 		mStorage?.let { ScryfallBulk(mClient, it, mBaseUrl) }
 	}
 
-	override suspend fun bulkSummary(): BulkSummary? = mBulk?.summary()
+	override suspend fun bulkVariants(): List<BulkSummary> = mBulk?.variants().orEmpty()
 
 	override suspend fun streamAll(
+		variantId: String,
 		onBytes: (Long, Long?) -> Unit,
 		onCard: suspend (CardPrinting) -> Unit,
 	) {
-		mBulk?.stream(onBytes, onCard)
+		mBulk?.stream(variantId, onBytes, onCard)
 	}
 
 	companion object {

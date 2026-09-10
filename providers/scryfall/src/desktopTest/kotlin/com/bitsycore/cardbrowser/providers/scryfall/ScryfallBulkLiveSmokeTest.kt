@@ -7,6 +7,7 @@ import okio.FileSystem
 import okio.Path.Companion.toPath
 import kotlin.test.Ignore
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -31,17 +32,27 @@ class ScryfallBulkLiveSmokeTest {
 	private fun provider() = ScryfallProvider(HttpClientFactory.create(policy = ScryfallProvider.HTTP_POLICY), mStorage = storage())
 
 	@Test
-	fun `the manifest names a default_cards file with a real size`(): Unit = runBlocking {
-		val vSummary = assertNotNull(provider().bulkSummary(), "Scryfall published no bulk manifest")
+	fun `the manifest names both usable dumps with real sizes`(): Unit = runBlocking {
+		val vVariants = provider().bulkVariants()
+		assertTrue(vVariants.isNotEmpty(), "Scryfall published no bulk manifest")
 
-		// 74.6 MB when this was written. Asserted as a range rather than a number, because the
-		// file grows with the game and a test that fails on a new Magic set is noise.
-		assertTrue(
-			vSummary.compressedBytes in 40_000_000..400_000_000,
-			"unexpected bulk size: ${vSummary.compressedBytes}",
-		)
-		assertTrue(vSummary.description.isNotBlank())
-		assertNotNull(vSummary.updatedAt, "Scryfall states a rebuild date and it should survive mapping")
+		// Both, and in that order: the app offers the cheap one as the default and the
+		// every-language one as the opt-in, so the ordering is part of the contract.
+		assertEquals(listOf("default_cards", "all_cards"), vVariants.map { it.id })
+		assertTrue(vVariants.first().compressedBytes < vVariants.last().compressedBytes)
+		assertTrue(vVariants.last().coversAllLanguages)
+
+		for (vVariant in vVariants) {
+			// 78.2 MB and 392.8 MB on 2026-09-11. Asserted as a range rather than a number,
+			// because the files grow with the game and a test that fails on a new Magic set is
+			// noise -- and 40 MB to 1 GB is still tight enough to catch the wrong file.
+			assertTrue(
+				vVariant.compressedBytes in 40_000_000..1_000_000_000,
+				"unexpected size for ${vVariant.id}: ${vVariant.compressedBytes}",
+			)
+			assertTrue(vVariant.description.isNotBlank())
+			assertNotNull(vVariant.updatedAt, "Scryfall states a rebuild date; it should survive mapping")
+		}
 	}
 
 	@Test
@@ -55,6 +66,7 @@ class ScryfallBulkLiveSmokeTest {
 		val vSets = mutableSetOf<String>()
 
 		provider().streamAll(
+			variantId = "default_cards",
 			onBytes = { vDone, _ -> vLastBytes = vDone },
 		) { vCard ->
 			vCards++

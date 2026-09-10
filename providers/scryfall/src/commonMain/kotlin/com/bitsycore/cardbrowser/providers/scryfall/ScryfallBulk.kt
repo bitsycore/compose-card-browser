@@ -57,22 +57,31 @@ internal class ScryfallBulk(
 	private val mBaseUrl: String,
 ) {
 
-	suspend fun summary(): BulkSummary? = mapProviderErrors("Scryfall.bulkSummary") {
-		val vEntry = manifest() ?: return@mapProviderErrors null
-		BulkSummary(
-			compressedBytes = vEntry.compressedSize,
-			updatedAt = vEntry.updatedAt.substringBefore('T').let {
-				runCatching { LocalDate.parse(it) }.getOrNull()
-			},
-			description = vEntry.description,
-		)
+	suspend fun variants(): List<BulkSummary> = mapProviderErrors("Scryfall.bulkVariants") {
+		val vEntries = manifest()
+		WANTED_TYPES.mapNotNull { (vType, vLabel) ->
+			val vEntry = vEntries.firstOrNull { it.type == vType } ?: return@mapNotNull null
+			BulkSummary(
+				id = vType,
+				label = vLabel,
+				compressedBytes = vEntry.compressedSize,
+				updatedAt = vEntry.updatedAt.substringBefore('T').let {
+					runCatching { LocalDate.parse(it) }.getOrNull()
+				},
+				description = vEntry.description,
+				coversAllLanguages = vType == ALL_LANGUAGES,
+			)
+		}
 	}
 
 	suspend fun stream(
+		variantId: String,
 		onBytes: (Long, Long?) -> Unit,
 		onCard: suspend (CardPrinting) -> Unit,
 	) {
-		val vEntry = manifest() ?: return
+		// By exact id, with no fallback. The two differ by 315 MB, and quietly fetching the other
+		// one because a name did not match is not a mistake a user could diagnose.
+		val vEntry = manifest().firstOrNull { it.type == variantId } ?: return
 		val vScratch = mStorage.cacheRoot / SCRATCH_NAME
 		try {
 			download(vEntry.downloadUri, vScratch, vEntry.compressedSize, onBytes)
@@ -88,11 +97,10 @@ internal class ScryfallBulk(
 	// ============
 	//  Steps
 
-	private suspend fun manifest(): BulkEntryDto? = mClient
+	private suspend fun manifest(): List<BulkEntryDto> = mClient
 		.get(mBaseUrl) { url { appendPathSegments("bulk-data") } }
 		.body<BulkListDto>()
 		.data
-		.firstOrNull { it.type == WANTED_TYPE }
 
 	/** Streams the compressed file to disk, reporting progress as it goes. */
 	private suspend fun download(uri: String, into: Path, total: Long, onBytes: (Long, Long?) -> Unit) {
@@ -151,13 +159,31 @@ internal class ScryfallBulk(
 
 	private companion object {
 
+		/** Every card in every language Scryfall has. Measured 2026-09-11: 392.8 MB compressed. */
+		const val ALL_LANGUAGES = "all_cards"
+
 		/**
-		 * Every card in English, or its printed language where no English printing exists.
+		 * The two dumps this app can use, cheapest first, with a label a menu can show.
 		 *
-		 * Not `all_cards`: five times the transfer, and the cache is keyed per language, so
-		 * importing every language would write eleven copies of the catalogue.
+		 * `default_cards` is "every card in English, or its printed language where there is no
+		 * English printing", which sounds multilingual and is not: sampled 2026-09-10, 8780
+		 * English records against 92 Spanish, 47 Japanese, 27 French and 1 German. So it is the
+		 * right default -- 78.2 MB, and the language nearly everything is printed in -- and the
+		 * wrong thing to describe as covering languages.
+		 *
+		 * `all_cards` genuinely does, at 392.8 MB compressed and roughly eleven cache records per
+		 * set instead of one, because the cache is keyed per language. That is a real purchase
+		 * and it is now the user's to make rather than one made for them here. Both figures
+		 * measured against the live manifest on 2026-09-11.
+		 *
+		 * Scryfall publishes five more -- `oracle_cards`, `unique_artwork`, `rulings`,
+		 * `art_tags`, `oracle_tags` -- and none is a catalogue of printings, which is what this
+		 * app caches. They are deliberately not offered.
 		 */
-		const val WANTED_TYPE = "default_cards"
+		val WANTED_TYPES: List<Pair<String, String>> = listOf(
+			"default_cards" to "English",
+			ALL_LANGUAGES to "Every language",
+		)
 
 		const val SCRATCH_NAME = "scryfall-bulk.jsonl.gz"
 

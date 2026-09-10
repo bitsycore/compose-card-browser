@@ -27,6 +27,7 @@ import com.bitsycore.cardbrowser.data.repository.BulkImportProgress
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDate
 import kotlinx.serialization.json.Json
 import okio.Path.Companion.toPath
 import okio.fakefilesystem.FakeFileSystem
@@ -103,13 +104,35 @@ class BulkImportTest {
 
 		override suspend fun cardDetail(id: SourceId, language: CardLanguage?): CardPrinting? = null
 
-		override suspend fun bulkSummary(): BulkSummary =
-			BulkSummary(compressedBytes = 1234, updatedAt = null, description = "a fake dump")
+		/** Two, so a test can assert the caller picks one and reports which it read. */
+		override suspend fun bulkVariants(): List<BulkSummary> = listOf(
+			BulkSummary(
+				id = "cheap",
+				label = "Cheap",
+				compressedBytes = 1234,
+				updatedAt = LocalDate(2026, 9, 11),
+				description = "a fake dump",
+			),
+			BulkSummary(
+				id = "everything",
+				label = "Everything",
+				compressedBytes = 9999,
+				updatedAt = LocalDate(2026, 9, 11),
+				description = "a fake dump in every language",
+				coversAllLanguages = true,
+			),
+		)
+
+		/** The last variant asked for, so a test can assert the choice reached the adapter. */
+		var streamedVariant: String? = null
+			private set
 
 		override suspend fun streamAll(
+			variantId: String,
 			onBytes: (Long, Long?) -> Unit,
 			onCard: suspend (CardPrinting) -> Unit,
 		) {
+			streamedVariant = variantId
 			onBytes(0, 1234)
 			// Interleaved on purpose: a real dump is not grouped by set, which is the entire
 			// reason the import buckets rather than accumulating a list per set as it reads.
@@ -244,4 +267,37 @@ class BulkImportTest {
 
 		assertNull(vRepository.importBulk(GameId("nothing-here")))
 	}
+	@Test
+	fun `the default is the cheapest dump -- and the result says which was read`() = runTest {
+		// The fake publishes two, as Scryfall does. Null must take the first rather than an
+		// arbitrary one, because the two differ by 315 MB in the real case.
+		val vProvider = FakeBulkProvider(mProviderId, listOf(printing("OGN", "1")), listOf(set("OGN")))
+		val vResult = assertNotNull(repository(vProvider).importBulk(TestGameProfile.id))
+
+		assertEquals("cheap", vProvider.streamedVariant)
+		assertEquals("cheap", vResult.variantId)
+		assertEquals(LocalDate(2026, 9, 11), vResult.dumpUpdatedAt)
+	}
+
+	@Test
+	fun `an explicit variant is the one streamed`() = runTest {
+		val vProvider = FakeBulkProvider(mProviderId, listOf(printing("OGN", "1")), listOf(set("OGN")))
+
+		val vResult = assertNotNull(
+			repository(vProvider).importBulk(TestGameProfile.id, variantId = "everything"),
+		)
+
+		assertEquals("everything", vProvider.streamedVariant)
+		assertEquals("everything", vResult.variantId)
+	}
+
+	@Test
+	fun `an unknown variant imports nothing rather than quietly taking another`() = runTest {
+		// The two real ones differ by 315 MB. Falling back would spend that on a typo.
+		val vProvider = FakeBulkProvider(mProviderId, listOf(printing("OGN", "1")), listOf(set("OGN")))
+
+		assertNull(repository(vProvider).importBulk(TestGameProfile.id, variantId = "nope"))
+		assertNull(vProvider.streamedVariant)
+	}
+
 }

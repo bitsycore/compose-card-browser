@@ -53,7 +53,7 @@ class DownloadRenderer {
 				setName = "Base Set",
 				cardCount = 102,
 				onDismiss = {},
-				onConfirm = { _, _ -> },
+				onConfirm = { _, _, _ -> },
 				languages = listOf(
 					CardLanguage.ENGLISH,
 					CardLanguage.FRENCH,
@@ -68,7 +68,7 @@ class DownloadRenderer {
 				setName = "Base Set",
 				cardCount = 102,
 				onDismiss = {},
-				onConfirm = { _, _ -> },
+				onConfirm = { _, _, _ -> },
 				alreadyHave = setOf(DownloadKind.CARD_INFO),
 				languages = listOf(CardLanguage.ENGLISH, CardLanguage.FRENCH, CardLanguage.GERMAN),
 				defaultLanguage = CardLanguage.FRENCH,
@@ -83,7 +83,7 @@ class DownloadRenderer {
 				setName = "Base Set",
 				cardCount = 102,
 				onDismiss = {},
-				onConfirm = { _, _ -> },
+				onConfirm = { _, _, _ -> },
 				languages = CardLanguage.entries.toList(),
 				defaultLanguage = CardLanguage.FRENCH,
 			)

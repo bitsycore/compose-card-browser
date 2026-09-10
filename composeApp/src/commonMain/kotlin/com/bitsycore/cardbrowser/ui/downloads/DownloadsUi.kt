@@ -2,6 +2,8 @@ package com.bitsycore.cardbrowser.ui.downloads
 
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
+import com.bitsycore.cardbrowser.core.provider.BulkSummary
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,6 +32,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -94,7 +97,11 @@ fun DownloadKindDialog(
 	setName: String,
 	cardCount: Int?,
 	onDismiss: () -> Unit,
-	onConfirm: (Set<DownloadKind>, Set<CardLanguage>) -> Unit,
+	/**
+	 * @param variantId which bulk file to import, by `BulkSummary.id`, or `null` when this game's
+	 *   source publishes none and card info is fetched per set
+	 */
+	onConfirm: (Set<DownloadKind>, Set<CardLanguage>, String?) -> Unit,
 	/**
 	 * How many sets this covers. 1 for a single row; more for "download all".
 	 *
@@ -138,7 +145,15 @@ fun DownloadKindDialog(
 	 * is the entire catalogue, so using it to fetch a single set transfers far more than the
 	 * request it would replace. `null` hides the option rather than showing a disabled one.
 	 */
-	bulkBytes: Long? = null,
+	/**
+	 * The dumps this game's source publishes, cheapest first, or empty when it publishes none.
+	 *
+	 * More than one is a real choice rather than a detail: Scryfall's cheap file is 78 MB and is
+	 * 97% English despite being described as "the printed language", and its every-language file
+	 * is 393 MB. Someone downloading a game in French needs to know which of those they are
+	 * getting, and the first one silently was.
+	 */
+	bulkVariants: List<BulkSummary> = emptyList(),
 	/**
 	 * True while a whole-game import is running for this game.
 	 *
@@ -149,24 +164,33 @@ fun DownloadKindDialog(
 	 */
 	isImportingGame: Boolean = false,
 	/**
-	 * True when card info for this whole game is already held because the dump was imported.
+	 * Which dumps have already been imported at their current edition, by `BulkSummary.id`.
+	 *
+	 * Checked against whichever one is *selected*, so importing the English file does not lock
+	 * away the every-language file -- they are different purchases and the second is exactly what
+	 * someone would come back for.
 	 *
 	 * Separate from [alreadyHave], which is an intersection over the sets on screen and can never
 	 * reach card info for a game served by a dump: the file holds nothing for the sets a
 	 * catalogue lists but nothing has been printed in, so one such set keeps the intersection
 	 * empty and the dialog offers an import that would fetch nothing.
 	 */
-	isGameImported: Boolean = false,
+	importedVariantIds: Set<String> = emptySet(),
 ) {
 	// Ticking is a fresh decision each time the dialog opens, so it is keyed on what is already
 	// held: reopening after a download must not restore a tick for something now on disk.
 	var vRedownload by remember(alreadyHave) { mutableStateOf(false) }
+	// The cheapest, which for Scryfall is English. The expensive one is opted into, the same way
+	// images are: a default that costs 393 MB is not a default.
+	var vVariant by remember(bulkVariants) { mutableStateOf(bulkVariants.firstOrNull()) }
+	val vBulkBytes = vVariant?.compressedBytes
 	val vInfoComplete = infoIsComplete(alreadyHave, languages, infoLanguages)
 	val vLocked: (DownloadKind) -> Boolean = { vKind ->
 		when {
 			// Before `vRedownload`, like the in-flight check: an import that has already run
-			// fetches nothing, and "Download again" should not spend 74 MB proving it.
-			vKind == DownloadKind.CARD_INFO && isGameImported && bulkBytes != null -> true
+			// fetches nothing, and "Download again" should not spend 78 MB proving it. Only the
+			// selected file counts -- the other one has not been taken.
+			vKind == DownloadKind.CARD_INFO && vVariant?.id in importedVariantIds -> true
 			// Before the re-download escape hatch, because this one is not about what is held --
 			// it is about what is in flight, and "Download again" must not start a second writer
 			// against the records an import is in the middle of laying down.
@@ -222,8 +246,9 @@ fun DownloadKindDialog(
 					// reason is indistinguishable from a broken one.
 					note = when {
 						isImportingGame -> "Already downloading for the whole game"
-						isGameImported && bulkBytes != null ->
-							"Already imported. The source has not republished it since."
+						vVariant?.id in importedVariantIds ->
+							"\"${vVariant?.label}\" is already imported, and the source has not " +
+								"republished it since."
 						else -> null
 					},
 					// Deliberately not "small": the honest thing is to say what it is, since a set
@@ -234,9 +259,13 @@ fun DownloadKindDialog(
 								// A dump is one transfer, so it carries none of the per-set
 								// pacing cost the row below has to warn about. Two rows, two
 								// different costs, each said where it applies.
-								bulkBytes != null && setCount > 1 ->
-									"One file, about ${bulkBytes / 1_000_000} MB, in every " +
-										"language it carries."
+								// Names the file, because the two differ by more than size and
+								// the difference is the thing a user gets wrong: Scryfall's cheap
+								// dump is described as "the printed language" and is 97% English.
+								vBulkBytes != null && setCount > 1 ->
+									"One file, about ${vBulkBytes!! / 1_000_000} MB" +
+										vVariant?.let { " (${it.label.lowercase()})" }.orEmpty() +
+										"."
 								setCount > 1 && cardCount != null ->
 									"About $cardCount cards across $setCount sets, one set at a " +
 										"time."
@@ -262,6 +291,41 @@ fun DownloadKindDialog(
 						}
 					},
 				)
+				if (bulkVariants.size > 1 && vInfo && !vLocked(DownloadKind.CARD_INFO)) {
+					Spacer(Modifier.height(6.dp))
+					Column(Modifier.padding(start = 44.dp)) {
+						for (vOption in bulkVariants) {
+							Row(
+								verticalAlignment = Alignment.CenterVertically,
+								modifier = Modifier.clickable { vVariant = vOption },
+							) {
+								RadioButton(
+									selected = vOption.id == vVariant?.id,
+									onClick = { vVariant = vOption },
+								)
+								Spacer(Modifier.width(4.dp))
+								Text(
+									// The size in the label, because it is the whole difference:
+									// one of these is five times the other.
+									text = "${vOption.label} \u2014 ${vOption.compressedBytes / 1_000_000} MB",
+									style = MaterialTheme.typography.bodyMedium,
+								)
+							}
+						}
+						Text(
+							// Said plainly, because the cheap file's own description does not.
+							// Scryfall calls it "English or the printed language", which reads as
+							// multilingual: sampled, it is 8780 English records against 92
+							// Spanish, 47 Japanese, 27 French and 1 German.
+							text = "The smaller file is almost entirely English. Pick every " +
+								"language only if you want to read cards in one you have not " +
+								"downloaded.",
+							style = MaterialTheme.typography.bodySmall,
+							color = MaterialTheme.colorScheme.onSurfaceVariant,
+						)
+					}
+				}
+
 				Spacer(Modifier.height(8.dp))
 				KindRow(
 					checked = vThumbnails && !vLocked(DownloadKind.GRID_THUMBNAILS),
@@ -344,6 +408,7 @@ fun DownloadKindDialog(
 							if (vThumbnails) add(DownloadKind.GRID_THUMBNAILS)
 						},
 						vLanguages,
+						vVariant?.id,
 					)
 				},
 			) { Text("Download") }
@@ -557,14 +622,14 @@ private fun previewJob(
 @Preview
 @Composable
 private fun DownloadKindDialogPreview() = PreviewFrame {
-	DownloadKindDialog(setName = "Origins", cardCount = 352, onDismiss = {}, onConfirm = { _, _ -> })
+	DownloadKindDialog(setName = "Origins", cardCount = 352, onDismiss = {}, onConfirm = { _, _, _ -> })
 }
 
 @Preview
 @Composable
 private fun DownloadKindDialogUnknownSizePreview() = PreviewFrame {
 	// No card count, so no size estimate is offered rather than a made-up one.
-	DownloadKindDialog(setName = "Promos", cardCount = null, onDismiss = {}, onConfirm = { _, _ -> })
+	DownloadKindDialog(setName = "Promos", cardCount = null, onDismiss = {}, onConfirm = { _, _, _ -> })
 }
 
 @Preview
@@ -576,7 +641,7 @@ private fun DownloadAllDialogPreview() = PreviewFrame {
 		cardCount = 21_450,
 		setCount = 88,
 		onDismiss = {},
-		onConfirm = { _, _ -> },
+		onConfirm = { _, _, _ -> },
 	)
 }
 
@@ -590,7 +655,7 @@ private fun DownloadKindDialogPartlyHeldPreview() = PreviewFrame {
 		cardCount = 352,
 		alreadyHave = setOf(DownloadKind.CARD_INFO),
 		onDismiss = {},
-		onConfirm = { _, _ -> },
+		onConfirm = { _, _, _ -> },
 	)
 }
 
@@ -607,6 +672,6 @@ private fun DownloadKindDialogPartlyTranslatedPreview() = PreviewFrame(isDark = 
 		defaultLanguage = CardLanguage.FRENCH,
 		infoLanguages = setOf(CardLanguage.FRENCH),
 		onDismiss = {},
-		onConfirm = { _, _ -> },
+		onConfirm = { _, _, _ -> },
 	)
 }

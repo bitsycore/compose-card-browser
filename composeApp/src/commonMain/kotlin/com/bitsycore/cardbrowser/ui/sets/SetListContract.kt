@@ -6,7 +6,6 @@ import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.SetFavourites
 import com.bitsycore.cardbrowser.core.provider.BulkSummary
-import com.bitsycore.cardbrowser.data.repository.BulkImportProgress
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.cardbrowser.data.settings.ImageDownloadRecord
@@ -78,13 +77,13 @@ object SetListContract :
 		 */
 		val savedSetIds: Set<String> = emptySet(),
 		/**
-		 * What this game's source says a bulk import would cost, or `null` when it publishes none.
+		 * The dumps this game's source publishes, cheapest first. Empty when it publishes none.
 		 *
-		 * Only Scryfall does today. Fetched separately from the data so the size can be stated
-		 * before anything is downloaded -- a dialog that says "75 MB" is the difference between an
-		 * informed choice and a surprise on a phone bill.
+		 * A list, because Scryfall publishes two the app can use and they are a very different
+		 * purchase -- 78 MB of one printing per card, or 393 MB of every language -- so which
+		 * one is the user's choice rather than one made for them here.
 		 */
-		val bulkSummary: BulkSummary? = null,
+		val bulkVariants: List<BulkSummary> = emptyList(),
 		/** Pinned sets in the user's order, by qualified id, across every game. See `SetFavourites`. */
 		val favouriteIds: List<String> = emptyList(),
 		/**
@@ -141,15 +140,19 @@ object SetListContract :
 		 */
 		val availableLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
 		/**
-		 * True when this game's bulk file has already been imported, and the source has not
-		 * rebuilt it since.
+		 * Which of this game's dumps have been imported at their current edition, by
+		 * `BulkSummary.id`.
+		 *
+		 * Per file rather than per game, because a game can have more than one and they are not
+		 * substitutes: having taken Scryfall's 78 MB English dump is no reason to stop offering
+		 * the 393 MB every-language one, which is exactly the thing a user would come back for.
 		 *
 		 * Answered from a record of the import rather than from the sets on disk. A dump holds no
 		 * cards for every set a catalogue lists -- token sheets, memorabilia, a set announced but
-		 * not printed -- so "is every set saved?" is no forever, and the download-all dialog went
-		 * on offering an import that had run and would fetch nothing new.
+		 * not printed -- so "is every set saved?" is no forever, and the dialog went on offering
+		 * an import that had run and would fetch nothing new.
 		 */
-		val isGameImported: Boolean = false,
+		val importedVariantIds: Set<String> = emptySet(),
 		/**
 		 * Which product line to show, or `null` for all of them.
 		 *
@@ -230,10 +233,15 @@ object SetListContract :
 		data object Refresh : Intent
 
 		/** The source answered about its bulk file, or said it has none. */
-		data class BulkAvailable(val summary: BulkSummary?) : Intent
+		data class BulkAvailable(val variants: List<BulkSummary>) : Intent
 
 		/** The user asked for the whole catalogue in one file. */
-		data object BulkImportRequested : Intent
+		/**
+		 * Import this game's whole catalogue from the source's dump.
+		 *
+		 * @param variantId which dump, by `BulkSummary.id`, or `null` for the cheapest
+		 */
+		data class BulkImportRequested(val variantId: String?) : Intent
 
 		/** An import moved on, or finished when [progress] is null. */
 
@@ -307,7 +315,7 @@ object SetListContract :
 			val savedLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
 			val confirmedCardCounts: Map<String, Int> = emptyMap(),
 			val availableLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
-			val isGameImported: Boolean = false,
+			val importedVariantIds: Set<String> = emptySet(),
 		) : Intent
 
 		/** A product line was picked, or `null` to see every line again. */
@@ -318,11 +326,11 @@ object SetListContract :
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
 
-		is Intent.BulkAvailable -> state.copy(bulkSummary = intent.summary)
+		is Intent.BulkAvailable -> state.copy(bulkVariants = intent.variants)
 
 		// Nothing to reduce. The import is a job on the download queue now, and the queue is what
 		// reports its progress -- so this screen no longer holds a second, parallel account of it.
-		// Deliberately does not clear `bulkSummary` either: the file is still there, and offering
+		// Deliberately does not clear `bulkVariants` either: the files are still there, and offering
 		// the import again after one finishes is reasonable, since Scryfall rebuilds daily.
 		is Intent.BulkImportRequested -> state
 
@@ -387,7 +395,7 @@ object SetListContract :
 					savedLanguages = emptyMap(),
 					confirmedCardCounts = emptyMap(),
 					availableLanguages = emptyMap(),
-					isGameImported = false,
+					importedVariantIds = emptySet(),
 					search = "",
 					isLoading = true,
 					error = null,
@@ -406,7 +414,7 @@ object SetListContract :
 			savedLanguages = intent.savedLanguages,
 			confirmedCardCounts = intent.confirmedCardCounts,
 			availableLanguages = intent.availableLanguages,
-			isGameImported = intent.isGameImported,
+			importedVariantIds = intent.importedVariantIds,
 		)
 
 		// Purely a view of what is already loaded: every line arrives in one request, so narrowing
