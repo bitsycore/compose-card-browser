@@ -197,18 +197,16 @@ fun DownloadKindDialog(
 					detail = buildString {
 						append(
 							when {
-								// When the source publishes a dump, the whole game comes as one
-								// file and there is no per-set option to weigh against it -- so
-								// this describes what will happen rather than offering a choice.
+								// A dump is one transfer, so it carries none of the per-set
+								// pacing cost the row below has to warn about. Two rows, two
+								// different costs, each said where it applies.
 								bulkBytes != null && setCount > 1 ->
-									"The whole catalogue in one file, about " +
-										"${bulkBytes / 1_000_000} MB. Names, numbers, rarities " +
-										"and rules text, in every language the file carries."
+									"One file, about ${bulkBytes / 1_000_000} MB, in every " +
+										"language it carries."
 								setCount > 1 && cardCount != null ->
-									"About $cardCount cards across $setCount sets. Names, " +
-										"numbers, rarities and rules text."
-								cardCount != null ->
-									"$cardCount cards. Names, numbers, rarities and rules text."
+									"About $cardCount cards across $setCount sets, one set at a " +
+										"time."
+								cardCount != null -> "$cardCount cards."
 								else -> "Names, numbers, rarities and rules text."
 							},
 						)
@@ -236,10 +234,21 @@ fun DownloadKindDialog(
 					onCheckedChange = { vThumbnails = it },
 					enabled = !vLocked(DownloadKind.GRID_THUMBNAILS),
 					done = DownloadKind.GRID_THUMBNAILS in alreadyHave,
-					title = "Grid thumbnails",
-					detail = cardCount
-						?.let { "About ${megabytes(it, THUMBNAIL_BYTES)} MB. Enough to browse the grid offline." }
-						?: "The small rendition the grid draws.",
+					title = "Thumbnails",
+					detail = buildString {
+						append(
+							cardCount
+								?.let { "About ${megabytes(it, THUMBNAIL_BYTES)} MB. Enough to browse offline." }
+								?: "The small rendition the grid draws.",
+						)
+						// The pacing warning lives here rather than under the whole dialog,
+						// because it is only true of this row: images are a request per card and
+						// the queue runs one set at a time, while card info above may arrive as a
+						// single file that costs none of that.
+						if (setCount > 1) {
+							append(" $setCount sets, one at a time -- this takes a while.")
+						}
+					},
 				)
 				if (vChoosable) {
 					Spacer(Modifier.height(14.dp))
@@ -285,20 +294,6 @@ fun DownloadKindDialog(
 							color = MaterialTheme.colorScheme.error,
 						)
 					}
-				}
-
-				if (setCount > 1) {
-					Spacer(Modifier.height(12.dp))
-					Text(
-						// Only for a queue, and only because it is genuinely a surprise: 988 sets
-						// one at a time is hours, and that should be known before starting rather
-						// than discovered from a badge that will not go down. For a single set
-						// there is nothing to warn about, so nothing is said.
-						text = "$setCount sets, downloaded one at a time. This takes a while; " +
-							"you can keep browsing or stop it from the downloads button.",
-						style = MaterialTheme.typography.bodySmall,
-						color = MaterialTheme.colorScheme.onSurfaceVariant,
-					)
 				}
 			}
 		},

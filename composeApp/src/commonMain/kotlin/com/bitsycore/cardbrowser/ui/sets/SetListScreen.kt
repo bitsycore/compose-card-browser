@@ -843,7 +843,7 @@ private fun SetRow(
 					ImageMark(
 						record = images?.thumbnails,
 						icon = Icons.Outlined.GridView,
-						label = "Grid thumbnails",
+						label = "Thumbnails",
 						leadingSpace = isSaved,
 					)
 				}
