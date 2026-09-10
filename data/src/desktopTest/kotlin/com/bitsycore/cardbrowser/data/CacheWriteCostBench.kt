@@ -23,17 +23,22 @@ import kotlin.test.Test
  * 300 KB each:
  *
  * ```
- *                        as shipped      with trimLocked() stubbed out
- *   writes #1-50           4.3 ms                 2.6 ms
- *   writes #451-500       31.4 ms                 1.3 ms
- *   writes #951-1000      66.6 ms                 1.2 ms
- *   total                 33.1 s                  1.4 s
+ *                        before        after
+ *   writes #1-50           4.3 ms       2.7 ms
+ *   writes #451-500       31.4 ms       1.3 ms
+ *   writes #951-1000      66.6 ms       1.4 ms
+ *   total                 33.1 s        1.5 s
  * ```
  *
- * The per-write cost grows with the number of files already on disk, which makes the loop
- * quadratic: `write` ends in `trimLocked`, and that lists the whole directory twice -- once
- * directly and once inside `pinnedNames` -- stat-ing every file each time. The eviction sweep is
- * 96% of a bulk import's write time and none of it is the writing.
+ * Before, the per-write cost grew with the number of files already on disk, which made the loop
+ * quadratic: `write` ended in `trimLocked`, and that listed the whole directory twice -- once
+ * directly and once inside `pinnedNames` -- stat-ing every file each time. The eviction sweep was
+ * 96% of a bulk import's write time and none of it was the writing.
+ *
+ * After, the cost is flat. `MetadataCache` keeps the total in memory and sweeps only when it says
+ * the ceiling is breached, with hysteresis so a cache that cannot be reclaimed -- everything an
+ * import writes is pinned -- is not re-swept per write. 1.4 s is what the same run costs with the
+ * sweep removed entirely, so 1.6 s is close to the floor.
  */
 class CacheWriteCostBench {
 

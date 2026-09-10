@@ -135,6 +135,30 @@ class MetadataCachePinTest {
 	}
 
 	@Test
+	fun `a cache that cannot be reclaimed still evicts once something unpinned arrives`() = runTest {
+		// The case the sweep hysteresis is about, and the one it must not break. Writing pinned
+		// records past the ceiling leaves the cache unreclaimable, so sweeps are deferred -- that
+		// is the whole point, since re-walking the directory per write is what made a bulk import
+		// quadratic. But the moment something evictable is written, the ceiling has to bite again.
+		val vCache = cache(maxBytes = 600)
+
+		for (vIndex in 0 until 4) {
+			val vKey = CacheKey.of("pinned-$vIndex")
+			vCache.pin(vKey)
+			vCache.put(vKey, "x".repeat(300))
+		}
+		assertTrue(vCache.sizeInBytes() > 600, "the pinned records should have breached the ceiling")
+
+		mNow += 1_000
+		vCache.put(CacheKey.of("browsed"), "y".repeat(300))
+
+		assertNull(vCache.get(CacheKey.of("browsed")), "the unpinned record is the one that goes")
+		for (vIndex in 0 until 4) {
+			assertNotNull(vCache.get(CacheKey.of("pinned-$vIndex")), "pinned-$vIndex must survive")
+		}
+	}
+
+	@Test
 	fun `a marker is not itself an entry`() = runTest {
 		// It is a zero-byte sibling of the record. Counting it as an evictable entry would let a
 		// pin delete itself, which would be a quiet way of un-protecting everything.

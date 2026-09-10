@@ -101,10 +101,28 @@ class MetadataCache(
 	//  Writing
 
 	/**
-	 * Writes [envelope] at [key], atomically, then trims the cache back under its ceiling.
+	 * Writes [envelope] at [key], atomically, and sweeps only when the cache is over its ceiling.
 	 *
 	 * A write that fails is swallowed rather than thrown: failing to cache is not failing to browse,
 	 * and a full disk should not take down a screen that already has its data.
+	 *
+	 * ## Why the total is tracked rather than measured
+	 *
+	 * This used to end in an unconditional [trimLocked], which made a bulk import quadratic.
+	 * Measured on 2026-09-10 by `CacheWriteCostBench`, 1000 records of 300 KB against a real
+	 * filesystem: 4.3 ms for the first writes, 31.4 ms by the five hundredth, 66.6 ms by the
+	 * thousandth, **33.1 s in total** -- against **1.4 s** flat with the sweep taken out. The
+	 * sweep was 96% of the time and none of it was writing.
+	 *
+	 * A sweep lists the whole directory and stats every file, and it did so twice -- once directly
+	 * and once inside the old `pinnedNames`. Per write, against a directory that is growing, that
+	 * is O(n^2): importing Magic paid roughly two million stat calls to evict nothing, because
+	 * everything an import writes is pinned and pinned records are never evicted.
+	 *
+	 * So the total is kept in memory and adjusted as records are written, and the directory is
+	 * walked only when that total says the ceiling has actually been breached -- which during an
+	 * import is never, and in ordinary browsing is rare. The ceiling still holds exactly, because
+	 * a sweep recomputes the real total from disk whenever it runs.
 	 */
 	suspend fun <T> write(
 		key: CacheKey,
@@ -115,6 +133,8 @@ class MetadataCache(
 			mWriteLock.withLock {
 				val vPath = pathFor(key)
 				val vTemp = vPath.parent!! / "${vPath.name}$TEMP_SUFFIX"
+				// What this key already occupied, so replacing a record is not counted twice.
+				val vPrevious = mFileSystem.metadataOrNull(vPath)?.size ?: 0L
 				try {
 					mFileSystem.createDirectories(mDirectory)
 					mFileSystem.sink(vTemp).buffer().use { vSink ->
@@ -127,7 +147,13 @@ class MetadataCache(
 					deleteQuietly(vTemp)
 					return@withLock
 				}
-				trimLocked()
+				val vWritten = mFileSystem.metadataOrNull(vPath)?.size ?: 0L
+				// Unknown until something measures it once: a fresh process inherits a directory
+				// it has never looked at, and assuming zero would let the cache grow past its
+				// ceiling until the first eviction.
+				val vTotal = (mTotalBytes ?: measuredBytes()) - vPrevious + vWritten
+				mTotalBytes = vTotal
+				if (vTotal > mMaxBytes() && isWorthSweeping(key)) trimLocked()
 			}
 		}
 	}
@@ -151,8 +177,11 @@ class MetadataCache(
 	suspend fun remove(key: CacheKey) {
 		withContext(mIoDispatcher) {
 			mWriteLock.withLock {
-				deleteQuietly(pathFor(key))
+				val vPath = pathFor(key)
+				val vSize = mFileSystem.metadataOrNull(vPath)?.size ?: 0L
+				deleteQuietly(vPath)
 				mAccessTimes.remove(key.fileName)
+				mTotalBytes = mTotalBytes?.let { (it - vSize).coerceAtLeast(0L) }
 			}
 		}
 	}
@@ -179,6 +208,7 @@ class MetadataCache(
 			mWriteLock.withLock {
 				entriesOnDisk().forEach { deleteQuietly(it.path) }
 				mAccessTimes.clear()
+				mTotalBytes = 0L
 			}
 		}
 	}
@@ -226,7 +256,15 @@ class MetadataCache(
 
 	/** Removes the mark, returning the record to ordinary eviction. */
 	suspend fun unpin(key: CacheKey) {
-		withContext(mIoDispatcher) { mWriteLock.withLock { deleteQuietly(markerFor(key)) } }
+		withContext(mIoDispatcher) {
+			mWriteLock.withLock {
+				deleteQuietly(markerFor(key))
+				// Something just became evictable, so a sweep that previously found nothing may
+				// now find this. Without the reset it would stay deferred until an unpinned
+				// record happened to be written.
+				mSweepFoundNothing = false
+			}
+		}
 	}
 
 	/** Whether [key] is protected from eviction. */
@@ -241,8 +279,11 @@ class MetadataCache(
 	 * settings screen that shows a limit should be able to say how much of it is spoken for.
 	 */
 	suspend fun pinnedBytes(): Long = withContext(mIoDispatcher) {
-		val vPinned = pinnedNames()
-		recordsOnDisk().filter { it.path.name in vPinned }.sumOf { it.sizeBytes }
+		val vAll = entriesOnDisk()
+		val vPinned = pinnedNamesIn(vAll)
+		vAll.filterNot { isMarker(it.path.name) }
+			.filter { it.path.name in vPinned }
+			.sumOf { it.sizeBytes }
 	}
 
 	// ==================
@@ -308,9 +349,15 @@ class MetadataCache(
 		withContext(mIoDispatcher) { mWriteLock.withLock { trimLocked() } }
 	}
 
-	/** [trim]'s body, for callers that already hold [mWriteLock]. */
+	/**
+	 * [trim]'s body, for callers that already hold [mWriteLock].
+	 *
+	 * Also the only place [mTotalBytes] is re-established from disk, which is why a caller that
+	 * has lost track of it can simply run this.
+	 */
 	private fun trimLocked() {
-		val vEntries = entriesOnDisk().toMutableList()
+		val vAll = entriesOnDisk()
+		val vEntries = vAll.toMutableList()
 
 		// Stray temp files are the debris of an interrupted write. They are never valid records, so
 		// they go first and do not count toward the budget.
@@ -325,12 +372,18 @@ class MetadataCache(
 
 		// Marker files are bookkeeping, not records. They are a few bytes at most, but they must not
 		// be treated as evictable entries or a pin would delete itself.
-		val vPinnedNames = pinnedNames()
+		// From the listing already taken. This used to walk the directory a second time, which
+		// doubled the cost of the one operation here that was already the expensive one.
+		val vPinnedNames = pinnedNamesIn(vAll)
 		vEntries.removeAll { it.path.name.endsWith(PIN_SUFFIX) || it.path.name.endsWith(COUNT_SUFFIX) }
 
 		val vCeiling = mMaxBytes()
 		var vTotal = vEntries.sumOf { it.sizeBytes }
-		if (vTotal <= vCeiling) return
+		mTotalBytes = vTotal
+		if (vTotal <= vCeiling) {
+			mSweepFoundNothing = false
+			return
+		}
 
 		// Least recently used first. An entry the cache has never recorded an access for sorts
 		// oldest, which is correct: it was written before this process started tracking.
@@ -346,6 +399,9 @@ class MetadataCache(
 			mAccessTimes.remove(vEntry.path.name)
 			vTotal -= vEntry.sizeBytes
 		}
+		mTotalBytes = vTotal
+		// Whether the sweep achieved anything decides whether the next one is worth running.
+		mSweepFoundNothing = vTotal > vCeiling
 	}
 
 	// ============
@@ -361,6 +417,56 @@ class MetadataCache(
 	 */
 	private val mAccessTimes = mutableMapOf<String, Long>()
 
+	/**
+	 * What the records currently occupy, or `null` when nothing has measured it yet.
+	 *
+	 * In memory and per process, like [mAccessTimes], and for the same reason: the alternative is
+	 * a directory walk, and that walk is the cost this exists to avoid. Seeded by the first write
+	 * that needs it and re-established exactly by every sweep, so it can drift only if something
+	 * outside this class changes the directory -- and the ceiling bounds incidental browsing, it
+	 * is not an accounting guarantee.
+	 */
+	private var mTotalBytes: Long? = null
+
+	/** The real figure, from disk. One directory walk. */
+	private fun measuredBytes(): Long = recordsOnDisk().sumOf { it.sizeBytes }
+
+	/**
+	 * Whether a sweep could achieve anything, given what is being written.
+	 *
+	 * The cache is over its ceiling; the question is whether walking the directory would free
+	 * anything, and the answer is knowable without walking it.
+	 *
+	 * A sweep that already failed means everything on disk is pinned, and pinned records are never
+	 * evicted -- the ceiling gives way by design. Writing *another pinned* record cannot change
+	 * that, so re-walking the directory for it is pure cost. That is the download case, and it is
+	 * the one that hurt: measured after the first fix, an import still spent 30 ms a write over
+	 * its last fifty, re-sweeping a cache with nothing in it to reclaim.
+	 *
+	 * Writing an **unpinned** record does change it -- that record is evictable, and it is exactly
+	 * what the ceiling exists to evict -- so that always sweeps.
+	 *
+	 * This replaced a byte-margin heuristic ("wait until 8 MB more has accumulated"), which was
+	 * wrong for the same reason heuristics usually are: it also deferred the sweep that should
+	 * have thrown away the first unpinned record after a download. A test written for that case
+	 * failed immediately, which is how this rule came to be exact rather than approximate.
+	 */
+	private fun isWorthSweeping(key: CacheKey): Boolean =
+		!mSweepFoundNothing || !mFileSystem.exists(markerFor(key))
+
+	/**
+	 * Whether the last sweep got under the ceiling.
+	 *
+	 * False after a sweep that could not, which happens only when the excess is entirely pinned.
+	 * Cleared by any successful sweep and by [unpin], so releasing a set takes effect on the next
+	 * write rather than being suppressed by a stale reading.
+	 */
+	private var mSweepFoundNothing: Boolean = false
+
+	/** Pins, counts and half-written temporaries are bookkeeping, not records. */
+	private fun isMarker(name: String): Boolean =
+		name.endsWith(PIN_SUFFIX) || name.endsWith(COUNT_SUFFIX) || name.endsWith(TEMP_SUFFIX)
+
 	private fun touch(key: CacheKey) {
 		mAccessTimes[key.fileName] = mClock()
 	}
@@ -371,8 +477,8 @@ class MetadataCache(
 
 	private fun countFor(key: CacheKey): Path = mDirectory / (key.fileName + COUNT_SUFFIX)
 
-	/** The record names that carry a pin marker, from one listing. */
-	private fun pinnedNames(): Set<String> = entriesOnDisk()
+	/** The record names that carry a pin marker, from a listing the caller already has. */
+	private fun pinnedNamesIn(entries: List<DiskEntry>): Set<String> = entries
 		.asSequence()
 		.map { it.path.name }
 		.filter { it.endsWith(PIN_SUFFIX) }
@@ -386,11 +492,7 @@ class MetadataCache(
 	 * a record. Counting them makes `entryCount` report more than is held and lets a trim consider
 	 * deleting a marker -- which would quietly unprotect the very thing it marks.
 	 */
-	private fun recordsOnDisk(): List<DiskEntry> = entriesOnDisk().filterNot {
-		it.path.name.endsWith(PIN_SUFFIX) ||
-			it.path.name.endsWith(COUNT_SUFFIX) ||
-			it.path.name.endsWith(TEMP_SUFFIX)
-	}
+	private fun recordsOnDisk(): List<DiskEntry> = entriesOnDisk().filterNot { isMarker(it.path.name) }
 
 	private fun entriesOnDisk(): List<DiskEntry> = try {
 		if (!mFileSystem.exists(mDirectory)) {
@@ -445,6 +547,7 @@ class MetadataCache(
 		private const val COUNT_SUFFIX: String = ".n"
 
 		const val TEMP_SUFFIX = ".tmp"
+
 	}
 }
 
