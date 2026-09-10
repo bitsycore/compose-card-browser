@@ -241,17 +241,6 @@ fun DownloadKindDialog(
 						?.let { "About ${megabytes(it, THUMBNAIL_BYTES)} MB. Enough to browse the grid offline." }
 						?: "The small rendition the grid draws.",
 				)
-				Spacer(Modifier.height(8.dp))
-				Text(
-					// Stated rather than offered, the same way the bulk file is. The reason is the
-					// same too: it is not this project's CDN to draw hundreds of megabytes from for
-					// pictures nobody asked to see.
-					text = "Full-size art is not downloaded in bulk. It is fetched and kept when " +
-						"you open a card, so the ones you read end up on the device and the ones " +
-						"you scroll past cost nothing.",
-					style = MaterialTheme.typography.bodySmall,
-					color = MaterialTheme.colorScheme.onSurfaceVariant,
-				)
 				if (vChoosable) {
 					Spacer(Modifier.height(14.dp))
 					HorizontalDivider()
@@ -261,11 +250,10 @@ fun DownloadKindDialog(
 						style = MaterialTheme.typography.labelLarge,
 					)
 					Text(
-						// The asymmetry, said plainly. Card info is cheap and switching language on
+						// The asymmetry, in one line. Card info is cheap and switching language on
 						// a card you already have is the point of downloading it; pictures are a
-						// request per card per language and almost nobody wants all of them.
-						text = "Card info is downloaded in all ${languages.size} languages this " +
-							"set was printed in. Pick which of them to fetch thumbnails for.",
+						// request per card per language.
+						text = "Info comes in all ${languages.size}. Pick the thumbnail languages.",
 						style = MaterialTheme.typography.bodySmall,
 						color = MaterialTheme.colorScheme.onSurfaceVariant,
 					)
@@ -299,39 +287,19 @@ fun DownloadKindDialog(
 					}
 				}
 
-				if (bulkBytes != null && setCount > 1) {
+				if (setCount > 1) {
 					Spacer(Modifier.height(12.dp))
 					Text(
-						// Stated, not offered. The source publishes this file so that clients stop
-						// walking its API a set at a time, and it is not our API to decide to
-						// hammer instead -- so where a dump exists it is the only way the whole
-						// game's records are fetched, and there is no control here to opt out.
-						// Per-set fetching is untouched for a single set, where one request is
-						// obviously cheaper than 75 MB.
-						text = "Card info for the whole game arrives as a single file rather " +
-							"than $setCount separate requests, because that is what the source " +
-							"publishes it for. Art is not in the file and is still fetched per set.",
+						// Only for a queue, and only because it is genuinely a surprise: 988 sets
+						// one at a time is hours, and that should be known before starting rather
+						// than discovered from a badge that will not go down. For a single set
+						// there is nothing to warn about, so nothing is said.
+						text = "$setCount sets, downloaded one at a time. This takes a while; " +
+							"you can keep browsing or stop it from the downloads button.",
 						style = MaterialTheme.typography.bodySmall,
 						color = MaterialTheme.colorScheme.onSurfaceVariant,
 					)
 				}
-
-				Spacer(Modifier.height(12.dp))
-				Text(
-					text = if (setCount > 1) {
-						// The honest warning. A queue of 988 sets is hours of work against someone
-						// else's free API, and the user should know that before starting, not
-						// discover it from a badge that will not go down.
-						"$setCount sets will be queued and downloaded one at a time, to stay " +
-							"within what these free APIs allow. That can take a long while. You " +
-							"can keep browsing, and you can stop it from the downloads button."
-					} else {
-						"Downloads run one set at a time, to stay within what these free APIs " +
-							"allow. You can keep browsing while one runs."
-					},
-					style = MaterialTheme.typography.bodySmall,
-					color = MaterialTheme.colorScheme.onSurfaceVariant,
-				)
 			}
 		},
 		confirmButton = {
