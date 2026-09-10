@@ -1,14 +1,5 @@
 .gradle/
 build/
-# Gradle's output directories are `build/`, and so is one of the three folders
-# under tools/, which is a real one holding the release script. The rule above
-# matches a directory of that name at any depth, so it swallowed tools/build
-# whole: `dist.py` is named by both the README and CLAUDE.md as how a release
-# is cut and has never been committed, because `git status` never mentioned it.
-# The directory has to be re-included rather than its contents: git does not
-# descend into an excluded directory, so a rule naming a file inside one is
-# never even read.
-!tools/build/
 local.properties
 .kotlin/
 .idea/
@@ -16,7 +7,6 @@ local.properties
 captures/
 .externalNativeBuild/
 .cxx/
-tools/mapdata/liberty_source.json
 __pycache__/
 *.pyc
 
@@ -26,44 +16,16 @@ xcuserdata/
 *.xcuserdatad/
 .DS_Store
 
-# Signing keys, never commit
+# Signing keys, never commit. This project signs debug builds with AGP's own
+# per-machine debug keystore and has no release signing config, so there is no
+# key here that is meant to be shared.
 *.jks
 *.keystore
-# Except the development key, which is committed so every machine signs the
-# same way and an APK from one installs over an APK from another. It is not a
-# store key: its password is in androidApp/build.gradle.kts.
-!androidApp/key0.jks
 
-# The device save tools/build/push_save.sh copies out before it pushes. It is a
-# player's own save, it is next to the caller because sqlite3 here is a Windows
-# binary that cannot read /tmp, and two of them were committed once by accident.
-mapexplore-device-*.db
-.mapexplore-push.tmp.db
-
-# The server's own environment: the compose file reads it and it holds a password.
-# .env.example is committed and is the one to copy.
-.env
-
-# Local APK outputs
-androidApp/release/
-androidApp/debug/
-dist/
-
-# Screenshots pulled off a device while measuring. They are evidence for one
-# afternoon, not for the repository.
-emu.png
-crop.png
-*-check.png
-
-# atrace captures pulled by tools/bench/bench_trace.sh, hundreds of megabytes each
-trace.txt
-# The raw Overpass answer, cached so the POI pipeline can be re-measured without
-# asking a public API the same very large question again. Regenerable, 17 MB, and
-# nine polite requests to somebody else's server
-tools/mapdata/data/overpass_raw.json
-
-# Scratch space for provider research: captured API responses and device screenshots.
+# Scratch space for provider research: captured API responses and device
+# screenshots. Evidence for one afternoon, not for the repository.
 .research/
 
-# Built APKs kept outside build/ so a clean does not delete them. Binaries stay out of git.
+# Built APKs kept outside build/ so a clean does not delete them. Binaries stay
+# out of git.
 /dist/

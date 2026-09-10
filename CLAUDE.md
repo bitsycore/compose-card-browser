@@ -100,7 +100,7 @@ Follow the user's global conventions (Spirtech prefixes, tabs, KDoc). Specifical
 
 ```bash
 ./gradlew build -x lint          # everything, all four targets, including both iOS ones
-./gradlew desktopTest            # the deterministic suite (752 tests)
+./gradlew desktopTest            # the deterministic suite (412 tests on 2026-09-10)
 ./gradlew :androidApp:assembleDebug
 ./gradlew :composeApp:run        # desktop
 ```
@@ -195,9 +195,10 @@ error message lists the wrong set of languages, and Riftcodex's `/cards/search` 
 search. Record findings in `docs/PROVIDER_RESEARCH.md` with the date checked.
 
 **Artwork:** a game's logo belongs to the game module; a set's symbol comes from the provider. The
-test is whether swapping the provider would change the image. Five bundled logos are
-licence-checked Wikimedia Commons files; two were supplied by the project owner from third-party
-sites and carry no verified licence — that distinction is documented and should not be flattened.
+test is whether swapping the provider would change the image. **Three** bundled logos are
+licence-checked Wikimedia Commons files; **seven** were supplied by the project owner from
+third-party sites and carry no verified licence — that distinction is documented in `GameArt`'s
+KDoc, which owns the detail, and should not be flattened.
 
 ---
 

@@ -195,10 +195,7 @@ fun App() {
 
 					is Route.Search -> NavEntry(vRoute) {
 						SearchScreen(
-							// A route naming a game this build no longer routes resolves to null in
-							// the view model, which shows an error rather than crashing on a
-							// restored back stack -- and rather than silently opening Riftbound,
-							// which is what the old fallback did.
+							// Same null-game handling as the route above.
 							game = GameId(vRoute.game),
 							onBack = { vBackStack.removeLastOrNull() },
 							onOpenCard = { vCard ->
@@ -278,24 +275,6 @@ fun App() {
 // ==================
 
 /**
- * A cross-fade between screens, with the container's size left alone.
- *
- * `sizeTransform = null` is the whole point of writing this by hand. Both `fadeIn() togetherWith
- * fadeOut()` and the three-argument `ContentTransform` default to a live `SizeTransform()`, which
- * animates the container's bounds and clips its content to them -- that is the "unfolding out of the
- * top-left corner" effect, and it is not a fade at all.
- *
- * It is actively harmful here. The card artwork is a shared element flying from a grid tile to the
- * detail screen along its own path; a container simultaneously growing and clipping cuts that flight
- * in half and, under a predictive-back scrub where the two run at whatever progress the finger is
- * at, produces something that looks broken. With the size animation gone the container simply fades
- * and the shared element is the only thing moving, which is the point of having one.
- *
- * @param zIndex 1 to bring the arriving screen over the one it replaces, which is what a push looks
- *   like; 0 to leave the departing screen on top and let it dissolve to reveal what is underneath,
- *   which is what a pop looks like
- */
-/**
  * Forward: the arriving screen slides in from the end, the leaving one drifts a quarter out.
  *
  * A quarter rather than the full width, which is the Material forward pattern: the outgoing screen
@@ -353,6 +332,24 @@ private fun heldStill(zIndex: Float): ContentTransform =
 		sizeTransform = null,
 	)
 
+/**
+ * A cross-fade between screens, with the container's size left alone.
+ *
+ * `sizeTransform = null` is the whole point of writing this by hand. Both `fadeIn() togetherWith
+ * fadeOut()` and the three-argument `ContentTransform` default to a live `SizeTransform()`, which
+ * animates the container's bounds and clips its content to them -- that is the "unfolding out of the
+ * top-left corner" effect, and it is not a fade at all.
+ *
+ * It is actively harmful here. The card artwork is a shared element flying from a grid tile to the
+ * detail screen along its own path; a container simultaneously growing and clipping cuts that flight
+ * in half and, under a predictive-back scrub where the two run at whatever progress the finger is
+ * at, produces something that looks broken. With the size animation gone the container simply fades
+ * and the shared element is the only thing moving, which is the point of having one.
+ *
+ * @param zIndex 1 to bring the arriving screen over the one it replaces, which is what a push looks
+ *   like; 0 to leave the departing screen on top and let it dissolve to reveal what is underneath,
+ *   which is what a pop looks like
+ */
 private fun <T : Any> fadeThrough(
 	zIndex: Float,
 ): AnimatedContentTransitionScope<Scene<T>>.() -> ContentTransform = {

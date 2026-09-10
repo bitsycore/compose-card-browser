@@ -1,7 +1,6 @@
 package com.bitsycore.cardbrowser.ui.sets
 
 import androidx.lifecycle.viewModelScope
-import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.data.download.DownloadKind
 import com.bitsycore.cardbrowser.core.model.GameId

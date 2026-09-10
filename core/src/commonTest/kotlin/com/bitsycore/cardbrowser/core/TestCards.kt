@@ -51,16 +51,6 @@ object TestCards {
 		externalIds = mapOf(ExternalIdKey.CARDMARKET_EXPANSION to listOf("6289")),
 	)
 
-	/** A set with no release date, to prove those sort last rather than crashing. */
-	val UNDATED = CardSet(
-		id = SourceId(PROVIDER, "undated"),
-		game = TestGame.id,
-		code = "PR",
-		name = "Riftbound Promotional Cards",
-		cardCount = 13,
-		releaseDate = null,
-	)
-
 	/**
 	 * A printing, with everything defaulted to the common Riftbound case.
 	 *

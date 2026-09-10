@@ -5,10 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,14 +20,13 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SearchOff
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
@@ -48,9 +45,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import com.bitsycore.cardbrowser.ui.common.sharedSetContainer
@@ -61,7 +58,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -250,7 +246,7 @@ fun CardGridContent(
 					},
 					navigationIcon = {
 						IconButton(onClick = onBack) {
-							Icon(Icons.Outlined.ArrowBack, contentDescription = "Back to sets")
+							Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back to sets")
 						}
 					},
 					actions = {
@@ -353,7 +349,7 @@ fun CardGridContent(
 				vState.isInitialLoad -> LoadingState(Modifier.padding(vPadding))
 
 				vState.cards.isEmpty() && vState.error != null -> ErrorState(
-					error = vState.error!!,
+					error = vState.error,
 					onRetry = { dispatch(CardGridContract.Intent.Load) },
 					modifier = Modifier.padding(vPadding),
 				)
@@ -381,7 +377,17 @@ fun CardGridContent(
 	}
 
 	if (vState.isFilterSheetOpen) {
-		val vSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+		// `rememberBottomSheetState`, not the deprecated `rememberModalBottomSheetState`. The
+		// states the sheet may take are now listed rather than expressed as a skip flag, and
+		// omitting `PartiallyExpanded` is what `skipPartiallyExpanded = true` used to say: this
+		// sheet is a filter panel, and a half-height filter panel is a worse filter panel.
+		// The second argument is the set of states the sheet may take, and leaving
+		// `PartiallyExpanded` out of it is what `skipPartiallyExpanded = true` used to say. Passed
+		// positionally because the parameter is unnamed in the published API.
+		val vSheetState = rememberBottomSheetState(
+			SheetValue.Hidden,
+			setOf(SheetValue.Hidden, SheetValue.Expanded),
+		)
 		ModalBottomSheet(
 			onDismissRequest = { dispatch(CardGridContract.Intent.FilterSheetToggled(false)) },
 			sheetState = vSheetState,

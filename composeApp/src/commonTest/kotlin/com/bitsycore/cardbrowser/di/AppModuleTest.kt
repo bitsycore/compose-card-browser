@@ -5,7 +5,13 @@ import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
 import com.bitsycore.cardbrowser.core.provider.CardProvider
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.cache.AppStorage
-import com.bitsycore.cardbrowser.data.net.HttpClientFactory
+import com.bitsycore.cardbrowser.data.cache.CacheManager
+import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.download.DownloadManager
+import com.bitsycore.cardbrowser.data.repository.CardRepository
+import com.bitsycore.cardbrowser.data.repository.SetCatalogueWarmer
+import com.bitsycore.cardbrowser.data.settings.PreferencesStore
+import com.bitsycore.cardbrowser.ui.browse.BrowseSession
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -15,6 +21,7 @@ import okio.Path.Companion.toPath
 import okio.fakefilesystem.FakeFileSystem
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 /**
@@ -73,12 +80,19 @@ class AppModuleTest {
 	}
 
 	@Test
-	fun `every adapter is a distinct instance -- not the same one seven times`() {
+	fun `every adapter is a distinct instance -- not one of them repeated`() {
 		val vProviders = graph().getAll<CardProvider<GameProfile>>()
 
 		val vIds = vProviders.map { it.id.value }
-		assertEquals(vIds.size, vIds.distinct().size, "Duplicate provider ids: $vIds")
-		assertTrue(vIds.size >= 7, "Expected all seven adapters, got $vIds")
+		assertEquals(vIds.size, vIds.distinct().size, "Duplicate provider ids: ${'$'}vIds")
+		// Against the routing table rather than a literal. The count was written as "seven" and
+		// has moved twice since, and a stale floor is a check that stops checking: three adapters
+		// could have been dropped and `>= 7` would still have passed.
+		assertEquals(
+			providerRoutes.map { it.provider }.distinct().size,
+			vIds.size,
+			"Expected one instance per routed adapter, got ${'$'}vIds",
+		)
 	}
 
 	@Test
@@ -119,8 +133,11 @@ class AppModuleTest {
 	fun `a game with no adapter is not offered at all`() {
 		val vRegistry = graph().get<ProviderRegistry>()
 
-		// Cyberpunk TCG is deliberately absent -- the game is unreleased and no data source for it
-		// exists. There is no longer an enum for it to be absent *from*: a game exists because a
+		// Duel Masters is the game deliberately absent -- measured, and recorded in
+		// `docs/PROVIDER_RESEARCH.md`: no source has both images and coverage. (Cyberpunk TCG used
+		// to be the example here and stopped being one when TCGplayer opened category 92, which is
+		// why this illustration is worth keeping current.) There is no longer an enum for a game
+		// to be absent *from*: a game exists because a
 		// `:games:*` module declares it and the routing table routes it, so an unserved game is
 		// simply a module nobody wrote, and the switcher cannot show it.
 		assertEquals(
@@ -190,21 +207,58 @@ class AppModuleTest {
 					vVisual.logoTintDarkArgb != null,
 				"$vGame tints over a plate without saying what the dark theme gets",
 			)
-			// A plate is a statement about artwork. Declaring one with nothing to put on it means
-			// a coloured rectangle with a generic glyph in the middle.
-			assertTrue(
-				vVisual.backdropArgb == null || vVisual.logo != null,
-				"${vGame.id} asks for a backdrop but has no logo to put on it",
-			)
+			// A plate needs a mark to put on it, and that one is enforced by the type rather
+			// than here: `GameArt.logo` is a non-null `DrawableResource`. There used to be an
+			// assertion for it and it was vacuous -- the compiler said so, "Condition is always
+			// 'true'" -- which is this codebase's own cardinal sin in test form: a check that
+			// claims something it cannot verify.
 		}
 	}
 
 	@Test
-	fun `the shared HTTP client is a single instance`() {
-		// Every adapter takes `get()` for its client. Seven clients would mean seven connection
-		// pools and seven copies of the image cache's transport.
+	fun `the two shared HTTP clients are each a single instance`() {
+		// There are deliberately three kinds of client in this graph, and the split is easy to
+		// undo by accident:
+		//
+		//  - the unnamed one, which is the image loader's -- see `InstallImageLoader`
+		//  - `named(PROVIDER_CLIENT)`, shared by the eight adapters that need no throttle
+		//  - two built inline by Scryfall and YGOPRODeck, because a rate limit is a fact about a
+		//    source and travels with it
+		//
+		// A duplicate of either shared one means two connection pools serving the same hosts, so
+		// both are pinned. The per-adapter pair is deliberately *not* -- being distinct is the
+		// point of them.
 		val vKoin = graph()
-		assertTrue(vKoin.get<io.ktor.client.HttpClient>() === vKoin.get<io.ktor.client.HttpClient>())
-		assertNotNull(HttpClientFactory.json)
+		assertTrue(
+			vKoin.get<io.ktor.client.HttpClient>() === vKoin.get<io.ktor.client.HttpClient>(),
+			"The image client must be one instance",
+		)
+		assertTrue(
+			vKoin.get<io.ktor.client.HttpClient>(named(PROVIDER_CLIENT)) ===
+				vKoin.get<io.ktor.client.HttpClient>(named(PROVIDER_CLIENT)),
+			"The shared provider client must be one instance",
+		)
+		assertTrue(
+			vKoin.get<io.ktor.client.HttpClient>() !==
+				vKoin.get<io.ktor.client.HttpClient>(named(PROVIDER_CLIENT)),
+			"The image client and the provider client must not be the same one",
+		)
+	}
+
+	@Test
+	fun `every application-scoped single resolves`() {
+		// The gap this closes: the file existed to catch wiring that compiles and passes every
+		// other test, and it only ever resolved the provider half of the graph. A missing binding
+		// under `CardRepository` or `DownloadManager` would have reached a device first.
+		val vKoin = graph()
+
+		assertNotNull(vKoin.get<CardRepository>())
+		assertNotNull(vKoin.get<CacheManager>())
+		assertNotNull(vKoin.get<MetadataCache>())
+		assertNotNull(vKoin.get<DownloadManager>())
+		assertNotNull(vKoin.get<SetCatalogueWarmer>())
+		assertNotNull(vKoin.get<PreferencesStore>())
+		assertNotNull(vKoin.get<BrowseSession>())
+		assertNotNull(vKoin.get<GameArtRegistry>())
 	}
 }

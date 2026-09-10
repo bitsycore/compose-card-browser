@@ -381,7 +381,6 @@ class RiftcodexProviderTest {
 		val vProvider = RiftcodexProvider(jsonClient("{}"))
 		val vCapabilities = vProvider.capabilities
 
-		// The game is in the type now, not in a `Set<Game>` the capabilities carried.
 		assertEquals(RiftboundGame, vProvider.game)
 
 		assertTrue(

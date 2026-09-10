@@ -12,7 +12,9 @@ import org.jetbrains.compose.resources.DrawableResource
 /**
  * Yu-Gi-Oh!
  *
- * Its logo is the one bundled mark that carries a licence requiring credit -- see [GameArt].
+ * Its logo is the publisher's own current mark, supplied by the project owner, and carries no
+ * verified licence. It used to be a CC BY Commons file whose credit the app displayed; that credit
+ * left with the file. [GameArt] owns the licence story for all ten logos.
  */
 object YuGiOhGame : GameProfile {
 

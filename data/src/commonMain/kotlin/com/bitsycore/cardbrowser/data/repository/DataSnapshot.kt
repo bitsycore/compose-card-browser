@@ -23,9 +23,6 @@ data class DataSnapshot<T>(
 	val error: ProviderError? = null,
 ) {
 
-	/** True when there is something to draw. */
-	val hasValue: Boolean get() = value != null
-
 	/** True when the screen should show a retry affordance beside whatever it is already showing. */
 	val hasRecoverableError: Boolean get() = error != null && value != null
 
@@ -71,7 +68,6 @@ enum class DataOrigin {
  * from part of the set and the UI must say so -- a filter applied to three of four pages is not
  * "the Fury cards in Origins", it is "the Fury cards among the 300 of Origins we have".
  *
- * @property matchedCount how many cards matched after filtering
  * @property knownSetSize the provider's own count for the whole set, when it states one
  * @property cachedCardCount how many cards of the set the app actually holds
  */
@@ -81,8 +77,6 @@ data class SetCards(
 	val knownSetSize: Int?,
 	val cachedCardCount: Int,
 ) {
-
-	val matchedCount: Int get() = cards.size
 
 	/** True when the app holds part of a set whose full size it knows. */
 	val isPartial: Boolean

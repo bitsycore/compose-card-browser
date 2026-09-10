@@ -11,12 +11,12 @@ is not shipped and the reason is recorded here rather than papered over with a s
 | Game | Source | Verified | Languages served | Shipped |
 | --- | --- | --- | --- | --- |
 | Riftbound | Riftcodex | 2026-09 | en | yes |
-| Pokémon | TCGdex | 2026-09-08 | fr, ja, en, ko | yes |
-| Magic: The Gathering | Scryfall | 2026-09-08 | fr, ja, en, ko | yes |
+| Pokémon | TCGdex | 2026-09-08 | all eleven the app knows | yes |
+| Magic: The Gathering | Scryfall | 2026-09-08 | all eleven the app knows | yes |
 | One Piece | OPTCG API | 2026-09-08 | en | yes |
 | Altered | Altered TCG Card Database (community mirror) | 2026-09-08 | fr, en | yes |
 | Cyberpunk TCG | TCGCSV category 92 | 2026-09-09 | none stated | yes |
-| Yu-Gi-Oh! | YGOPRODeck | 2026-09-08 | fr, ja, en, ko | yes |
+| Yu-Gi-Oh! | YGOPRODeck | 2026-09-08 | de, en, fr, it, ja, ko, pt | yes |
 | Wuthering Waves TCG | UCP `mc-api.ucp-jp.com` | 2026-09-09 | ja, zh-cn, ko | yes, bundled |
 | Disney Lorcana | TCGCSV category 71 | 2026-09-09 | none stated | yes |
 | World of Warcraft TCG | TCGCSV category 13 | 2026-09-09 | none stated | yes |
@@ -359,14 +359,17 @@ of what was requested.
 
 The list endpoint returns six fields per card. Rarity, attribute, cost, level, weapon, faction and
 the rules text exist **only** on `/web/card/info`, one card at a time, so assembling the catalogue
-costs 123 requests per locale — 357 for all three. Using the provider's own filters to tag cards in
+costs one request per card per locale — three times the size of the catalogue, and growing with
+it. Using the provider's own filters to tag cards in
 bulk would be far cheaper and does not work: `rarity_id` is silently ignored under every spelling
 tried, and `fee=0` means "no filter" rather than "costs zero", which would misreport the 31 cards
 that genuinely cost 0.
 
-For a game whose entire output is **128 printings**, that is a lot of somebody else's bandwidth to
-spend on every cold start. So the catalogue is scraped once, aligned across the three locales, and
-committed as a bundled asset, `providers/wuwa/src/commonMain/composeResources/files/wuwa-cards.json` (170 KB). `providers/wuwa/tools/scrape_wuwa.py`
+For a game this small — **184 records under 120 printed codes** as of the 2026-09-10 refresh,
+231 KB of JSON — that is a lot of somebody else's bandwidth to spend on every cold start. So the
+catalogue is scraped once, aligned across the three locales, and committed as a bundled asset,
+`providers/wuwa/src/commonMain/composeResources/files/wuwa-cards.json`. The figures here are dated
+because the game grows; `WuwaSnapshotFreshnessTest` is what notices. `providers/wuwa/tools/scrape_wuwa.py`
 regenerates it and documents the alignment rules; `WuwaSnapshotFreshnessTest` is an opt-in live
 check that asks UCP whether the file is still current.
 

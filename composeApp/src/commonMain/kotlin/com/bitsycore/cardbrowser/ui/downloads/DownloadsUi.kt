@@ -3,13 +3,11 @@ package com.bitsycore.cardbrowser.ui.downloads
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -17,7 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.DownloadDone
 import androidx.compose.foundation.layout.widthIn
@@ -30,10 +27,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,7 +39,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.model.GameId
@@ -60,16 +54,6 @@ import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 // MARK: Choosing what to download
 // ==================
 
-/**
- * Asks which parts of a set to put on disk.
- *
- * Two checkboxes rather than one button, because the two cost very different amounts and the
- * dialog says so in the same breath as offering them. Card records are a handful of small requests;
- * images are one per card against a CDN, which for a large set is hundreds of them.
- *
- * Card info is pre-selected and images are not: the cheap, useful half is the default, and the
- * expensive half is opted into.
- */
 /**
  * A dialog width that does not depend on what is inside it.
  *
@@ -94,6 +78,16 @@ private val STABLE_DIALOG = DialogProperties(usePlatformDefaultWidth = false)
 /** Wide enough for the longest of the three download descriptions, narrow enough to read. */
 private val MAX_DIALOG_WIDTH = 420.dp
 
+/**
+ * Asks which parts of a set to put on disk.
+ *
+ * Two checkboxes rather than one button, because the two cost very different amounts and the
+ * dialog says so in the same breath as offering them. Card records are a handful of small requests;
+ * images are one per card against a CDN, which for a large set is hundreds of them.
+ *
+ * Card info is pre-selected and images are not: the cheap, useful half is the default, and the
+ * expensive half is opted into.
+ */
 @Composable
 fun DownloadKindDialog(
 	setName: String,
@@ -113,9 +107,9 @@ fun DownloadKindDialog(
 	 * Offered as done rather than as a choice: re-downloading what you already have is almost never
 	 * what the tap meant. A "Download again" button unlocks them, because a re-download is
 	 * occasionally exactly what is wanted -- the image cache is an LRU and can be evicted from
-	 * underneath a record that still says the art came down.
+	 * underneath a record that still says the images came down.
 	 *
-	 * Only *complete* kinds belong here. A part-finished art download is still worth offering.
+	 * Only *complete* kinds belong here. A part-finished download is still worth offering.
 	 */
 	alreadyHave: Set<DownloadKind> = emptySet(),
 	/**
@@ -166,10 +160,10 @@ fun DownloadKindDialog(
 	// card is opened. See `DownloadKind`. Not pre-ticked.
 	var vThumbnails by remember(alreadyHave) { mutableStateOf(false) }
 
-	// Which languages the art is wanted in. Card info is not part of this: text records are small
-	// and a card is not much use in a language you cannot read *and* cannot switch to, so info is
-	// fetched in every language the set states. Images are the expensive half -- a full set's art
-	// is tens of megabytes -- so those are chosen.
+	// Which languages the thumbnails are wanted in. Card info is not part of this: text records
+	// are small and a card is not much use in a language you cannot read *and* cannot switch to,
+	// so info is fetched in every language the set states. Images are a request per card per
+	// language against someone else's CDN, so those are chosen.
 	val vChoosable = languages.size > 1
 	var vLanguages by remember(languages, defaultLanguage) {
 		mutableStateOf(
@@ -187,8 +181,8 @@ fun DownloadKindDialog(
 			// resizable. With eleven languages -- Pokémon and Magic both reach that -- the chips
 			// alone are five rows, and on a short viewport (landscape, a small handset, or a large
 			// system font) the whole "Image languages" block was clipped away while the Download
-			// button stayed enabled: art would be fetched in the default language with no way to
-			// reach the control that changes it.
+			// button stayed enabled: images would be fetched in the default language with no way
+			// to reach the control that changes it.
 			Column(Modifier.verticalScroll(rememberScrollState())) {
 				KindRow(
 					checked = vInfo && !vLocked(DownloadKind.CARD_INFO),
@@ -343,7 +337,7 @@ fun DownloadKindDialog(
 		confirmButton = {
 			TextButton(
 				// Nothing ticked is not a download, so the button is not offered as one -- and
-				// neither is art in no language at all.
+				// neither is imagery in no language at all.
 				enabled = (vInfo || vThumbnails) &&
 					(!vThumbnails || !vChoosable || vLanguages.isNotEmpty()),
 				onClick = {
@@ -360,8 +354,8 @@ fun DownloadKindDialog(
 		dismissButton = {
 			Row {
 				// Only where it can do something. The image cache is an LRU and can be evicted
-				// from under a record that still says the art came down, so re-downloading is a
-				// real need rather than a theoretical one.
+				// from under a record that still says the images came down, so re-downloading is
+				// a real need rather than a theoretical one.
 				if (alreadyHave.isNotEmpty() && !vRedownload) {
 					TextButton(onClick = { vRedownload = true }) { Text("Download again") }
 				}
@@ -421,16 +415,15 @@ private fun megabytes(cardCount: Int, bytesPerCard: Int): Int =
 	((cardCount.toLong() * bytesPerCard) / 1_000_000).toInt().coerceAtLeast(1)
 
 /**
- * Per-card image sizes, measured rather than guessed.
+ * The per-card thumbnail size, measured rather than guessed.
  *
  * Sampled on 2026-09-09 across three providers: TCGdex 19.5 KB thumbnail against 63 KB full,
  * Scryfall 47 against 67, YGOPRODeck 28 against 153. The means are about 32 KB and 94 KB, so a
- * thumbnail is roughly a quarter of the pair -- which is the whole reason the two are separate
- * choices rather than one.
+ * thumbnail is roughly a quarter of the full image -- which is why the thumbnail is the only
+ * rendition bulk-fetched at all. See `DownloadKind`.
  *
- * The spread is wide, so these are an order of magnitude and not a promise: Scryfall's two
- * renditions barely differ, and a provider with no small rendition at all fetches nothing for the
- * thumbnail option.
+ * The spread is wide, so this is an order of magnitude and not a promise: Scryfall's two
+ * renditions barely differ, and a provider with no small rendition at all fetches nothing.
  */
 private const val THUMBNAIL_BYTES = 32_000
 
@@ -457,87 +450,6 @@ fun DownloadsButton(jobs: List<DownloadJob>, onClick: () -> Unit) {
 				imageVector = if (vActive > 0) Icons.Outlined.Download else Icons.Outlined.DownloadDone,
 				contentDescription = if (vActive > 0) "$vActive downloads in progress" else "Downloads",
 			)
-		}
-	}
-}
-
-/** The queue, as a dialog: what is running, what is waiting, and what went wrong. */
-@Composable
-fun DownloadsDialog(
-	jobs: List<DownloadJob>,
-	onCancel: (String) -> Unit,
-	onCancelAll: () -> Unit,
-	onClearFinished: () -> Unit,
-	onDismiss: () -> Unit,
-) {
-	AlertDialog(
-		onDismissRequest = onDismiss,
-		modifier = dialogWidth(),
-		properties = STABLE_DIALOG,
-		title = { Text("Downloads") },
-		text = {
-			if (jobs.isEmpty()) {
-				Text("Nothing queued.")
-			} else {
-				LazyColumn(
-					// Bounded, or a long queue pushes the buttons off a phone screen.
-					modifier = Modifier.heightIn(max = 320.dp),
-					verticalArrangement = Arrangement.spacedBy(10.dp),
-				) {
-					items(jobs, key = { it.id }) { vJob -> DownloadRow(vJob, onCancel) }
-				}
-			}
-		},
-		confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-		dismissButton = {
-			Row {
-				if (jobs.any { !it.isActive }) {
-					TextButton(onClick = onClearFinished) { Text("Clear finished") }
-				}
-				if (jobs.any { it.isActive }) {
-					TextButton(onClick = onCancelAll) { Text("Stop all") }
-				}
-			}
-		},
-	)
-}
-
-/** One queue row: what it is, how far it has got, and a way to stop it. */
-@Composable
-private fun DownloadRow(job: DownloadJob, onCancel: (String) -> Unit) {
-	Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-		Column(Modifier.weight(1f)) {
-			Text(
-				text = job.request.setName,
-				style = MaterialTheme.typography.bodyLarge,
-				fontWeight = FontWeight.Medium,
-			)
-			Text(
-				text = describe(job),
-				style = MaterialTheme.typography.bodySmall,
-				color = if (job.status is DownloadStatus.Failed) {
-					MaterialTheme.colorScheme.error
-				} else {
-					MaterialTheme.colorScheme.onSurfaceVariant
-				},
-			)
-			val vProgress = job.progress
-			if (job.status is DownloadStatus.Running) {
-				Spacer(Modifier.height(6.dp))
-				if (vProgress == null) {
-					// The image count is not known until the card list lands. An indeterminate bar
-					// is the truthful shape; a determinate one at 0% would imply a known total.
-					LinearProgressIndicator(Modifier.fillMaxWidth())
-				} else {
-					LinearProgressIndicator(progress = { vProgress }, modifier = Modifier.fillMaxWidth())
-				}
-			}
-		}
-		if (job.isActive) {
-			Spacer(Modifier.width(8.dp))
-			IconButton(onClick = { onCancel(job.id) }) {
-				Icon(Icons.Outlined.Close, contentDescription = "Stop downloading ${job.request.setName}")
-			}
 		}
 	}
 }
@@ -631,37 +543,6 @@ private fun previewJob(
 	),
 	status = status,
 )
-
-@Preview
-@Composable
-private fun DownloadsDialogPreview() = PreviewFrame {
-	DownloadsDialog(
-		jobs = listOf(
-			previewJob("OGN", "Origins", DownloadStatus.Running(completed = 214, total = 704)),
-			previewJob("VEN", "Vendetta", DownloadStatus.Queued),
-			// The state the row exists to be honest about.
-			previewJob("SFD", "Spiritforged", DownloadStatus.Completed(288, 570, 6)),
-			previewJob("UNL", "Unleashed", DownloadStatus.Failed("No network connection")),
-		),
-		onCancel = {},
-		onCancelAll = {},
-		onClearFinished = {},
-		onDismiss = {},
-	)
-}
-
-@Preview
-@Composable
-private fun DownloadsDialogStartingPreview() = PreviewFrame(isDark = false) {
-	// Total unknown: an indeterminate bar rather than a determinate one stuck at zero.
-	DownloadsDialog(
-		jobs = listOf(previewJob("OGN", "Origins", DownloadStatus.Running(completed = 0, total = 0))),
-		onCancel = {},
-		onCancelAll = {},
-		onClearFinished = {},
-		onDismiss = {},
-	)
-}
 
 @Preview
 @Composable

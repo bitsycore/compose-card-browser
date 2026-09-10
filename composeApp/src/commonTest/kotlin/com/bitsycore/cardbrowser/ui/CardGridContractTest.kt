@@ -1,7 +1,5 @@
 package com.bitsycore.cardbrowser.ui
 
-import com.bitsycore.cardbrowser.core.game.GameProfile
-import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.core.provider.CardQuery

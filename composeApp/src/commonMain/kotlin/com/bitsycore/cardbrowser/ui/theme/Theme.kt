@@ -2,7 +2,10 @@ package com.bitsycore.cardbrowser.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -38,15 +41,31 @@ private val DARK_COLORS = darkColorScheme(
 /**
  * Wraps content in the app's theme.
  *
+ * ## Expressive, and why
+ *
+ * `MaterialExpressiveTheme` rather than plain `MaterialTheme`. The project is on material3
+ * 1.12.0-alpha03 -- bumped from 1.9.0 for the wavy progress indicators -- and was using exactly one
+ * component out of that, while every other component's motion still ran on the standard scheme.
+ * Supplying `MotionScheme.expressive()` here is what makes the springier durations apply to the
+ * whole app rather than to the one screen that opted in by hand.
+ *
+ * Shapes and typography are deliberately left at their defaults, for the same reason the colour
+ * scheme is barely touched: card art supplies all the character a browser needs, and hand-picking
+ * a shape scale is a good way to ship something that looks arbitrary.
+ *
  * @param useDarkTheme defaults to whatever the system is set to, so the app follows the platform
  *   rather than insisting on its own mode
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun CardBrowserTheme(
 	useDarkTheme: Boolean = isSystemInDarkTheme(),
 	content: @Composable () -> Unit,
 ) {
-	MaterialTheme(colorScheme = if (useDarkTheme) DARK_COLORS else LIGHT_COLORS) {
+	MaterialExpressiveTheme(
+		colorScheme = if (useDarkTheme) DARK_COLORS else LIGHT_COLORS,
+		motionScheme = MotionScheme.expressive(),
+	) {
 		// The app's floor, and it was missing.
 		//
 		// Every screen paints its own background through its `Scaffold`, which looks complete right

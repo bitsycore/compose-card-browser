@@ -1,6 +1,5 @@
 package com.bitsycore.cardbrowser.core.provider
 
-import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import kotlinx.datetime.LocalDate
 

@@ -14,7 +14,6 @@ import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
 import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
-import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.core.provider.SortDirection
 import com.bitsycore.cardbrowser.data.net.mapProviderErrors
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame

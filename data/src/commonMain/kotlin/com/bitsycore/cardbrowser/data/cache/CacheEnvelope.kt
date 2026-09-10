@@ -59,8 +59,15 @@ data class CacheEnvelope<T>(
 /**
  * What a cached record actually covers.
  *
- * A set list, a whole set of cards, one page of a set, or one card. Held as a sealed type rather
- * than a string so a page can never be filed where a complete set is expected.
+ * A set list, a whole set of cards, one card, one search, or one set's languages. Held as a sealed
+ * type rather than a string so a partial record can never be filed where a complete one is
+ * expected.
+ *
+ * **There is deliberately no page scope**, and there was one. Every provider declares
+ * `remote = emptySet()` for filtering, so a page is only ever a step towards a complete set --
+ * which is what gets cached. Caching pages as well would mean holding the same cards twice under
+ * two rules about how complete they are, and the failure that produces is the one this whole type
+ * exists to prevent: a filtered partial page served as if it were the set.
  */
 @Serializable
 sealed interface CacheScope {
@@ -77,21 +84,6 @@ sealed interface CacheScope {
 	 */
 	@Serializable
 	data class CompleteSet(val setId: String) : CacheScope
-
-	/**
-	 * One page of one set, for one query.
-	 *
-	 * [queryFingerprint] is part of the identity: a page of results for "fury, epic" is not a page
-	 * of the set, and serving one as the other is exactly the "filtered partial page presented as
-	 * complete" failure the app must not have.
-	 */
-	@Serializable
-	data class CardPage(
-		val setId: String,
-		val queryFingerprint: String,
-		val page: Int,
-		val pageSize: Int,
-	) : CacheScope
 
 	/** One card's detail record. */
 	@Serializable

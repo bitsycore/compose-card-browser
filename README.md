@@ -34,8 +34,9 @@ in detail. No backend: the apps talk to each game's card database directly over 
 | **Android** | Debug APK builds and runs on a real device. Game picker, set lists and card grids verified on screen. |
 | **iOS** | **Kotlin now compiles** for `iosArm64` and `iosSimulatorArm64`, from scratch, as part of `./gradlew build`. Linking the framework and building the Swift shell still need a Mac and have never been done. See [`iosApp/README.md`](iosApp/README.md). |
 
-**752 deterministic tests pass on every target** and `./gradlew build` is green end to end,
-including both iOS targets. See [Build, run, test](#build-run-test).
+**The deterministic suite passes and `./gradlew build` is green end to end**, including both iOS
+targets. `./gradlew desktopTest` ran 412 checks on 2026-09-10. See
+[Build, run, test](#build-run-test).
 
 The live provider checks are a separate story: **63 of 68 pass**. The five failures are all
 Scryfall and all `429 Rate limited` — not assertion failures. The client paces itself at 150 ms and
@@ -101,7 +102,7 @@ Then follow [`iosApp/README.md`](iosApp/README.md) to create the Xcode project.
 Everything deterministic, no network:
 
 ```bash
-./gradlew :core:desktopTest :data:desktopTest :providers:riftcodex:desktopTest :composeApp:desktopTest
+./gradlew desktopTest
 ```
 
 Or, more briefly, every check on every buildable target:
@@ -127,7 +128,9 @@ Each adapter has its own task:
 ./gradlew :providers:wuwa:liveProviderTest
 ```
 
-48 checks in total, all passing as of 2026-09-09. These are what catch a provider changing shape
+68 checks in total across the eight adapters, of which 63 passed on 2026-09-09 — the five
+failures are the Scryfall rate limiting described under [Status](#status), not assertion failures.
+These are what catch a provider changing shape
 underneath us — including a full round trip through the real API, the real disk cache, a local
 filter and an offline replay, and, for the two sources whose images are mirrored or undocumented, a
 direct check that the card art still loads.
@@ -145,7 +148,7 @@ dynamic versions, no `+`.
 | Android Gradle Plugin | 9.4.0 | `:androidApp:assembleDebug` produces an APK. |
 | Kotlin | 2.4.20 | Every module compiles; all tests run. |
 | Compose Multiplatform | 1.12.0 | Desktop app launched and browsed. |
-| Compose Material 3 | 1.9.0 | Every screen uses it. |
+| Compose Material 3 | 1.12.0-alpha03 | Every screen uses it. An alpha on purpose: it is the version that carries the Material 3 Expressive components, behind `ExperimentalMaterial3ExpressiveApi`. |
 | Pulse MVI | 0.3.7 | `com.bitsycore.lib:pulse{,-viewmodel,-compose,-test}` from `maven.bitsycore.com`. Real API confirmed against the published sources jar — the reducer lives on `ContainerContract`, and state is exposed as `stateFlow`, both of which differ from the README. |
 | Koin | 4.2.2 | Graph resolves; the desktop app runs from it. |
 | Ktor Client | 3.5.2 | OkHttp on Android, Darwin on iOS, Java on desktop. No Ktor Server anywhere. |
@@ -203,7 +206,7 @@ records what each check found, including the two that changed the design.
 | One Piece | [OPTCG API](https://optcgapi.com) | none stated | Data is plainly English; the source never says so, so nothing is claimed. |
 | Altered | [Altered TCG Card Database](https://github.com/PolluxTroy0/Altered-TCG-Card-Database) | fr, en | A community mirror. The official API is gone — see below. |
 | Yu-Gi-Oh! | [YGOPRODeck](https://ygoprodeck.com) | fr, ja, en, ko, de, it, pt | Sets are addressed by name; rarity is per printing. |
-| Wuthering Waves TCG | UCP `mc-api.ucp-jp.com` (bundled snapshot) | ja, zh-cn, ko | Undocumented internal endpoint with no stability promise, so the whole 128-card game is scraped and shipped. The only adapter that makes no requests for card data. |
+| Wuthering Waves TCG | UCP `mc-api.ucp-jp.com` (bundled snapshot) | ja, zh-cn, ko | Undocumented internal endpoint with no stability promise, so the whole game is scraped and shipped. The only adapter that makes no requests for card data. |
 | Disney Lorcana | [TCGCSV](https://tcgcsv.com) (category 71) | none stated | Ink, cost, Strength, Willpower, type and rules text. A better API exists and was rejected over its image format — see below. |
 | Cyberpunk TCG | [TCGCSV](https://tcgcsv.com) (category 92) | none stated | Pre-release: nine groups, all dated 6 November 2026. Colour, cost, Power, tags and rules text. |
 | World of Warcraft TCG | [TCGCSV](https://tcgcsv.com) (category 13) | none stated | **A name, a rarity and a 200x280 picture.** The thinnest source here, because the game died in 2013 and only a marketplace catalogue outlived it. |
@@ -488,9 +491,11 @@ art that arrived through ordinary browsing is not counted at all.
 
 ### Cross-set search
 
-Search every set of a game by card name. Five of the eight sources can search their whole catalogue;
-Riftbound and Altered cannot, so for those the app searches **only the sets already downloaded** and
-says exactly that, with a count of how many of the game's sets that was.
+Search every set of a game by card name. Most sources can search their whole catalogue. Riftcodex,
+the Altered mirror and TCGCSV cannot — TCGCSV has no search endpoint at all, only per-group product
+listings — so for Riftbound, Altered, Disney Lorcana, Cyberpunk TCG and the WoW TCG the app searches
+**only the sets already downloaded** and says exactly that, with a count of how many of the game's
+sets that was.
 
 The distinction is not cosmetic. A whole-catalogue search finding nothing means the card does not
 exist; a cache-scoped search finding nothing usually means you have never opened the set it is in.
@@ -539,8 +544,8 @@ and it separates a provider's API host from its image CDN.
 | Grid tile minimum width | 108 dp | Columns adapt to the window; this keeps art legible on a phone. |
 | Search debounce | 300 ms | |
 | Retries | 2 extra attempts, exponential, transient failures only | A 4xx is never retried. |
-| Default sort | Natural collector number, ascending. Tapping the selected sort again reverses it |
-| Rarity order | Common → Uncommon → Rare → Epic → Showcase | Riftbound's own ladder. Providers supply rarity as a bare string with no ordering, and sorting those alphabetically puts Common between Uncommon and Epic. Unrecognised rarities sort last rather than being ranked. | |
+| Default sort | Natural collector number, ascending | Tapping the selected sort again reverses it. |
+| Rarity order | Common → Uncommon → Rare → Epic → Showcase | Riftbound's own ladder. Providers supply rarity as a bare string with no ordering, and sorting those alphabetically puts Common between Uncommon and Epic. Unrecognised rarities sort last rather than being ranked. |
 | Card language preference | French → Japanese → English → Korean, then the other seven | As specified for the first four. A preference, not a claim: what a given source can actually serve is its own capability, and the set list only offers languages that set was really printed in. |
 | Seller country, minimum condition | **Unset** | Buying preferences, deliberately not chosen. |
 
@@ -627,11 +632,16 @@ the inline image and the fullscreen viewer now decode at source resolution.
 
 ### Not verified
 
-- **iOS has never been compiled.** No Mac, no Xcode, and Kotlin/Native cannot target Apple platforms
-  from Windows. The Kotlin and Swift are written; whether they link is unknown. There is no
-  `.xcodeproj` — see [`iosApp/README.md`](iosApp/README.md) for why, and for the setup steps.
-- **The Android APK was never installed or run.** It builds; no device or emulator was available, so
-  nothing about its runtime behaviour has been observed. Desktop working proves nothing about it.
+- **iOS has never been linked or run.** The Kotlin/Native iOS targets *do* compile — `./gradlew
+  build -x lint` compiles `iosArm64` and `iosSimulatorArm64` here and in CI, and a Kotlin/Native-only
+  error has failed that build and been fixed. What has never happened is the rest: linking
+  `ComposeApp.framework`, building the Swift shell, and running any of it. That needs a Mac and
+  Xcode, neither of which this project has had. There is no `.xcodeproj` — see
+  [`iosApp/README.md`](iosApp/README.md) for why, and for the setup steps.
+- **Most of the Android app has not been watched running.** The debug APK builds, installs and runs
+  on a real device, and the game picker, set lists and card grids were verified on screen — but that
+  is where the observation stops. Nothing below those three screens, and nothing about the download
+  queue or the caches, has been seen on Android.
 - **Non-Latin text rendering is untested in practice.** French accents render correctly on desktop
   and are covered by tests (accent folding in search and sorting). Japanese and Korean cannot be
   tested because no integrated provider supplies any — there is no such text to render.
@@ -724,8 +734,8 @@ the inline image and the fullscreen viewer now decode at source resolution.
   the same 200–300 KB JPEG the detail screen does. Every other provider serves a small variant. The
   artwork records this by leaving `thumbnailUrl` null rather than pointing it at the full image.
 - **Wuthering Waves is a snapshot, not a live source.** Its list endpoint carries six fields per
-  card, so rarity, attribute, cost and rules text had to be fetched one card at a time — 357
-  requests to describe a game that ships 128 printings across three languages. That catalogue is now
+  card, so rarity, attribute, cost and rules text have to be fetched one card at a time — one
+  request per card per locale, three locales, for a game of a few hundred records. That catalogue is now
   scraped once, aligned across the locales, and committed as
   [`wuwa-cards.json`](providers/wuwa/src/commonMain/composeResources/files/wuwa-cards.json) — a Compose Multiplatform resource, so it ships on every
   target including iOS. The adapter makes no

@@ -8,9 +8,9 @@ import androidx.compose.ui.unit.Density
 import coil3.ColorImage
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
+import coil3.annotation.DelicateCoilApi
 import coil3.intercept.Interceptor
 import coil3.request.ErrorResult
-import coil3.request.ImageResult
 import coil3.request.SuccessResult
 import coil3.decode.DataSource
 import com.bitsycore.cardbrowser.core.model.Artwork
@@ -38,6 +38,7 @@ import kotlin.test.assertTrue
  * and fails the ones the test wants failed. `ImageComposeScene` draws into a Skia surface with no
  * window, and the scene is rendered repeatedly to let the load coroutines run between frames.
  */
+@OptIn(DelicateCoilApi::class)
 class ImageFallbackTest {
 
 	private val mRequested = CopyOnWriteArrayList<String>()

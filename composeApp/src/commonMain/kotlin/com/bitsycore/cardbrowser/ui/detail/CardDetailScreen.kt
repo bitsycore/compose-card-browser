@@ -35,10 +35,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -203,7 +203,7 @@ fun CardDetailContent(
 				},
 				navigationIcon = {
 					IconButton(onClick = onBack) {
-						Icon(Icons.Outlined.ArrowBack, contentDescription = "Back to cards")
+						Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back to cards")
 					}
 				},
 				scrollBehavior = vScrollBehavior,
@@ -674,7 +674,7 @@ private fun CardDetailPage(
 				Spacer(Modifier.height(4.dp))
 				OutlinedButton(onClick = onOpenCardmarket, modifier = Modifier.fillMaxWidth()) {
 					Icon(
-						imageVector = Icons.Outlined.OpenInNew,
+						imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
 						contentDescription = null,
 						modifier = Modifier.size(16.dp),
 					)

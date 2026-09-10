@@ -224,16 +224,6 @@ internal object ScryfallMapper {
 		)
 	}
 
-	/** Scryfall's one-letter colours, spelled out for the filter chips. */
-	private fun colourName(code: String): String = when (code.uppercase()) {
-		"W" -> "White"
-		"U" -> "Blue"
-		"B" -> "Black"
-		"R" -> "Red"
-		"G" -> "Green"
-		else -> code
-	}
-
 	/**
 	 * Which way a card is printed, from its layout.
 	 *

@@ -14,7 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Storage
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -35,7 +36,14 @@ import com.bitsycore.cardbrowser.core.provider.ProviderError
  * their own wording for "offline" or their own retry button.
  */
 
-/** A centred spinner, for when there is nothing at all to draw yet. */
+/**
+ * A centred spinner, for when there is nothing at all to draw yet.
+ *
+ * Material 3 Expressive's `LoadingIndicator` -- a morphing polygon rather than a sweeping arc.
+ * One edit here changes every data screen, which is the whole reason this composable exists
+ * rather than each screen drawing its own.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LoadingState(modifier: Modifier = Modifier) {
 	Column(
@@ -43,7 +51,7 @@ fun LoadingState(modifier: Modifier = Modifier) {
 		verticalArrangement = Arrangement.Center,
 		horizontalAlignment = Alignment.CenterHorizontally,
 	) {
-		CircularProgressIndicator()
+		LoadingIndicator()
 	}
 }
 

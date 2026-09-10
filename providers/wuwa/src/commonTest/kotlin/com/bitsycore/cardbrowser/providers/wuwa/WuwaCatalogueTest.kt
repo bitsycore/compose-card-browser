@@ -7,7 +7,6 @@ import com.bitsycore.cardbrowser.core.model.ExternalIdKey
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
-import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesGame
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

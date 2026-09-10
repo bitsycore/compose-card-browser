@@ -1,7 +1,6 @@
 package com.bitsycore.cardbrowser.ui.settings
 
 import androidx.lifecycle.viewModelScope
-import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.cache.CacheManager
 import com.bitsycore.cardbrowser.data.net.ApiCallStats

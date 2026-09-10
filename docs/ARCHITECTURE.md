@@ -18,11 +18,15 @@ Five, chosen so that each boundary stops something specific from leaking. Not on
    ↑                     The one place Compose's resources runtime is allowed below the UI.
 :games:*                 one module per game: its vocabulary, rarity ladder, Cardmarket
    ↑                     segment, logo and accent. riftbound, pokemon, magic, onepiece,
-                         altered, yugioh, wutheringwaves. Knows no endpoint.
+                         altered, yugioh, wutheringwaves, lorcana, cyberpunk, wowtcg.
+                         Knows no endpoint.
 :providers:*             one module per adapter: endpoints, DTOs, mapping, its own quirks.
-   ↑                     riftcodex, tcgdex, scryfall, optcg, altered, ygoprodeck, wuwa.
-                         Each depends on exactly one :games:* module and names it in its
-                         own type. None of them knows another provider exists.
+   ↑                     riftcodex, tcgdex, scryfall, optcg, altered, ygoprodeck, wuwa,
+                         tcgcsv. Each depends on exactly one :games:* module and names it
+                         in its own type -- except :providers:tcgcsv, which is one adapter
+                         over one API serving three games and therefore ships three
+                         CardProvider classes keyed by TCGplayer category. None of them
+                         knows another provider exists.
 :composeApp              Compose screens, Pulse view models, Koin wiring.
    ↑                     Targets android + desktop + iosArm64/iosSimulatorArm64.
 :androidApp              an Activity and an Application. Nothing else.
@@ -108,15 +112,29 @@ escapes an adapter. There is no global or cross-provider identity anywhere.
 ## The provider contract
 
 [`CardProvider`](../core/src/commonMain/kotlin/com/bitsycore/cardbrowser/core/provider/CardProvider.kt)
-is four members:
+is small, and the game it serves is in its **type** rather than in a parameter:
 
 ```kotlin
-val id: ProviderId
-val capabilities: ProviderCapabilities
-suspend fun listSets(game: Game): List<CardSet>
-suspend fun listCards(request: CardPageRequest): CardPage
-suspend fun cardDetail(id: SourceId): CardPrinting?
+interface CardProvider<out G : GameProfile> {
+    val id: ProviderId
+    val displayName: String
+    val game: G
+    val capabilities: ProviderCapabilities
+
+    suspend fun listSets(language: CardLanguage?): List<CardSet>
+    suspend fun listCards(request: CardPageRequest): CardPage
+    suspend fun cardDetail(id: SourceId, language: CardLanguage?): CardPrinting?
+
+    // Both defaulted, so an adapter implements one only when its source can do better
+    // than the default. See § "Adding a provider".
+    suspend fun confirmLanguages(setId: SourceId, candidates: Set<CardLanguage>): Set<CardLanguage>
+    suspend fun searchAllSets(request: CardSearchRequest): CardPage
+}
 ```
+
+A source that can hand over its whole catalogue in one download additionally implements
+[`BulkCatalogue`](../core/src/commonMain/kotlin/com/bitsycore/cardbrowser/core/provider/BulkCatalogue.kt),
+which is optional and separate for exactly that reason: two of the eight sources have one.
 
 ### Capabilities describe the source, coverage describes the fact
 
@@ -128,13 +146,18 @@ The most consequential field is the filtering split:
 
 ```kotlin
 FilterSupport(
-    remote   = setOf(TEXT),                                  // the provider does these
-    localOnly = setOf(DOMAIN, CARD_TYPE, RARITY, ENERGY_COST, ARTWORK_TREATMENT),
+    remote    = emptySet(),                                  // the provider does these
+    localOnly = setOf(TEXT, DOMAIN, CARD_TYPE, RARITY, COST),  // the app does these, in memory
 )
 ```
 
-A field in neither set is **not offered by the UI at all**. That is how Riftcodex ends up with no
-finish and no language filter without a single `if (provider is Riftcodex)` anywhere.
+A field in neither set is **not offered by the UI at all**. That is how a source with no finish
+data ends up with no finish filter, without a single `if (provider is ...)` anywhere.
+
+**No shipped adapter declares a remote filter**, and every one of them writes `remote = emptySet()`.
+The mechanism is kept for a source that can genuinely narrow server-side, but the repository fetches
+and caches a set whole for offline use, and filtering that in memory is instant where a round trip
+per filter chip is not.
 
 ### Errors, and cancellation
 
@@ -245,10 +268,10 @@ them by name.
 Two assertions have earned their place in every adapter's tests, because each caught a real bug:
 
 - **Ids must be unique across a page.** `LazyVerticalGrid` throws outright on a repeated key rather
-  than degrading, so a provider that issues one is a crash rather than a cosmetic problem. Wuthering
-  Waves nearly does: 36 of its 87 card codes carry two records each, so that adapter keys on the
-  code *and the rarity tier* -- the two records are one card printed at two rarities, with a
-  different illustration for each.
+  than degrading, so a provider that issues one is a crash rather than a cosmetic problem. The
+  worked example is Wuthering Waves, whose printed codes are not unique -- see `WuwaCatalogueTest`
+  for the assertion and CLAUDE.md for the trap. No count here on purpose: the snapshot grows, and
+  the last two numbers written down went stale within a fortnight.
 - **Omitting a language gets the app's *first preference*, not English.** `resolveLanguage(null)`
   walks `CardLanguage.PREFERENCE_ORDER`, so a source that carries French answers in French. A test
   written without an explicit language gets French names back and looks broken when it is not.
@@ -329,9 +352,10 @@ remote search means the card does not exist. An empty local search almost always
 never opened the set it is in — and on a fresh install, *every* local search is empty. The screen
 says which happened, and how many of the game's sets were actually looked at.
 
-Nothing about a search is cached. A search result is a slice of many sets under a query that will
-never be repeated verbatim; storing it under any key would either collide with the complete-set
-entries the rest of the app depends on being complete, or accumulate for ever.
+A search page **is** cached, under its own `CacheScope.Search` — the normalised needle, the
+provider, the language and the page — with the same TTL as card data. Its own scope, and that is
+the point: a slice of many sets under one query must never be reachable where a complete set is
+expected, and a sealed scope makes that a type error rather than a convention.
 
 ---
 
@@ -357,16 +381,18 @@ The state this app spends most of its time in is *"here is cached data **and** t
 A type that forces a choice between a value and an error cannot express it, and collapsing it either
 throws away usable data or hides a failure.
 
-`cards()` and `setList()` are flows that emit **at most twice**: the cached value, then the network
-result. A failed refresh re-emits the cached value with the error attached.
+`setList()` emits **at most twice**: the cached value, then the network result. `cards()` emits
+more than that on purpose — the cached value first, then one emission per page batch as a set is
+walked, and a final one carrying the complete set. See § Progressive loading. Either way a failed
+refresh re-emits the cached value with the error attached rather than replacing it.
 
 ### The completeness rule
 
 The single most important behaviour in `CardRepository`.
 
-Riftcodex filters remotely by text and nothing else. A filter on rarity therefore has to run
-locally — and running it against one page would produce results a user would reasonably read as
-"the whole set", which they are not.
+No provider here filters remotely — every adapter declares `remote = emptySet()`. So every filter
+runs locally, and running one against a single page would produce results a user would reasonably
+read as "the whole set", which they are not.
 
 So when a query needs a filter the provider cannot apply, the repository fetches **every page** of
 the set, caches it as `CacheScope.CompleteSet`, and filters that. When it cannot finish, it returns
@@ -374,10 +400,12 @@ what it has with `isCompleteSet = false` and the real set size beside it, and th
 
 > Filtered from 200 of 352 downloaded cards — not the whole set.
 
-A page is cached under `CacheScope.CardPage` with a query fingerprint, and a complete set only under
-`CacheScope.CompleteSet` with no query at all. Filing a filtered page where a complete set is
-expected is exactly the bug that would make every later filter silently wrong, so the scopes are a
-sealed type rather than a string.
+**A page is never cached.** Only the complete set is, under `CacheScope.CompleteSet` with no query
+at all. There used to be a `CacheScope.CardPage` carrying a query fingerprint and nothing ever wrote
+one — a page is only ever a step towards the complete set, so caching it would mean holding the same
+cards twice under two different rules about how complete they are. Filing a filtered page where a
+complete set is expected is exactly the bug that would make every later filter silently wrong, which
+is why the scopes are a sealed type rather than a string.
 
 ### Progressive loading
 

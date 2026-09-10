@@ -21,18 +21,6 @@ import okio.use
 // ==================
 
 /**
- * What the user chose while browsing, remembered across launches.
- *
- * Browsing preferences only. Buying preferences -- seller country, minimum condition -- are a
- * separate concern and are deliberately not modelled here: none has been chosen, and a default
- * would be a decision nobody made.
- *
- * @property lastSetId the set to reopen, source-qualified so it survives a provider change
- * @property preferredLanguages the card-language preference order. A preference, not a claim that
- *   any provider serves all of them
- * @property gridColumnPreference `null` lets the layout choose from the window width
- */
-/**
  * How much of one set's art a download actually brought down.
  *
  * @property fetched images that arrived
@@ -86,6 +74,17 @@ enum class ThemeMode(val label: String) {
 	}
 }
 
+/**
+ * What the user chose while browsing, remembered across launches.
+ *
+ * Browsing preferences only. Buying preferences -- seller country, minimum condition -- are a
+ * separate concern and are deliberately not modelled here: none has been chosen, and a default
+ * would be a decision nobody made.
+ *
+ * @property lastSetId the set to reopen, source-qualified so it survives a provider change
+ * @property preferredLanguages the card-language preference order. A preference, not a claim that
+ *   any provider serves all of them
+ */
 @Serializable
 data class BrowsingPreferences(
 	val lastSetId: String? = null,
@@ -132,7 +131,6 @@ data class BrowsingPreferences(
 	 * later installing a build without it does not corrupt the setting.
 	 */
 	val hiddenGames: Set<String> = emptySet(),
-	val gridColumnPreference: Int? = null,
 	/** Ceiling for downloaded card art. Applied when the image loader is built, so on next launch. */
 	val imageCacheLimitBytes: Long = DEFAULT_IMAGE_CACHE_LIMIT_BYTES,
 	/** Ceiling for cached card and set records. Applied on the next write. */

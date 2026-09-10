@@ -17,7 +17,7 @@ import com.bitsycore.cardbrowser.data.download.DownloadKind
 import com.bitsycore.cardbrowser.data.download.DownloadRequest
 import com.bitsycore.cardbrowser.data.download.DownloadStatus
 import com.bitsycore.cardbrowser.ui.downloads.DownloadKindDialog
-import com.bitsycore.cardbrowser.ui.downloads.DownloadsDialog
+import com.bitsycore.cardbrowser.ui.downloads.DownloadsScreen
 import com.bitsycore.cardbrowser.ui.theme.CardBrowserTheme
 import java.io.File
 import kotlin.test.Ignore
@@ -40,7 +40,13 @@ class DownloadRenderer {
 		vOut.mkdirs()
 
 		render(vOut, "downloads-queue-multilingual") {
-			DownloadsDialog(jobs = multilingualJobs(), onCancel = {}, onCancelAll = {}, onClearFinished = {}, onDismiss = {})
+			DownloadsScreen(
+				jobs = multilingualJobs(),
+				onBack = {},
+				onCancel = {},
+				onCancelAll = {},
+				onClearFinished = {},
+			)
 		}
 		render(vOut, "downloads-kind-dialog") {
 			DownloadKindDialog(

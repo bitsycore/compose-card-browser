@@ -77,12 +77,6 @@ class CacheManager(
 		mMetadataCache.trim()
 	}
 
-	/** Empties both. */
-	suspend fun clearAll() {
-		clearMetadata()
-		clearImages()
-	}
-
 	private fun directorySize(directory: Path): Long = try {
 		if (!mStorage.fileSystem.exists(directory)) {
 			0L
@@ -122,7 +116,4 @@ data class CacheUsage(
 	val metadataLimitBytes: Long,
 	val imageBytes: Long,
 	val imageLimitBytes: Long,
-) {
-
-	val totalBytes: Long get() = metadataBytes + imageBytes
-}
+)

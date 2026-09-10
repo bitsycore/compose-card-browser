@@ -245,7 +245,7 @@ class CardRepositoryTest {
 
 		val vFinal = vResult.last()
 		assertNotNull(vFinal.value, "a failed refresh must not erase valid cached data")
-		assertEquals("Origins", vFinal.value?.single()?.name)
+		assertEquals("Origins", vFinal.value.single().name)
 		assertIs<ProviderError.Offline>(vFinal.error)
 		assertTrue(vFinal.hasRecoverableError)
 	}
@@ -270,7 +270,7 @@ class CardRepositoryTest {
 		val vStorage = AppStorage(FakeFileSystem(), "/cache".toPath(), "/prefs".toPath()).also { it.prepare() }
 		val vRepository = CardRepository(
 			mRegistry = vRegistry,
-			mCache = MetadataCache(vStorage, Json {}, Dispatchers.Unconfined, mClock = { mNow }),
+			mCache = MetadataCache(vStorage, Json, Dispatchers.Unconfined, mClock = { mNow }),
 			mClock = { mNow },
 		)
 

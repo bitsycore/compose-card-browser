@@ -13,7 +13,6 @@ import kotlinx.coroutines.CompletableDeferred
 import okio.Path.Companion.toPath
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals

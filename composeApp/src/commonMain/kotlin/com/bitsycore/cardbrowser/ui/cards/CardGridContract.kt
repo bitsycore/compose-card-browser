@@ -9,7 +9,6 @@ import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.ProviderError
-import com.bitsycore.cardbrowser.core.provider.SortDirection
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.lib.pulse.container.ContainerContract
 
@@ -335,7 +334,4 @@ object CardGridContract :
 
 	/** Flips a value in or out of a set, which is what every filter chip does. */
 	fun <T> Set<T>.toggle(value: T): Set<T> = if (value in this) this - value else this + value
-
-	/** Whether [direction] is the descending one, for the sort toggle. */
-	fun isDescending(direction: SortDirection): Boolean = direction == SortDirection.DESCENDING
 }

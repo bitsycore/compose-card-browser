@@ -1,7 +1,6 @@
 package com.bitsycore.cardbrowser.ui.search
 
 import androidx.lifecycle.viewModelScope
-import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry

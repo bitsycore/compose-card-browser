@@ -19,10 +19,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.OfflinePin
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Style
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -48,7 +46,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,7 +72,6 @@ import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.Description
 import com.bitsycore.cardbrowser.data.settings.ImageDownloadRecord
 import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,7 +92,6 @@ import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.BulkImportProgress
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
-import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.ui.common.EmptyState
 import com.bitsycore.cardbrowser.ui.common.FastScroller
 import com.bitsycore.cardbrowser.ui.common.ErrorState
@@ -148,12 +144,13 @@ fun SetListScreen(
 		onDownload = { vSet, vKinds, vLanguages ->
 			// One job per language, because everything downstream is per language: a cache key
 			// embeds it and so does an image download record. Splitting here is what makes "card
-			// info in every language, art in the two you read" a thing the queue can express.
+			// info in every language, thumbnails in the two you read" a thing the queue can
+			// express.
 			//
 			// The two halves are treated differently on purpose. Card records are small and the
 			// whole point of having them is being able to switch language on a card you already
-			// hold, so those are fetched in every language the set states. Art is tens of megabytes
-			// a language, so it goes only where it was asked for.
+			// hold, so those are fetched in every language the set states. Thumbnails are a
+			// request per card per language, so they go only where they were asked for.
 			val vPrimary = vPreferences.preferences.value.primaryLanguage
 			// A set that states no languages gets one job in the user's own, which is exactly what
 			// happened before this existed -- see the note below on why `null` is not passed.
@@ -368,7 +365,7 @@ fun SetListContent(
 				// a hang -- and this one does not go through the download queue, so its button
 				// says nothing about it either.
 				vState.bulkProgress != null -> NoticeBanner(
-					text = bulkProgressText(vState.bulkProgress!!),
+					text = bulkProgressText(vState.bulkProgress),
 					onAction = null,
 				)
 				vState.error != null && vState.sets.isNotEmpty() -> NoticeBanner(
@@ -386,7 +383,7 @@ fun SetListContent(
 					vState.isInitialLoad -> LoadingState()
 
 					vState.sets.isEmpty() && vState.error != null -> ErrorState(
-						error = vState.error!!,
+						error = vState.error,
 						onRetry = { dispatch(SetListContract.Intent.Refresh) },
 					)
 
@@ -779,14 +776,18 @@ private fun SetRow(
 				downloadStatus?.isActive == true -> {
 					Spacer(Modifier.size(8.dp))
 					val vProgress = downloadStatus.progress
-					Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+					// Wavy, to agree with the Downloads screen. The reason is recorded there and
+					// applies just as much here: a long download that is progressing looks
+					// identical to a stalled one under a static indicator, and the wave moves on
+					// its own. This is the app's other live-download surface, so it should not
+					// read differently.
+					Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
 						if (vProgress == null) {
-							CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+							CircularWavyProgressIndicator(Modifier.size(24.dp))
 						} else {
-							CircularProgressIndicator(
+							CircularWavyProgressIndicator(
 								progress = { vProgress },
-								modifier = Modifier.size(20.dp),
-								strokeWidth = 2.dp,
+								modifier = Modifier.size(24.dp),
 							)
 						}
 					}
@@ -824,8 +825,8 @@ private fun SetRow(
 			}
 			// Two marks, because the two halves of a download are separately true: a set can have
 			// its records and none of its thumbnails, which is the common case after browsing it
-			// once. There is no third mark any more -- full-size art is not bulk-downloaded, so
-			// there is no state to report about it. See `DownloadKind`.
+			// once. Full-size art has no mark because it is never bulk-downloaded and so has no
+			// state to report -- see `DownloadKind`.
 			if (isSaved || images?.isEmpty == false) {
 				Spacer(Modifier.size(6.dp))
 				Row(verticalAlignment = Alignment.CenterVertically) {
@@ -939,10 +940,10 @@ private fun ImageMark(
 /**
  * A set's own symbol where its provider publishes one, and its code where none exists.
  *
- * Three of the seven sources supply real artwork -- Scryfall a symbol for all 988 of its paper
- * sets, TCGdex a logo for 157 of its 218, YGOPRODeck box art for many of its. The other four
- * publish nothing at all, and so do the sets those three skip, which is why the coloured monogram
- * below is a permanent fallback rather than a temporary one.
+ * Three of the sources supply real artwork -- Scryfall a symbol for all 988 of its paper sets,
+ * TCGdex a logo for 157 of its 218, YGOPRODeck box art for many of its. The rest publish nothing at
+ * all, and so do the sets those three skip, which is why the coloured monogram below is a permanent
+ * fallback rather than a temporary one.
  */
 @Composable
 private fun SetMark(set: CardSet, isHighlighted: Boolean) {
@@ -1017,10 +1018,10 @@ private fun SetMonogram(code: String, isHighlighted: Boolean) {
 /**
  * A stable colour for a set, derived from its code.
  *
- * Placeholder work, and deliberately so: none of the seven providers publishes a set symbol -- the
- * only image in any of their schemas is a card's own art -- so until one does, the alternative is a
- * column of identical grey tiles that are genuinely hard to tell apart when scrolling a catalogue
- * of several hundred Magic sets.
+ * The fallback for every source and every set that publishes no symbol of its own -- see
+ * [SetMark], which prefers a real one where it exists. Without this the alternative is a column of
+ * identical grey tiles that are genuinely hard to tell apart when scrolling a catalogue of several
+ * hundred Magic sets.
  *
  * Derived rather than random. The same set is the same colour on every launch and on every device,
  * because a mark that changes each time you look at it is worse than no mark: it teaches you

@@ -170,7 +170,7 @@ fun SearchContent(
 					vState.isLoading && vState.results.isEmpty() -> LoadingState()
 
 					vState.results.isEmpty() && vState.error != null -> ErrorState(
-						error = vState.error!!,
+						error = vState.error,
 						onRetry = { dispatch(SearchContract.Intent.Submit) },
 					)
 

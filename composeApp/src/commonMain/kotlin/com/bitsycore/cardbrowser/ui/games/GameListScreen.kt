@@ -2,7 +2,6 @@ package com.bitsycore.cardbrowser.ui.games
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,14 +14,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Style
 import androidx.compose.material.icons.outlined.Tune
@@ -41,12 +38,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -119,11 +112,18 @@ fun GameListScreen(
 ) {
 	val vState by viewModel.collectAsStateWithLifecycle()
 
+	// Resolved here rather than in the row, because `GameListContent` and everything under it must
+	// stay free of Koin: a preview has no graph and `koinInject` throws in one. `GameRow` used to
+	// call it directly, which made five of this file's six previews unrenderable. The sibling
+	// screens already hoist exactly like this -- see `SetListScreen`.
+	val vArtRegistry = koinInject<GameArtRegistry>()
+
 	GameListContent(
 		state = vState,
 		dispatch = viewModel::dispatch,
 		onOpenGame = onOpenGame,
 		onOpenSettings = onOpenSettings,
+		artFor = vArtRegistry::forGame,
 	)
 }
 
@@ -139,6 +139,14 @@ fun GameListContent(
 	dispatch: (GameListContract.Intent) -> Unit,
 	onOpenGame: (GameProfile) -> Unit = {},
 	onOpenSettings: () -> Unit = {},
+	/**
+	 * A game's logo and accent colour, supplied by the caller.
+	 *
+	 * A parameter rather than a `koinInject` in the row, so this composable and its previews need
+	 * no Koin graph. The default answers `null`, which `GameMark` already draws a fallback for --
+	 * so a preview shows the monogram rather than throwing.
+	 */
+	artFor: (GameProfile) -> GameArt? = { null },
 ) {
 	Scaffold(
 		topBar = {
@@ -227,6 +235,7 @@ fun GameListContent(
 								onOpenGame(vGame)
 							},
 							dispatch = dispatch,
+							art = artFor(vGame),
 						)
 					}
 
@@ -250,6 +259,7 @@ fun GameListContent(
 								canHide = true,
 								onClick = {},
 								dispatch = dispatch,
+								art = artFor(vGame),
 							)
 						}
 					}
@@ -303,8 +313,8 @@ private fun GameRow(
 	canHide: Boolean,
 	onClick: () -> Unit,
 	dispatch: (GameListContract.Intent) -> Unit,
+	art: GameArt?,
 ) {
-	val vArt = koinInject<GameArtRegistry>().forGame(game)
 	val vColors = if (isLastOpened) {
 		CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
 	} else {
@@ -343,7 +353,7 @@ private fun GameRow(
 			if (isEditing) {
 				ReorderHandle(handleModifier ?: Modifier)
 			}
-			GameMark(vArt)
+			GameMark(art)
 			Spacer(Modifier.size(14.dp))
 			Column(Modifier.weight(1f)) {
 				Text(
