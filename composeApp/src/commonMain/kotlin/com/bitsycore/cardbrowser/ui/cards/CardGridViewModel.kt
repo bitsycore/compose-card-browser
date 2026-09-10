@@ -69,29 +69,47 @@ class CardGridViewModel(
 					// evidence that only one exists.
 					val vSetId = SourceId.parse(intent.setId)
 					val vRecord = vSetId?.let { mRepository.setRecord(it, vGame.id) }
-					// Confirmed, not merely claimed: TCGdex's Korean catalogue names 95 sets and
-					// serves cards for none of them. See `CardRepository.languagesFor`.
-					val vSetLanguages = vSetId?.let { mRepository.languagesFor(it, vGame.id) }
-						?.takeIf { it.isNotEmpty() }
-						?: vProvider.capabilities.data.languages
 					val vPreferred = mPreferences.preferences.value.primaryLanguage
+					// What the *menu* may offer: the set's claim, or the source's list where it
+					// makes none. A claim, deliberately -- confirming it is what used to happen
+					// here and it is why opening a set was slow. See below.
+					val vClaimed = vRecord?.languages?.takeIf { it.isNotEmpty() }
+						?: vProvider.capabilities.data.languages
 					dispatch(
 						CardGridContract.Intent.CapabilitiesResolved(
 							supportedFilters = vProvider.capabilities.filtering.supported,
 							game = vGame,
-							languages = vSetLanguages,
-							// The same rule the set list's saved mark uses, so the two agree on
-							// which file this set lives in -- see `CardSet.languageFor` -- but over
-							// the confirmed languages, so a set is never opened in a language that
-							// has no cards.
-							language = vRecord?.copy(languages = vSetLanguages)
-								?.languageFor(vPreferred)
-								?: vPreferred.takeIf { it in vSetLanguages }
-								?: vProvider.resolveLanguage(null),
+							languages = vClaimed,
+							// Confirmed for *one* language rather than all of them.
+							//
+							// This used to call `languagesFor`, which probes the source once per
+							// candidate -- eleven requests to api.scryfall.com for a Magic set,
+							// run before the grid could draw anything, and run even when every
+							// card was already on disk. It was both the API pressure and the
+							// reason a downloaded set took seconds to open.
+							//
+							// `openingLanguageFor` answers from the cache where it can, one probe
+							// where it cannot, and only pays for the full confirmation when the
+							// preferred language really has nothing. The rule it protects is the
+							// same: a set is never opened in a language with no cards.
+							language = vSetId?.let {
+								mRepository.openingLanguageFor(it, vGame.id, vPreferred)
+							} ?: vProvider.resolveLanguage(vPreferred),
 						),
 					)
 				}
 				dispatch(CardGridContract.Intent.Load)
+			}
+			CardGridContract.Intent.LanguageOptionsRequested -> {
+				// The expensive confirmation, paid by someone looking at the menu rather than by
+				// everyone who opens a set. Cached by the repository, so a second look is free,
+				// and a set whose cards are on disk needs no request for the languages it holds.
+				val vState = stateFlow.value
+				val vGame = vState.game ?: return
+				val vSetId = SourceId.parse(vState.setId) ?: return
+				val vConfirmed = runCatching { mRepository.languagesFor(vSetId, vGame.id) }
+					.getOrDefault(emptySet())
+				dispatch(CardGridContract.Intent.LanguageOptionsResolved(vConfirmed))
 			}
 			CardGridContract.Intent.Load -> startLoad(debounce = false)
 			is CardGridContract.Intent.QueryChanged -> startLoad(debounce = intent.query.text != null)

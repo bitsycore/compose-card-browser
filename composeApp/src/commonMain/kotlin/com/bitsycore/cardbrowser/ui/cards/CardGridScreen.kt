@@ -274,6 +274,9 @@ fun CardGridContent(
 								onSelect = {
 									dispatch(CardGridContract.Intent.LanguageSelected(it))
 								},
+								onOpened = {
+									dispatch(CardGridContract.Intent.LanguageOptionsRequested)
+								},
 							)
 						}
 						// Search is a button beside filters rather than a field permanently occupying a
@@ -638,12 +641,21 @@ private fun LanguageMenu(
 	selected: CardLanguage?,
 	isBusy: Boolean,
 	onSelect: (CardLanguage) -> Unit,
+	/**
+	 * Called when the menu opens, so its options can be confirmed against the source.
+	 *
+	 * The list this opens with is the set's *claim*. Confirming it is a request per candidate --
+	 * eleven for a Magic set -- and doing that on every set open was both the API pressure and
+	 * the reason a downloaded set took seconds to draw. Here it is paid by someone who is
+	 * actually looking at the menu, and the answer narrows the list under them.
+	 */
+	onOpened: () -> Unit = {},
 ) {
 	var vIsOpen by remember { mutableStateOf(false) }
 
 	Box {
 		TextButton(
-			onClick = { vIsOpen = true },
+			onClick = { vIsOpen = true; onOpened() },
 			// Disabled while a switch is in flight, so a second tap cannot start a third load and
 			// leave the state describing an edition nobody asked for.
 			enabled = !isBusy,

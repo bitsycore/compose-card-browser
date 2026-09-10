@@ -69,6 +69,9 @@ class SetCardCountTest {
 
 	private var mNow = 10_000L
 
+	/** How many languages have been probed, so a test can assert what a set open costs. */
+	private var mProbeCount = 0
+
 	// ==================
 	// MARK: A source that translates only some of a set
 	// ==================
@@ -84,6 +87,7 @@ class SetCardCountTest {
 		override val id: ProviderId,
 		private val mSets: List<CardSet>,
 		private val mCountsByLanguage: Map<CardLanguage, Int>,
+		private val mOnProbe: (Int) -> Unit = {},
 	) : CardProvider<CountTestGame> {
 
 		override val displayName = "Partly translated"
@@ -122,11 +126,19 @@ class SetCardCountTest {
 
 		override suspend fun cardDetail(id: SourceId, language: CardLanguage?): CardPrinting? = null
 
-		/** What YGOPRODeck and TCGdex now do: ask, rather than assume the catalogue is complete. */
+		/**
+		 * What YGOPRODeck and TCGdex now do: ask, rather than assume the catalogue is complete.
+		 *
+		 * Counts one probe per candidate, the way a real adapter costs one request per candidate,
+		 * so a test can assert what opening a set actually spends.
+		 */
 		override suspend fun confirmLanguages(
 			setId: SourceId,
 			candidates: Set<CardLanguage>,
-		): Set<CardLanguage> = candidates.filterTo(mutableSetOf()) { (mCountsByLanguage[it] ?: 0) > 0 }
+		): Set<CardLanguage> {
+			mOnProbe(candidates.size)
+			return candidates.filterTo(mutableSetOf()) { (mCountsByLanguage[it] ?: 0) > 0 }
+		}
 	}
 
 	// ==================
@@ -282,6 +294,47 @@ class SetCardCountTest {
 		)
 	}
 
+	// ==================
+	// MARK: What opening a set costs
+	// ==================
+
+	@Test
+	fun `a set already on disk is opened without asking the source anything`() = runTest {
+		// The report was "opening a set hits api.scryfall.com twelve times". It did: the grid
+		// confirmed every language the source declares before it could draw, one request each,
+		// even when every card was already cached and the only thing left to fetch was images.
+		val vRepository = repository(english = 24, french = 4)
+		vRepository.cards(mSetId, CountTestGame.id, CardQuery(), CardLanguage.FRENCH).toList()
+		val vBefore = mProbeCount
+
+		val vLanguage = vRepository.openingLanguageFor(mSetId, CountTestGame.id, CardLanguage.FRENCH)
+
+		assertEquals(CardLanguage.FRENCH, vLanguage)
+		assertEquals(vBefore, mProbeCount, "a cached set must cost no language probes")
+	}
+
+	@Test
+	fun `a set not on disk costs one probe -- not one per language`() = runTest {
+		val vRepository = repository(english = 24, french = 4)
+		val vBefore = mProbeCount
+
+		val vLanguage = vRepository.openingLanguageFor(mSetId, CountTestGame.id, CardLanguage.FRENCH)
+
+		assertEquals(CardLanguage.FRENCH, vLanguage)
+		assertEquals(1, mProbeCount - vBefore, "one probe for the one language being opened")
+	}
+
+	@Test
+	fun `a language with nothing falls back -- and only then pays for the full list`() = runTest {
+		// Beyond the Brave: eight cards, none translated. The cheap path cannot answer, so the
+		// full confirmation runs -- and its result is what picks the language actually opened.
+		val vRepository = repository(english = 8, french = 0)
+
+		val vLanguage = vRepository.openingLanguageFor(mSetId, CountTestGame.id, CardLanguage.FRENCH)
+
+		assertEquals(CardLanguage.ENGLISH, vLanguage, "French has nothing, so English opens")
+	}
+
 	@Test
 	fun `an unknown game has nothing to say`() = runTest {
 		assertNull(
@@ -316,6 +369,7 @@ class SetCardCountTest {
 			id = mProviderId,
 			mSets = sets(),
 			mCountsByLanguage = mapOf(CardLanguage.ENGLISH to english, CardLanguage.FRENCH to french),
+			mOnProbe = { mProbeCount += it },
 		)
 		val vStorage = AppStorage(fileSystem, "/cache".toPath(), "/prefs".toPath()).also { it.prepare() }
 		return CardRepository(

@@ -186,7 +186,7 @@ data class BrowsingPreferences(
 		const val DEFAULT_IMAGE_CACHE_LIMIT_BYTES: Long = 1024L * 1024 * 1024
 
 		/** Matches `MetadataCache.DEFAULT_MAX_BYTES`, restated to avoid a cycle. */
-		const val DEFAULT_METADATA_CACHE_LIMIT_BYTES: Long = 256L * 1024 * 1024
+		const val DEFAULT_METADATA_CACHE_LIMIT_BYTES: Long = 1024L * 1024 * 1024
 
 		const val DEFAULT_PREFETCH_RADIUS: Int = 3
 

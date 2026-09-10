@@ -102,12 +102,17 @@ class CardDetailViewModel(
 		val vSet = if (vSetId != null) {
 			mRepository.setList(vGame.id, vLanguage).first().value
 				?.firstOrNull { it.id == vSetId }
-				// The set's *confirmed* languages replace its claimed ones, because that is what
-				// the language menu is built from. A set list's claim is not reliable enough to
-				// offer: TCGdex names 95 Korean sets and serves cards for none of them, so the
-				// menu offered Korean on every one of them and it had to be tried to find out.
+				// Narrowed by what is already on disk, and by nothing that costs a request.
+				//
+				// This used to call `languagesFor`, which probes the source once per candidate --
+				// eleven for a Magic set, on every card opened. The claim it replaced is not
+				// reliable (TCGdex names 95 Korean sets and serves cards for none of them), but
+				// paying eleven requests per card to improve a label is far worse than the label
+				// being optimistic. The grid confirms properly when its menu is opened, and that
+				// answer is cached, so this reads it for free when it is there.
 				?.let { vRecord ->
-					vRecord.copy(languages = mRepository.languagesFor(vRecord.id, vGame.id))
+					val vConfirmed = mRepository.cachedLanguagesFor(vRecord.id, vGame.id)
+					if (vConfirmed.isEmpty()) vRecord else vRecord.copy(languages = vConfirmed)
 				}
 		} else {
 			null

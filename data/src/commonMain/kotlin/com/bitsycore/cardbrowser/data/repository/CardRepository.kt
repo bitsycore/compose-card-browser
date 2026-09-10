@@ -1056,6 +1056,84 @@ class CardRepository(
 	}
 
 	/**
+	 * Which languages of [setId] are confirmed **without asking the source anything**.
+	 *
+	 * A language whose cards are already on disk is confirmed by definition: they are there
+	 * because the source served them. That is free to check -- one file-existence test per
+	 * candidate -- and it is the answer for every set the user has actually opened or downloaded.
+	 *
+	 * Exists because the probing version is expensive in a way that was invisible: Scryfall
+	 * declares eleven languages and its `confirmLanguages` is one `cards/random` request each, so
+	 * opening a set cost **eleven requests to api.scryfall.com** even when every card was already
+	 * cached and the only thing left to fetch was images from the CDN.
+	 */
+	suspend fun cachedLanguagesFor(setId: SourceId, game: GameId): Set<CardLanguage> {
+		val vProvider = mRegistry.byId(setId.provider) ?: return emptySet()
+		val vSet = setRecord(setId, game)
+		val vCandidates = vSet?.languages?.takeIf { it.isNotEmpty() }
+			?: vProvider.capabilities.data.languages
+		return vCandidates
+			.mapNotNull { effectiveLanguage(vProvider, it) }
+			.filterTo(mutableSetOf()) { mCache.exists(completeSetKey(vProvider, setId, it)) }
+	}
+
+	/**
+	 * The language to open [setId] in, for the cheapest evidence available.
+	 *
+	 * Three steps, and it stops at the first that answers:
+	 *
+	 * 1. **What is on disk.** A set held in the language it would open in opens in it, with no
+	 *    request at all. This is the case for anything downloaded or previously browsed.
+	 * 2. **One probe.** Otherwise the source is asked about *that one language*, which is one
+	 *    request rather than the eleven a full confirmation costs.
+	 * 3. **The full confirmation**, only when the preferred language turns out to have nothing --
+	 *    the case a Japan-only set or an untranslated new set falls into, where a menu has to be
+	 *    built anyway.
+	 *
+	 * The rule this protects is unchanged: a set is never opened in a language with no cards. It
+	 * is the cost of establishing that which changes, from eleven requests per set open to zero
+	 * for the ordinary case. See [languagesFor] for what step 3 does and why it is cached.
+	 */
+	suspend fun openingLanguageFor(
+		setId: SourceId,
+		game: GameId,
+		preferred: CardLanguage?,
+	): CardLanguage? {
+		val vProvider = mRegistry.byId(setId.provider) ?: return preferred
+		val vSet = setRecord(setId, game)
+		val vWanted = effectiveLanguage(vProvider, vSet?.languageFor(preferred) ?: preferred)
+			?: return null
+
+		// 1. Held on disk, so the source has already served it. No request.
+		if (mCache.exists(completeSetKey(vProvider, setId, vWanted))) return vWanted
+
+		// A confirmation already on disk answers without asking again, and is what step 3 leaves
+		// behind -- so the expensive path is paid at most once per set per TTL.
+		val vSerializer = CacheEnvelope.serializer(SetSerializer(serializer<CardLanguage>()))
+		mCache.read(setLanguagesKey(vProvider, setId), vSerializer)
+			?.takeIf { !it.isStale(mClock(), mSetListTtlMillis) }
+			?.payload
+			?.let { vConfirmed ->
+				return vConfirmed.firstOrNull { it == vWanted }
+					?: vSet?.copy(languages = vConfirmed)?.languageFor(preferred)
+					?: vConfirmed.firstOrNull()
+			}
+
+		// 2. One probe, for the one language that matters.
+		val vHasWanted = runCatching { vProvider.confirmLanguages(setId, setOf(vWanted)) }
+			.getOrNull()
+			// Unconfirmable is not absent -- a timeout says nothing about the printing. Opening
+			// it and letting the grid report an empty set is the honest outcome.
+			?: return vWanted
+		if (vWanted in vHasWanted) return vWanted
+
+		// 3. It really has nothing. Now the full list is worth its cost, and it is cached.
+		val vConfirmed = languagesFor(setId, game)
+		return vSet?.copy(languages = vConfirmed)?.languageFor(preferred)
+			?: vConfirmed.firstOrNull()
+	}
+
+	/**
 	 * The languages [setId] can really be browsed in, cached.
 	 *
 	 * Two narrowings, and both are needed:

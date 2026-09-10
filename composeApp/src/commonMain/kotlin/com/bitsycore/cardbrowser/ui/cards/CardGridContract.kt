@@ -198,6 +198,19 @@ object CardGridContract :
 			val language: CardLanguage?,
 		) : Intent
 
+		/**
+		 * The language menu was opened, so its options are worth confirming.
+		 *
+		 * Confirmation is a request per candidate -- eleven for a Magic set -- so it is paid when
+		 * a menu is actually looked at rather than on every set open. `CardRepository` caches the
+		 * answer, so this costs once per set per TTL and nothing at all for a set whose cards are
+		 * on disk.
+		 */
+		data object LanguageOptionsRequested : Intent
+
+		/** The confirmed list, replacing the claimed one the menu opened with. */
+		data class LanguageOptionsResolved(val languages: Set<CardLanguage>) : Intent
+
 		/** The user picked another edition of this set. */
 		data class LanguageSelected(val language: CardLanguage) : Intent
 
@@ -290,6 +303,17 @@ object CardGridContract :
 			// chosen must not undo their choice.
 			language = state.language ?: intent.language,
 		)
+
+		is Intent.LanguageOptionsRequested -> state
+
+		// Narrowing only. A confirmation that arrives after the user has already picked must not
+		// widen the menu back to the claim, and an empty answer is a failed probe rather than a
+		// set with no languages -- see `CardProvider.confirmLanguages`.
+		is Intent.LanguageOptionsResolved -> if (intent.languages.isEmpty()) {
+			state
+		} else {
+			state.copy(availableLanguages = intent.languages)
+		}
 
 		// The cards on screen are kept while the new edition loads. Blanking the grid to a spinner
 		// makes a switch that turns out to be impossible look like one that destroyed the set.
