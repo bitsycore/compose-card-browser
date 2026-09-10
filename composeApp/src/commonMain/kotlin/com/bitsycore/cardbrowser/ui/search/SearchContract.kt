@@ -62,6 +62,30 @@ object SearchContract :
 		/** True when more matched than are shown. */
 		val isTruncated: Boolean
 			get() = hasMore || (totalCount != null && totalCount > results.size)
+
+		/**
+		 * What was actually searched, or `null` when the search saw the whole catalogue.
+		 *
+		 * On the state rather than in the screen so it can be tested, which is how a false claim
+		 * got in: the sentence used to read "the N of M sets **you have downloaded** were
+		 * searched", and M is [knownSetCount] -- how many sets the *game* has. For Pokémon that
+		 * told the user they had downloaded 486 sets when they had downloaded two.
+		 *
+		 * The two numbers are both worth stating, just not as one possessive phrase: how much of
+		 * the game a local search could see is exactly the caveat this strip exists for.
+		 */
+		val coverageNotice: String?
+			get() = if (!isLimitedByCache) {
+				null
+			} else {
+				// No branch for an unknown catalogue size, because there is no such state to
+				// reach: [isLimitedByCache] requires `searchedSetCount < knownSetCount`, so a
+				// `knownSetCount` of zero makes this null before it gets here. The old wording
+				// carried that branch and it was dead -- a test written for it is what showed it.
+				"This source cannot search across sets, so only the $searchedSetCount " +
+					"${if (searchedSetCount == 1) "set" else "sets"} you have downloaded " +
+					"were searched, of $knownSetCount in ${game?.shortName ?: "this game"}."
+			}
 	}
 
 	sealed interface Intent {

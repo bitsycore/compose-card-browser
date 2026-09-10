@@ -869,6 +869,42 @@ class CardRepository(
 			.any { mCache.exists(completeSetKey(provider, set.id, it)) }
 	}
 
+	/**
+	 * Which languages of [sets] have their card records on disk, per set.
+	 *
+	 * The finer-grained answer that [savedSetIds] deliberately does not give. Both are wanted, for
+	 * different questions: a row badge asks "is any of this set here?", while the download dialog
+	 * asks "do I already have the edition I am about to fetch?" -- and answering the second with
+	 * the first was a real fault. Downloading Base Set fetched card info in all six languages it is
+	 * published in; reopening the dialog then showed "Card info" ticked and locked as already held
+	 * after only French had finished, so the other five could not be asked for again without
+	 * "Download again".
+	 *
+	 * Keyed by qualified set id, and only the languages a set actually states -- plus whichever it
+	 * would open in, which is the one a source that states none will have written under. A set with
+	 * no entry at all is absent from the map rather than mapping to an empty set, so "nothing
+	 * downloaded" and "nothing known" stay distinguishable.
+	 */
+	suspend fun savedLanguages(
+		game: GameId,
+		sets: List<CardSet>,
+		language: CardLanguage? = null,
+	): Map<String, Set<CardLanguage>> {
+		val vProvider = mRegistry.resolve(game, language) ?: return emptyMap()
+		val vResult = mutableMapOf<String, Set<CardLanguage>>()
+		for (vSet in sets) {
+			currentCoroutineContext().ensureActive()
+			val vCandidates = (vSet.languages + setOfNotNull(vSet.languageFor(language)))
+				.mapNotNull { effectiveLanguage(vProvider, it) }
+				.distinct()
+			val vHeld = vCandidates.filterTo(mutableSetOf()) {
+				mCache.exists(completeSetKey(vProvider, vSet.id, it))
+			}
+			if (vHeld.isNotEmpty()) vResult[vSet.id.qualified] = vHeld
+		}
+		return vResult
+	}
+
 	// ============
 	//  One set's record
 

@@ -1,5 +1,7 @@
 package com.bitsycore.cardbrowser.ui.downloads
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -126,15 +128,30 @@ fun DownloadKindDialog(
 	languages: List<CardLanguage> = emptyList(),
 	/** Ticked when the dialog opens. The user's own preference, where the set has it. */
 	defaultLanguage: CardLanguage? = null,
+	/**
+	 * Which languages already have their card records on disk.
+	 *
+	 * Named separately from [alreadyHave] because card info is not one purchase: it is fetched in
+	 * every language a set states, so a set can be half held. Shown, so the answer to "what have I
+	 * already got?" is a list of languages rather than a tick that means "some of them".
+	 */
+	infoLanguages: Set<CardLanguage> = emptySet(),
 ) {
 	// Ticking is a fresh decision each time the dialog opens, so it is keyed on what is already
 	// held: reopening after a download must not restore a tick for something now on disk.
 	var vRedownload by remember(alreadyHave) { mutableStateOf(false) }
-	val vLocked: (DownloadKind) -> Boolean = { it in alreadyHave && !vRedownload }
-
-	var vInfo by remember(alreadyHave) {
-		mutableStateOf(DownloadKind.CARD_INFO !in alreadyHave)
+	val vInfoComplete = infoIsComplete(alreadyHave, languages, infoLanguages)
+	val vLocked: (DownloadKind) -> Boolean = { vKind ->
+		when {
+			vRedownload -> false
+			// Held in *every* language, not merely in one. See [infoIsComplete].
+			vKind == DownloadKind.CARD_INFO -> vInfoComplete
+			else -> vKind in alreadyHave
+		}
 	}
+
+	val vInfoMissing = languages.filterNot { it in infoLanguages }
+	var vInfo by remember(alreadyHave, infoLanguages) { mutableStateOf(!vInfoComplete) }
 	// Thumbnails are the cheap useful half -- about a quarter of the image bytes, and enough to
 	// browse a set's grid offline -- so they sit above full art. Neither is pre-ticked.
 	var vThumbnails by remember(alreadyHave) { mutableStateOf(false) }
@@ -157,21 +174,50 @@ fun DownloadKindDialog(
 		properties = STABLE_DIALOG,
 		title = { Text(if (setCount > 1) "Download $setCount sets" else "Download $setName") },
 		text = {
-			Column {
+			// Scrollable, because this content is not a fixed height and the dialog is not
+			// resizable. With eleven languages -- Pokémon and Magic both reach that -- the chips
+			// alone are five rows, and on a short viewport (landscape, a small handset, or a large
+			// system font) the whole "Image languages" block was clipped away while the Download
+			// button stayed enabled: art would be fetched in the default language with no way to
+			// reach the control that changes it.
+			Column(Modifier.verticalScroll(rememberScrollState())) {
 				KindRow(
 					checked = vInfo && !vLocked(DownloadKind.CARD_INFO),
 					onCheckedChange = { vInfo = it },
 					enabled = !vLocked(DownloadKind.CARD_INFO),
-					done = DownloadKind.CARD_INFO in alreadyHave,
+					// The mark means "nothing left to fetch", so it follows completeness rather
+					// than presence -- otherwise a set held in one language of six looks finished.
+					done = vInfoComplete,
 					title = "Card info",
 					// Deliberately not "small": the honest thing is to say what it is, since a set
 					// with an unknown card count cannot be sized at all.
-					detail = when {
-						setCount > 1 && cardCount != null ->
-							"About $cardCount cards across $setCount sets. Names, numbers, " +
-								"rarities and rules text."
-						cardCount != null -> "$cardCount cards. Names, numbers, rarities and rules text."
-						else -> "Names, numbers, rarities and rules text."
+					detail = buildString {
+						append(
+							when {
+								setCount > 1 && cardCount != null ->
+									"About $cardCount cards across $setCount sets. Names, " +
+										"numbers, rarities and rules text."
+								cardCount != null ->
+									"$cardCount cards. Names, numbers, rarities and rules text."
+								else -> "Names, numbers, rarities and rules text."
+							},
+						)
+						// What is already here, by name. "We don't see what language is
+						// downloaded" was the report; a tick cannot answer it and a list can.
+						if (infoLanguages.isNotEmpty()) {
+							append("\nAlready have: ")
+							append(
+								CardLanguage.PREFERENCE_ORDER
+									.filter { it in infoLanguages }
+									.joinToString(", ") { it.displayName },
+							)
+							append(".")
+							if (vInfoMissing.isNotEmpty()) {
+								append(" Missing ")
+								append(vInfoMissing.joinToString(", ") { it.displayName })
+								append(".")
+							}
+						}
 					},
 				)
 				Spacer(Modifier.height(8.dp))
@@ -466,8 +512,37 @@ private fun DownloadRow(job: DownloadJob, onCancel: (String) -> Unit) {
 	}
 }
 
-/** One line saying exactly where a job stands. */
-private fun describe(job: DownloadJob): String {
+/**
+ * Whether there is any card info left to fetch for this set.
+ *
+ * The rule that was wrong, extracted so it can be tested. A download splits into one job per
+ * language and fetches card info in *every* language a set states, so "already have card info" is
+ * not a yes/no about the set -- it is a question about several editions. Locking the checkbox on
+ * presence meant one finished language read as done and the other five could be reached only
+ * through "Download again".
+ *
+ * [languages] empty means the source states none, and then presence is all there is to go on.
+ */
+internal fun infoIsComplete(
+	alreadyHave: Set<DownloadKind>,
+	languages: List<CardLanguage>,
+	infoLanguages: Set<CardLanguage>,
+): Boolean = DownloadKind.CARD_INFO in alreadyHave &&
+	(languages.isEmpty() || languages.all { it in infoLanguages })
+
+/**
+ * One line saying exactly where a job stands, and which edition it is.
+ *
+ * The language is not decoration here. A download splits into one job per language -- card info in
+ * every language a set states, art in the ones picked -- so a single tap on one set can put six
+ * jobs in this queue whose set name is identical. Without the language, four of them read
+ * "Base Set / Waiting · info" and there was no way to tell which was German and which Italian, nor
+ * which of them the failed one was.
+ *
+ * Omitted when the source states no language at all, which is most of them: naming one there would
+ * be inventing it.
+ */
+internal fun describe(job: DownloadJob): String {
 	val vWhat = job.request.kinds.sortedBy { it.ordinal }.joinToString(" + ") {
 		when (it) {
 			DownloadKind.CARD_INFO -> "info"
@@ -475,13 +550,15 @@ private fun describe(job: DownloadJob): String {
 			DownloadKind.FULL_ART -> "art"
 		}
 	}
+	val vWhere = job.request.language?.displayName
+	val vSuffix = if (vWhere == null) vWhat else "$vWhat · $vWhere"
 	return when (val vStatus = job.status) {
-		is DownloadStatus.Queued -> "Waiting · $vWhat"
+		is DownloadStatus.Queued -> "Waiting · $vSuffix"
 		is DownloadStatus.Running ->
 			if (vStatus.total <= 0) {
-				"Fetching card list · $vWhat"
+				"Fetching card list · $vSuffix"
 			} else {
-				"${vStatus.completed} of ${vStatus.total} images · $vWhat"
+				"${vStatus.completed} of ${vStatus.total} images · $vSuffix"
 			}
 		is DownloadStatus.Completed -> buildString {
 			append("${vStatus.cards} cards")
@@ -489,9 +566,12 @@ private fun describe(job: DownloadJob): String {
 			// Never rounded up to "done". A set that is four images short is not complete, and the
 			// user should find that out here rather than offline.
 			if (vStatus.imagesFailed > 0) append(" · ${vStatus.imagesFailed} failed")
+			if (vWhere != null) append(" · $vWhere")
 		}
-		is DownloadStatus.Failed -> vStatus.reason
-		DownloadStatus.Cancelled -> "Stopped"
+		// A failure needs it most: this is where the user finds out that the Italian art did not
+		// come down while the French did.
+		is DownloadStatus.Failed -> if (vWhere == null) vStatus.reason else "${vStatus.reason} · $vWhere"
+		DownloadStatus.Cancelled -> if (vWhere == null) "Stopped" else "Stopped · $vWhere"
 	}
 }
 
@@ -581,6 +661,23 @@ private fun DownloadKindDialogPartlyHeldPreview() = PreviewFrame {
 		setName = "Origins",
 		cardCount = 352,
 		alreadyHave = setOf(DownloadKind.CARD_INFO, DownloadKind.GRID_THUMBNAILS),
+		onDismiss = {},
+		onConfirm = { _, _ -> },
+	)
+}
+
+@Preview
+@Composable
+private fun DownloadKindDialogPartlyTranslatedPreview() = PreviewFrame(isDark = false) {
+	// Card info half held: French came down and the other two did not. The row has to say so and
+	// stay tickable, because it used to read as finished and lock the rest away.
+	DownloadKindDialog(
+		setName = "Base Set",
+		cardCount = 102,
+		alreadyHave = setOf(DownloadKind.CARD_INFO),
+		languages = listOf(CardLanguage.ENGLISH, CardLanguage.FRENCH, CardLanguage.GERMAN),
+		defaultLanguage = CardLanguage.FRENCH,
+		infoLanguages = setOf(CardLanguage.FRENCH),
 		onDismiss = {},
 		onConfirm = { _, _ -> },
 	)

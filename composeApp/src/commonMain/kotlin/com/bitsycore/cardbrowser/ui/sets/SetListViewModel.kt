@@ -172,6 +172,9 @@ class SetListViewModel(
 		dispatch(
 			SetListContract.Intent.SavedSetsResolved(
 				setIds = mRepository.savedSetIds(game, vSets, language),
+				// Per language as well as per set, because the dialog's question is "do I have the
+				// edition I am about to fetch?" and `setIds` only answers "is any of it here?".
+				savedLanguages = mRepository.savedLanguages(game, vSets, language),
 				// Read straight from preferences rather than measured: see
 				// `BrowsingPreferences.imageDownloads` for why the image side cannot be checked
 				// cheaply, and what the record therefore does and does not mean.

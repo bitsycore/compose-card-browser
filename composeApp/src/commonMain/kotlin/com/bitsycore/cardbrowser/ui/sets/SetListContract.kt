@@ -2,6 +2,7 @@ package com.bitsycore.cardbrowser.ui.sets
 
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.game.GameRegion
+import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.SetFavourites
 import com.bitsycore.cardbrowser.core.provider.ProviderError
@@ -96,6 +97,18 @@ object SetListContract :
 		 * over-claims. See `BrowsingPreferences.imageDownloads`.
 		 */
 		val imageDownloads: Map<String, SetImageStatus> = emptyMap(),
+		/**
+		 * Which languages of each set have card records on disk, by qualified set id.
+		 *
+		 * Finer than [savedSetIds], which answers only "is any edition of this here?". The
+		 * download dialog needs the finer answer: card info is fetched in *every* language a set
+		 * states, so holding French is not holding the set, and treating it as such ticked "Card
+		 * info" as already-held and hid the other five behind "Download again".
+		 *
+		 * A set with nothing on disk is absent rather than mapping to an empty set, so "none
+		 * downloaded" and "not yet resolved" stay distinguishable.
+		 */
+		val savedLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
 		/**
 		 * Which product line to show, or `null` for all of them.
 		 *
@@ -242,6 +255,7 @@ object SetListContract :
 		data class SavedSetsResolved(
 			val setIds: Set<String>,
 			val imageDownloads: Map<String, SetImageStatus> = emptyMap(),
+			val savedLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
 		) : Intent
 
 		/** A product line was picked, or `null` to see every line again. */
@@ -310,6 +324,7 @@ object SetListContract :
 					// Cleared with the list. Leaving them would tick rows of the new game whose
 					// ids happen to collide, and briefly claim the wrong sets are downloaded.
 					savedSetIds = emptySet(),
+					savedLanguages = emptyMap(),
 					search = "",
 					isLoading = true,
 					error = null,
@@ -325,6 +340,7 @@ object SetListContract :
 		is Intent.SavedSetsResolved -> state.copy(
 			savedSetIds = intent.setIds,
 			imageDownloads = intent.imageDownloads,
+			savedLanguages = intent.savedLanguages,
 		)
 
 		// Purely a view of what is already loaded: every line arrives in one request, so narrowing

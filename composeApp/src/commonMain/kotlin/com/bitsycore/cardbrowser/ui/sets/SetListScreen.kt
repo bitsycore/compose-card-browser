@@ -464,6 +464,7 @@ fun SetListContent(
 			onDismiss = { vPendingSet = null },
 			languages = vSet.languages.toList(),
 			defaultLanguage = preferredLanguage,
+			infoLanguages = vState.savedLanguages[vSet.id.qualified].orEmpty(),
 			onConfirm = { vKinds, vLanguages ->
 				onDownload(vSet, vKinds, vLanguages)
 				vPendingSet = null
@@ -499,6 +500,12 @@ fun SetListContent(
 			// worth offering -- the enqueue skips it for the sets that were never printed in it.
 			languages = vSets.flatMap { it.languages }.distinct(),
 			defaultLanguage = preferredLanguage,
+			// Only what *every* shown set already holds, for the same reason `alreadyHave` is an
+			// intersection: a language half the list is missing must stay fetchable.
+			infoLanguages = vSets
+				.map { vState.savedLanguages[it.id.qualified].orEmpty() }
+				.reduceOrNull { vAcc, vNext -> vAcc intersect vNext }
+				.orEmpty(),
 			onDismiss = { vPendingAll = false },
 			onConfirm = { vKinds, vLanguages ->
 				vSets.forEach { vSet -> onDownload(vSet, vKinds, vLanguages) }

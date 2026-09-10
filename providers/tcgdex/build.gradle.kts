@@ -50,6 +50,11 @@ kotlin {
 tasks.named<Test>("desktopTest") {
 	filter {
 		excludeTestsMatching("*LiveSmokeTest")
+		// The wiring check is live too, and excluding only `*LiveSmokeTest` let it run in the
+		// deterministic suite -- so an ordinary `./gradlew desktopTest` was making twelve requests
+		// to someone else's server and would fail on a train. Both patterns are listed rather than
+		// widened to `*Live*` so what is excluded stays readable.
+		excludeTestsMatching("*LanguageWiringTest")
 		isFailOnNoMatchingTests = false
 	}
 }

@@ -228,15 +228,8 @@ private fun CoverageNotice(
 			onAction = { dispatch(SearchContract.Intent.Submit) },
 		)
 
-		state.isLimitedByCache -> NoticeBanner(
-			text = if (state.knownSetCount > 0) {
-				"This source cannot search across sets, so only the " +
-					"${state.searchedSetCount} of ${state.knownSetCount} sets you have " +
-					"downloaded were searched."
-			} else {
-				"This source cannot search across sets, so only sets you have already " +
-					"downloaded were searched."
-			},
+		state.coverageNotice != null -> NoticeBanner(
+			text = state.coverageNotice.orEmpty(),
 			icon = Icons.Outlined.Storage,
 			onAction = null,
 		)
