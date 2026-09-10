@@ -17,6 +17,12 @@ import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
+import com.bitsycore.cardbrowser.core.provider.BulkCatalogue
+import okio.ByteString.Companion.encodeUtf8
+import okio.buffer
+import okio.use
+import com.bitsycore.cardbrowser.data.cache.AppStorage
+import kotlinx.serialization.json.Json
 import com.bitsycore.cardbrowser.data.cache.CacheEnvelope
 import com.bitsycore.cardbrowser.data.cache.CacheKey
 import com.bitsycore.cardbrowser.data.cache.CacheScope
@@ -57,6 +63,16 @@ class CardRepository(
 	private val mRegistry: ProviderRegistry,
 	private val mCache: MetadataCache,
 	private val mClock: () -> Long,
+	/**
+	 * Where a bulk import writes its scratch buckets, or `null` for a caller that has no storage.
+	 *
+	 * Optional because bulk is: a repository built without it simply reports no bulk support, the
+	 * same answer a game whose source publishes no dump gets. Every ordinary path is unaffected,
+	 * which is why the existing callers did not have to change.
+	 */
+	private val mStorage: AppStorage? = null,
+	/** Serialises the scratch buckets. The cache has its own; this is not shared with it. */
+	private val mJson: Json = Json { ignoreUnknownKeys = true },
 	private val mSetListTtlMillis: Long = DEFAULT_SET_LIST_TTL_MILLIS,
 	private val mCardsTtlMillis: Long = DEFAULT_CARDS_TTL_MILLIS,
 	/**
@@ -1125,6 +1141,145 @@ class CardRepository(
 			language?.code ?: "-",
 		)
 
+	// ==================
+	// MARK: Bulk import
+	// ==================
+
+	/**
+	 * Imports a provider's whole catalogue from its bulk file, writing one cached set at a time.
+	 *
+	 * For "download everything for this game" and nothing else. Browsing a single set stays on the
+	 * per-set path, which is cheaper for that job -- see [BulkCatalogue] for why.
+	 *
+	 * ## How the memory stays bounded
+	 *
+	 * Scryfall's dump is 598 MB of JSON, so nothing may hold it. The provider hands over one card
+	 * at a time; this appends each one, already mapped and therefore an order of magnitude smaller
+	 * than the source record, to a scratch file for its set. Only when the stream ends is each
+	 * scratch file read back and written as a cache entry -- so the high-water mark is one set's
+	 * worth of cards, a few hundred, rather than a hundred thousand.
+	 *
+	 * The obvious alternative -- a map of set to list, filled as the stream runs -- holds the whole
+	 * catalogue by the end. Measured against the mapped model rather than the source it would still
+	 * be tens of megabytes of live objects on a phone, which is the sort of thing that survives
+	 * testing and dies on someone's actual device.
+	 *
+	 * ## What it writes
+	 *
+	 * A complete-set record per set, pinned, exactly as a per-set download would leave it -- so a
+	 * bulk import and 988 individual downloads produce the same cache, and the set list marks them
+	 * saved by the same check. Sets the bulk file does not mention are left untouched.
+	 *
+	 * @return what happened, or `null` when this game's source publishes no bulk file
+	 */
+	suspend fun importBulk(
+		game: GameId,
+		language: CardLanguage? = null,
+		onProgress: (BulkImportProgress) -> Unit = {},
+	): BulkImportResult? {
+		val vStorage = mStorage ?: return null
+		val vProvider = mRegistry.resolve(game, language) ?: return null
+		val vBulk = vProvider as? BulkCatalogue ?: return null
+		val vLanguage = effectiveLanguage(vProvider, language)
+
+		// One request, for the names and codes. The bulk records carry a set *code* but not the
+		// catalogue's own metadata, and a set list written from cards alone would lose release
+		// dates and symbols that the ordinary path has.
+		val vSets = runCatching { vProvider.listSets(vLanguage) }.getOrDefault(emptyList())
+		val vSetsById = vSets.associateBy { it.id.qualified }
+
+		val vScratch = vStorage.cacheRoot / BULK_SCRATCH_DIR
+		val vBuckets = mutableMapOf<String, okio.BufferedSink>()
+		var vCards = 0
+
+		try {
+			vStorage.fileSystem.createDirectories(vScratch)
+			vBulk.streamAll(
+				language = vLanguage,
+				onBytes = { vDone, vTotal ->
+					onProgress(BulkImportProgress.Downloading(vDone, vTotal))
+				},
+			) { vCard ->
+				val vSink = vBuckets.getOrPut(vCard.setId.qualified) {
+					vStorage.fileSystem.sink(vScratch / bucketName(vCard.setId)).buffer()
+				}
+				vSink.writeUtf8(mJson.encodeToString(serializer<CardPrinting>(), vCard))
+				vSink.writeUtf8("\n")
+				vCards++
+				if (vCards % BULK_PROGRESS_EVERY == 0) {
+					onProgress(BulkImportProgress.Reading(vCards))
+				}
+			}
+		} finally {
+			// Closed before anything is read back, or the last writes are still in a buffer.
+			vBuckets.values.forEach { runCatching { it.close() } }
+		}
+
+		var vSetsWritten = 0
+		try {
+			for ((vQualified, _) in vBuckets) {
+				currentCoroutineContext().ensureActive()
+				val vSetId = SourceId.parse(vQualified) ?: continue
+				val vBucket = vScratch / bucketName(vSetId)
+				val vPrintings = readBucket(vStorage, vBucket)
+				if (vPrintings.isEmpty()) continue
+
+				// Pinned before the write, for the same reason a download is: writing runs a trim,
+				// and a set large enough to breach the ceiling would otherwise be evicted by the
+				// very write that stored it.
+				val vKey = completeSetKey(vProvider, vSetId, vLanguage)
+				mCache.pin(vKey)
+				mCache.write(
+					key = vKey,
+					envelope = CacheEnvelope(
+						schemaVersion = CacheEnvelope.CURRENT_SCHEMA_VERSION,
+						provider = vProvider.id,
+						language = vLanguage,
+						scope = CacheScope.CompleteSet(vSetId.qualified),
+						fetchedAtEpochMillis = mClock(),
+						// The bulk file is the whole catalogue by definition, so a set drawn from
+						// it is complete in a way a paged fetch has to prove.
+						completeness = Completeness.COMPLETE,
+						payload = dedupePrintings(vPrintings),
+					),
+					serializer = CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>())),
+				)
+				vSetsWritten++
+				onProgress(BulkImportProgress.Writing(vSetsWritten, vBuckets.size))
+			}
+		} finally {
+			runCatching { vStorage.fileSystem.deleteRecursively(vScratch) }
+		}
+
+		return BulkImportResult(
+			cards = vCards,
+			sets = vSetsWritten,
+			// Named so a screen can say "988 sets" against what the catalogue actually lists,
+			// rather than implying the import covered sets it never saw.
+			knownSets = vSetsById.size,
+		)
+	}
+
+	/** Reads one set's scratch file back into printings, skipping any line that will not parse. */
+	private fun readBucket(storage: AppStorage, path: okio.Path): List<CardPrinting> {
+		if (!storage.fileSystem.exists(path)) return emptyList()
+		val vOut = mutableListOf<CardPrinting>()
+		storage.fileSystem.source(path).buffer().use { vSource ->
+			while (true) {
+				val vLine = vSource.readUtf8Line() ?: break
+				if (vLine.isBlank()) continue
+				runCatching { mJson.decodeFromString(serializer<CardPrinting>(), vLine) }
+					.getOrNull()
+					?.let(vOut::add)
+			}
+		}
+		return vOut
+	}
+
+	/** A filesystem-safe scratch name per set. Hashed, because a set code is not a filename. */
+	private fun bucketName(setId: SourceId): String =
+		setId.qualified.encodeUtf8().sha256().hex() + ".jsonl"
+
 	/**
 	 * Protects a downloaded set's records from cache eviction, or releases them.
 	 *
@@ -1144,6 +1299,12 @@ class CardRepository(
 		CacheKey.of("v${CacheEnvelope.CURRENT_SCHEMA_VERSION}", provider.id.value, "set", setId.qualified, language?.code ?: "-")
 
 	companion object {
+
+		/** Scratch directory for a bulk import's per-set buckets. Deleted when the import ends. */
+		private const val BULK_SCRATCH_DIR = "bulk-scratch"
+
+		/** How often to report while sorting cards into sets. Often enough to move, rarely enough not to thrash. */
+		private const val BULK_PROGRESS_EVERY = 2_000
 
 		/**
 		 * Newest first, and sets with no stated release date last.
@@ -1223,4 +1384,25 @@ class CardRepository(
 		 */
 		private const val SEARCH_PAGE_SIZE = 60
 	}
+}
+
+/** What a bulk import did. */
+data class BulkImportResult(
+	val cards: Int,
+	val sets: Int,
+	/** How many sets the catalogue lists, so a screen can say what share was covered. */
+	val knownSets: Int,
+)
+
+/** Where a bulk import has got to. Three phases, because they have very different durations. */
+sealed interface BulkImportProgress {
+
+	/** Fetching the file. [total] is null until the source states a length. */
+	data class Downloading(val bytes: Long, val total: Long?) : BulkImportProgress
+
+	/** Reading it back and sorting cards into sets. */
+	data class Reading(val cards: Int) : BulkImportProgress
+
+	/** Writing the cached sets. */
+	data class Writing(val sets: Int, val total: Int) : BulkImportProgress
 }

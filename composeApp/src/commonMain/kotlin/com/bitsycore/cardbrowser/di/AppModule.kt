@@ -147,6 +147,9 @@ val appModule = module {
 				stats = get(),
 				httpCache = get<OkioHttpCacheStorage>(),
 			),
+			// Scryfall is the only source here that publishes a bulk dump, and the import needs
+			// somewhere to put 75 MB while it reads it. See `ScryfallBulk`.
+			mStorage = get(),
 		)
 	} bind CardProvider::class
 	single { OptcgProvider(mClient = get(named(PROVIDER_CLIENT))) } bind CardProvider::class
@@ -202,6 +205,10 @@ val appModule = module {
 			mRegistry = get(),
 			mCache = get(),
 			mClock = { nowEpochMillis() },
+			// Only the bulk import uses these; every other path is unaffected by their absence,
+			// which is why they are optional on the constructor.
+			mStorage = get(),
+			mJson = get(),
 			mSetListRevalidateAfterMillis = {
 				// Switching the check off makes every cached list "recent enough" forever.
 				if (vPreferences.preferences.value.revalidateSetsOnLaunch) {

@@ -33,6 +33,8 @@ kotlin {
 			implementation(libs.ktor.serialization.json)
 			implementation(libs.kotlinx.datetime)
 			implementation(libs.kotlinx.coroutines.core)
+			// The bulk import decompresses and reads a file; see `ScryfallBulk`.
+			implementation(libs.okio)
 		}
 		commonTest.dependencies {
 			implementation(libs.kotlin.test)

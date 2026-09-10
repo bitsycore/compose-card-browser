@@ -15,6 +15,9 @@ import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
 import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
+import com.bitsycore.cardbrowser.core.provider.BulkCatalogue
+import com.bitsycore.cardbrowser.core.provider.BulkSummary
+import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.net.mapProviderErrors
 import com.bitsycore.cardbrowser.games.magic.MagicGame
 import io.ktor.client.HttpClient
@@ -75,7 +78,15 @@ import io.ktor.http.appendPathSegments
 class ScryfallProvider(
 	private val mClient: HttpClient,
 	private val mBaseUrl: String = DEFAULT_BASE_URL,
-) : CardProvider<MagicGame> {
+	/**
+	 * Where the bulk import writes its scratch file, or `null` on a caller that has no storage.
+	 *
+	 * Null makes [bulkSummary] answer null and [streamAll] do nothing, which is the same shape as
+	 * a source with no dump at all -- so a test or a preview constructing this without storage gets
+	 * a provider that simply does not offer bulk rather than one that throws when asked.
+	 */
+	private val mStorage: AppStorage? = null,
+) : CardProvider<MagicGame>, BulkCatalogue {
 
 	override val id: ProviderId = PROVIDER_ID
 
@@ -335,6 +346,27 @@ class ScryfallProvider(
 	private fun io.ktor.client.request.HttpRequestBuilder.identify() {
 		header("User-Agent", USER_AGENT)
 		header("Accept", "application/json")
+	}
+
+	// ============
+	//  Bulk
+
+	private val mBulk: ScryfallBulk? by lazy {
+		mStorage?.let { ScryfallBulk(mClient, it, mBaseUrl) }
+	}
+
+	override suspend fun bulkSummary(): BulkSummary? = mBulk?.summary()
+
+	override suspend fun streamAll(
+		language: CardLanguage?,
+		onBytes: (Long, Long?) -> Unit,
+		onCard: suspend (CardPrinting) -> Unit,
+	) {
+		// `default_cards` is English, or the printed language where there is no English printing --
+		// so the records are labelled with what was asked for rather than with something negotiated
+		// with the server. Falling back to English is right for this file specifically: it is the
+		// English dump, and labelling its contents as anything else would be a claim about them.
+		mBulk?.stream(resolveLanguage(language) ?: CardLanguage.ENGLISH, onBytes, onCard)
 	}
 
 	companion object {
