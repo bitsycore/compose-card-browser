@@ -318,12 +318,21 @@ class DownloadManager(
 			currentCoroutineContext().ensureActive()
 
 			if (vCards.isEmpty()) {
-				// Nothing was stored, so the mark protects nothing and is swept up rather than
-				// left behind as a permanent exemption for a set that is not there.
+				// Not a failure. A set with no cards is a real thing a source can hold: a
+				// marketplace catalogue files sealed product under a set name and lists no
+				// singles for it at all -- 13 of the WoW TCG's 54 sets are exactly that, holding
+				// a booster box or a raid deck and nothing else.
+				//
+				// Reporting it as an error made a whole-game download look broken, with a dozen
+				// red rows for sets that had answered perfectly and simply had nothing to give.
+				// The distinction the app cares about is "the fetch failed" against "the source
+				// has nothing here", and only the first is worth a warning.
 				if (vPinsRecords) {
 					mRepository.setPinned(vRequest.game, vRequest.setId, vRequest.language, false)
 				}
-				update(job.id) { DownloadStatus.Failed("No cards came back for this set") }
+				update(job.id) {
+					DownloadStatus.Completed(cards = 0, imagesFetched = 0, imagesFailed = 0)
+				}
 				return
 			}
 

@@ -358,15 +358,10 @@ class ScryfallProvider(
 	override suspend fun bulkSummary(): BulkSummary? = mBulk?.summary()
 
 	override suspend fun streamAll(
-		language: CardLanguage?,
 		onBytes: (Long, Long?) -> Unit,
 		onCard: suspend (CardPrinting) -> Unit,
 	) {
-		// `default_cards` is English, or the printed language where there is no English printing --
-		// so the records are labelled with what was asked for rather than with something negotiated
-		// with the server. Falling back to English is right for this file specifically: it is the
-		// English dump, and labelling its contents as anything else would be a claim about them.
-		mBulk?.stream(resolveLanguage(language) ?: CardLanguage.ENGLISH, onBytes, onCard)
+		mBulk?.stream(onBytes, onCard)
 	}
 
 	companion object {

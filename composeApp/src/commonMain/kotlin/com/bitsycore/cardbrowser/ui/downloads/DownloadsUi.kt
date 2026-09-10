@@ -589,6 +589,14 @@ internal fun describe(job: DownloadJob): String {
 				"${vStatus.completed} of ${vStatus.total} images · $vSuffix"
 			}
 		is DownloadStatus.Completed -> buildString {
+			// Zero is a real answer, not a failure, and says which of the two it is. A source can
+			// list a set and hold no singles for it -- a marketplace catalogue filing a booster box
+			// under a set name is the common case -- and calling that "0 cards" beside a tick reads
+			// as a mistake somewhere.
+			if (vStatus.cards == 0) {
+				append("No single cards in this set")
+				return@buildString
+			}
 			append("${vStatus.cards} cards")
 			if (vStatus.imagesFetched > 0) append(", ${vStatus.imagesFetched} images")
 			// Never rounded up to "done". A set that is four images short is not complete, and the

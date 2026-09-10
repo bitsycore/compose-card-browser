@@ -107,7 +107,6 @@ class BulkImportTest {
 			BulkSummary(compressedBytes = 1234, updatedAt = null, description = "a fake dump")
 
 		override suspend fun streamAll(
-			language: CardLanguage?,
 			onBytes: (Long, Long?) -> Unit,
 			onCard: suspend (CardPrinting) -> Unit,
 		) {
@@ -152,6 +151,27 @@ class BulkImportTest {
 			mStorage = vStorage,
 			mJson = Json { ignoreUnknownKeys = true },
 		)
+	}
+
+	@Test
+	fun `cards are stored under the language their own record states`() = runTest {
+		// The bug this replaced: the import asked for a language, callers passed null, and
+		// `resolveLanguage(null)` walks the preference order -- which for a source offering all
+		// eleven resolves to French. An overwhelmingly English file was imported, cached and
+		// reported as French. The file decides now, per record.
+		val vEnglish = printing("AAA", "001")
+		val vJapanese = printing("AAA", "002").let {
+			it.copy(text = it.text.copy(language = CardLanguage.JAPANESE))
+		}
+		val vProvider = FakeBulkProvider(mProviderId, listOf(vEnglish, vJapanese), listOf(set("AAA")))
+		val vRepository = repository(vProvider)
+
+		val vResult = assertNotNull(vRepository.importBulk(TestGameProfile.id))
+
+		// One set, two languages, two cache entries -- not one entry with the two mixed under a
+		// single label that is wrong for half of them.
+		assertEquals(2, vResult.cards)
+		assertEquals(2, vResult.sets, "each language of a set is its own cached entry")
 	}
 
 	@Test

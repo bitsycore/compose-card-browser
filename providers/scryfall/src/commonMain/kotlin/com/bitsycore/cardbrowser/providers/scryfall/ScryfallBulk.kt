@@ -69,7 +69,6 @@ internal class ScryfallBulk(
 	}
 
 	suspend fun stream(
-		language: CardLanguage,
 		onBytes: (Long, Long?) -> Unit,
 		onCard: suspend (CardPrinting) -> Unit,
 	) {
@@ -78,7 +77,7 @@ internal class ScryfallBulk(
 		try {
 			download(vEntry.downloadUri, vScratch, vEntry.compressedSize, onBytes)
 			currentCoroutineContext().ensureActive()
-			readCards(vScratch, language, onCard)
+			readCards(vScratch, onCard)
 		} finally {
 			// Including on cancellation: 75 MB left behind because someone changed their mind is
 			// not a cache, it is litter the app has no way of ever explaining.
@@ -122,11 +121,7 @@ internal class ScryfallBulk(
 	 * line, and a malformed one can be skipped instead of failing the whole import. A single bad
 	 * record in a 100,000-line file is not a reason to abandon the other 99,999.
 	 */
-	private suspend fun readCards(
-		from: Path,
-		language: CardLanguage,
-		onCard: suspend (CardPrinting) -> Unit,
-	) {
+	private suspend fun readCards(from: Path, onCard: suspend (CardPrinting) -> Unit) {
 		mStorage.fileSystem.source(from).gzip().buffer().use { vSource ->
 			while (true) {
 				currentCoroutineContext().ensureActive()
@@ -134,11 +129,20 @@ internal class ScryfallBulk(
 				if (vLine.isBlank()) continue
 				val vDto = runCatching { JSON.decodeFromString<ScryfallCardDto>(vLine) }.getOrNull()
 					?: continue
+				// The record's own language, not one chosen by the caller. `default_cards` is
+				// mostly English and genuinely mixed -- Spanish, Japanese, French, Italian and a
+				// few others -- so a single label across the file would be wrong for thousands of
+				// cards. Scryfall states `lang` per record; this believes it.
+				//
+				// A language this app has no name for is skipped rather than guessed at. Scryfall
+				// ships Phyrexian (`ph`), which is a real printing language and not one of the
+				// eleven the app knows, and labelling it as something else would be a claim.
+				val vLanguage = vDto.lang?.let(CardLanguage::fromCode) ?: continue
 				val vCard = ScryfallMapper.toPrinting(
 					dto = vDto,
 					provider = ScryfallProvider.PROVIDER_ID,
 					set = null,
-					language = language,
+					language = vLanguage,
 				) ?: continue
 				onCard(vCard)
 			}

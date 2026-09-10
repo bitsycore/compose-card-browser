@@ -48,13 +48,23 @@ interface BulkCatalogue {
 	 * Not a list and not a `Flow` of lists: the point is that no caller ever holds more than one
 	 * record, and a suspending callback is the plainest way to say so.
 	 *
+	 * There is deliberately **no language parameter**. A dump is a file, not a query: it contains
+	 * whatever languages it contains, and asking for one would either be ignored or answered with a
+	 * filter the caller could apply itself. Each card carries the language its own record states,
+	 * so the caller can store them apart -- which is what the cache needs, being keyed per language.
+	 *
+	 * That absence is the fix for a real bug. The parameter used to be here, callers passed null,
+	 * and `resolveLanguage(null)` walks the app's preference order -- which for a source offering
+	 * all eleven languages resolves to **French**. So an overwhelmingly English file was imported,
+	 * cached and reported as French. Measured on Scryfall's `default_cards`: 8780 English records
+	 * in the first sample against 92 Spanish, 47 Japanese, 27 French and a handful of others.
+	 *
 	 * @param onCard called once per card. Suspending, so a caller can write to disk without
 	 *   buffering, and back-pressure is simply the callback taking its time
 	 * @param onBytes called as the transfer progresses, with bytes so far and the total when the
 	 *   source states one. A 75 MB download with no progress is indistinguishable from a hang
 	 */
 	suspend fun streamAll(
-		language: CardLanguage? = null,
 		onBytes: (downloaded: Long, total: Long?) -> Unit = { _, _ -> },
 		onCard: suspend (CardPrinting) -> Unit,
 	)

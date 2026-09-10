@@ -1196,13 +1196,17 @@ class CardRepository(
 		try {
 			vStorage.fileSystem.createDirectories(vScratch)
 			vBulk.streamAll(
-				language = vLanguage,
 				onBytes = { vDone, vTotal ->
 					onProgress(BulkImportProgress.Downloading(vDone, vTotal))
 				},
 			) { vCard ->
-				val vSink = vBuckets.getOrPut(vCard.setId.qualified) {
-					vStorage.fileSystem.sink(vScratch / bucketName(vCard.setId)).buffer()
+				// Bucketed by set *and* language. A cache entry holds one language and this file
+				// carries several -- overwhelmingly English, with thousands of cards in six others
+				// -- so one bucket per set would mix them and store the lot under a single label
+				// that is wrong for most of it.
+				val vBucketKey = bucketKey(vCard.setId, vCard.text.language)
+				val vSink = vBuckets.getOrPut(vBucketKey) {
+					vStorage.fileSystem.sink(vScratch / bucketName(vBucketKey)).buffer()
 				}
 				vSink.writeUtf8(mJson.encodeToString(serializer<CardPrinting>(), vCard))
 				vSink.writeUtf8("\n")
@@ -1218,12 +1222,14 @@ class CardRepository(
 
 		var vSetsWritten = 0
 		try {
-			for ((vQualified, _) in vBuckets) {
+			for ((vBucketKey, _) in vBuckets) {
 				currentCoroutineContext().ensureActive()
-				val vSetId = SourceId.parse(vQualified) ?: continue
-				val vBucket = vScratch / bucketName(vSetId)
-				val vPrintings = readBucket(vStorage, vBucket)
+				val vPrintings = readBucket(vStorage, vScratch / bucketName(vBucketKey))
 				if (vPrintings.isEmpty()) continue
+				// Read off the records rather than parsed back out of the key, so the cache is
+				// written under the language the cards in it actually state.
+				val vSetId = vPrintings.first().setId
+				val vLanguage = vPrintings.first().text.language
 
 				// Pinned before the write, for the same reason a download is: writing runs a trim,
 				// and a set large enough to breach the ceiling would otherwise be evicted by the
@@ -1289,9 +1295,12 @@ class CardRepository(
 		return vOut
 	}
 
-	/** A filesystem-safe scratch name per set. Hashed, because a set code is not a filename. */
-	private fun bucketName(setId: SourceId): String =
-		setId.qualified.encodeUtf8().sha256().hex() + ".jsonl"
+	/** One bucket per set *and* language, because that is exactly what one cache entry holds. */
+	private fun bucketKey(setId: SourceId, language: CardLanguage?): String =
+		setId.qualified + "|" + (language?.code ?: "-")
+
+	/** A filesystem-safe scratch name. Hashed, because a set code is not a filename. */
+	private fun bucketName(key: String): String = key.encodeUtf8().sha256().hex() + ".jsonl"
 
 	/**
 	 * Protects a downloaded set's records from cache eviction, or releases them.
