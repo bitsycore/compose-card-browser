@@ -70,10 +70,15 @@ class CardGridViewModel(
 					val vSetId = SourceId.parse(intent.setId)
 					val vRecord = vSetId?.let { mRepository.setRecord(it, vGame.id) }
 					val vPreferred = mPreferences.preferences.value.primaryLanguage
-					// What the *menu* may offer: the set's claim, or the source's list where it
-					// makes none. A claim, deliberately -- confirming it is what used to happen
-					// here and it is why opening a set was slow. See below.
-					val vClaimed = vRecord?.languages?.takeIf { it.isNotEmpty() }
+					// What the *menu* may offer, from the best answer already on hand and without
+					// a request: the confirmation if this set's menu has ever been opened, else
+					// the set's claim, else the source's list. The card detail screen reads the
+					// identical helper, which is what keeps the two menus from disagreeing --
+					// they did, and it was reported: detail listed the two languages whose cards
+					// were on disk while the grid beside it offered eleven.
+					val vClaimed = vSetId
+						?.let { mRepository.knownLanguagesFor(it, vGame.id) }
+						?.takeIf { it.isNotEmpty() }
 						?: vProvider.capabilities.data.languages
 					dispatch(
 						CardGridContract.Intent.CapabilitiesResolved(

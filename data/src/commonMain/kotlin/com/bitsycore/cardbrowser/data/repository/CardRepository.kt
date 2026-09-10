@@ -1056,25 +1056,35 @@ class CardRepository(
 	}
 
 	/**
-	 * Which languages of [setId] are confirmed **without asking the source anything**.
+	 * The languages a menu should offer for [setId], **without asking the source anything**.
 	 *
-	 * A language whose cards are already on disk is confirmed by definition: they are there
-	 * because the source served them. That is free to check -- one file-existence test per
-	 * candidate -- and it is the answer for every set the user has actually opened or downloaded.
+	 * The best answer already on hand, in order:
 	 *
-	 * Exists because the probing version is expensive in a way that was invisible: Scryfall
-	 * declares eleven languages and its `confirmLanguages` is one `cards/random` request each, so
-	 * opening a set cost **eleven requests to api.scryfall.com** even when every card was already
-	 * cached and the only thing left to fetch was images from the CDN.
+	 * 1. the confirmed list, if [languagesFor] has run for this set and its record is still fresh
+	 * 2. what the set itself claims, for the two sources that state it per set
+	 * 3. everything the source can serve
+	 *
+	 * Every screen that offers a language menu uses this, and that is the point: the card grid and
+	 * the card detail screen have to agree, and they did not. Detail briefly listed only the
+	 * languages whose cards were *on disk* -- two, for a set opened in English and Japanese --
+	 * while the grid beside it offered eleven. Neither number was the same question: what is
+	 * cached is not what exists, and a language you have not downloaded is exactly the one you
+	 * would open the menu to ask for.
+	 *
+	 * Never a request, so it costs nothing on the path that opens a card. The confirmation that
+	 * narrows step 3 to the truth is paid once, when the grid's menu is opened, and both screens
+	 * read it from then on.
 	 */
-	suspend fun cachedLanguagesFor(setId: SourceId, game: GameId): Set<CardLanguage> {
+	suspend fun knownLanguagesFor(setId: SourceId, game: GameId): Set<CardLanguage> {
 		val vProvider = mRegistry.byId(setId.provider) ?: return emptySet()
-		val vSet = setRecord(setId, game)
-		val vCandidates = vSet?.languages?.takeIf { it.isNotEmpty() }
+		val vSerializer = CacheEnvelope.serializer(SetSerializer(serializer<CardLanguage>()))
+		mCache.read(setLanguagesKey(vProvider, setId), vSerializer)
+			?.takeIf { !it.isStale(mClock(), mSetListTtlMillis) }
+			?.payload
+			?.takeIf { it.isNotEmpty() }
+			?.let { return it }
+		return setRecord(setId, game)?.languages?.takeIf { it.isNotEmpty() }
 			?: vProvider.capabilities.data.languages
-		return vCandidates
-			.mapNotNull { effectiveLanguage(vProvider, it) }
-			.filterTo(mutableSetOf()) { mCache.exists(completeSetKey(vProvider, setId, it)) }
 	}
 
 	/**

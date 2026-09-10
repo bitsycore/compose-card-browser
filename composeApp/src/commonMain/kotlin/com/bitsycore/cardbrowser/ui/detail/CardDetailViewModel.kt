@@ -102,17 +102,15 @@ class CardDetailViewModel(
 		val vSet = if (vSetId != null) {
 			mRepository.setList(vGame.id, vLanguage).first().value
 				?.firstOrNull { it.id == vSetId }
-				// Narrowed by what is already on disk, and by nothing that costs a request.
-				//
-				// This used to call `languagesFor`, which probes the source once per candidate --
-				// eleven for a Magic set, on every card opened. The claim it replaced is not
-				// reliable (TCGdex names 95 Korean sets and serves cards for none of them), but
-				// paying eleven requests per card to improve a label is far worse than the label
-				// being optimistic. The grid confirms properly when its menu is opened, and that
-				// answer is cached, so this reads it for free when it is there.
+				// The same list the grid offers, by construction -- see
+				// `CardRepository.knownLanguagesFor`. It reads the confirmation if the grid's menu
+				// has already paid for one and falls back to the claim otherwise, and it never
+				// makes a request, which is what opening a card must not do.
 				?.let { vRecord ->
-					val vConfirmed = mRepository.cachedLanguagesFor(vRecord.id, vGame.id)
-					if (vConfirmed.isEmpty()) vRecord else vRecord.copy(languages = vConfirmed)
+					mRepository.knownLanguagesFor(vRecord.id, vGame.id)
+						.takeIf { it.isNotEmpty() }
+						?.let { vRecord.copy(languages = it) }
+						?: vRecord
 				}
 		} else {
 			null

@@ -336,6 +336,53 @@ class SetCardCountTest {
 	}
 
 	@Test
+	fun `the language menu offers what exists -- not what happens to be cached`() = runTest {
+		// The report: a set opened in English and Japanese offered every language in the grid and
+		// only those two on the card screen. Two different questions were being asked under one
+		// name. What is on disk is not what exists, and a language you have not downloaded is
+		// precisely the one you would open the menu to ask for.
+		val vRepository = repository(english = 24, french = 4)
+		vRepository.cards(mSetId, CountTestGame.id, CardQuery(), CardLanguage.ENGLISH).toList()
+
+		assertEquals(
+			setOf(CardLanguage.ENGLISH, CardLanguage.FRENCH),
+			vRepository.knownLanguagesFor(mSetId, CountTestGame.id),
+			"holding one edition must not hide the other from the menu",
+		)
+	}
+
+	@Test
+	fun `a confirmed list replaces the claim once something has paid for it`() = runTest {
+		// French has nothing here, so the confirmation narrows the source's two to one. Until
+		// that runs the menu offers both, which is the honest state: unasked is not absent.
+		val vRepository = repository(english = 8, french = 0)
+
+		assertEquals(
+			setOf(CardLanguage.ENGLISH, CardLanguage.FRENCH),
+			vRepository.knownLanguagesFor(mSetId, CountTestGame.id),
+			"before confirmation, the source's claim is all there is",
+		)
+
+		vRepository.languagesFor(mSetId, CountTestGame.id)
+
+		assertEquals(
+			setOf(CardLanguage.ENGLISH),
+			vRepository.knownLanguagesFor(mSetId, CountTestGame.id),
+			"after it, the confirmed list is what both menus read",
+		)
+	}
+
+	@Test
+	fun `reading the menu list costs no requests`() = runTest {
+		val vRepository = repository(english = 24, french = 4)
+		val vBefore = mProbeCount
+
+		vRepository.knownLanguagesFor(mSetId, CountTestGame.id)
+
+		assertEquals(vBefore, mProbeCount, "opening a card must not probe the source")
+	}
+
+	@Test
 	fun `an unknown game has nothing to say`() = runTest {
 		assertNull(
 			repository(english = 24, french = 4)
