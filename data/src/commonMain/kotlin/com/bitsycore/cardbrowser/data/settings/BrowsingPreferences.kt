@@ -156,6 +156,20 @@ data class BrowsingPreferences(
 	 * rather than over-claims -- the safe direction.
 	 */
 	val imageDownloads: Map<String, ImageDownloadRecord> = emptyMap(),
+	/**
+	 * Which edition of each game's bulk file has been imported, by game id.
+	 *
+	 * The value is the source's own `updated_at` day for the dump that was read, as an ISO date,
+	 * or `"-"` when it published none. Kept because "have I already imported this game?" cannot
+	 * be answered from the set records the import wrote: a dump holds no cards for some sets a
+	 * catalogue lists -- token sheets, memorabilia, sets with nothing printed yet -- so asking
+	 * "is every set on disk?" answers no forever, and the download-all dialog went on offering an
+	 * import that had already run and would fetch nothing new.
+	 *
+	 * The date rather than a flag, so a source rebuilding its file makes the import worth
+	 * offering again. Scryfall rebuilds daily.
+	 */
+	val bulkImports: Map<String, String> = emptyMap(),
 ) {
 
 	/** What [imageDownloads] recorded for one rendition, or `null` if it was never downloaded. */

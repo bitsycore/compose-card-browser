@@ -533,6 +533,7 @@ fun SetListContent(
 				.orEmpty(),
 			onDismiss = { vPendingAll = false },
 			isImportingGame = vIsImportingGame,
+			isGameImported = state.isGameImported,
 			onConfirm = { vKinds, vLanguages ->
 				// Where the source publishes a dump, the whole game's records come from it and
 				// there is no path here that fetches them a set at a time. That is not a

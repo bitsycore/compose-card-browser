@@ -141,6 +141,16 @@ object SetListContract :
 		 */
 		val availableLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
 		/**
+		 * True when this game's bulk file has already been imported, and the source has not
+		 * rebuilt it since.
+		 *
+		 * Answered from a record of the import rather than from the sets on disk. A dump holds no
+		 * cards for every set a catalogue lists -- token sheets, memorabilia, a set announced but
+		 * not printed -- so "is every set saved?" is no forever, and the download-all dialog went
+		 * on offering an import that had run and would fetch nothing new.
+		 */
+		val isGameImported: Boolean = false,
+		/**
 		 * Which product line to show, or `null` for all of them.
 		 *
 		 * Pokemon ships four -- see `GameProfile.regions` -- and they are different products rather
@@ -297,6 +307,7 @@ object SetListContract :
 			val savedLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
 			val confirmedCardCounts: Map<String, Int> = emptyMap(),
 			val availableLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
+			val isGameImported: Boolean = false,
 		) : Intent
 
 		/** A product line was picked, or `null` to see every line again. */
@@ -376,6 +387,7 @@ object SetListContract :
 					savedLanguages = emptyMap(),
 					confirmedCardCounts = emptyMap(),
 					availableLanguages = emptyMap(),
+					isGameImported = false,
 					search = "",
 					isLoading = true,
 					error = null,
@@ -394,6 +406,7 @@ object SetListContract :
 			savedLanguages = intent.savedLanguages,
 			confirmedCardCounts = intent.confirmedCardCounts,
 			availableLanguages = intent.availableLanguages,
+			isGameImported = intent.isGameImported,
 		)
 
 		// Purely a view of what is already loaded: every line arrives in one request, so narrowing

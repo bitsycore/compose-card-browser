@@ -213,6 +213,11 @@ class SetListViewModel(
 				// left by opening it, or the claim the catalogue came with. See
 				// `CardRepository.availableLanguages`.
 				availableLanguages = mRepository.availableLanguages(game, vSets, language),
+				// The recorded import against what the source is currently publishing. Equal
+				// means there is nothing to fetch; different -- or absent -- means there is.
+				isGameImported = vPreferences.bulkImports[game.value]
+					?.let { it == (stateFlow.value.bulkSummary?.updatedAt?.toString() ?: "-") }
+					?: false,
 				// Read straight from preferences rather than measured: see
 				// `BrowsingPreferences.imageDownloads` for why the image side cannot be checked
 				// cheaply, and what the record therefore does and does not mean.

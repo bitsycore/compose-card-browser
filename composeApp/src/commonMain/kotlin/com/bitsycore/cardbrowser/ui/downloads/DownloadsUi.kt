@@ -148,6 +148,15 @@ fun DownloadKindDialog(
 	 * games are untouched, since an import is scoped to one.
 	 */
 	isImportingGame: Boolean = false,
+	/**
+	 * True when card info for this whole game is already held because the dump was imported.
+	 *
+	 * Separate from [alreadyHave], which is an intersection over the sets on screen and can never
+	 * reach card info for a game served by a dump: the file holds nothing for the sets a
+	 * catalogue lists but nothing has been printed in, so one such set keeps the intersection
+	 * empty and the dialog offers an import that would fetch nothing.
+	 */
+	isGameImported: Boolean = false,
 ) {
 	// Ticking is a fresh decision each time the dialog opens, so it is keyed on what is already
 	// held: reopening after a download must not restore a tick for something now on disk.
@@ -155,6 +164,9 @@ fun DownloadKindDialog(
 	val vInfoComplete = infoIsComplete(alreadyHave, languages, infoLanguages)
 	val vLocked: (DownloadKind) -> Boolean = { vKind ->
 		when {
+			// Before `vRedownload`, like the in-flight check: an import that has already run
+			// fetches nothing, and "Download again" should not spend 74 MB proving it.
+			vKind == DownloadKind.CARD_INFO && isGameImported && bulkBytes != null -> true
 			// Before the re-download escape hatch, because this one is not about what is held --
 			// it is about what is in flight, and "Download again" must not start a second writer
 			// against the records an import is in the middle of laying down.
@@ -208,7 +220,12 @@ fun DownloadKindDialog(
 					title = "Card info",
 					// Said rather than left as an unexplained grey row: a disabled control with no
 					// reason is indistinguishable from a broken one.
-					note = "Already downloading for the whole game".takeIf { isImportingGame },
+					note = when {
+						isImportingGame -> "Already downloading for the whole game"
+						isGameImported && bulkBytes != null ->
+							"Already imported. The source has not republished it since."
+						else -> null
+					},
 					// Deliberately not "small": the honest thing is to say what it is, since a set
 					// with an unknown card count cannot be sized at all.
 					detail = buildString {
