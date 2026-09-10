@@ -5,6 +5,8 @@ import com.bitsycore.cardbrowser.core.game.GameRegion
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.SetFavourites
+import com.bitsycore.cardbrowser.core.provider.BulkSummary
+import com.bitsycore.cardbrowser.data.repository.BulkImportProgress
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.cardbrowser.data.settings.ImageDownloadRecord
@@ -76,6 +78,16 @@ object SetListContract :
 		 * mark in the row says saved and promises nothing about how much of the set is there.
 		 */
 		val savedSetIds: Set<String> = emptySet(),
+		/**
+		 * What this game's source says a bulk import would cost, or `null` when it publishes none.
+		 *
+		 * Only Scryfall does today. Fetched separately from the data so the size can be stated
+		 * before anything is downloaded -- a dialog that says "75 MB" is the difference between an
+		 * informed choice and a surprise on a phone bill.
+		 */
+		val bulkSummary: BulkSummary? = null,
+		/** Where a running import has got to, or `null` when none is running. */
+		val bulkProgress: BulkImportProgress? = null,
 		/** Pinned sets in the user's order, by qualified id, across every game. See `SetFavourites`. */
 		val favouriteIds: List<String> = emptyList(),
 		/**
@@ -188,6 +200,15 @@ object SetListContract :
 		/** Start, or start again. Bumps the generation, which invalidates anything in flight. */
 		data object Refresh : Intent
 
+		/** The source answered about its bulk file, or said it has none. */
+		data class BulkAvailable(val summary: BulkSummary?) : Intent
+
+		/** The user asked for the whole catalogue in one file. */
+		data object BulkImportRequested : Intent
+
+		/** An import moved on, or finished when [progress] is null. */
+		data class BulkProgressed(val progress: BulkImportProgress?) : Intent
+
 		/** A set was pinned to the top, or unpinned. */
 		data class FavouriteToggled(val setId: String) : Intent
 
@@ -265,6 +286,18 @@ object SetListContract :
 	sealed interface Effect
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
+
+		is Intent.BulkAvailable -> state.copy(bulkSummary = intent.summary)
+
+		// Deliberately does not clear `bulkSummary`: the file is still there, and offering the
+		// import again after one finishes is reasonable -- Scryfall rebuilds daily.
+		is Intent.BulkProgressed -> state.copy(bulkProgress = intent.progress)
+
+		// The work happens in the view model; the reducer only records that it started, so the
+		// banner appears on the same frame as the tap rather than after the first byte.
+		is Intent.BulkImportRequested -> state.copy(
+			bulkProgress = BulkImportProgress.Downloading(0, state.bulkSummary?.compressedBytes),
+		)
 
 		is Intent.FavouritesRestored -> state.copy(favouriteIds = intent.favouriteIds)
 

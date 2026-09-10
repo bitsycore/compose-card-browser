@@ -136,6 +136,15 @@ fun DownloadKindDialog(
 	 * already got?" is a list of languages rather than a tick that means "some of them".
 	 */
 	infoLanguages: Set<CardLanguage> = emptySet(),
+	/**
+	 * The size of a one-file import of this game's card records, when its source offers one.
+	 *
+	 * Offered only on the whole-game dialog, because that is the only case it improves: the file
+	 * is the entire catalogue, so using it to fetch a single set transfers far more than the
+	 * request it would replace. `null` hides the option rather than showing a disabled one.
+	 */
+	bulkBytes: Long? = null,
+	onBulk: (() -> Unit)? = null,
 ) {
 	// Ticking is a fresh decision each time the dialog opens, so it is keyed on what is already
 	// held: reopening after a download must not restore a tick for something now on disk.
@@ -287,6 +296,25 @@ fun DownloadKindDialog(
 							color = MaterialTheme.colorScheme.error,
 						)
 					}
+				}
+
+				if (bulkBytes != null && onBulk != null && setCount > 1) {
+					Spacer(Modifier.height(14.dp))
+					HorizontalDivider()
+					Spacer(Modifier.height(10.dp))
+					Text("All at once", style = MaterialTheme.typography.labelLarge)
+					Text(
+						// Both halves of the comparison, honestly. It is one transfer instead of
+						// hundreds, and it is only the records -- the art is untouched, and the art
+						// is where the bytes actually are.
+						text = "This game's source publishes its whole catalogue as one file: " +
+							"${bulkBytes / 1_000_000} MB, one download instead of $setCount. " +
+							"Card info only — art is not included and is still fetched per set.",
+						style = MaterialTheme.typography.bodySmall,
+						color = MaterialTheme.colorScheme.onSurfaceVariant,
+					)
+					Spacer(Modifier.height(6.dp))
+					TextButton(onClick = onBulk) { Text("Get card info in one file") }
 				}
 
 				Spacer(Modifier.height(12.dp))

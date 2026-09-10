@@ -66,6 +66,12 @@ class SetListViewModel(
 			dispatch(SetListContract.Intent.GamesRestored(games = vGames, game = vGame))
 			dispatch(SetListContract.Intent.LastOpenedSetRestored(vPreferences.lastSetId))
 			dispatch(SetListContract.Intent.FavouritesRestored(vPreferences.favouriteSets))
+			// A 3 KB question asked once, so the download-all dialog can state the size before
+			// anything large is fetched. Silent on failure: a source that will not answer about
+			// its bulk file simply does not offer one, which is the same as not having one.
+			runCatching { mRepository.bulkSummary(vGame.id) }
+				.getOrNull()
+				?.let { dispatch(SetListContract.Intent.BulkAvailable(it)) }
 			// Started only once the game is known, so the first request is not fired against
 			// whichever game the initial state happened to name.
 			dispatch(SetListContract.Intent.Refresh)
@@ -101,6 +107,22 @@ class SetListViewModel(
 
 			// Read back off the reduced state rather than recomputed here: `SetFavourites` has
 			// already been applied by the reducer, and applying it twice is how the two would drift.
+			SetListContract.Intent.BulkImportRequested -> {
+				// Not on the download queue. That queue exists to run one set at a time against a
+				// rate-limited API, and this is one transfer that replaces the lot -- putting it
+				// in a queue built for pacing would be describing it as the thing it avoids.
+				val vResult = runCatching {
+					mRepository.importBulk(mArgs.game) { vProgress ->
+						dispatch(SetListContract.Intent.BulkProgressed(vProgress))
+					}
+				}
+				dispatch(SetListContract.Intent.BulkProgressed(null))
+				if (vResult.isSuccess) {
+					// The saved marks are read from the cache, and the import just filled it.
+					dispatch(SetListContract.Intent.Refresh)
+				}
+			}
+
 			is SetListContract.Intent.FavouriteToggled,
 			is SetListContract.Intent.FavouriteMovedTo,
 			-> {

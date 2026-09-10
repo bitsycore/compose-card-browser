@@ -94,6 +94,7 @@ import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.ProviderError
+import com.bitsycore.cardbrowser.data.repository.BulkImportProgress
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.ui.common.EmptyState
@@ -361,6 +362,13 @@ fun SetListContent(
 
 			// The honesty strip. Shown whenever what is on screen is not a fresh network result.
 			when {
+				// First, because a 75 MB transfer with nothing on screen is indistinguishable from
+				// a hang -- and this one does not go through the download queue, so its button
+				// says nothing about it either.
+				vState.bulkProgress != null -> NoticeBanner(
+					text = bulkProgressText(vState.bulkProgress!!),
+					onAction = null,
+				)
 				vState.error != null && vState.sets.isNotEmpty() -> NoticeBanner(
 					text = "Showing saved sets. Refresh failed.",
 					onAction = { dispatch(SetListContract.Intent.Refresh) },
@@ -512,6 +520,11 @@ fun SetListContent(
 				}
 				.reduceOrNull { vAcc, vNext -> vAcc intersect vNext }
 				.orEmpty(),
+			bulkBytes = vState.bulkSummary?.compressedBytes,
+			onBulk = {
+				dispatch(SetListContract.Intent.BulkImportRequested)
+				vPendingAll = false
+			},
 			// Every language any of these sets states. A language only some of them have is still
 			// worth offering -- the enqueue skips it for the sets that were never printed in it.
 			languages = vSets.flatMap { it.languages }.distinct(),
@@ -1176,4 +1189,23 @@ private fun SetListDownloadMarksPreview() = PreviewFrame {
 		onOpenSet = {},
 		onOpenSettings = {},
 	)
+}
+
+/**
+ * What to say while a bulk import runs.
+ *
+ * Three phases with very different durations, so each says what is actually happening rather than
+ * one spinner covering the lot. The download is the long part and the only one with a denominator.
+ */
+private fun bulkProgressText(progress: BulkImportProgress): String = when (progress) {
+	is BulkImportProgress.Downloading -> {
+		val vTotal = progress.total
+		if (vTotal != null && vTotal > 0) {
+			"Downloading the catalogue… ${progress.bytes / 1_000_000} of ${vTotal / 1_000_000} MB"
+		} else {
+			"Downloading the catalogue… ${progress.bytes / 1_000_000} MB"
+		}
+	}
+	is BulkImportProgress.Reading -> "Sorting ${progress.cards} cards into sets…"
+	is BulkImportProgress.Writing -> "Saving set ${progress.sets} of ${progress.total}…"
 }

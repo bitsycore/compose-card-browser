@@ -18,6 +18,7 @@ import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.BulkCatalogue
+import com.bitsycore.cardbrowser.core.provider.BulkSummary
 import okio.ByteString.Companion.encodeUtf8
 import okio.buffer
 import okio.use
@@ -1258,6 +1259,18 @@ class CardRepository(
 			// rather than implying the import covered sets it never saw.
 			knownSets = vSetsById.size,
 		)
+	}
+
+	/**
+	 * What a bulk import of [game] would cost, or `null` when its source publishes no dump.
+	 *
+	 * Cheap -- a manifest request, not the file -- so a screen can state the size before anything
+	 * large is fetched.
+	 */
+	suspend fun bulkSummary(game: GameId, language: CardLanguage? = null): BulkSummary? {
+		if (mStorage == null) return null
+		val vProvider = mRegistry.resolve(game, language) ?: return null
+		return (vProvider as? BulkCatalogue)?.bulkSummary()
 	}
 
 	/** Reads one set's scratch file back into printings, skipping any line that will not parse. */
