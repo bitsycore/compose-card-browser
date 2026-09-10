@@ -361,13 +361,6 @@ fun SetListContent(
 
 			// The honesty strip. Shown whenever what is on screen is not a fresh network result.
 			when {
-				// First, because a 75 MB transfer with nothing on screen is indistinguishable from
-				// a hang -- and this one does not go through the download queue, so its button
-				// says nothing about it either.
-				vState.bulkProgress != null -> NoticeBanner(
-					text = bulkProgressText(vState.bulkProgress),
-					onAction = null,
-				)
 				vState.error != null && vState.sets.isNotEmpty() -> NoticeBanner(
 					text = "Showing saved sets. Refresh failed.",
 					onAction = { dispatch(SetListContract.Intent.Refresh) },
@@ -476,6 +469,13 @@ fun SetListContent(
 		}
 	}
 
+	// One import at a time per game, and nothing per-set that would write the same records while
+	// it runs. Read off the queue rather than tracked here, so it stays true if the import was
+	// started from another screen -- which it can be, now that it survives leaving this one.
+	val vIsImportingGame = downloads.any {
+		it.isActive && it.request.isWholeGameImport && it.request.game == state.game?.id
+	}
+
 	vPendingSet?.let { vSet ->
 		DownloadKindDialog(
 			setName = vSet.name,
@@ -485,6 +485,7 @@ fun SetListContent(
 				images = vState.imageDownloads[vSet.id.qualified],
 			),
 			onDismiss = { vPendingSet = null },
+			isImportingGame = vIsImportingGame,
 			languages = vSet.languages.toList(),
 			defaultLanguage = preferredLanguage,
 			infoLanguages = vState.savedLanguages[vSet.id.qualified].orEmpty(),
@@ -531,6 +532,7 @@ fun SetListContent(
 				.reduceOrNull { vAcc, vNext -> vAcc intersect vNext }
 				.orEmpty(),
 			onDismiss = { vPendingAll = false },
+			isImportingGame = vIsImportingGame,
 			onConfirm = { vKinds, vLanguages ->
 				// Where the source publishes a dump, the whole game's records come from it and
 				// there is no path here that fetches them a set at a time. That is not a
@@ -1257,21 +1259,3 @@ private fun SetListDownloadMarksPreview() = PreviewFrame {
 	)
 }
 
-/**
- * What to say while a bulk import runs.
- *
- * Three phases with very different durations, so each says what is actually happening rather than
- * one spinner covering the lot. The download is the long part and the only one with a denominator.
- */
-private fun bulkProgressText(progress: BulkImportProgress): String = when (progress) {
-	is BulkImportProgress.Downloading -> {
-		val vTotal = progress.total
-		if (vTotal != null && vTotal > 0) {
-			"Downloading the catalogue… ${progress.bytes / 1_000_000} of ${vTotal / 1_000_000} MB"
-		} else {
-			"Downloading the catalogue… ${progress.bytes / 1_000_000} MB"
-		}
-	}
-	is BulkImportProgress.Reading -> "Sorting ${progress.cards} cards into sets…"
-	is BulkImportProgress.Writing -> "Saving set ${progress.sets} of ${progress.total}…"
-}

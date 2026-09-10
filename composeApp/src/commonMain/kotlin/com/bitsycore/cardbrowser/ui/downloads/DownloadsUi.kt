@@ -138,6 +138,15 @@ fun DownloadKindDialog(
 	 * request it would replace. `null` hides the option rather than showing a disabled one.
 	 */
 	bulkBytes: Long? = null,
+	/**
+	 * True while a whole-game import is running for this game.
+	 *
+	 * Card info is the one thing it collides with: the import is already writing exactly those
+	 * records, so queueing them per set would fetch what is arriving anyway and race it to the
+	 * same cache keys. Thumbnails are untouched -- an import carries no pictures -- and other
+	 * games are untouched, since an import is scoped to one.
+	 */
+	isImportingGame: Boolean = false,
 ) {
 	// Ticking is a fresh decision each time the dialog opens, so it is keyed on what is already
 	// held: reopening after a download must not restore a tick for something now on disk.
@@ -145,6 +154,10 @@ fun DownloadKindDialog(
 	val vInfoComplete = infoIsComplete(alreadyHave, languages, infoLanguages)
 	val vLocked: (DownloadKind) -> Boolean = { vKind ->
 		when {
+			// Before the re-download escape hatch, because this one is not about what is held --
+			// it is about what is in flight, and "Download again" must not start a second writer
+			// against the records an import is in the middle of laying down.
+			vKind == DownloadKind.CARD_INFO && isImportingGame -> true
 			vRedownload -> false
 			// Held in *every* language, not merely in one. See [infoIsComplete].
 			vKind == DownloadKind.CARD_INFO -> vInfoComplete
@@ -192,6 +205,9 @@ fun DownloadKindDialog(
 					// than presence -- otherwise a set held in one language of six looks finished.
 					done = vInfoComplete,
 					title = "Card info",
+					// Said rather than left as an unexplained grey row: a disabled control with no
+					// reason is indistinguishable from a broken one.
+					note = "Already downloading for the whole game".takeIf { isImportingGame },
 					// Deliberately not "small": the honest thing is to say what it is, since a set
 					// with an unknown card count cannot be sized at all.
 					detail = buildString {
@@ -334,6 +350,8 @@ private fun KindRow(
 	onCheckedChange: (Boolean) -> Unit,
 	title: String,
 	detail: String,
+	/** Why this row is disabled, when the reason is not "you already have it". */
+	note: String? = null,
 	enabled: Boolean = true,
 	done: Boolean = false,
 ) {
@@ -363,9 +381,10 @@ private fun KindRow(
 				},
 			)
 			Text(
-				// What is already held says so instead of quoting a size again -- the cost of a
-				// thing you already have is not the useful fact about it.
-				text = if (done && !enabled) "Already downloaded" else detail,
+				// A stated reason wins over both. What is already held says so instead of quoting
+				// a size again -- the cost of a thing you already have is not the useful fact
+				// about it -- and a row disabled for any other reason has to say which.
+				text = note ?: if (done && !enabled) "Already downloaded" else detail,
 				style = MaterialTheme.typography.bodySmall,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
 			)

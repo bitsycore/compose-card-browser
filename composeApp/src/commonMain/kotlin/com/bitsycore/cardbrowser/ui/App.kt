@@ -158,6 +158,7 @@ fun App() {
 						GameListScreen(
 							onOpenGame = { vGame -> vBackStack.add(Route.Sets(vGame.id.value)) },
 							onOpenSettings = { vBackStack.add(Route.Settings) },
+							onOpenDownloads = { vBackStack.add(Route.Downloads) },
 						)
 					}
 
@@ -236,6 +237,7 @@ fun App() {
 									Route.Detail(cardId = vCard.id.qualified, setId = vRoute.setId),
 								)
 							},
+							onOpenDownloads = { vBackStack.add(Route.Downloads) },
 						)
 					}
 

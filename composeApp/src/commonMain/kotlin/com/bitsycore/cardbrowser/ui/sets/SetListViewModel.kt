@@ -3,6 +3,7 @@ package com.bitsycore.cardbrowser.ui.sets
 import androidx.lifecycle.viewModelScope
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.data.download.DownloadKind
+import com.bitsycore.cardbrowser.data.download.DownloadRequest
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.repository.CardRepository
@@ -91,6 +92,12 @@ class SetListViewModel(
 				.collect {
 					val vState = stateFlow.value
 					val vGame = vState.game ?: return@collect
+					// A finished whole-game import has written every set in the catalogue, so the
+					// list itself is stale and not only its marks. Re-reading the marks alone
+					// would leave every row's count saying what it said before the import ran.
+					if (mDownloads.jobs.value.any { it.request.isWholeGameImport && !it.isActive }) {
+						dispatch(SetListContract.Intent.Refresh)
+					}
 					resolveSavedSets(vGame.id, mPreferences.preferences.value.primaryLanguage)
 				}
 		}
@@ -107,19 +114,21 @@ class SetListViewModel(
 			// Read back off the reduced state rather than recomputed here: `SetFavourites` has
 			// already been applied by the reducer, and applying it twice is how the two would drift.
 			SetListContract.Intent.BulkImportRequested -> {
-				// Not on the download queue. That queue exists to run one set at a time against a
-				// rate-limited API, and this is one transfer that replaces the lot -- putting it
-				// in a queue built for pacing would be describing it as the thing it avoids.
-				val vResult = runCatching {
-					mRepository.importBulk(mArgs.game) { vProgress ->
-						dispatch(SetListContract.Intent.BulkProgressed(vProgress))
-					}
-				}
-				dispatch(SetListContract.Intent.BulkProgressed(null))
-				if (vResult.isSuccess) {
-					// The saved marks are read from the cache, and the import just filled it.
-					dispatch(SetListContract.Intent.Refresh)
-				}
+				// Onto the download queue, which is the one scope that outlives this screen.
+				//
+				// It used to run here, in `viewModelScope`, and Navigation 3 scopes a view model
+				// to its back-stack entry -- so going back to the game picker cancelled the
+				// import and `ScryfallBulk` deleted the 74 MB it had already fetched. The queue's
+				// scope is the application's. It is also simply where a user looks for a download.
+				mDownloads.enqueue(
+					DownloadRequest(
+						setId = null,
+						game = mArgs.game,
+						setName = stateFlow.value.game?.displayName ?: mArgs.game.value,
+						kinds = setOf(DownloadKind.CARD_INFO),
+						isWholeGameImport = true,
+					),
+				)
 			}
 
 			is SetListContract.Intent.FavouriteToggled,

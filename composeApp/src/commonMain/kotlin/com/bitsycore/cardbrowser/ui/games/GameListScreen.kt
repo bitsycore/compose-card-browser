@@ -56,7 +56,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.runtime.collectAsState
 import com.bitsycore.cardbrowser.core.game.GameProfile
+import com.bitsycore.cardbrowser.data.download.DownloadJob
+import com.bitsycore.cardbrowser.data.download.DownloadManager
+import com.bitsycore.cardbrowser.ui.downloads.DownloadsButton
 import com.bitsycore.cardbrowser.games.api.GameArt
 import com.bitsycore.cardbrowser.games.lorcana.LorcanaGame
 import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesGame
@@ -108,9 +112,16 @@ import org.koin.compose.viewmodel.koinViewModel
 fun GameListScreen(
 	onOpenGame: (GameProfile) -> Unit,
 	onOpenSettings: () -> Unit,
+	onOpenDownloads: () -> Unit = {},
 	viewModel: GameListViewModel = koinViewModel(),
 ) {
 	val vState by viewModel.collectAsStateWithLifecycle()
+
+	// The queue is application-scoped, so it is read here and handed down as plain state --
+	// `GameListContent` stays free of Koin and therefore previewable. This screen needs it because
+	// it is where a download is most likely to be *left* running: going back here from the sets is
+	// exactly the moment a long import stops being visible anywhere else.
+	val vJobs by koinInject<DownloadManager>().jobs.collectAsState()
 
 	// Resolved here rather than in the row, because `GameListContent` and everything under it must
 	// stay free of Koin: a preview has no graph and `koinInject` throws in one. `GameRow` used to
@@ -123,6 +134,8 @@ fun GameListScreen(
 		dispatch = viewModel::dispatch,
 		onOpenGame = onOpenGame,
 		onOpenSettings = onOpenSettings,
+		onOpenDownloads = onOpenDownloads,
+		downloads = vJobs,
 		artFor = vArtRegistry::forGame,
 	)
 }
@@ -139,6 +152,8 @@ fun GameListContent(
 	dispatch: (GameListContract.Intent) -> Unit,
 	onOpenGame: (GameProfile) -> Unit = {},
 	onOpenSettings: () -> Unit = {},
+	onOpenDownloads: () -> Unit = {},
+	downloads: List<DownloadJob> = emptyList(),
 	/**
 	 * A game's logo and accent colour, supplied by the caller.
 	 *
@@ -153,6 +168,9 @@ fun GameListContent(
 			TopAppBar(
 				title = { Text(if (state.isEditing) "Customise list" else "Card Browser") },
 				actions = {
+					// Draws nothing when the queue is empty, so it costs no space until there is
+					// something to see -- see `DownloadsButton`.
+					DownloadsButton(jobs = downloads, onClick = onOpenDownloads)
 					IconButton(onClick = { dispatch(GameListContract.Intent.EditingToggled) }) {
 						Icon(
 							imageVector = if (state.isEditing) {

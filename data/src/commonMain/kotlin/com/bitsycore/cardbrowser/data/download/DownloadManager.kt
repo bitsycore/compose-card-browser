@@ -5,6 +5,7 @@ import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.ProviderError
+import com.bitsycore.cardbrowser.data.repository.BulkImportProgress
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.settings.imageDownloadKey
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
@@ -70,17 +71,29 @@ enum class DownloadKind {
 	val isImagery: Boolean get() = this == GRID_THUMBNAILS
 }
 
-/** A request to put a set on disk. */
+/**
+ * A request to put something on disk: one set, or a whole game's records in one file.
+ *
+ * @property setId the set, or `null` for a whole-game import -- which is not about a set and must
+ *   not be matched against one. A row asking "is my set downloading?" compares this, and a
+ *   synthetic id would have made every such comparison quietly wrong for one game
+ * @property setName what the queue calls this job. The set's name, or the game's for an import
+ * @property isWholeGameImport true when this is the source's bulk file rather than a set fetch.
+ *   The two are queued together on purpose -- see `DownloadManager` -- because they are the same
+ *   thing to the person waiting, however differently they are fetched
+ */
 data class DownloadRequest(
-	val setId: SourceId,
+	val setId: SourceId?,
 	val game: GameId,
 	val setName: String,
 	val kinds: Set<DownloadKind>,
 	val language: CardLanguage? = null,
+	val isWholeGameImport: Boolean = false,
 ) {
 
 	init {
 		require(kinds.isNotEmpty()) { "A download with nothing to download is not a download" }
+		require(setId != null || isWholeGameImport) { "A set download needs a set" }
 	}
 }
 
@@ -290,9 +303,68 @@ class DownloadManager(
 		}
 	}
 
+
+	/**
+	 * A whole-game import, as a job in this queue.
+	 *
+	 * It used to run in the set list's view model, and Navigation 3 scopes a view model to its
+	 * back-stack entry -- so going back to the game picker cancelled the import and `ScryfallBulk`
+	 * deleted the 74 MB it had already fetched. The queue's scope is the application's, which is
+	 * the property this needed all along.
+	 *
+	 * It is still not paced like the rest: one transfer replacing hundreds of requests is the
+	 * opposite of the thing the one-at-a-time rule protects against. Being *in* the queue is about
+	 * where the user looks for it, not about how it is fetched -- and it does mean a set fetch and
+	 * an import for the same game cannot run at once, which is the right answer anyway since they
+	 * would be writing the same records.
+	 */
+	private suspend fun runWholeGameImport(job: DownloadJob) {
+		val vResult = runCatching {
+			mRepository.importBulk(job.request.game) { vProgress ->
+				// Bytes while downloading, then cards, then sets. Three different units for one
+				// bar, which is honest about the three phases having nothing in common: the bar
+				// restarts rather than pretending the download and the write are one scale.
+				update(job.id) {
+					when (vProgress) {
+						is BulkImportProgress.Downloading -> DownloadStatus.Running(
+							completed = (vProgress.bytes / 1024).toInt(),
+							total = ((vProgress.total ?: 0L) / 1024).toInt(),
+						)
+						is BulkImportProgress.Reading ->
+							DownloadStatus.Running(completed = vProgress.cards, total = 0)
+						is BulkImportProgress.Writing ->
+							DownloadStatus.Running(completed = vProgress.sets, total = vProgress.total)
+					}
+				}
+			}
+		}
+		val vImport = vResult.getOrNull()
+		update(job.id) {
+			when {
+				vResult.isFailure -> DownloadStatus.Failed(
+					vResult.exceptionOrNull()?.message ?: "The import did not finish",
+				)
+				// Null means this game's source publishes no dump. Not a failure of the download,
+				// but not a success either -- nothing was fetched, and saying "done" would be a
+				// claim that the game is now on disk.
+				vImport == null -> DownloadStatus.Failed("This game's source publishes no bulk file")
+				else -> DownloadStatus.Completed(
+					cards = vImport.cards,
+					imagesFetched = 0,
+					imagesFailed = 0,
+				)
+			}
+		}
+	}
+
 	/** One job, start to finish. */
 	private suspend fun run(job: DownloadJob) {
 		val vRequest = job.request
+		if (vRequest.isWholeGameImport) {
+			runWholeGameImport(job)
+			return
+		}
+		val vSetId = vRequest.setId ?: return
 		// Marked *before* the fetch, not after it.
 		//
 		// Writing a record runs a trim, so a set large enough to push the cache over its ceiling
@@ -301,7 +373,7 @@ class DownloadManager(
 		// be laid down first and simply waits for it.
 		val vPinsRecords = DownloadKind.CARD_INFO in vRequest.kinds
 		if (vPinsRecords) {
-			mRepository.setPinned(vRequest.game, vRequest.setId, vRequest.language, isPinned = true)
+			mRepository.setPinned(vRequest.game, vSetId, vRequest.language, isPinned = true)
 		}
 		try {
 			// 1. The card records. Needed even for an images-only download, because the image URLs
@@ -309,7 +381,7 @@ class DownloadManager(
 			//    it costs nothing beyond the read.
 			val vCards = mRepository
 				.cards(
-					setId = vRequest.setId,
+					setId = vSetId,
 					game = vRequest.game,
 					query = CardQuery(),
 					language = vRequest.language,
@@ -427,8 +499,11 @@ class DownloadManager(
 		total: Int,
 	) {
 		if (total <= 0) return
+		// Only a set download fetches images, so a whole-game import never reaches here with a
+		// null set -- but the record is keyed by set id, so there would be nothing to write under.
+		val vSetId = request.setId ?: return
 		runCatching {
-			val vKey = imageDownloadKey(request.setId.qualified, request.language, kind.name)
+			val vKey = imageDownloadKey(vSetId.qualified, request.language, kind.name)
 			mPreferences.update { vPreferences ->
 				vPreferences.copy(
 					imageDownloads = vPreferences.imageDownloads +
@@ -462,7 +537,8 @@ class DownloadManager(
 	 * It only stopped mattering because nothing offered a choice of language until now.
 	 */
 	private fun idOf(request: DownloadRequest): String = buildString {
-		append(request.setId.qualified)
+		if (request.isWholeGameImport) append("bulk:")
+		append(request.setId?.qualified ?: request.game.value)
 		append('|')
 		append(request.kinds.map { it.name }.sorted().joinToString(","))
 		append('|')

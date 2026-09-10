@@ -155,6 +155,65 @@ class DownloadManagerTest {
 	}
 
 	@Test
+	fun `a whole-game import is a job in the queue like any other`() = runTest {
+		// The property that matters is where it lives, not how it fetches. It used to run in the
+		// set list's view model, which Navigation 3 scopes to the back-stack entry -- so going
+		// back to the game picker cancelled it and threw away the 74 MB already downloaded. In
+		// the queue it runs in the application's scope, which no screen can take away, and it is
+		// visible in the one place a user looks for a download.
+		val vManager = managerWith(RecordingPrefetcher(), testScheduler)
+
+		val vId = vManager.enqueue(
+			DownloadRequest(
+				setId = null,
+				game = GameId("riftbound"),
+				setName = "Riftbound",
+				kinds = setOf(DownloadKind.CARD_INFO),
+				isWholeGameImport = true,
+			),
+		)
+
+		val vJob = vManager.jobs.value.single { it.id == vId }
+		assertTrue(vJob.request.isWholeGameImport)
+		assertEquals("Riftbound", vJob.request.setName)
+	}
+
+	@Test
+	fun `an import and a set download for the same game are different jobs`() = runTest {
+		// The id folds in the import flag, so queueing one does not replace the other. They still
+		// run one at a time, which is what stops them writing the same records at once.
+		val vManager = managerWith(RecordingPrefetcher(), testScheduler)
+
+		vManager.enqueue(request())
+		vManager.enqueue(
+			DownloadRequest(
+				setId = null,
+				game = GameId("riftbound"),
+				setName = "Riftbound",
+				kinds = setOf(DownloadKind.CARD_INFO),
+				isWholeGameImport = true,
+			),
+		)
+
+		assertEquals(2, vManager.jobs.value.size)
+	}
+
+	@Test
+	fun `a request with no set must say it is a whole-game import`() {
+		// The set id is nullable so an import is not forced to invent one -- a synthetic id would
+		// have made every "is my set downloading?" comparison quietly wrong for one game. That
+		// nullability must not become a way to enqueue a set download with no set.
+		kotlin.test.assertFailsWith<IllegalArgumentException> {
+			DownloadRequest(
+				setId = null,
+				game = GameId("riftbound"),
+				setName = "Riftbound",
+				kinds = setOf(DownloadKind.CARD_INFO),
+			)
+		}
+	}
+
+	@Test
 	fun `thumbnails are the only imagery a download ever fetches`() {
 		// Full-size art was a third kind and was deliberately removed. Measured across three
 		// providers a full image is roughly four times its thumbnail -- 63 KB against 19.5 for

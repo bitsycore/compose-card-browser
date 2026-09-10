@@ -207,6 +207,9 @@ private fun DownloadCard(job: DownloadJob, onCancel: (String) -> Unit) {
 			// rows reading only the set's name was genuinely confusing.
 			Spacer(Modifier.height(8.dp))
 			Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+				// An import is the whole game in one file, which is a different shape of work
+				// from a set fetch and reads as one wrong row unless it says so.
+				if (job.request.isWholeGameImport) QueueChip("Whole game")
 				job.request.language?.let { vLanguage ->
 					QueueChip(vLanguage.displayName)
 				}

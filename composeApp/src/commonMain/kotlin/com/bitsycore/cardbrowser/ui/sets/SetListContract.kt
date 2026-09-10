@@ -85,8 +85,6 @@ object SetListContract :
 		 * informed choice and a surprise on a phone bill.
 		 */
 		val bulkSummary: BulkSummary? = null,
-		/** Where a running import has got to, or `null` when none is running. */
-		val bulkProgress: BulkImportProgress? = null,
 		/** Pinned sets in the user's order, by qualified id, across every game. See `SetFavourites`. */
 		val favouriteIds: List<String> = emptyList(),
 		/**
@@ -228,7 +226,6 @@ object SetListContract :
 		data object BulkImportRequested : Intent
 
 		/** An import moved on, or finished when [progress] is null. */
-		data class BulkProgressed(val progress: BulkImportProgress?) : Intent
 
 		/** A set was pinned to the top, or unpinned. */
 		data class FavouriteToggled(val setId: String) : Intent
@@ -312,15 +309,11 @@ object SetListContract :
 
 		is Intent.BulkAvailable -> state.copy(bulkSummary = intent.summary)
 
-		// Deliberately does not clear `bulkSummary`: the file is still there, and offering the
-		// import again after one finishes is reasonable -- Scryfall rebuilds daily.
-		is Intent.BulkProgressed -> state.copy(bulkProgress = intent.progress)
-
-		// The work happens in the view model; the reducer only records that it started, so the
-		// banner appears on the same frame as the tap rather than after the first byte.
-		is Intent.BulkImportRequested -> state.copy(
-			bulkProgress = BulkImportProgress.Downloading(0, state.bulkSummary?.compressedBytes),
-		)
+		// Nothing to reduce. The import is a job on the download queue now, and the queue is what
+		// reports its progress -- so this screen no longer holds a second, parallel account of it.
+		// Deliberately does not clear `bulkSummary` either: the file is still there, and offering
+		// the import again after one finishes is reasonable, since Scryfall rebuilds daily.
+		is Intent.BulkImportRequested -> state
 
 		is Intent.FavouritesRestored -> state.copy(favouriteIds = intent.favouriteIds)
 

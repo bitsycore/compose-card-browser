@@ -40,6 +40,11 @@ import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.collectAsState
+import com.bitsycore.cardbrowser.data.download.DownloadJob
+import com.bitsycore.cardbrowser.data.download.DownloadManager
+import com.bitsycore.cardbrowser.ui.downloads.DownloadsButton
+import org.koin.compose.koinInject
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -106,8 +111,12 @@ fun CardGridScreen(
 	setCode: String,
 	onBack: () -> Unit,
 	onOpenCard: (CardPrinting) -> Unit,
+	onOpenDownloads: () -> Unit = {},
 	viewModel: CardGridViewModel = koinViewModel(),
 ) {
+	// Application-scoped, so a download started from the set list is still running while its set
+	// is being browsed -- which is the common case, and was the one place it became invisible.
+	val vJobs by koinInject<DownloadManager>().jobs.collectAsState()
 	val vSnackbarHost = remember { SnackbarHostState() }
 
 	// A language that turns out to have nothing for this set has to say so. Silence would read as
@@ -148,6 +157,8 @@ fun CardGridScreen(
 			focusedCardId = vFocusedCardId,
 			onBack = onBack,
 			onOpenCard = onOpenCard,
+			onOpenDownloads = onOpenDownloads,
+			downloads = vJobs,
 		)
 	}
 }
@@ -168,6 +179,9 @@ fun CardGridContent(
 	focusedCardId: String? = null,
 	onBack: () -> Unit = {},
 	onOpenCard: (CardPrinting) -> Unit = {},
+	onOpenDownloads: () -> Unit = {},
+	/** The queue, passed in rather than injected, so this composable and its previews need no Koin. */
+	downloads: List<DownloadJob> = emptyList(),
 	/** Hoisted so the screen can post to it from an effect. A preview passes a fresh, unused one. */
 	snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
@@ -250,6 +264,7 @@ fun CardGridContent(
 						}
 					},
 					actions = {
+						DownloadsButton(jobs = downloads, onClick = onOpenDownloads)
 						// Only where there is a choice to make -- see `UiState.languageOptions`.
 						if (vState.languageOptions.size > 1) {
 							LanguageMenu(
