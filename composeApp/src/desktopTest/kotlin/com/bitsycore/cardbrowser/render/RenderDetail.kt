@@ -1,13 +1,6 @@
 package com.bitsycore.cardbrowser.render
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.ImageComposeScene
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.Density
 import com.bitsycore.cardbrowser.core.model.CardIdentity
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.core.model.CardLanguage
@@ -17,7 +10,6 @@ import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.ui.detail.CardDetailContent
 import com.bitsycore.cardbrowser.ui.detail.CardDetailContract
 import com.bitsycore.cardbrowser.ui.preview.PreviewData
-import com.bitsycore.cardbrowser.ui.theme.CardBrowserTheme
 import java.io.File
 import kotlin.test.Ignore
 import kotlin.test.Test
@@ -45,46 +37,22 @@ class DetailRenderer {
 		val vOut = File("build/render")
 		vOut.mkdirs()
 
-		render(vOut, "detail-riftbound") {
+		// 3800 px tall on purpose. The screen scrolls, and a viewport the size of a real phone
+		// would show the card image and its name and nothing else -- which is the part of this
+		// screen that was already fine.
+
+		renderToPng(vOut, "detail-riftbound", width = 420, height = 3800, density = 1.6f) {
 			CardDetailContent(state = riftboundState(), dispatch = {})
 		}
-		render(vOut, "detail-many-languages") {
+		renderToPng(vOut, "detail-many-languages", width = 420, height = 3800, density = 1.6f) {
 			CardDetailContent(state = manyLanguagesState(), dispatch = {})
 		}
-		render(vOut, "detail-light", isDark = false) {
+		renderToPng(vOut, "detail-light", width = 420, height = 3800, density = 1.6f, isDark = false) {
 			CardDetailContent(state = linkedArtworkState(), dispatch = {})
 		}
 
 		assertTrue(vOut.listFiles().orEmpty().any { it.length() > 0 }, "nothing was rendered")
 		println("Wrote ${vOut.absolutePath}")
-	}
-}
-
-/** One PNG of [content], at a phone-shaped width and tall enough to hold the whole page. */
-@OptIn(ExperimentalComposeUiApi::class)
-private fun render(
-	directory: File,
-	name: String,
-	isDark: Boolean = true,
-	content: @Composable () -> Unit,
-) {
-	// Very tall on purpose. The screen scrolls, and a viewport the size of a real phone would show
-	// the card image and its name and nothing else -- which is the part of this screen that was
-	// already fine.
-	val vScene = ImageComposeScene(width = 420, height = 3800, density = Density(1.6f)) {
-		CardBrowserTheme(useDarkTheme = isDark) {
-			Surface(modifier = Modifier.fillMaxSize()) {
-				Box(Modifier.fillMaxSize()) { content() }
-			}
-		}
-	}
-	try {
-		val vImage = vScene.render()
-		File(directory, "$name.png").writeBytes(
-			vImage.encodeToData()?.bytes ?: error("could not encode $name"),
-		)
-	} finally {
-		vScene.close()
 	}
 }
 

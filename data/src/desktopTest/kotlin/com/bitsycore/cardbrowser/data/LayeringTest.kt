@@ -79,16 +79,29 @@ class LayeringTest {
 		)
 
 		/**
-		 * Every game and every source this build has.
+		 * Every game and every source this build has, **read off the directory tree**.
 		 *
-		 * A list that has to be extended when a source is added, which is the point: the day
-		 * somebody adds one and puts its name in `:data`, this fails and says where.
+		 * It used to be a hand-written list, and the obvious thing happened: it said it was "every
+		 * game and every source" while omitting `magic` and `altered`. A guard that names what it
+		 * checks and then does not check all of it is worse than no guard, because the gap is
+		 * invisible -- `:data` could have said `MagicGame` and nothing would have failed.
+		 *
+		 * Derived instead, so adding a module adds it to the guard on the same commit. `api` is
+		 * excluded because `:games:api` is not a game and the substring appears everywhere.
 		 */
-		val FORBIDDEN = listOf(
-			"scryfall", "tcgdex", "tcgcsv", "riftcodex", "ygoprodeck", "optcg", "wuwa",
-			"riftbound", "pokemon", "onepiece", "yugioh", "lorcana", "cyberpunk", "wowtcg",
-			"wutheringwaves",
-		)
+		val FORBIDDEN: List<String> = (moduleNames("../games") + moduleNames("../providers"))
+			.filterNot { it == "api" }
+			.distinct()
+			.sorted()
+
+		/** The subdirectory names under [parent], which are the module names. */
+		private fun moduleNames(parent: String): List<String> {
+			val vDirectory = File(parent)
+			// A wrong path must fail loudly rather than quietly forbid nothing, which is exactly
+			// the failure this whole derivation exists to prevent.
+			check(vDirectory.isDirectory) { "cannot find $parent at ${vDirectory.absolutePath}" }
+			return vDirectory.listFiles().orEmpty().filter { it.isDirectory }.map { it.name }
+		}
 
 		val BLOCK_COMMENT = Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL)
 		val LINE_COMMENT = Regex("""//[^\n]*""")

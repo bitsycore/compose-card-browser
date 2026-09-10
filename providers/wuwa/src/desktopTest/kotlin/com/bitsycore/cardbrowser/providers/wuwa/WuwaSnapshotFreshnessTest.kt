@@ -1,10 +1,8 @@
 package com.bitsycore.cardbrowser.providers.wuwa
 
 import com.bitsycore.cardbrowser.core.model.CardLanguage
-import io.ktor.client.HttpClient
+import com.bitsycore.cardbrowser.data.net.HttpClientFactory
 import io.ktor.client.call.body
-import io.ktor.client.engine.java.Java
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.head
 import io.ktor.client.request.header
@@ -44,13 +42,18 @@ import kotlinx.serialization.json.Json
  */
 class WuwaSnapshotFreshnessTest {
 
-	private fun client() = HttpClient(Java) {
-		install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
-	}
-
-	/** One locale's card list, straight from the endpoint the scraper uses. */
-	private suspend fun listFor(locale: String): WireList = client().use { vClient ->
-		vClient
+	/**
+	 * One locale's card list, straight from the endpoint the scraper uses.
+	 *
+	 * Through [HttpClientFactory], and that is the fix rather than a tidy-up. This file used to
+	 * build a bare `HttpClient(Java)` -- the only test in the repository that did -- so its
+	 * requests to a volunteer-run API carried Ktor's default User-Agent instead of the honest,
+	 * contactable one the factory exists to guarantee, and had no timeout, no retry and no
+	 * throttle. It also built and closed a client *per request*, so eleven requests meant eleven
+	 * connection pools. One client, held for the class.
+	 */
+	private suspend fun listFor(locale: String): WireList = run {
+		mClient
 			.get(WuwaProvider.API_BASE_URL) {
 				url { appendPathSegments("api", "web", "card", "list") }
 				parameter("page", 1)
@@ -125,15 +128,13 @@ class WuwaSnapshotFreshnessTest {
 			.take(3)
 		assertTrue(vSample.isNotEmpty())
 
-		client().use { vClient ->
-			for (vCard in vSample) {
-				val vResponse: HttpResponse = vClient.head(vCard.artwork.imageUrl)
-				assertEquals(
-					HttpStatusCode.OK,
-					vResponse.status,
-					"${vCard.collectorNumber} art is gone: ${vCard.artwork.imageUrl}",
-				)
-			}
+		for (vCard in vSample) {
+			val vResponse: HttpResponse = mClient.head(vCard.artwork.imageUrl)
+			assertEquals(
+				HttpStatusCode.OK,
+				vResponse.status,
+				"${vCard.collectorNumber} art is gone: ${vCard.artwork.imageUrl}",
+			)
 		}
 	}
 
@@ -164,6 +165,9 @@ class WuwaSnapshotFreshnessTest {
 	)
 
 	private companion object {
+
+		/** One per JVM, with the app's own User-Agent, timeout and retry policy. */
+		val mClient by lazy { HttpClientFactory.create() }
 
 		/** Snapshot locale tag to the `x-lang` value UCP wants. The full tag; a bare one answers empty. */
 		val LOCALES = mapOf("ja" to "ja-jp", "zh-cn" to "zh-cn", "ko" to "ko-kr")

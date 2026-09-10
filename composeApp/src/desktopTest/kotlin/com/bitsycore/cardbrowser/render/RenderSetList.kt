@@ -1,13 +1,5 @@
 package com.bitsycore.cardbrowser.render
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.ImageComposeScene
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.Density
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.ProviderId
@@ -16,7 +8,6 @@ import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.ui.sets.SetListContent
 import com.bitsycore.cardbrowser.ui.sets.SetListContract
-import com.bitsycore.cardbrowser.ui.theme.CardBrowserTheme
 import kotlinx.datetime.LocalDate
 import java.io.File
 import kotlin.test.Ignore
@@ -44,11 +35,11 @@ class SetListRenderer {
 		val vOut = File("build/render")
 		vOut.mkdirs()
 
-		render(vOut, "sets-all-lines") { SetListContent(pokemonState(), {}, onOpenSet = {}, onOpenSettings = {}) }
-		render(vOut, "sets-one-line") {
+		renderToPng(vOut, "sets-all-lines", width = 660, height = 1100, density = 1.65f) { SetListContent(pokemonState(), {}, onOpenSet = {}, onOpenSettings = {}) }
+		renderToPng(vOut, "sets-one-line", width = 660, height = 1100, density = 1.65f) {
 			SetListContent(pokemonState().copy(region = "jp"), {}, onOpenSet = {}, onOpenSettings = {})
 		}
-		render(vOut, "sets-single-line-game", isDark = false) {
+		renderToPng(vOut, "sets-single-line-game", width = 660, height = 1100, density = 1.65f, isDark = false) {
 			SetListContent(riftboundState(), {}, onOpenSet = {}, onOpenSettings = {})
 		}
 
@@ -57,29 +48,6 @@ class SetListRenderer {
 	}
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
-private fun render(
-	directory: File,
-	name: String,
-	isDark: Boolean = true,
-	content: @Composable () -> Unit,
-) {
-	val vScene = ImageComposeScene(width = 660, height = 1100, density = Density(1.65f)) {
-		CardBrowserTheme(useDarkTheme = isDark) {
-			Surface(modifier = Modifier.fillMaxSize()) {
-				Box(Modifier.fillMaxSize()) { content() }
-			}
-		}
-	}
-	try {
-		val vImage = vScene.render()
-		File(directory, "$name.png").writeBytes(
-			vImage.encodeToData()?.bytes ?: error("could not encode $name"),
-		)
-	} finally {
-		vScene.close()
-	}
-}
 
 // ==================
 // MARK: States

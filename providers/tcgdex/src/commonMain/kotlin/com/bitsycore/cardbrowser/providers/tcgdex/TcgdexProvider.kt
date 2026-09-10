@@ -16,6 +16,8 @@ import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
 import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
 import com.bitsycore.cardbrowser.core.provider.ProviderError
+import com.bitsycore.cardbrowser.data.net.ProviderHttpPolicy
+import kotlin.time.Duration.Companion.milliseconds
 import com.bitsycore.cardbrowser.data.net.mapProviderErrors
 import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
 import io.ktor.client.HttpClient
@@ -530,6 +532,21 @@ class TcgdexProvider(
 	)
 
 	companion object {
+
+		/**
+		 * TCGdex publishes no rate limit, and this paces anyway.
+		 *
+		 * It is the one adapter here that fans out: `fetchCatalogues` puts eleven locale requests
+		 * in flight at once and `confirmLanguages` one per candidate, so a single `listSets` is an
+		 * eleven-wide burst at one host rather than a request. Nothing about that is hostile at
+		 * app scale -- it happens once per five minutes and is then memoised -- but a live test
+		 * sweep repeats it, and an unpaced burst is not a thing to send at a free API on the
+		 * grounds that nobody has asked us not to.
+		 *
+		 * 50 ms, matching YGOPRODeck's. The throttle serialises the fan-out, which costs about
+		 * half a second on a `listSets` that is made once.
+		 */
+		val HTTP_POLICY: ProviderHttpPolicy = ProviderHttpPolicy(minRequestInterval = 50.milliseconds)
 
 		/** Never changed: it is written into every id and every cache file this adapter produces. */
 		val PROVIDER_ID: ProviderId = ProviderId("tcgdex")

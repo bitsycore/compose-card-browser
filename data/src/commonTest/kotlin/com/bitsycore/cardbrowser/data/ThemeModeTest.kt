@@ -37,8 +37,15 @@ class ThemeModeTest {
 	@Test
 	fun `every mode is offered and labelled`() {
 		// The settings row renders `entries` directly, so a mode added without a label would show
-		// up as a blank chip rather than not at all.
-		assertEquals(3, ThemeMode.entries.size)
+		// up as a blank chip rather than not at all. That is the whole check -- there is
+		// deliberately no assertion on how many modes exist, because adding one is not a
+		// regression and a count would report it as though it were.
+		assertTrue(ThemeMode.entries.isNotEmpty())
 		assertTrue(ThemeMode.entries.all { it.label.isNotBlank() })
+		assertEquals(
+			ThemeMode.entries.size,
+			ThemeMode.entries.map { it.label }.distinct().size,
+			"two modes share a label",
+		)
 	}
 }

@@ -479,13 +479,19 @@ class CardRepositoryTest {
 			.cards(mSetId, TestGame.id, CardQuery(), knownSetSize = 30)
 			.toList()
 
+		// Referenced, not restated. 24 is a latency tuning value chosen from a measurement, and
+		// retuning it to 20 or 30 changes nothing any user-visible contract promises -- it should
+		// not cost three test edits.
 		assertEquals(
-			listOf(24, 100),
+			listOf(CardRepository.FIRST_PAGE_SIZE, 100),
 			vProvider.requestedPageSizes,
 			"a small first paint, then the provider's full page size",
 		)
 		// And the small one really did reach the screen ahead of the rest.
-		assertEquals(24, assertNotNull(vEmissions.first().value).cards.size)
+		assertEquals(
+			CardRepository.FIRST_PAGE_SIZE,
+			assertNotNull(vEmissions.first().value).cards.size,
+		)
 		assertFalse(assertNotNull(vEmissions.first().value).isCompleteSet)
 		assertEquals(30, assertNotNull(vEmissions.last().value).cards.size)
 		assertTrue(assertNotNull(vEmissions.last().value).isCompleteSet)
@@ -524,8 +530,8 @@ class CardRepositoryTest {
 			.toList()
 			.map { assertNotNull(it.value).cards.size }
 
-		// 24 from the quick first paint, then each page as it lands, then the whole set.
-		assertEquals(listOf(24, 100, 200, 250), vCounts)
+		// The quick first paint, then each page as it lands, then the whole set.
+		assertEquals(listOf(CardRepository.FIRST_PAGE_SIZE, 100, 200, 250), vCounts)
 	}
 
 	// ============

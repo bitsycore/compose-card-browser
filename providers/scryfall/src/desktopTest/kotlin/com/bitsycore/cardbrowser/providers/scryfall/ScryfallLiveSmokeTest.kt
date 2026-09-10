@@ -264,9 +264,16 @@ class ScryfallLiveSmokeTest {
 		val vClient = mClient
 		val vSets = ScryfallProvider(vClient).listSets()
 
+		// A proportion, not a total. Demanding all 500-odd paper sets publish an icon makes this
+		// red the day Scryfall adds one set without one -- which is their business and not a
+		// regression in this adapter. What the adapter has to get right is that it maps the field
+		// when it is there and states monochrome correctly, and a large majority proves that.
 		val vWithSymbol = vSets.count { it.symbol != null }
-		assertEquals(vSets.size, vWithSymbol, "Every paper set should publish an icon")
-		assertTrue(vSets.all { it.symbol?.isMonochrome == true })
+		assertTrue(
+			vWithSymbol > vSets.size * 9 / 10,
+			"Only $vWithSymbol of ${vSets.size} sets mapped a symbol",
+		)
+		assertTrue(vSets.mapNotNull { it.symbol }.all { it.isMonochrome })
 
 		// The symbols are SVG and nothing else, so the app needs an SVG decoder registered or
 		// every Magic set silently falls back to its code.

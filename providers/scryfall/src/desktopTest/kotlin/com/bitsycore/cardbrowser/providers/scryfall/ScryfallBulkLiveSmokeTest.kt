@@ -28,7 +28,7 @@ class ScryfallBulkLiveSmokeTest {
 		return AppStorage(FileSystem.SYSTEM, vRoot, vRoot).also { it.prepare() }
 	}
 
-	private fun provider() = ScryfallProvider(HttpClientFactory.create(), mStorage = storage())
+	private fun provider() = ScryfallProvider(HttpClientFactory.create(policy = ScryfallProvider.HTTP_POLICY), mStorage = storage())
 
 	@Test
 	fun `the manifest names a default_cards file with a real size`(): Unit = runBlocking {

@@ -1460,7 +1460,7 @@ class CardRepository(
 		 * Enough to fill the visible part of a grid on any screen this app runs on, and small
 		 * enough that it arrives while a full page is still transferring.
 		 */
-		private const val FIRST_PAGE_SIZE = 24
+		internal const val FIRST_PAGE_SIZE = 24
 
 		/**
 		 * How many pages of a set may be in flight at once.

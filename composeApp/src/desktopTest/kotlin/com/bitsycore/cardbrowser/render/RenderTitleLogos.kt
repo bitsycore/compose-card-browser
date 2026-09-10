@@ -1,12 +1,6 @@
 package com.bitsycore.cardbrowser.render
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
 import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.ImageComposeScene
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.Density
 import com.bitsycore.cardbrowser.games.api.GameArt
 import com.bitsycore.cardbrowser.games.altered.AlteredArt
 import com.bitsycore.cardbrowser.games.cyberpunk.CyberpunkArt
@@ -16,7 +10,6 @@ import com.bitsycore.cardbrowser.games.riftbound.RiftboundArt
 import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesArt
 import com.bitsycore.cardbrowser.ui.sets.SetListContent
 import com.bitsycore.cardbrowser.ui.sets.SetListContract
-import com.bitsycore.cardbrowser.ui.theme.CardBrowserTheme
 import java.io.File
 import kotlin.test.Ignore
 import kotlin.test.Test
@@ -68,28 +61,13 @@ class TitleLogoRenderer {
 
 /** Just the bar: short, so several fit on screen side by side when comparing them. */
 @OptIn(ExperimentalComposeUiApi::class)
-private fun renderTitle(directory: File, name: String, art: GameArt, isDark: Boolean) {
-	val vScene = ImageComposeScene(width = 660, height = 130, density = Density(1.65f)) {
-		CardBrowserTheme(useDarkTheme = isDark) {
-			Surface(modifier = Modifier.fillMaxSize()) {
-				Box(Modifier.fillMaxSize()) {
-					SetListContent(
-						state = SetListContract.UiState(isLoading = false),
-						dispatch = {},
-						onOpenSet = {},
-						onOpenSettings = {},
-						gameArt = art,
-					)
-				}
-			}
-		}
-	}
-	try {
-		val vImage = vScene.render()
-		File(directory, "$name.png").writeBytes(
-			vImage.encodeToData()?.bytes ?: error("could not encode $name"),
+private fun renderTitle(directory: File, name: String, art: GameArt, isDark: Boolean) =
+	renderToPng(directory, name, width = 660, height = 130, isDark = isDark) {
+		SetListContent(
+			state = SetListContract.UiState(isLoading = false),
+			dispatch = {},
+			onOpenSet = {},
+			onOpenSettings = {},
+			gameArt = art,
 		)
-	} finally {
-		vScene.close()
 	}
-}

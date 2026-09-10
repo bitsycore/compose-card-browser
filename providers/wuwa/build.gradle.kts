@@ -61,8 +61,12 @@ kotlin {
 			implementation(libs.kotlin.test)
 			implementation(libs.kotlinx.coroutines.test)
 		}
-		// Only the freshness check needs a network, so only it needs an engine.
+		// Only the freshness check needs a network, so only it needs an engine -- and `:data`,
+		// for `HttpClientFactory`. It builds the client the whole app uses, with the honest
+		// User-Agent these volunteer-run APIs are owed; a bare `HttpClient(Java)` here sent
+		// anonymous requests for a while and that is not a thing to leave in.
 		getByName("desktopTest").dependencies {
+			implementation(project(":data"))
 			implementation(libs.ktor.client.core)
 			implementation(libs.ktor.client.java)
 			implementation(libs.ktor.client.content.negotiation)

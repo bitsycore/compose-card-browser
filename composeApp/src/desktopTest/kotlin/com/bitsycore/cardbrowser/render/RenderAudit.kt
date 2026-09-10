@@ -39,7 +39,7 @@ class DownloadRenderer {
 		val vOut = File("build/render")
 		vOut.mkdirs()
 
-		render(vOut, "downloads-queue-multilingual") {
+		renderToPng(vOut, "downloads-queue-multilingual", width = 700, height = 900, density = 1.65f) {
 			DownloadsScreen(
 				jobs = multilingualJobs(),
 				onBack = {},
@@ -48,7 +48,7 @@ class DownloadRenderer {
 				onClearFinished = {},
 			)
 		}
-		render(vOut, "downloads-kind-dialog") {
+		renderToPng(vOut, "downloads-kind-dialog", width = 700, height = 900, density = 1.65f) {
 			DownloadKindDialog(
 				setName = "Base Set",
 				cardCount = 102,
@@ -63,7 +63,7 @@ class DownloadRenderer {
 				defaultLanguage = CardLanguage.FRENCH,
 			)
 		}
-		render(vOut, "downloads-kind-partly-held", isDark = false) {
+		renderToPng(vOut, "downloads-kind-partly-held", width = 700, height = 900, density = 1.65f, isDark = false) {
 			DownloadKindDialog(
 				setName = "Base Set",
 				cardCount = 102,
@@ -151,26 +151,3 @@ private fun renderPhone(
 	}
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
-private fun render(
-	directory: File,
-	name: String,
-	isDark: Boolean = true,
-	content: @Composable () -> Unit,
-) {
-	val vScene = ImageComposeScene(width = 700, height = 900, density = Density(1.65f)) {
-		CardBrowserTheme(useDarkTheme = isDark) {
-			Surface(modifier = Modifier.fillMaxSize()) {
-				Box(Modifier.fillMaxSize()) { content() }
-			}
-		}
-	}
-	try {
-		val vImage = vScene.render()
-		File(directory, "$name.png").writeBytes(
-			vImage.encodeToData()?.bytes ?: error("could not encode $name"),
-		)
-	} finally {
-		vScene.close()
-	}
-}

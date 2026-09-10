@@ -31,7 +31,13 @@ import kotlinx.coroutines.runBlocking
  */
 class TcgdexLiveSmokeTest {
 
-	private fun provider() = TcgdexProvider(HttpClientFactory.create())
+	// One instance for the whole class, and it matters more here than anywhere else in the suite.
+	// `fetchCatalogues` costs twelve requests -- eleven locales and a GraphQL query -- and memoises
+	// the result on the *instance* for five minutes. A fresh provider per test threw that away, so
+	// the six tests that call `listSets` paid for it six times over: 72 requests where 12 do. The
+	// client is shared for the same reason it is in `ScryfallLiveSmokeTest`: the throttle lives in
+	// the plugin instance, so one client is one budget.
+	private fun provider() = mProvider
 
 	@Test
 	fun `the set catalogue loads and carries real release dates`() = runBlocking {
@@ -386,4 +392,13 @@ class TcgdexLiveSmokeTest {
 			"TCGdex now serves set symbols -- prefer them over the wordmark logo",
 		)
 	}
+
+	private companion object {
+
+		/** One per JVM, so the catalogue memo and the throttle both span the class. */
+		val mProvider by lazy {
+			TcgdexProvider(HttpClientFactory.create(policy = TcgdexProvider.HTTP_POLICY))
+		}
+	}
+
 }

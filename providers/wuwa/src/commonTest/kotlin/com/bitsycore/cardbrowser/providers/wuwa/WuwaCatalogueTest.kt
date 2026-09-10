@@ -232,7 +232,17 @@ class WuwaCatalogueTest {
 	fun `sets are derived from card codes and count what they hold`() = runTest {
 		val vSets = mProvider.listSets()
 
-		assertEquals(listOf("BP01", "SD01", "SD02"), vSets.map { it.code })
+		// The *derivation*, not the current contents. Naming the three codes the snapshot happens
+		// to hold today would fail on the next `scrape_wuwa.py --refresh` -- which CLAUDE.md
+		// prescribes as the fix when the freshness check goes red, so this test would break as a
+		// direct consequence of doing the documented thing. What is actually under test is that
+		// `listSets` derives its sets from the cards' own `set` field, and that survives growth.
+		assertEquals(
+			WuwaCatalogue.snapshot().cards.map { it.set }.distinct().sorted(),
+			vSets.map { it.code }.sorted(),
+		)
+		assertTrue(vSets.isNotEmpty(), "the snapshot holds no sets at all")
+		assertEquals(vSets.size, vSets.map { it.code }.distinct().size, "duplicate set codes")
 		assertTrue(vSets.all { it.name == it.code })
 		for (vSet in vSets) {
 			// The provider's own maximum, which is what `CardRepository` passes. The default of 100

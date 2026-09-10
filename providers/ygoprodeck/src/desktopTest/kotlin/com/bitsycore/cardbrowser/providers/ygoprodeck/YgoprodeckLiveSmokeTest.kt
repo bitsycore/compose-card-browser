@@ -32,9 +32,10 @@ class YgoprodeckLiveSmokeTest {
 	 * them; a plain `create()` ignores the app's own policy, which is both discourteous to a free
 	 * API and a way to make every test here fail with `RateLimited` at once.
 	 */
-	private fun provider() = YgoprodeckProvider(
-		HttpClientFactory.create(policy = YgoprodeckProvider.HTTP_POLICY),
-	)
+	// The policy was right and the client was not: `requestThrottle` keeps its last-sent mark in
+	// the plugin instance, so a client per test is a budget per test and nothing is ever spaced.
+	// One instance for the class, the way `ScryfallLiveSmokeTest` does it.
+	private fun provider() = mProvider
 
 	private val mMetalRaiders = SourceId(YgoprodeckProvider.PROVIDER_ID, "Metal Raiders")
 
@@ -181,4 +182,13 @@ class YgoprodeckLiveSmokeTest {
 		val vResponse: HttpResponse = vClient.head(vWith.first().symbol!!.url)
 		assertEquals(HttpStatusCode.OK, vResponse.status, "Set image is not loading")
 	}
+
+	private companion object {
+
+		/** One per JVM, so the 50 ms throttle spans the class rather than one test method. */
+		val mProvider by lazy {
+			YgoprodeckProvider(HttpClientFactory.create(policy = YgoprodeckProvider.HTTP_POLICY))
+		}
+	}
+
 }
