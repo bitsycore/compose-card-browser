@@ -245,6 +245,29 @@ class SetCardCountTest {
 	}
 
 	@Test
+	fun `downloading a set is enough for its pin -- no menu visit required`() = runTest {
+		// The report: "I downloaded all and don't have a pin on all". The pin read only what a
+		// source had stated per set, and Scryfall states nothing -- so the whole of Magic could
+		// be on disk and every row stayed blank until its language menu had been opened by hand.
+		// Cards on disk are the strongest evidence of a language there is.
+		val vRepository = repository(english = 24, french = 4)
+
+		assertEquals(
+			emptyMap(),
+			vRepository.availableLanguages(CountTestGame.id, sets(), CardLanguage.FRENCH),
+			"nothing on disk and nothing stated is still nothing known",
+		)
+
+		vRepository.cards(mSetId, CountTestGame.id, CardQuery(), CardLanguage.ENGLISH).toList()
+
+		assertEquals(
+			setOf(CardLanguage.ENGLISH),
+			vRepository.availableLanguages(CountTestGame.id, sets(), CardLanguage.FRENCH)[mSetId.qualified],
+			"an English copy on disk is an English pin, without opening anything",
+		)
+	}
+
+	@Test
 	fun `a confirmed record outranks the claim`() = runTest {
 		// A catalogue listing a set in a language is not evidence it has cards in it -- TCGdex's
 		// Korean catalogue names 95 sets and serves none. Once the probe has run, its answer wins.

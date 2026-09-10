@@ -998,15 +998,23 @@ class CardRepository(
 	 * Deliberately **free of requests**. [languagesFor] gives the authoritative answer and costs a
 	 * probe per candidate; running it for every row would be a request per language per set, which
 	 * for Yu-Gi-Oh's catalogue is thousands of them to draw a list. This reads only what is already
-	 * known:
+	 * known, and unions three sources:
 	 *
-	 * 1. the confirmed record left behind by [languagesFor] the last time that set was opened, and
-	 * 2. failing that, whatever the set itself claims -- which for TCGdex and Wuthering Waves comes
-	 *    with the catalogue and for everything else is empty.
+	 * 1. the confirmed record left behind by [languagesFor] the last time that set was opened,
+	 * 2. **whatever is on disk** -- a set whose cards are cached in a language is confirmed in it,
+	 *    because they are there only because the source served them, and
+	 * 3. failing both, whatever the set itself claims -- which for TCGdex and Wuthering Waves
+	 *    comes with the catalogue and for everything else is empty.
 	 *
-	 * So the answer improves as sets are opened, and a set nobody has opened yet is simply absent
-	 * rather than guessed at. Absent means "not known", never "only one language" -- a source that
-	 * says nothing about a set's languages has not told us it has one.
+	 * Point 2 is what makes the pin useful after a download. Without it the pin read only what a
+	 * *source* had stated per set, and Scryfall states nothing -- so downloading the whole of
+	 * Magic left every row blank, and the pin appeared only on sets whose language menu had been
+	 * opened by hand. Cards on disk are the strongest evidence there is and they were being
+	 * ignored.
+	 *
+	 * So the answer improves as sets are downloaded or opened, and a set nobody has touched is
+	 * simply absent rather than guessed at. Absent means "not known", never "only one language" --
+	 * a source that says nothing about a set's languages has not told us it has one.
 	 */
 	suspend fun availableLanguages(
 		game: GameId,
@@ -1019,7 +1027,13 @@ class CardRepository(
 		for (vSet in sets) {
 			currentCoroutineContext().ensureActive()
 			val vConfirmed = mCache.read(setLanguagesKey(vProvider, vSet.id), vSerializer)?.payload
-			val vKnown = vConfirmed?.takeIf { it.isNotEmpty() } ?: vSet.languages
+			val vStated = vConfirmed?.takeIf { it.isNotEmpty() } ?: vSet.languages
+			// Plus every language this device actually holds cards in. The same candidate sweep
+			// `savedLanguages` runs -- one file-existence check per candidate, no requests.
+			val vHeld = languageCandidatesFor(vProvider, vSet, language)
+				.filterNotNull()
+				.filterTo(mutableSetOf()) { mCache.exists(completeSetKey(vProvider, vSet.id, it)) }
+			val vKnown = vStated + vHeld
 			if (vKnown.isNotEmpty()) vResult[vSet.id.qualified] = vKnown
 		}
 		return vResult
