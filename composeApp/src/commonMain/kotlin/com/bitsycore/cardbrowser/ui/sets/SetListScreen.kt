@@ -823,10 +823,9 @@ private fun SetRow(
 				}
 			}
 			// Two marks, because the two halves of a download are separately true: a set can have
-			// its records and none of its art, which is the common case after browsing it once.
-			// Three marks, because the three halves of a download are separately true: a set can
-			// have its records and no art, or thumbnails and no full art, and those are genuinely
-			// different states -- browsable offline versus readable offline.
+			// its records and none of its thumbnails, which is the common case after browsing it
+			// once. There is no third mark any more -- full-size art is not bulk-downloaded, so
+			// there is no state to report about it. See `DownloadKind`.
 			if (isSaved || images?.isEmpty == false) {
 				Spacer(Modifier.size(6.dp))
 				Row(verticalAlignment = Alignment.CenterVertically) {
@@ -845,12 +844,6 @@ private fun SetRow(
 						icon = Icons.Outlined.GridView,
 						label = "Grid thumbnails",
 						leadingSpace = isSaved,
-					)
-					ImageMark(
-						record = images?.art,
-						icon = Icons.Outlined.Photo,
-						label = "Full card art",
-						leadingSpace = isSaved || images?.thumbnails != null,
 					)
 				}
 			}
@@ -896,7 +889,6 @@ private fun alreadyDownloaded(isSaved: Boolean, images: SetImageStatus?): Set<Do
 	buildSet {
 		if (isSaved) add(DownloadKind.CARD_INFO)
 		if (images?.thumbnails?.isComplete == true) add(DownloadKind.GRID_THUMBNAILS)
-		if (images?.art?.isComplete == true) add(DownloadKind.FULL_ART)
 	}
 
 /**
@@ -1248,14 +1240,13 @@ private fun SetListDownloadMarksPreview() = PreviewFrame {
 			isLoading = false,
 			savedSetIds = PreviewData.SETS.drop(1).map { it.id.qualified }.toSet(),
 			imageDownloads = mapOf(
-				// Thumbnails only: browsable offline, not readable offline.
+				// Finished.
 				PreviewData.SETS[1].id.qualified to SetImageStatus(
 					thumbnails = ImageDownloadRecord(fetched = 280, total = 280),
 				),
-				// Both, with the art download interrupted.
+				// Interrupted, which the mark shows as a percentage rather than a tick.
 				PreviewData.SETS[2].id.qualified to SetImageStatus(
-					thumbnails = ImageDownloadRecord(fetched = 288, total = 288),
-					art = ImageDownloadRecord(fetched = 206, total = 288),
+					thumbnails = ImageDownloadRecord(fetched = 206, total = 288),
 				),
 			),
 		),

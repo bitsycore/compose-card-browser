@@ -97,15 +97,14 @@ class DownloadManagerTest {
 
 	@Test
 	fun `the same set with different kinds is a different job`() = runTest {
-		// Records, thumbnails and full art are three separate asks against one set, so each is its
-		// own row rather than being collapsed into one.
+		// Records and thumbnails are two separate asks against one set, so each is its own row
+		// rather than being collapsed into one.
 		val vManager = managerWith(RecordingPrefetcher(), testScheduler)
 
 		vManager.enqueue(request(kinds = setOf(DownloadKind.CARD_INFO)))
 		vManager.enqueue(request(kinds = setOf(DownloadKind.GRID_THUMBNAILS)))
-		vManager.enqueue(request(kinds = setOf(DownloadKind.FULL_ART)))
 
-		assertEquals(3, vManager.jobs.value.size)
+		assertEquals(2, vManager.jobs.value.size)
 	}
 
 	@Test
@@ -157,15 +156,18 @@ class DownloadManagerTest {
 	}
 
 	@Test
-	fun `thumbnails and full art are separate kinds -- and only they fetch pictures`() {
-		// The split exists because a thumbnail is about a quarter of the pair: measured across
-		// three providers, 19.5 KB against 63 for TCGdex and 28 against 153 for YGOPRODeck. So
-		// grid-browsable offline is a much cheaper purchase than readable offline, and the two are
-		// separately buyable.
+	fun `thumbnails are the only imagery a download ever fetches`() {
+		// Full-size art was a third kind and was deliberately removed. Measured across three
+		// providers a full image is roughly four times its thumbnail -- 63 KB against 19.5 for
+		// TCGdex, 153 against 28 for YGOPRODeck -- so bulk-fetching it meant hundreds of megabytes
+		// off someone else's CDN for pictures almost none of which are ever looked at. It arrives
+		// on demand when a card is opened instead, which the image cache keeps.
+		//
+		// The count is asserted so that putting a kind back is a decision rather than an accident:
+		// a new one needs the dialog, the queue's labels and the per-rendition record updating.
 		assertTrue(DownloadKind.GRID_THUMBNAILS.isImagery)
-		assertTrue(DownloadKind.FULL_ART.isImagery)
 		assertFalse(DownloadKind.CARD_INFO.isImagery)
-		assertEquals(3, DownloadKind.entries.size, "A new kind needs the UI and the record updating")
+		assertEquals(2, DownloadKind.entries.size, "A new kind needs the UI and the record updating")
 	}
 
 	@Test
@@ -196,16 +198,16 @@ class DownloadManagerTest {
 	@Test
 	fun `the same set and kinds in two languages are two jobs`() = runTest {
 		// Everything downstream is per language -- a cache key embeds it, and so does an image
-		// download record -- so a set's art in Japanese and in French is two pieces of work. The
+		// download record -- so a set's thumbnails in Japanese and in French are two pieces of work. The
 		// job id left the language out, so the second silently replaced the first in the queue and
 		// only one of them ever ran. Nothing noticed until the dialog started offering a choice.
 		val vManager = managerWith(RecordingPrefetcher(), testScheduler)
 
 		val vJapanese = vManager.enqueue(
-			request(kinds = setOf(DownloadKind.FULL_ART), language = CardLanguage.JAPANESE),
+			request(kinds = setOf(DownloadKind.GRID_THUMBNAILS), language = CardLanguage.JAPANESE),
 		)
 		val vFrench = vManager.enqueue(
-			request(kinds = setOf(DownloadKind.FULL_ART), language = CardLanguage.FRENCH),
+			request(kinds = setOf(DownloadKind.GRID_THUMBNAILS), language = CardLanguage.FRENCH),
 		)
 
 		assertTrue(vJapanese != vFrench, "Two languages must not share a job id")

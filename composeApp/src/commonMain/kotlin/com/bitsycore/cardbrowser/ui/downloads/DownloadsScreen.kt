@@ -266,7 +266,6 @@ private fun QueueChip(text: String) {
 private fun kindLabel(kind: DownloadKind): String = when (kind) {
 	DownloadKind.CARD_INFO -> "Card info"
 	DownloadKind.GRID_THUMBNAILS -> "Thumbnails"
-	DownloadKind.FULL_ART -> "Full art"
 }
 
 // ==================

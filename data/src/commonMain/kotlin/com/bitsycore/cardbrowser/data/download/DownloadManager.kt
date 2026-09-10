@@ -36,6 +36,19 @@ import kotlinx.coroutines.sync.withLock
  * four small JSON requests; its images are one request *per card* against a CDN, which for a
  * 400-card Magic set is 400 of them and tens of megabytes. Someone who wants a set browsable on a
  * train does not necessarily want to spend that, so it is a choice rather than a bundle.
+ *
+ * ## Why full-size art is not in here
+ *
+ * It used to be, and it was removed on purpose. Bulk-fetching every card's full rendition is the
+ * single heaviest thing this app could ask of a CDN it does not own and does not pay for --
+ * measured across three providers a full image is roughly four times its thumbnail (63 KB against
+ * 19 for TCGdex, 153 against 28 for YGOPRODeck), so downloading a game meant hundreds of megabytes
+ * of pictures, almost all of which are never looked at.
+ *
+ * Full art is fetched **on demand** instead: opening a card loads it and the image cache keeps it,
+ * so the art you actually read is on disk and the art you scrolled past never cost anyone a
+ * request. Nothing was lost from the offline story that thumbnails do not already cover -- a set
+ * with its records and its thumbnails browses completely offline.
  */
 enum class DownloadKind {
 
@@ -45,24 +58,16 @@ enum class DownloadKind {
 	/**
 	 * The small rendition the grid draws.
 	 *
-	 * Split from [FULL_ART] because the two are not the same purchase. Measured across three
-	 * providers, a thumbnail is about a quarter of the pair -- 19 KB against 63 for TCGdex, 28
-	 * against 153 for YGOPRODeck -- so this alone makes a set fully browsable offline for roughly a
-	 * quarter of the bytes, with card art fetched on demand.
+	 * The only imagery that is ever bulk-fetched. Measured across three providers a thumbnail is
+	 * about a quarter of the full image -- 19 KB against 63 for TCGdex, 28 against 153 for
+	 * YGOPRODeck -- so this makes a set browsable offline for a quarter of the bytes, and the
+	 * expensive three quarters are left to arrive one card at a time as they are read.
 	 */
 	GRID_THUMBNAILS,
-
-	/**
-	 * The full-size rendition the detail screen and the zoom viewer draw.
-	 *
-	 * The expensive three quarters. Worth it for a set you intend to read on a train, and pure cost
-	 * for one you only want to scroll.
-	 */
-	FULL_ART,
 	;
 
-	/** True for the two kinds that fetch pictures, as opposed to records. */
-	val isImagery: Boolean get() = this == GRID_THUMBNAILS || this == FULL_ART
+	/** True for the kind that fetches pictures, as opposed to records. */
+	val isImagery: Boolean get() = this == GRID_THUMBNAILS
 }
 
 /** A request to put a set on disk. */
@@ -343,23 +348,16 @@ class DownloadManager(
 				return
 			}
 
-			// 2. The art, in whichever renditions were asked for -- kept in separate lists so each
-			//    can be counted and recorded on its own. A provider with no small rendition (One
-			//    Piece, Altered) yields an empty thumbnail list rather than quietly falling back to
-			//    the full image, which would record art under the heading "thumbnails".
+			// 2. The thumbnails. Still keyed by kind rather than a bare list, because the record
+			//    written afterwards is per rendition and a second one may well come back one day.
+			//    A provider with no small rendition (One Piece, Altered) yields an empty list
+			//    rather than quietly falling back to the full image, which would both record art
+			//    under the heading "thumbnails" and fetch exactly the megabytes this avoids.
 			val vByKind: Map<DownloadKind, List<String>> = buildMap {
 				if (DownloadKind.GRID_THUMBNAILS in vRequest.kinds) {
 					put(
 						DownloadKind.GRID_THUMBNAILS,
 						vCards.mapNotNull { it.artwork.thumbnailUrl?.ifBlank { null } }.distinct(),
-					)
-				}
-				if (DownloadKind.FULL_ART in vRequest.kinds) {
-					put(
-						DownloadKind.FULL_ART,
-						vCards.mapNotNull {
-							(it.artwork.displayUrl ?: it.artwork.imageUrl).ifBlank { null }
-						}.distinct(),
 					)
 				}
 			}

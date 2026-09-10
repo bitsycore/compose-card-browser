@@ -215,11 +215,6 @@ class SetListViewModel(
 							language,
 							DownloadKind.GRID_THUMBNAILS.name,
 						),
-						art = vPreferences.imageDownloadFor(
-							vSet.id.qualified,
-							language,
-							DownloadKind.FULL_ART.name,
-						),
 					)
 					if (vStatus.isEmpty) null else vSet.id.qualified to vStatus
 				}.toMap(),

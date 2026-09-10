@@ -459,28 +459,32 @@ The job id used to leave the language out, which meant the second of two languag
 *replaced* the first in the queue and only one ever ran — invisible until something offered a
 choice.
 
-A set row has a download button, and the top bar can queue every set currently shown. Three things
+A set row has a download button, and the top bar can queue every set currently shown. Two things
 are offered separately, because they cost very differently:
 
 | | What it buys | Rough size |
 |---|---|---|
 | **Card info** | the set browsable and searchable offline | a handful of small requests |
 | **Grid thumbnails** | the grid renders offline | ~32 KB a card |
-| **Full card art** | a card readable and zoomable offline | ~94 KB a card |
 
-Those per-card figures are measured, not guessed — sampled across three providers on 2026-09-09:
-TCGdex 19.5 KB against 63 KB, Scryfall 47 against 67, YGOPRODeck 28 against 153. A thumbnail is
-about a quarter of the pair, which is why it is a separate purchase: browsing a set offline costs
-roughly a quarter of what reading it does. The spread is wide, so the dialog says "about".
+**Full-size art is deliberately not one of them.** It was, and it was removed: sampled across three
+providers on 2026-09-09, a full image is roughly four times its thumbnail — TCGdex 63 KB against
+19.5, Scryfall 67 against 47, YGOPRODeck 153 against 28 — so downloading a game meant hundreds of
+megabytes off a CDN this project neither owns nor pays for, for pictures almost none of which are
+ever looked at. It is fetched **on demand** instead: opening a card loads its full rendition and
+the image cache keeps it, so the cards you read end up on the device and the ones you scrolled past
+cost nobody a request. A set with its records and its thumbnails still browses completely offline.
+
+The per-card figures are measured, not guessed, and the spread is wide, so the dialog says "about".
 
 Jobs run **one at a time**. The provider clients already pace within a host, but nothing bounded how
 many jobs ran at once, and several of these APIs return 429 when pushed. Images within a job go four
 at a time, since those hit a CDN rather than the API.
 
-The set list then shows what a set has: a document mark for records, a grid mark for thumbnails, a
-photo mark for full art, with a percentage when a download did not finish. The image marks are
-records of a *download*, not proof of *presence* — the image cache is an LRU and the OS may purge it
-— so they read "downloaded", and art that arrived through ordinary browsing is not counted at all.
+The set list then shows what a set has: a document mark for records and a grid mark for thumbnails,
+with a percentage when a download did not finish. The marks are records of a *download*, not proof
+of *presence* — the image cache is an LRU and the OS may purge it — so they read "downloaded", and
+art that arrived through ordinary browsing is not counted at all.
 
 ### Cross-set search
 

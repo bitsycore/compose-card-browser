@@ -55,8 +55,9 @@ data class ImageDownloadRecord(
  * The key [BrowsingPreferences.imageDownloads] is stored under.
  *
  * Language, because a set in French and the same set in Japanese are different files. Rendition,
- * because grid thumbnails and full art are separately downloadable and separately true -- a set can
- * have every thumbnail and no art at all.
+ * because there was a second one -- full-size art -- and there may be again; keying by kind is what
+ * lets a rendition be added or removed without the records already on disk meaning something else.
+ * Records written for a kind that no longer exists simply never match.
  */
 fun imageDownloadKey(setId: String, language: CardLanguage?, kind: String): String =
 	setId + "|" + (language?.code ?: "-") + "|" + kind

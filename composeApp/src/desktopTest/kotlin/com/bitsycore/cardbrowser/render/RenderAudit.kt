@@ -114,10 +114,10 @@ private fun multilingualJobs(): List<DownloadJob> {
 		job(
 			5,
 			CardLanguage.FRENCH,
-			setOf(DownloadKind.GRID_THUMBNAILS, DownloadKind.FULL_ART),
+			setOf(DownloadKind.CARD_INFO, DownloadKind.GRID_THUMBNAILS),
 			DownloadStatus.Running(64, 204),
 		),
-		job(6, CardLanguage.ENGLISH, setOf(DownloadKind.FULL_ART), DownloadStatus.Failed("Offline")),
+		job(6, CardLanguage.ENGLISH, setOf(DownloadKind.GRID_THUMBNAILS), DownloadStatus.Failed("Offline")),
 	)
 }
 

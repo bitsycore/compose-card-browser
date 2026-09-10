@@ -160,10 +160,11 @@ fun DownloadKindDialog(
 
 	val vInfoMissing = languages.filterNot { it in infoLanguages }
 	var vInfo by remember(alreadyHave, infoLanguages) { mutableStateOf(!vInfoComplete) }
-	// Thumbnails are the cheap useful half -- about a quarter of the image bytes, and enough to
-	// browse a set's grid offline -- so they sit above full art. Neither is pre-ticked.
+	// The only imagery on offer. Full-size art was here and was deliberately removed: bulk-fetching
+	// every card's full rendition is roughly four times the bytes for pictures almost none of which
+	// are looked at, against a CDN this project does not own. It arrives on demand instead, when a
+	// card is opened. See `DownloadKind`. Not pre-ticked.
 	var vThumbnails by remember(alreadyHave) { mutableStateOf(false) }
-	var vArt by remember(alreadyHave) { mutableStateOf(false) }
 
 	// Which languages the art is wanted in. Card info is not part of this: text records are small
 	// and a card is not much use in a language you cannot read *and* cannot switch to, so info is
@@ -247,15 +248,15 @@ fun DownloadKindDialog(
 						?: "The small rendition the grid draws.",
 				)
 				Spacer(Modifier.height(8.dp))
-				KindRow(
-					checked = vArt && !vLocked(DownloadKind.FULL_ART),
-					onCheckedChange = { vArt = it },
-					enabled = !vLocked(DownloadKind.FULL_ART),
-					done = DownloadKind.FULL_ART in alreadyHave,
-					title = "Full card art",
-					detail = cardCount
-						?.let { "About ${megabytes(it, FULL_ART_BYTES)} MB. Needed to read a card offline." }
-						?: "The full-size rendition the card screen draws.",
+				Text(
+					// Stated rather than offered, the same way the bulk file is. The reason is the
+					// same too: it is not this project's CDN to draw hundreds of megabytes from for
+					// pictures nobody asked to see.
+					text = "Full-size art is not downloaded in bulk. It is fetched and kept when " +
+						"you open a card, so the ones you read end up on the device and the ones " +
+						"you scroll past cost nothing.",
+					style = MaterialTheme.typography.bodySmall,
+					color = MaterialTheme.colorScheme.onSurfaceVariant,
 				)
 				if (vChoosable) {
 					Spacer(Modifier.height(14.dp))
@@ -267,10 +268,10 @@ fun DownloadKindDialog(
 					)
 					Text(
 						// The asymmetry, said plainly. Card info is cheap and switching language on
-						// a card you already have is the point of downloading it; art is tens of
-						// megabytes a language and almost nobody wants all of them.
+						// a card you already have is the point of downloading it; pictures are a
+						// request per card per language and almost nobody wants all of them.
 						text = "Card info is downloaded in all ${languages.size} languages this " +
-							"set was printed in. Pick which of them to fetch art for.",
+							"set was printed in. Pick which of them to fetch thumbnails for.",
 						style = MaterialTheme.typography.bodySmall,
 						color = MaterialTheme.colorScheme.onSurfaceVariant,
 					)
@@ -289,15 +290,15 @@ fun DownloadKindDialog(
 								// Only meaningful for the kinds that fetch pictures. Greyed rather
 								// than hidden, so the choice does not appear and vanish as the
 								// tick boxes above are used.
-								enabled = vThumbnails || vArt,
+								enabled = vThumbnails,
 								label = { Text(vLanguage.displayName) },
 							)
 						}
 					}
-					if ((vThumbnails || vArt) && vLanguages.isEmpty()) {
+					if (vThumbnails && vLanguages.isEmpty()) {
 						Spacer(Modifier.height(6.dp))
 						Text(
-							text = "Choose at least one language for the art.",
+							text = "Choose at least one language for the thumbnails.",
 							style = MaterialTheme.typography.bodySmall,
 							color = MaterialTheme.colorScheme.error,
 						)
@@ -343,14 +344,13 @@ fun DownloadKindDialog(
 			TextButton(
 				// Nothing ticked is not a download, so the button is not offered as one -- and
 				// neither is art in no language at all.
-				enabled = (vInfo || vThumbnails || vArt) &&
-					(!(vThumbnails || vArt) || !vChoosable || vLanguages.isNotEmpty()),
+				enabled = (vInfo || vThumbnails) &&
+					(!vThumbnails || !vChoosable || vLanguages.isNotEmpty()),
 				onClick = {
 					onConfirm(
 						buildSet {
 							if (vInfo) add(DownloadKind.CARD_INFO)
 							if (vThumbnails) add(DownloadKind.GRID_THUMBNAILS)
-							if (vArt) add(DownloadKind.FULL_ART)
 						},
 						vLanguages,
 					)
@@ -433,8 +433,6 @@ private fun megabytes(cardCount: Int, bytesPerCard: Int): Int =
  * thumbnail option.
  */
 private const val THUMBNAIL_BYTES = 32_000
-
-private const val FULL_ART_BYTES = 94_000
 
 // ==================
 // MARK: The queue
@@ -579,7 +577,6 @@ internal fun describe(job: DownloadJob): String {
 		when (it) {
 			DownloadKind.CARD_INFO -> "info"
 			DownloadKind.GRID_THUMBNAILS -> "thumbnails"
-			DownloadKind.FULL_ART -> "art"
 		}
 	}
 	val vWhere = job.request.language?.displayName
@@ -623,7 +620,7 @@ private fun previewJob(
 	id: String,
 	name: String,
 	status: DownloadStatus,
-	kinds: Set<DownloadKind> = setOf(DownloadKind.CARD_INFO, DownloadKind.FULL_ART),
+	kinds: Set<DownloadKind> = setOf(DownloadKind.CARD_INFO, DownloadKind.GRID_THUMBNAILS),
 ) = DownloadJob(
 	id = id,
 	request = DownloadRequest(
@@ -695,12 +692,12 @@ private fun DownloadAllDialogPreview() = PreviewFrame {
 @Preview
 @Composable
 private fun DownloadKindDialogPartlyHeldPreview() = PreviewFrame {
-	// The state the `alreadyHave` parameter exists for: records and thumbnails are on disk, so
-	// they are shown as done rather than offered again, and only full art is still a choice.
+	// The state the `alreadyHave` parameter exists for: records are on disk and are shown as done
+	// rather than offered again, leaving thumbnails as the one thing still worth asking for.
 	DownloadKindDialog(
 		setName = "Origins",
 		cardCount = 352,
-		alreadyHave = setOf(DownloadKind.CARD_INFO, DownloadKind.GRID_THUMBNAILS),
+		alreadyHave = setOf(DownloadKind.CARD_INFO),
 		onDismiss = {},
 		onConfirm = { _, _ -> },
 	)

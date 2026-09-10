@@ -21,16 +21,15 @@ import com.bitsycore.lib.pulse.container.ContainerContract
 /**
  * What a set has had downloaded, per rendition.
  *
- * Two nullable records rather than one, because the two are separately true: a set can have every
- * grid thumbnail and no full art, which is exactly what "browsable offline but not readable
- * offline" looks like and is worth being able to show.
+ * One rendition, since full-size art stopped being a bulk download -- see `DownloadKind`. Still a
+ * record rather than a boolean, because a part-finished thumbnail run is worth showing as such:
+ * 206 of 288 is precisely the case where re-running it is the right thing to do.
  */
 data class SetImageStatus(
 	val thumbnails: ImageDownloadRecord? = null,
-	val art: ImageDownloadRecord? = null,
 ) {
 
-	val isEmpty: Boolean get() = thumbnails == null && art == null
+	val isEmpty: Boolean get() = thumbnails == null
 }
 
 object SetListContract :
