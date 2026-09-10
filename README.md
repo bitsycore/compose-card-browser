@@ -509,7 +509,7 @@ Where the brief left a choice, these were taken. All are one edit to change.
 
 | Choice | Value | Why |
 |---|---|---|
-| Metadata cache ceiling | 256 MB | Every Riftbound set is a few megabytes of JSON. Card metadata is what makes the app work offline and is two orders of magnitude cheaper than images, so evicting it to save megabytes would be a poor trade. |
+| Metadata cache ceiling | 1 GB | Card metadata is what makes the app work offline and is two orders of magnitude cheaper per card than images, so evicting it to save megabytes would be a poor trade. It was 256 MB, chosen when a game meant a few megabytes of JSON — a bulk import of Magic is larger than that on its own, so the first thing that ceiling did was evict what had just been imported. |
 | Image cache ceiling | 1 GB | A ceiling, not an allocation — a full browse of all 352 Origins cards came to under 4 MB. At ~22 KB a thumbnail this is room for tens of thousands of cards, so the limit stops being what evicts. On Android and iOS it sits in the OS cache directory, which the system may purge regardless. |
 | Thumbnail format | WebP at `w=320` | Pinned, not negotiated — see [Known limitations](#known-limitations). ~22 KB against ~260 KB for the same image as PNG. |
 | Detail image | WebP at the asset's native width, `q=90` | ~180 KB against ~1.17 MB for the lossless PNG, and no visible difference. Decoded at source resolution rather than layout size so zoom has real pixels. |
