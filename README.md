@@ -331,6 +331,22 @@ default, and the app recolours immediately rather than on the next launch, becau
 `PreferencesStore`'s flow at the root of the composition rather than through a view model of its
 own.
 
+### Scrubbing a long set list
+
+A drag strip down the right edge turns the whole list into one gesture: the top of the screen is the
+first set, the bottom is the last, and the list follows the finger. Magic has 988 sets, which is a
+lot of flinging.
+
+While dragging, the page dims and a column of labels appears beside the finger, largest at the
+finger and shrinking away from it. The fisheye is not decoration — mapping a whole list onto one
+screen height means a single pixel can be several sets, so the strip alone cannot say where you
+are. Showing *every* label instead does not survive a real catalogue: 988 of them will not fit on a
+phone at any legible size. A window around the finger stays readable whether the list holds thirty
+entries or a thousand.
+
+It does not appear below 25 rows, where an ordinary scroll reaches anything in a flick and a
+permanent strip is just a control in the way. The handle rests at 22% opacity for the same reason.
+
 ### Favourite sets
 
 A star on any set row pins it to the top of that game's list, under a "favourites" heading, and

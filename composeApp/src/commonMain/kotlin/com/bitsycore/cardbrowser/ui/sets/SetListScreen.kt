@@ -97,6 +97,7 @@ import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.ui.common.EmptyState
+import com.bitsycore.cardbrowser.ui.common.FastScroller
 import com.bitsycore.cardbrowser.ui.common.ErrorState
 import com.bitsycore.cardbrowser.ui.common.LoadingState
 import com.bitsycore.cardbrowser.ui.common.NoticeBanner
@@ -447,6 +448,21 @@ fun SetListContent(
 								onMove = vOnMove,
 							)
 						}
+
+						// Labelled in the same order the list is drawn in, headings included, so an
+						// index from the strip lands on the row the label names rather than a few
+						// off. A heading is labelled with the section it opens.
+						FastScroller(
+							listState = vListState,
+							labels = buildList {
+								if (vFavourites.isNotEmpty()) add("Favourites")
+								vFavourites.forEach { add(it.code.ifBlank { it.name }) }
+								if (vFavourites.isNotEmpty() && vState.otherSets.isNotEmpty()) {
+									add("All sets")
+								}
+								vState.otherSets.forEach { add(it.code.ifBlank { it.name }) }
+							},
+						)
 					}
 				}
 			}
