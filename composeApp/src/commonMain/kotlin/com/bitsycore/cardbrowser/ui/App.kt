@@ -37,6 +37,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
+import com.bitsycore.cardbrowser.data.download.DownloadManager
+import com.bitsycore.cardbrowser.ui.downloads.DownloadsScreen
 import com.bitsycore.cardbrowser.ui.theme.CardBrowserTheme
 import kotlinx.serialization.Serializable
 
@@ -74,6 +76,15 @@ sealed interface Route : NavKey {
 
 	@Serializable
 	data object Settings : Route
+
+	/**
+	 * The download queue.
+	 *
+	 * A destination rather than a dialog: a download of Magic runs for a long time and this is the
+	 * only place that says how it is going, so it is something a user comes back to. A dialog is a
+	 * thing you dismiss.
+	 */
+	data object Downloads : Route
 
 	/**
 	 * Cross-set search within one game.
@@ -178,6 +189,7 @@ fun App() {
 							},
 							onOpenSettings = { vBackStack.add(Route.Settings) },
 							onOpenSearch = { vGame -> vBackStack.add(Route.Search(vGame.id.value)) },
+							onOpenDownloads = { vBackStack.add(Route.Downloads) },
 						)
 					}
 
@@ -240,6 +252,18 @@ fun App() {
 
 					is Route.Settings -> NavEntry(vRoute) {
 						SettingsScreen(onBack = { vBackStack.removeLastOrNull() })
+					}
+
+					is Route.Downloads -> NavEntry(vRoute) {
+						val vDownloads = koinInject<DownloadManager>()
+						val vJobs by vDownloads.jobs.collectAsState()
+						DownloadsScreen(
+							jobs = vJobs,
+							onBack = { vBackStack.removeLastOrNull() },
+							onCancel = vDownloads::cancel,
+							onCancelAll = vDownloads::cancelAll,
+							onClearFinished = vDownloads::clearFinished,
+						)
 					}
 				}
 			},

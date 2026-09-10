@@ -60,7 +60,6 @@ import com.bitsycore.cardbrowser.data.download.DownloadManager
 import com.bitsycore.cardbrowser.data.download.DownloadRequest
 import com.bitsycore.cardbrowser.ui.downloads.DownloadKindDialog
 import com.bitsycore.cardbrowser.ui.downloads.DownloadsButton
-import com.bitsycore.cardbrowser.ui.downloads.DownloadsDialog
 import org.koin.compose.koinInject
 import androidx.compose.foundation.Image
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -122,6 +121,7 @@ fun SetListScreen(
 	onOpenSet: (CardSet) -> Unit,
 	onOpenSettings: () -> Unit,
 	onOpenSearch: (GameProfile) -> Unit,
+	onOpenDownloads: () -> Unit,
 	viewModel: SetListViewModel = koinViewModel { parametersOf(SetListArgs(game)) },
 ) {
 	val vState by viewModel.collectAsStateWithLifecycle()
@@ -143,6 +143,7 @@ fun SetListScreen(
 		onOpenSet = onOpenSet,
 		onOpenSettings = onOpenSettings,
 		onOpenSearch = onOpenSearch,
+		onOpenDownloads = onOpenDownloads,
 		downloads = vJobs,
 		onDownload = { vSet, vKinds, vLanguages ->
 			// One job per language, because everything downstream is per language: a cache key
@@ -224,6 +225,8 @@ fun SetListContent(
 	onOpenSet: (CardSet) -> Unit,
 	onOpenSettings: () -> Unit,
 	onOpenSearch: (GameProfile) -> Unit = {},
+	/** Opens the download queue, which is a screen rather than a dialog. See `DownloadsScreen`. */
+	onOpenDownloads: () -> Unit = {},
 	downloads: List<DownloadJob> = emptyList(),
 	onDownload: (CardSet, Set<DownloadKind>, Set<CardLanguage>) -> Unit = { _, _, _ -> },
 	/**
@@ -243,7 +246,6 @@ fun SetListContent(
 	// Which set's download dialog is open, and whether the queue is showing. Local because neither
 	// is worth a trip through the state machine: nothing outside this screen cares.
 	var vPendingSet by remember { mutableStateOf<CardSet?>(null) }
-	var vShowQueue by remember { mutableStateOf(false) }
 	var vPendingAll by remember { mutableStateOf(false) }
 
 	Scaffold(
@@ -326,7 +328,7 @@ fun SetListContent(
 							)
 						}
 					}
-					DownloadsButton(jobs = downloads, onClick = { vShowQueue = true })
+					DownloadsButton(jobs = downloads, onClick = onOpenDownloads)
 					IconButton(onClick = { vState.game?.let(onOpenSearch) }) {
 						Icon(
 							Icons.Outlined.TravelExplore,
@@ -494,7 +496,7 @@ fun SetListContent(
 				vPendingSet = null
 				// Straight to the queue, so the download is visibly a thing that now exists rather
 				// than a dialog that closed and apparently did nothing.
-				vShowQueue = true
+				onOpenDownloads()
 			},
 		)
 	}
@@ -539,20 +541,11 @@ fun SetListContent(
 			onConfirm = { vKinds, vLanguages ->
 				vSets.forEach { vSet -> onDownload(vSet, vKinds, vLanguages) }
 				vPendingAll = false
-				vShowQueue = true
+				onOpenDownloads()
 			},
 		)
 	}
 
-	if (vShowQueue) {
-		DownloadsDialog(
-			jobs = downloads,
-			onCancel = onCancelDownload,
-			onCancelAll = onCancelAllDownloads,
-			onClearFinished = onClearFinishedDownloads,
-			onDismiss = { vShowQueue = false },
-		)
-	}
 }
 
 

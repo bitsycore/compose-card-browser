@@ -422,6 +422,25 @@ that set was really printed in. `CardSet.languages` carries what the source stat
 offers Japanese for a Japanese-line Pokémon set and does not offer Russian for a game that has none.
 A switch that fails says so rather than silently showing the previous language.
 
+### The download queue is a screen
+
+It was a dialog, and a dialog was the wrong container. A download of Magic runs for a long time and
+the queue is the only place that says what is happening — so it is the one thing in the app you come
+*back* to, and a dialog is a thing you dismiss. It also has to hold a row per set, which for
+"download all" is hundreds, inside a box that leaves room for the screen behind it.
+
+As a screen each job says what it actually is: which language, which kinds, how far through, and
+what a failure was. A set can legitimately be queued three times for three different things in two
+languages, and three identical rows reading only the set's name was confusing. There is a summary
+line too, because "is it done yet" should not require counting two hundred rows.
+
+The bars are Material 3 Expressive's `LinearWavyProgressIndicator`. Reaching them meant moving
+`material3` from 1.9.0 to 1.12.0-alpha03 — the project was pinning material3 to 1.9.0 while every
+other Compose artifact was already 1.12.0, so this aligned a version that had drifted rather than
+reaching for something new. They sit behind `ExperimentalMaterial3ExpressiveApi`, which is their
+honest status. The wave earns its place: a long download that is progressing looks identical to a
+stalled one under a static bar, and a wave that animates on its own does not.
+
 ### Downloading a set
 
 Card info and card art are fetched per language, and the two are offered differently: **info comes
