@@ -143,7 +143,7 @@ val appModule = module {
 	single {
 		ScryfallProvider(
 			mClient = HttpClientFactory.create(
-				policy = ProviderHttpPolicy.SCRYFALL,
+				policy = ScryfallProvider.HTTP_POLICY,
 				stats = get(),
 				httpCache = get<OkioHttpCacheStorage>(),
 			),
@@ -157,7 +157,7 @@ val appModule = module {
 	single {
 		YgoprodeckProvider(
 			mClient = HttpClientFactory.create(
-				policy = ProviderHttpPolicy.YGOPRODECK,
+				policy = YgoprodeckProvider.HTTP_POLICY,
 				stats = get(),
 				httpCache = get<OkioHttpCacheStorage>(),
 			),

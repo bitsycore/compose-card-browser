@@ -35,7 +35,7 @@ class YgoprodeckLiveSmokeTest {
 	 * API and a way to make every test here fail with `RateLimited` at once.
 	 */
 	private fun provider() = YgoprodeckProvider(
-		HttpClientFactory.create(policy = ProviderHttpPolicy.YGOPRODECK),
+		HttpClientFactory.create(policy = YgoprodeckProvider.HTTP_POLICY),
 	)
 
 	private val mMetalRaiders = SourceId(YgoprodeckProvider.PROVIDER_ID, "Metal Raiders")
@@ -173,7 +173,7 @@ class YgoprodeckLiveSmokeTest {
 	}
 	@Test
 	fun `sets that publish box art carry it as a symbol`() = runBlocking<Unit> {
-		val vClient = HttpClientFactory.create(policy = ProviderHttpPolicy.YGOPRODECK)
+		val vClient = HttpClientFactory.create(policy = YgoprodeckProvider.HTTP_POLICY)
 		val vSets = YgoprodeckProvider(vClient).listSets()
 
 		val vWith = vSets.filter { it.symbol != null }

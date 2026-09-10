@@ -61,6 +61,14 @@ The same standard applies to **you**, in commit messages, in docs, and in what y
 
 Two boundaries matter more than the rest:
 
+**`:core` and `:data` know no game or provider names, and a test enforces it.** `LayeringTest`
+scans both source trees with comments stripped and fails naming the file. It exists because the
+rule had already been broken: `ProviderHttpPolicy.SCRYFALL` and `.YGOPRODECK` sat in the shared HTTP
+layer, so `:data` knew two sources existed and nothing complained. A rate limit is a fact about a
+source, like its endpoints and its quirks, so it lives in that source's module -- see
+`ScryfallProvider.HTTP_POLICY`. Comments naming a source are fine and are most of how this codebase
+explains itself; it is code that must not.
+
 **`:core` knows no game names.** There is no `Game` enum. A game is a `GameProfile` in its own
 module, identified by `GameId("riftbound")`. Core holds *mechanisms* — how to rank a rarity, how to
 label a stat, how to build a Cardmarket URL — and never a table of which games exist. If you find

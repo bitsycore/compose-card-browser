@@ -15,6 +15,8 @@ import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
 import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
+import com.bitsycore.cardbrowser.data.net.ProviderHttpPolicy
+import kotlin.time.Duration.Companion.milliseconds
 import com.bitsycore.cardbrowser.data.net.mapProviderErrors
 import com.bitsycore.cardbrowser.games.yugioh.YuGiOhGame
 import io.ktor.client.HttpClient
@@ -271,6 +273,15 @@ class YgoprodeckProvider(
 	}
 
 	companion object {
+
+		/**
+		 * YGOPRODeck asks for no more than 20 requests a second, so this paces at 50 ms.
+		 *
+		 * Declared here rather than in the shared HTTP layer, where it used to live: a rate limit
+		 * is a fact about this source in the same way its endpoints are, and `:data` naming a
+		 * provider was the one place that layer knew any of them existed.
+		 */
+		val HTTP_POLICY: ProviderHttpPolicy = ProviderHttpPolicy(minRequestInterval = 50.milliseconds)
 
 		/** Never changed: it is written into every id and every cache file this adapter produces. */
 		val PROVIDER_ID: ProviderId = ProviderId("ygoprodeck")

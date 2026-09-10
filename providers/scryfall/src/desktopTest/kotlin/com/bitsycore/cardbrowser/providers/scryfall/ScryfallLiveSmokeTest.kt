@@ -282,6 +282,6 @@ class ScryfallLiveSmokeTest {
 	private companion object {
 
 		/** One per JVM, so the throttle spans the class rather than one test method. */
-		val mClient by lazy { HttpClientFactory.create(policy = ProviderHttpPolicy.SCRYFALL) }
+		val mClient by lazy { HttpClientFactory.create(policy = ScryfallProvider.HTTP_POLICY) }
 	}
 }
