@@ -962,6 +962,39 @@ class CardRepository(
 		return vResult
 	}
 
+	/**
+	 * Which languages each of [sets] is known to exist in, for a set list to show.
+	 *
+	 * Deliberately **free of requests**. [languagesFor] gives the authoritative answer and costs a
+	 * probe per candidate; running it for every row would be a request per language per set, which
+	 * for Yu-Gi-Oh's catalogue is thousands of them to draw a list. This reads only what is already
+	 * known:
+	 *
+	 * 1. the confirmed record left behind by [languagesFor] the last time that set was opened, and
+	 * 2. failing that, whatever the set itself claims -- which for TCGdex and Wuthering Waves comes
+	 *    with the catalogue and for everything else is empty.
+	 *
+	 * So the answer improves as sets are opened, and a set nobody has opened yet is simply absent
+	 * rather than guessed at. Absent means "not known", never "only one language" -- a source that
+	 * says nothing about a set's languages has not told us it has one.
+	 */
+	suspend fun availableLanguages(
+		game: GameId,
+		sets: List<CardSet>,
+		language: CardLanguage? = null,
+	): Map<String, Set<CardLanguage>> {
+		val vProvider = mRegistry.resolve(game, language) ?: return emptyMap()
+		val vSerializer = CacheEnvelope.serializer(SetSerializer(serializer<CardLanguage>()))
+		val vResult = mutableMapOf<String, Set<CardLanguage>>()
+		for (vSet in sets) {
+			currentCoroutineContext().ensureActive()
+			val vConfirmed = mCache.read(setLanguagesKey(vProvider, vSet.id), vSerializer)?.payload
+			val vKnown = vConfirmed?.takeIf { it.isNotEmpty() } ?: vSet.languages
+			if (vKnown.isNotEmpty()) vResult[vSet.id.qualified] = vKnown
+		}
+		return vResult
+	}
+
 	// ============
 	//  One set's record
 

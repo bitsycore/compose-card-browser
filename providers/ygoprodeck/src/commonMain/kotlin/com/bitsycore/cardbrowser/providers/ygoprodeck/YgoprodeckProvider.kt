@@ -27,6 +27,9 @@ import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.appendPathSegments
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 
 /**
  * The YGOPRODeck adapter, serving [YuGiOhGame].
@@ -190,6 +193,76 @@ class YgoprodeckProvider(
 				}
 			}
 		}
+	}
+
+	/**
+	 * Which of [candidates] this set has actually been translated into.
+	 *
+	 * ## Why it is needed here
+	 *
+	 * `cardsets.php` says nothing about languages, so a set arrives claiming none and the layer
+	 * above falls back to everything this source can serve -- all seven. That is a claim about
+	 * translation coverage made from a capability list, and for a newly announced set it is wrong
+	 * in the most visible way there is.
+	 *
+	 * Measured against the live API on 2026-09-10, both released in late 2026:
+	 *
+	 * ```
+	 *   cardset=Magnificent Maestros            24 cards
+	 *   cardset=Magnificent Maestros&language=fr 4 cards      (same for de, it, pt, ja, ko)
+	 *   cardset=Beyond the Brave                 8 cards
+	 *   cardset=Beyond the Brave&language=fr     400, no match (same for the other five)
+	 * ```
+	 *
+	 * The app browses in French unless told otherwise, so Beyond the Brave opened onto an empty
+	 * grid and Magnificent Maestros onto four of its twenty-four. Nothing was broken: Konami has
+	 * not published the translations yet, and the app had no way to know that because it never
+	 * asked. This is the asking.
+	 *
+	 * ## The cost
+	 *
+	 * One `num=1` request per candidate, measured at 1.7-3.8 KB and roughly half a second each,
+	 * seven of them concurrently. Paid once per set and cached by `CardRepository.languagesFor`
+	 * for as long as the set list itself, because a translation that does not exist today will not
+	 * appear between two openings of the same set.
+	 *
+	 * A probe that fails keeps its language. A language is dropped on evidence that the set is not
+	 * published in it, and a timeout is not evidence.
+	 */
+	override suspend fun confirmLanguages(
+		setId: SourceId,
+		candidates: Set<CardLanguage>,
+	): Set<CardLanguage> = coroutineScope {
+		candidates
+			.map { vLanguage -> async { vLanguage to hasCards(vLanguage, setId.local) } }
+			.awaitAll()
+			.filter { it.second }
+			.mapTo(mutableSetOf()) { it.first }
+	}
+
+	/** True when this set has at least one card in this language, or when the probe could not say. */
+	private suspend fun hasCards(language: CardLanguage, setName: String): Boolean = try {
+		val vResponse: YgoCardResponseDto = mClient
+			.get(mBaseUrl) {
+				url { appendPathSegments("api", "v7", "cardinfo.php") }
+				parameter("cardset", setName)
+				parameter("num", 1)
+				parameter("offset", 0)
+				languageParameter(language)
+				identify()
+			}
+			.body()
+		vResponse.data.isNotEmpty()
+	} catch (vError: ClientRequestException) {
+		// 400 is this API's "no match", not a fault -- see `fetchPage`. Here it is the answer the
+		// probe was asking for: nothing in this set is published in this language.
+		if (vError.response.status == HttpStatusCode.BadRequest) false else true
+	} catch (vError: kotlinx.coroutines.CancellationException) {
+		throw vError
+	} catch (vError: Exception) {
+		// Unknown, not absent. Keeping the language leaves a switch that may fail and says so;
+		// dropping it hides an edition that probably exists.
+		true
 	}
 
 	override suspend fun searchAllSets(request: CardSearchRequest): CardPage {

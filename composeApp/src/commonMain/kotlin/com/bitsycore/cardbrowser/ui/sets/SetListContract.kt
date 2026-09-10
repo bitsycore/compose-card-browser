@@ -133,6 +133,17 @@ object SetListContract :
 		 */
 		val confirmedCardCounts: Map<String, Int> = emptyMap(),
 		/**
+		 * Which languages each set is known to exist in, by qualified set id.
+		 *
+		 * Not the same question as [savedLanguages], which is about this device. This is about the
+		 * set: a Japan-only set browsed by a French user is the case it exists for.
+		 *
+		 * Absent means not known, never "one language" -- most sources say nothing per set, and
+		 * the answer only arrives once a set has been opened and its languages confirmed. See
+		 * `CardRepository.availableLanguages`.
+		 */
+		val availableLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
+		/**
 		 * Which product line to show, or `null` for all of them.
 		 *
 		 * Pokemon ships four -- see `GameProfile.regions` -- and they are different products rather
@@ -289,6 +300,7 @@ object SetListContract :
 			val imageDownloads: Map<String, SetImageStatus> = emptyMap(),
 			val savedLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
 			val confirmedCardCounts: Map<String, Int> = emptyMap(),
+			val availableLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
 		) : Intent
 
 		/** A product line was picked, or `null` to see every line again. */
@@ -371,6 +383,7 @@ object SetListContract :
 					savedSetIds = emptySet(),
 					savedLanguages = emptyMap(),
 					confirmedCardCounts = emptyMap(),
+					availableLanguages = emptyMap(),
 					search = "",
 					isLoading = true,
 					error = null,
@@ -388,6 +401,7 @@ object SetListContract :
 			imageDownloads = intent.imageDownloads,
 			savedLanguages = intent.savedLanguages,
 			confirmedCardCounts = intent.confirmedCardCounts,
+			availableLanguages = intent.availableLanguages,
 		)
 
 		// Purely a view of what is already loaded: every line arrives in one request, so narrowing

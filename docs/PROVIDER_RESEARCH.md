@@ -66,6 +66,39 @@ under `CARDS/{lang}/{set}/{faction}/`, so it is the opposite of a dump; and TCGC
 category-wide product listing with 404, which is fine because its unit is already the group — a set
 there is one request, the same as a bulk file would cost per set.
 
+## Per-set languages — every source, checked 2026-09-10
+
+A source's language list is a fact about the source. Which languages *one set* exists in is a
+different fact, and getting them confused is how the app came to offer French for a Yu-Gi-Oh! set
+released in November 2026 whose translations do not exist yet. `CardSet.languages` carries the
+per-set answer and `CardProvider.confirmLanguages` narrows it to what a source really serves.
+
+| Source | States it per set? | How |
+| --- | --- | --- |
+| TCGdex | **yes, with the catalogue** | eleven locale catalogues, already merged in `listSets` |
+| Wuthering Waves | **yes** | the bundled snapshot carries a locale per card |
+| YGOPRODeck | **no, but cheap to ask** | `cardinfo.php?num=1&language=…`, one per candidate |
+| Scryfall | **no, but cheap to ask** | already overrides `confirmLanguages` |
+| Altered mirror | no | `META/card_sets_{locale}.json` lists all 20 sets in all 5 locales |
+| Riftcodex, OPTCG | n/a | one language each, so the per-set answer adds nothing |
+| TCGCSV | n/a | states no language at all, so there is nothing to narrow |
+
+TCGdex's catalogues genuinely differ and the difference is the whole Japan line:
+
+```
+/v2/en/sets  218 sets      /v2/ja/sets  184, of which 180 are in no western catalogue
+/v2/fr/sets  200 sets      /v2/ko/sets   95, of which none are in the English one
+```
+
+YGOPRODeck's probe was measured at 1.7–3.8 KB and roughly 0.5 s per candidate, seven candidates
+per set, run concurrently and cached for as long as the set list. Beyond the Brave answers `400`
+for all six non-English languages and Magnificent Maestros answers all seven, with 4 cards against
+24 — see `YgoprodeckProvider.confirmLanguages`.
+
+Altered's per-locale set indexes are 8.7 KB each and list the same 20 sets in every one, so there
+is nothing per set to learn from them. Listing a set in a locale would not be evidence of cards in
+it anyway — that is exactly the TCGdex Korean trap — so it is left unstated rather than claimed.
+
 ## Pokémon — TCGdex
 
 `https://api.tcgdex.net/v2/{lang}/…`, no key, no auth.

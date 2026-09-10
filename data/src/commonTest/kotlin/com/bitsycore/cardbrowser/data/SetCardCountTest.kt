@@ -121,6 +121,12 @@ class SetCardCountTest {
 		}
 
 		override suspend fun cardDetail(id: SourceId, language: CardLanguage?): CardPrinting? = null
+
+		/** What YGOPRODeck and TCGdex now do: ask, rather than assume the catalogue is complete. */
+		override suspend fun confirmLanguages(
+			setId: SourceId,
+			candidates: Set<CardLanguage>,
+		): Set<CardLanguage> = candidates.filterTo(mutableSetOf()) { (mCountsByLanguage[it] ?: 0) > 0 }
 	}
 
 	// ==================
@@ -194,6 +200,51 @@ class SetCardCountTest {
 		assertEquals(
 			4,
 			vRepository.confirmedCardCounts(CountTestGame.id, sets(), CardLanguage.FRENCH)[mSetId.qualified],
+		)
+	}
+
+	// ==================
+	// MARK: The language pin
+	// ==================
+
+	@Test
+	fun `a set says nothing about its languages until something knows`() = runTest {
+		// The pin's silence is deliberate. This source states no per-set languages, so before the
+		// set has ever been opened there is nothing to show -- and filling the gap from the
+		// provider's capability list would announce two languages for a set that may have one.
+		assertEquals(
+			emptyMap(),
+			repository(english = 24, french = 4)
+				.availableLanguages(CountTestGame.id, sets(), CardLanguage.FRENCH),
+		)
+	}
+
+	@Test
+	fun `a set that claims its own languages is pinned straight away`() = runTest {
+		// What TCGdex and the Wuthering Waves snapshot do: the languages arrive with the catalogue,
+		// so the row can say so on the first frame without a single request.
+		val vRepository = repository(english = 24, french = 4)
+		val vClaimed = sets().map { it.copy(languages = setOf(CardLanguage.ENGLISH, CardLanguage.FRENCH)) }
+
+		assertEquals(
+			mapOf(mSetId.qualified to setOf(CardLanguage.ENGLISH, CardLanguage.FRENCH)),
+			vRepository.availableLanguages(CountTestGame.id, vClaimed, CardLanguage.FRENCH),
+		)
+	}
+
+	@Test
+	fun `a confirmed record outranks the claim`() = runTest {
+		// A catalogue listing a set in a language is not evidence it has cards in it -- TCGdex's
+		// Korean catalogue names 95 sets and serves none. Once the probe has run, its answer wins.
+		val vRepository = repository(english = 24, french = 0)
+		val vClaimed = sets().map { it.copy(languages = setOf(CardLanguage.ENGLISH, CardLanguage.FRENCH)) }
+
+		vRepository.languagesFor(mSetId, CountTestGame.id)
+
+		assertEquals(
+			setOf(CardLanguage.ENGLISH),
+			vRepository.availableLanguages(CountTestGame.id, vClaimed, CardLanguage.FRENCH)[mSetId.qualified],
+			"The probe found no French cards, so the claim must not survive it",
 		)
 	}
 

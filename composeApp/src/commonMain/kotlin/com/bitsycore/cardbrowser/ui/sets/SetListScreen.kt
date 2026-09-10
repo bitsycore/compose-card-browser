@@ -655,6 +655,7 @@ private fun LazyListScope.setRows(
 			// Absent until the set has been fetched in the language it opens in, and the row then
 			// falls back to the figure the source states. See `UiState.confirmedCardCounts`.
 			confirmedCardCount = state.confirmedCardCounts[vId],
+			availableLanguages = state.availableLanguages[vId].orEmpty(),
 			downloadStatus = downloads.firstOrNull { it.request.setId == vSet.id },
 			images = state.imageDownloads[vId],
 			onDownload = { onDownload(vSet) },
@@ -703,6 +704,7 @@ private fun SetRow(
 	isSaved: Boolean,
 	onClick: () -> Unit,
 	confirmedCardCount: Int? = null,
+	availableLanguages: Set<CardLanguage> = emptySet(),
 	downloadStatus: DownloadJob? = null,
 	images: SetImageStatus? = null,
 	onDownload: () -> Unit = {},
@@ -761,6 +763,7 @@ private fun SetRow(
 						RegionBadge(region)
 						Spacer(Modifier.size(6.dp))
 					}
+					LanguagePin(availableLanguages)
 					Text(
 						text = setSubtitle(set, isLastOpened, confirmedCardCount),
 						style = MaterialTheme.typography.bodySmall,
@@ -1055,6 +1058,55 @@ private const val MONOGRAM_SATURATION = 0.55f
 
 /** Mid-lightness, so the same colour works as text on a light theme and on a dark one. */
 private const val MONOGRAM_LIGHTNESS = 0.62f
+
+/**
+ * The languages a set is known to exist in, as a small run of codes.
+ *
+ * ## When it appears, and when it deliberately does not
+ *
+ * Only where the languages are actually **known**, which is a narrower thing than it sounds. Two
+ * sources state them with the catalogue -- TCGdex, which serves eleven locales and whose Japanese
+ * line does not exist in any of the western ones, and the Wuthering Waves snapshot. Everywhere
+ * else the answer only arrives once the set has been opened and `CardRepository.languagesFor`
+ * has probed for it, and until then this is empty and nothing is drawn.
+ *
+ * That silence is the point. Most sources say nothing per set, and a pin that filled the gap from
+ * the provider's capability list would announce eleven languages for a set printed in one -- which
+ * is the exact claim `LanguageCoverage` exists to prevent.
+ *
+ * A single language that is not the one being browsed is worth showing on its own: that is the
+ * Japan-only set, and it is why a French user opens it in Japanese rather than onto nothing.
+ */
+@Composable
+private fun LanguagePin(languages: Set<CardLanguage>) {
+	if (languages.isEmpty()) return
+	// Ordered by the app's own preference rather than by whatever a set happened to list, so the
+	// same set reads the same way in every row it appears in.
+	val vCodes = CardLanguage.PREFERENCE_ORDER
+		.filter { it in languages }
+		.plus(languages.filterNot { it in CardLanguage.PREFERENCE_ORDER })
+		.map { it.code.uppercase() }
+	Row(
+		modifier = Modifier
+			.padding(end = 6.dp)
+			.clip(RoundedCornerShape(4.dp))
+			.background(MaterialTheme.colorScheme.surfaceVariant)
+			.padding(horizontal = 5.dp, vertical = 1.dp),
+	) {
+		Text(
+			// Capped, because eleven locales in a subtitle is not a pin any more. The overflow
+			// count still says there are more rather than silently hiding them.
+			text = vCodes.take(LANGUAGE_PIN_MAX).joinToString(" ") +
+				if (vCodes.size > LANGUAGE_PIN_MAX) " +${vCodes.size - LANGUAGE_PIN_MAX}" else "",
+			style = MaterialTheme.typography.labelSmall,
+			color = MaterialTheme.colorScheme.onSurfaceVariant,
+			maxLines = 1,
+		)
+	}
+}
+
+/** Three codes and a count reads at a glance; five does not. */
+private const val LANGUAGE_PIN_MAX = 3
 
 /**
  * "OGN · 352 cards · Oct 2025", with each part dropped when the provider does not supply it.

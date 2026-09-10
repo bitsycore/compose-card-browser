@@ -201,6 +201,10 @@ class SetListViewModel(
 				// established it. The source's own figure counts the English printing and is the
 				// wrong number to print beside a row that will open in French.
 				confirmedCardCounts = mRepository.confirmedCardCounts(game, vSets, language),
+				// What is already known about each set's languages, with no requests: the record
+				// left by opening it, or the claim the catalogue came with. See
+				// `CardRepository.availableLanguages`.
+				availableLanguages = mRepository.availableLanguages(game, vSets, language),
 				// Read straight from preferences rather than measured: see
 				// `BrowsingPreferences.imageDownloads` for why the image side cannot be checked
 				// cheaply, and what the record therefore does and does not mean.
