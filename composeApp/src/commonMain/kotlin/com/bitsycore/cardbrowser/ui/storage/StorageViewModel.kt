@@ -98,6 +98,7 @@ class StorageViewModel(
 					sets = vStorage.sets,
 					bytes = vStorage.bytes,
 					knownSets = vStorage.knownSets,
+					infoLanguages = vStorage.languages,
 					// Distinct sets, not records: one set downloaded in two languages is one set
 					// with pictures, and the images are the same file either way.
 					thumbnailSets = vImages

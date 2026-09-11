@@ -110,21 +110,22 @@ class CacheManager(
 		/**
 		 * 1 GB of images.
 		 *
-		 * Affordable because of what the images now cost: a WebP thumbnail is ~22 KB and a
-		 * full-size card ~180 KB, so this is room for roughly twelve thousand thumbnails -- more
-		 * than any one game has. In practice the limit stops being the thing that evicts.
+		 * Generous on purpose, and affordable because of what the images now cost: a WebP thumbnail
+		 * is ~22 KB and a full-size card ~180 KB, so this is room for tens of thousands of cards --
+		 * far more than any one game has. In practice the limit stops being the thing that evicts,
+		 * which is what it is for: the LRU should be trimming what is old, not what is recent.
 		 *
-		 * It was 1 GB, which was sized to hold *downloads* as well as browsing. Downloads are
-		 * pinned now and pinned bytes are outside the budget, so this bounds only what looking at
-		 * cards accumulates, and a gigabyte of that is a gigabyte nobody asked for.
+		 * It bounds browsing only. Downloaded art is pinned and pinned bytes are outside the
+		 * budget, so this number never decides whether something the user asked for survives.
 		 *
 		 * A ceiling is not an allocation. Nothing is reserved; the cache only grows as cards are
 		 * actually looked at, and a real browse of all 352 Origins cards came to under 4 MB.
 		 *
 		 * It is also the OS's to overrule. On Android and iOS this lives in the system cache
-		 * directory, which the platform may purge whenever it wants the space back.
+		 * directory, which the platform may purge whenever it wants the space back -- which is
+		 * precisely why a disposable cache is the right place to be generous.
 		 */
-		const val DEFAULT_IMAGE_CACHE_MAX_BYTES: Long = 256L * 1024 * 1024
+		const val DEFAULT_IMAGE_CACHE_MAX_BYTES: Long = 1024L * 1024 * 1024
 	}
 }
 

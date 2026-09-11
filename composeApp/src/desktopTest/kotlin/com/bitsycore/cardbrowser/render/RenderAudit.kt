@@ -136,9 +136,23 @@ class DownloadRenderer {
 							sets = 988,
 							bytes = 441_000_000,
 							knownSets = 988,
+							infoLanguages = setOf(CardLanguage.ENGLISH),
 							importedVariant = com.bitsycore.cardbrowser.data.settings.BulkImportRecord(
 								"default_cards",
 								"2026-09-10T09:14:00Z",
+							),
+						),
+						com.bitsycore.cardbrowser.ui.storage.StorageContract.KeptGame(
+							game = GameId("pokemon"),
+							displayName = "Pokémon",
+							sets = 486,
+							bytes = 81_100_000,
+							knownSets = 486,
+							infoLanguages = setOf(
+								CardLanguage.ENGLISH,
+								CardLanguage.FRENCH,
+								CardLanguage.JAPANESE,
+								CardLanguage.GERMAN,
 							),
 						),
 						com.bitsycore.cardbrowser.ui.storage.StorageContract.KeptGame(
@@ -148,6 +162,7 @@ class DownloadRenderer {
 							bytes = 21_000_000,
 							knownSets = 8,
 							thumbnailSets = 2,
+							infoLanguages = setOf(CardLanguage.ENGLISH),
 						),
 					),
 					isLoading = false,

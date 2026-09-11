@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.ui.storage
 
+import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.data.cache.CacheUsage
 import com.bitsycore.cardbrowser.data.settings.BulkImportRecord
@@ -56,9 +57,13 @@ object StorageContract :
 	/**
 	 * One game's downloaded records.
 	 *
-	 * @property sets how many sets have card info downloaded
+	 * @property sets how many *sets* have card info downloaded, in any language -- comparable with
+	 *   [knownSets], which is also sets. Never a record count; see `GameStorage.sets`
 	 * @property knownSets how many the game has, or `null` when its catalogue is not cached and no
 	 *   denominator can honestly be given
+	 * @property infoLanguages which languages the card records are filed under. A bulk import files
+	 *   cards under the language they state, so this is the only place that can say an English dump
+	 *   left English records behind
 	 * @property thumbnailSets how many sets have their grid pictures downloaded. A count, not
 	 *   bytes: images live in the image cache, which is one pool for every game and cannot be
 	 *   attributed to one. Full-size art has no entry because it is never bulk-fetched -- it
@@ -72,15 +77,37 @@ object StorageContract :
 		val bytes: Long,
 		val knownSets: Int? = null,
 		val thumbnailSets: Int = 0,
+		val infoLanguages: Set<CardLanguage> = emptySet(),
 		val importedVariant: BulkImportRecord? = null,
 	) {
 
-		/** "Card info 2/8 · Thumbnails 2" -- only the parts that are actually there. */
+		/** "Card info 988/988 · English, French · Thumbnails 2" -- only the parts that are there. */
 		val summary: String
 			get() = buildList {
 				add(if (knownSets != null) "Card info $sets/$knownSets" else "Card info $sets")
+				if (infoLanguages.isNotEmpty()) add(languageSummary)
 				if (thumbnailSets > 0) add("Thumbnails $thumbnailSets")
 			}.joinToString(" · ")
+
+		/**
+		 * Which languages the card info is in, named while naming them is short.
+		 *
+		 * Named rather than counted, because "which language did that import actually give me?" is
+		 * the question this screen kept failing to answer -- a Scryfall dump files cards under the
+		 * language they state, so an import made under a French preference is mostly English and
+		 * nothing said so. Past three it becomes a count, which is the point at which a list stops
+		 * being readable at a glance; Magic reaches eleven.
+		 */
+		private val languageSummary: String
+			get() {
+				val vOrdered = CardLanguage.PREFERENCE_ORDER.filter { it in infoLanguages }
+					.ifEmpty { infoLanguages.toList() }
+				return if (vOrdered.size <= 3) {
+					vOrdered.joinToString(", ") { it.displayName }
+				} else {
+					"${vOrdered.size} languages"
+				}
+			}
 	}
 
 	sealed interface Intent {

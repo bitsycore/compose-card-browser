@@ -133,13 +133,20 @@ data class CardSearchResults(
 /**
  * What one game is keeping on disk that the cache ceiling will not reclaim.
  *
- * @property sets how many set records are pinned. Not how many sets the game has, and not how many
- *   are cached -- browsing leaves records too, and those the ceiling can take back
+ * @property sets how many distinct *sets* have a pinned record. Not how many records: a record is
+ *   per set **and** language, so a set held in English and French is two records and one set. This
+ *   counted records once, and the storage screen divided it by [knownSets] -- which is sets -- and
+ *   reported "Card info 1111/988" for a Magic import and "1075/486" for Pokemon. Two different
+ *   units either side of a slash is always wrong, however plausible the numbers look
+ * @property languages every language those records are filed under, so a row can say what an
+ *   import actually left behind. A bulk dump files cards under the language they state, which is
+ *   not necessarily the one being browsed in
  * @property bytes what those records occupy
  */
 data class GameStorage(
 	val game: com.bitsycore.cardbrowser.core.model.GameId,
 	val sets: Int,
+	val languages: Set<com.bitsycore.cardbrowser.core.model.CardLanguage> = emptySet(),
 	val bytes: Long,
 	/**
 	 * How many sets the game has in total, or `null` when its catalogue is not cached.

@@ -1621,10 +1621,13 @@ class CardRepository(
 		// the only route from a hashed filename back to a set. Kept records then disappeared from
 		// this screen while still being on disk and still being reported as downloaded by the
 		// download dialog, which is exactly the contradiction a storage screen must not produce.
+		// Kept as parsed labels rather than raw entries, because both counts below are about the
+		// *parts* -- which set, and which language -- and re-splitting per count is how the two
+		// would drift apart.
 		val vByGame = mCache.pinnedEntries()
 			.mapNotNull { vEntry ->
 				val vParts = vEntry.label.split(TAB)
-				if (vParts.size < 2 || vParts[0].isEmpty()) null else vParts[0] to vEntry
+				if (vParts.size < 2 || vParts[0].isEmpty()) null else vParts[0] to (vParts to vEntry)
 			}
 			.groupBy({ it.first }, { it.second })
 
@@ -1638,8 +1641,13 @@ class CardRepository(
 				?.size
 			GameStorage(
 				game = vGame,
-				sets = vEntries.map { it.label }.distinct().size,
-				bytes = vEntries.sumOf { it.bytes },
+				// Distinct set ids, so this is comparable with `knownSets`. A set held in eleven
+				// languages is one set here and eleven records on disk.
+				sets = vEntries.mapNotNull { (vParts, _) -> vParts.getOrNull(1) }.distinct().size,
+				languages = vEntries
+					.mapNotNull { (vParts, _) -> vParts.getOrNull(2)?.ifEmpty { null } }
+					.mapNotNullTo(mutableSetOf()) { CardLanguage.fromCode(it) },
+				bytes = vEntries.sumOf { (_, vEntry) -> vEntry.bytes },
 				knownSets = vKnownSets,
 			)
 		}
