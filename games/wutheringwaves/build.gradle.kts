@@ -5,7 +5,6 @@ plugins {
 	// `:games:api`, which is where the art abstraction and this dependency are justified.
 	alias(libs.plugins.composeMultiplatform)
 	alias(libs.plugins.composeCompiler)
-	alias(libs.plugins.composeDesktopNativeBridge)
 }
 
 // Wuthering Waves TCG: what the app knows about the game itself, independent of any source that serves it.

@@ -9,6 +9,9 @@ plugins {
 	// Declared at the root even though only :composeApp and the library modules apply it: without
 	// this AGP 9 and the Kotlin Multiplatform plugin race to claim the android target.
 	alias(libs.plugins.androidKmpLibrary) apply false
+	// Only ever applied under -PnativeDesktop, below. On the classpath here so that
+	// applying it by id is possible at all.
+	alias(libs.plugins.composeDesktopNativeBridge) apply false
 }
 
 // The Skia fork the bridge plugin uses for Windows, pinned to what is actually published.
@@ -22,6 +25,17 @@ plugins {
 // when a bridge release points at a version that exists.
 if (providers.gradleProperty("nativeDesktop").isPresent) {
 	subprojects {
+		// The bridge, on every multiplatform module rather than on the ones that name Compose:
+		// it rewrites what a module *resolves*, and a provider resolves Compose transitively
+		// through its game module without ever declaring it.
+		//
+		// Applied here rather than in each module's `plugins` block because it is for a port that
+		// is parked. Applying it unconditionally registered its packaging and Skia-provisioning
+		// tasks on every ordinary build -- configuration work, and ten tasks in `tasks --all`, for
+		// targets that did not exist.
+		plugins.withId("org.jetbrains.kotlin.multiplatform") {
+			apply(plugin = "com.bitsycore.compose-desktop-native.bridge")
+		}
 		configurations.configureEach {
 			resolutionStrategy.eachDependency {
 				if (requested.group == "com.bitsycore.skiko") useVersion(SKIKO_MINGW_FORK)

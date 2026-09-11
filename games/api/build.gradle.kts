@@ -3,7 +3,6 @@ plugins {
 	alias(libs.plugins.androidKmpLibrary)
 	alias(libs.plugins.composeMultiplatform)
 	alias(libs.plugins.composeCompiler)
-	alias(libs.plugins.composeDesktopNativeBridge)
 }
 
 // What every `:games:*` module implements, and the one place the Compose dependency needed for a

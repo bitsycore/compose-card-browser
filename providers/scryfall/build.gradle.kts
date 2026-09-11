@@ -1,9 +1,5 @@
 plugins {
 	alias(libs.plugins.kotlinMultiplatform)
-	// Transitively resolves Compose klibs through its game module, so it needs the
-	// substitution too -- the bridge rewrites whatever a module *resolves*, not only
-	// what it declares.
-	alias(libs.plugins.composeDesktopNativeBridge)
 	alias(libs.plugins.androidKmpLibrary)
 	alias(libs.plugins.kotlinSerialization)
 }

@@ -115,6 +115,17 @@ Follow the user's global conventions (Spirtech prefixes, tabs, KDoc). Specifical
 ./gradlew :composeApp:run        # desktop
 ```
 
+The Kotlin/Native desktop port is **parked and entirely opt-in**. Without `-PnativeDesktop` no
+native target is declared, the bridge plugin is not applied, and `tasks --all` lists nothing for it
+-- the ordinary build is exactly what it was. Nothing about day-to-day work needs to know it exists:
+
+```bash
+./gradlew -PnativeDesktop=true :core:compileKotlinLinuxX64
+```
+
+See [`docs/NATIVE_DESKTOP.md`](docs/NATIVE_DESKTOP.md) for what is blocking it and who is fixing
+what.
+
 Live provider checks are **excluded from the ordinary run** and have one task each:
 
 ```bash
@@ -268,6 +279,14 @@ Do not "fix" these without asking; each is a decision with a reason recorded nea
 
 Not decisions, not bugs with a ticket -- just the things that are half-finished or unverified, so
 nobody re-discovers them the slow way. Delete an entry when it stops being true.
+
+**Parked, not stalled**
+
+- **The Kotlin/Native desktop port.** Every module below the UI compiles for `mingwX64`,
+  `linuxX64` and `macosArm64`; `:composeApp` is blocked on four libraries that publish no native
+  klibs, and those are being ported by someone else. Nothing here is waiting on this repository, so
+  treat it as background: do not convert anything further "to help", and do not remove the
+  scaffolding because it looks unused. `docs/NATIVE_DESKTOP.md` is the whole picture.
 
 **Known debt**
 
