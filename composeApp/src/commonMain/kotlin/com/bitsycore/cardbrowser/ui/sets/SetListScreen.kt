@@ -33,6 +33,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.Role
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import com.bitsycore.cardbrowser.ui.common.arrowSelection
 import com.bitsycore.cardbrowser.ui.common.reorderHandle
@@ -444,6 +451,8 @@ fun SetListContent(
 						// The keyboard's cursor, over the two groups as one run of sets.
 						val vSelectable = vFavourites + vState.otherSets
 						var vSelected by remember { mutableIntStateOf(0) }
+						// See the game picker: no cursor until something navigates.
+						var vCursorVisible by remember { mutableStateOf(false) }
 						LaunchedEffect(vSelectable.size) {
 							vSelected = vSelected.coerceIn(0, (vSelectable.size - 1).coerceAtLeast(0))
 						}
@@ -475,6 +484,8 @@ fun SetListContent(
 								count = vSelectable.size,
 								selected = vSelected,
 								onSelect = { vSelected = it },
+								isCursorVisible = vCursorVisible,
+								onKeyboardUsed = { vCursorVisible = true },
 								onActivate = {
 									vSelectable.getOrNull(vSelected)?.let {
 										dispatch(SetListContract.Intent.SetOpened(it))
@@ -507,7 +518,8 @@ fun SetListContent(
 							}
 
 							setRows(
-								selectedId = vSelectable.getOrNull(vSelected)?.id?.qualified,
+								selectedId = vSelectable.getOrNull(vSelected)
+									?.takeIf { vCursorVisible }?.id?.qualified,
 								sets = vFavourites,
 								state = vState,
 								dispatch = dispatch,
@@ -523,7 +535,8 @@ fun SetListContent(
 							}
 
 							setRows(
-								selectedId = vSelectable.getOrNull(vSelected)?.id?.qualified,
+								selectedId = vSelectable.getOrNull(vSelected)
+									?.takeIf { vCursorVisible }?.id?.qualified,
 								sets = vState.otherSets,
 								state = vState,
 								dispatch = dispatch,
@@ -887,8 +900,13 @@ private fun SetRow(
 				.fillMaxWidth(),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
-			if (handleModifier != null) {
-				ReorderHandle(handleModifier)
+			// The defaults, for the reason recorded on the game picker's row: `AnimatedVisibility`
+			// in a `Row` is `fadeIn() + expandHorizontally()` on one critically damped spring, and
+			// `expandHorizontally` already anchors its content to the end -- so the handle slides
+			// in from outside the row without help. Adding a slide on top was a second animation
+			// moving the same object a different distance, and it chattered.
+			AnimatedVisibility(visible = handleModifier != null) {
+				ReorderHandle(handleModifier ?: Modifier)
 			}
 			SetMark(set, isHighlighted = isLastOpened)
 			Spacer(Modifier.size(12.dp))
@@ -942,44 +960,64 @@ private fun SetRow(
 					}
 				}
 
-				// A star you can press, but only while arranging.
-				//
-				// Browsing, a favourite still shows its star and a non-favourite shows nothing at
-				// all: the mark is a fact about the set and worth keeping, while an empty outline
-				// on every row is a column of targets to miss on the way to opening one.
-				!isEditing -> {
-					if (isFavourite) {
-						Spacer(Modifier.size(4.dp))
-						Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
-							Icon(
-								imageVector = AppIcons.StarFilled,
-								contentDescription = "${set.name} is a favourite",
-								tint = MaterialTheme.colorScheme.primary,
-								modifier = Modifier.size(20.dp),
-							)
-						}
-					}
-				}
-
+				// A star you can press, but only while arranging. Browsing, a favourite still
+				// shows its star and a non-favourite shows nothing at all: the mark is a fact
+				// about the set and worth keeping, while an empty outline on every row is a
+				// column of targets to miss on the way to opening one.
 				else -> {
 					Spacer(Modifier.size(4.dp))
-					IconButton(onClick = onToggleFavourite, modifier = Modifier.size(32.dp)) {
-						Icon(
-							imageVector = if (isFavourite) AppIcons.StarFilled else AppIcons.StarBorder,
-							contentDescription = if (isFavourite) {
-								"Remove ${set.name} from favourites"
-							} else {
-								"Add ${set.name} to favourites"
-							},
-							// Filled and coloured when on, outlined and quiet when off, so a column
-							// of rows reads as "these few" rather than as a row of identical stars.
-							tint = if (isFavourite) {
-								MaterialTheme.colorScheme.primary
-							} else {
-								MaterialTheme.colorScheme.onSurfaceVariant
-							},
-							modifier = Modifier.size(20.dp),
-						)
+					// A mark becomes a button in the same place, so the star does not jump when the
+					// mode changes. The same scale-through the game picker's trailing icon uses: a
+					// plain cross-fade leaves both at full size and half-transparent, which reads
+					// as a glitch rather than as one thing becoming another.
+					//
+					// Both branches occupy the same 32dp, so the centre they share is the same
+					// point on screen -- a browsing row with no star still holds the space, which
+					// is what stops the whole row shuffling sideways as the mode turns.
+					AnimatedContent(
+						targetState = isEditing,
+						transitionSpec = {
+							(fadeIn() + scaleIn(initialScale = 0.6f)) togetherWith
+								(fadeOut() + scaleOut(targetScale = 0.6f))
+						},
+						label = "favourite control",
+					) { vIsEditing ->
+						if (!vIsEditing) {
+							Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+								if (isFavourite) {
+									Icon(
+										imageVector = AppIcons.StarFilled,
+										contentDescription = "${set.name} is a favourite",
+										tint = MaterialTheme.colorScheme.primary,
+										modifier = Modifier.size(20.dp),
+									)
+								}
+							}
+						} else {
+							IconButton(onClick = onToggleFavourite, modifier = Modifier.size(32.dp)) {
+								Icon(
+									imageVector = if (isFavourite) {
+										AppIcons.StarFilled
+									} else {
+										AppIcons.StarBorder
+									},
+									contentDescription = if (isFavourite) {
+										"Remove ${set.name} from favourites"
+									} else {
+										"Add ${set.name} to favourites"
+									},
+									// Filled and coloured when on, outlined and quiet when off, so
+									// a column of rows reads as "these few" rather than as a row of
+									// identical stars.
+									tint = if (isFavourite) {
+										MaterialTheme.colorScheme.primary
+									} else {
+										MaterialTheme.colorScheme.onSurfaceVariant
+									},
+									modifier = Modifier.size(20.dp),
+								)
+							}
+						}
 					}
 					// Offered only while there is something left to fetch, and only while browsing.
 					// A button that starts a download of nothing is worse than no button: it
@@ -990,7 +1028,7 @@ private fun SetRow(
 					// The marks below still say what is held -- this removes the *offer*, not the
 					// statement. Which is the right way round: "you have this" is information, and
 					// "get this" is an action that has nothing to act on.
-					if (!isFullyDownloaded && !isEditing) {
+					AnimatedVisibility(visible = !isFullyDownloaded && !isEditing) {
 						IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
 							Icon(
 								imageVector = AppIcons.Download,

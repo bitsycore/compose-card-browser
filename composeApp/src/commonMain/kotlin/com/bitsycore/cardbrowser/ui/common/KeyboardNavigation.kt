@@ -146,6 +146,14 @@ private const val FOCUS_ATTEMPTS = 10
  * @param columns 1 for a list. For a grid, up and down move by a row and left and right by one --
  *   which is why a grid has to tell this how wide it is
  * @param onActivate Enter and Space, or null for a list where opening the selection means nothing
+ * @param isCursorVisible whether the screen is drawing the selection yet. While false, the first
+ *   navigation key *reveals* it and moves nothing -- "show me where I am" before "go somewhere
+ *   else", which is how a TV or a desktop launcher behaves. A first press that also moved would
+ *   skip an item, and the one it skipped is the one the user was looking at
+ * @param onKeyboardUsed called when a navigation key arrives, including the reveal press and
+ *   including a key that moves nothing because the list has ended. An outline drawn before anyone
+ *   has pressed a key is answering a question nobody asked -- and on a phone, where there may be no
+ *   keyboard at all, it never stops being wrong
  * @param takeFocus false when something else on the screen has the better claim, such as a search
  *   field that opens focused -- it would otherwise eat the first letter typed
  */
@@ -156,16 +164,32 @@ fun Modifier.arrowSelection(
 	onSelect: (Int) -> Unit,
 	columns: Int = 1,
 	onActivate: (() -> Unit)? = null,
+	isCursorVisible: Boolean = true,
+	onKeyboardUsed: () -> Unit = {},
 	takeFocus: Boolean = true,
 ): Modifier {
 	fun move(delta: Int): (() -> Unit)? {
 		if (count <= 0) return null
+		// The reveal press. It consumes the key -- the cursor appearing *is* the response to it --
+		// and leaves the selection where it was, which is the point: what appears is where you
+		// already are.
+		if (!isCursorVisible) return ({ onKeyboardUsed() })
 		val vNext = (selected + delta).coerceIn(0, count - 1)
 		// No handler when there is nowhere to go, so the key is passed on rather than swallowed at
 		// the ends of the list.
 		return if (vNext == selected) null else ({ onSelect(vNext) })
 	}
 	return this
+		// Observed *before* the handlers below, and consuming nothing: a key at the end of a list
+		// moves nothing and is still someone reaching for the keyboard. `onKeyEvent` is only
+		// reached by keys nothing under this wanted, so a focused text field's arrows never get
+		// here and never reveal a cursor that has nothing to do with them.
+		.onKeyEvent { vEvent ->
+			if (vEvent.type == KeyEventType.KeyDown && vEvent.key in NAVIGATION_KEYS) {
+				onKeyboardUsed()
+			}
+			false
+		}
 		.arrowKeys(
 			// A one-column list leaves left and right alone: on the card detail they change card,
 			// and a list inside something that uses them should not eat them.
@@ -182,3 +206,13 @@ fun Modifier.arrowSelection(
 			true
 		}
 }
+
+/** The keys that mean someone is navigating rather than typing. */
+private val NAVIGATION_KEYS = setOf(
+	Key.DirectionLeft,
+	Key.DirectionRight,
+	Key.DirectionUp,
+	Key.DirectionDown,
+	Key.Enter,
+	Key.Spacebar,
+)

@@ -65,6 +65,38 @@ class ListArrowNavigationTest {
 	}
 
 	@Test
+	fun `the first press reveals the cursor rather than moving it`() = onSwingThread {
+		// One press against a press-and-come-back. Both should end on the first row: the opening
+		// Down only makes the cursor visible, so the Up in the second run has nowhere to go and
+		// clamps where it already is. If the first press *moved* as well as revealed, the two runs
+		// would end a row apart and the frames would differ.
+		var vRest = ""
+		var vOnePress = ""
+		var vDownThenUp = ""
+
+		val vFirst = scene()
+		try {
+			vRest = vFirst.frame()
+			vFirst.press(Key.DirectionDown)
+			vOnePress = vFirst.frame()
+		} finally {
+			vFirst.close()
+		}
+
+		val vSecond = scene()
+		try {
+			vSecond.press(Key.DirectionDown)
+			vSecond.press(Key.DirectionUp)
+			vDownThenUp = vSecond.frame()
+		} finally {
+			vSecond.close()
+		}
+
+		assertTrue(vOnePress != vRest, "the first press drew no cursor")
+		assertTrue(vOnePress == vDownThenUp, "the first press moved the cursor instead of revealing it")
+	}
+
+	@Test
 	@Ignore("A rendering tool, not a check -- it has nothing to assert that the test above does not.")
 	fun `the selection is drawn where the keyboard has got to`() = onSwingThread {
 		// Not only that something changed -- that the change is visible as a cursor. A selection

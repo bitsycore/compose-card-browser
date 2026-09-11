@@ -202,6 +202,8 @@ fun CardGridContent(
 	// The keyboard's cursor, held here rather than inside either renderer: it is a position in the
 	// *set*, and switching between the grid and the list should not lose your place in it.
 	var vSelected by remember { mutableIntStateOf(0) }
+	// See the game picker: no cursor until something navigates.
+	var vCursorVisible by remember { mutableStateOf(false) }
 	LaunchedEffect(vState.cards.size) {
 		vSelected = vSelected.coerceIn(0, (vState.cards.size - 1).coerceAtLeast(0))
 	}
@@ -467,7 +469,9 @@ fun CardGridContent(
 					onOpenCard = { dispatch(CardGridContract.Intent.CardOpened(it)) },
 					contentPadding = vPadding,
 					selected = vSelected,
+					isCursorVisible = vCursorVisible,
 					onSelect = { vSelected = it },
+					onKeyboardUsed = { vCursorVisible = true },
 					canTakeFocus = !vState.isSearchOpen,
 				)
 
@@ -478,7 +482,9 @@ fun CardGridContent(
 					onOpenCard = { dispatch(CardGridContract.Intent.CardOpened(it)) },
 					contentPadding = vPadding,
 					selected = vSelected,
+					isCursorVisible = vCursorVisible,
 					onSelect = { vSelected = it },
+					onKeyboardUsed = { vCursorVisible = true },
 					canTakeFocus = !vState.isSearchOpen,
 				)
 			}
@@ -531,7 +537,9 @@ private fun CardGrid(
 	 */
 	tileSize: CardTileSize,
 	selected: Int,
+	isCursorVisible: Boolean,
 	onSelect: (Int) -> Unit,
+	onKeyboardUsed: () -> Unit = {},
 	canTakeFocus: Boolean = true,
 ) {
 	// How many tiles are on a row, read off the grid rather than recomputed from the window.
@@ -560,17 +568,19 @@ private fun CardGrid(
 		modifier = Modifier.arrowSelection(
 			count = cards.size,
 			selected = selected,
+			isCursorVisible = isCursorVisible,
 			onSelect = onSelect,
 			// A grid, so up and down move by a row and left and right by one tile.
 			columns = vColumns,
 			onActivate = { cards.getOrNull(selected)?.let(onOpenCard) },
+			onKeyboardUsed = onKeyboardUsed,
 			takeFocus = canTakeFocus,
 		),
 	) {
 		itemsIndexed(cards, key = { _, vCard -> vCard.id.qualified }) { vIndex, vCard ->
 			CardTile(
 				card = vCard,
-				isSelected = vIndex == selected,
+				isSelected = isCursorVisible && vIndex == selected,
 				onClick = { onOpenCard(vCard) },
 			)
 		}
@@ -597,7 +607,9 @@ private fun CardList(
 	onOpenCard: (CardPrinting) -> Unit,
 	contentPadding: PaddingValues,
 	selected: Int,
+	isCursorVisible: Boolean,
 	onSelect: (Int) -> Unit,
+	onKeyboardUsed: () -> Unit,
 	canTakeFocus: Boolean,
 ) {
 	LazyColumn(
@@ -612,8 +624,10 @@ private fun CardList(
 		modifier = Modifier.arrowSelection(
 			count = cards.size,
 			selected = selected,
+			isCursorVisible = isCursorVisible,
 			onSelect = onSelect,
 			onActivate = { cards.getOrNull(selected)?.let(onOpenCard) },
+			onKeyboardUsed = onKeyboardUsed,
 			takeFocus = canTakeFocus,
 		),
 	) {
@@ -622,7 +636,7 @@ private fun CardList(
 				card = vCard,
 				rowHeight = rowHeight,
 				knownSetSize = knownSetSize,
-				isSelected = vIndex == selected,
+				isSelected = isCursorVisible && vIndex == selected,
 				onClick = { onOpenCard(vCard) },
 			)
 		}
@@ -1015,3 +1029,4 @@ private fun ViewModeButton(
 		}
 	}
 }
+

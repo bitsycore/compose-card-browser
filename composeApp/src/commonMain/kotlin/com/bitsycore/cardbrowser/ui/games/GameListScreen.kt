@@ -43,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -251,6 +252,13 @@ fun GameListContent(
 				// Where the arrow keys are. An index the screen owns, not focus inside the list:
 				// see `arrowSelection` for why leaning on Compose's traversal does not work here.
 				var vSelected by remember { mutableIntStateOf(0) }
+				// Hidden until an arrow is pressed.
+				//
+				// An outline drawn before anyone has touched the keyboard is answering a question
+				// nobody asked -- and on a phone or a tablet, where there may be no keyboard at
+				// all, it never stops being wrong. So the cursor does not exist until something
+				// navigates, which is how a TV or a desktop launcher behaves.
+				var vCursorVisible by remember { mutableStateOf(false) }
 				LaunchedEffect(vVisible.size) {
 					vSelected = vSelected.coerceIn(0, (vVisible.size - 1).coerceAtLeast(0))
 				}
@@ -271,6 +279,8 @@ fun GameListContent(
 						count = vVisible.size,
 						selected = vSelected,
 						onSelect = { vSelected = it },
+						isCursorVisible = vCursorVisible,
+						onKeyboardUsed = { vCursorVisible = true },
 						onActivate = {
 							vVisible.getOrNull(vSelected)?.let {
 								dispatch(GameListContract.Intent.GameOpened(it))
@@ -285,7 +295,7 @@ fun GameListContent(
 							source = state.sources[vGame],
 							isLastOpened = vGame == state.lastGame,
 							isEditing = state.isEditing,
-							isSelected = vIndex == vSelected,
+							isSelected = vCursorVisible && vIndex == vSelected,
 							isHidden = false,
 							isDragging = vIsDragging,
 							// The dragged row follows the finger, so it must not also be animated
