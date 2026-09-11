@@ -3,6 +3,7 @@ package com.bitsycore.cardbrowser.ui.storage
 import androidx.lifecycle.viewModelScope
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.cache.CacheManager
+import com.bitsycore.cardbrowser.data.download.DownloadKind
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.lib.pulse.viewmodel.PulseViewModel
@@ -67,12 +68,38 @@ class StorageViewModel(
 			val vUsage = mCacheManager.usage()
 			val vImports = mPreferences.preferences.value.bulkImports
 			val vNames = mRegistry.games.associate { it.id to it.displayName }
+			// Which provider serves which game, so an image-download key -- which carries a
+			// qualified set id and therefore a provider -- can be attributed to a game.
+			val vGameOfProvider = mRegistry.games
+				.mapNotNull { vGame -> mRegistry.resolve(vGame)?.id?.value?.let { it to vGame.id } }
+				.toMap()
+			val vImageSets = mPreferences.preferences.value.imageDownloads
+				.filterValues { it.isComplete }
+				.keys
+				.mapNotNull { vKey ->
+					// `setId|language|kind`, and the set id is `provider:local`.
+					val vParts = vKey.split('|')
+					if (vParts.size < 3) return@mapNotNull null
+					val vGame = vGameOfProvider[vParts[0].substringBefore(':')] ?: return@mapNotNull null
+					Triple(vGame, vParts[2], vParts[0])
+				}
+				.groupBy { it.first }
+
 			val vKept = mRepository.keptByGame().map { vStorage ->
+				val vImages = vImageSets[vStorage.game].orEmpty()
 				StorageContract.KeptGame(
 					game = vStorage.game,
 					displayName = vNames[vStorage.game] ?: vStorage.game.value,
 					sets = vStorage.sets,
 					bytes = vStorage.bytes,
+					knownSets = vStorage.knownSets,
+					// Distinct sets, not records: one set downloaded in two languages is one set
+					// with pictures, and the images are the same file either way.
+					thumbnailSets = vImages
+						.filter { it.second == DownloadKind.GRID_THUMBNAILS.name }
+						.map { it.third }
+						.distinct()
+						.size,
 					importedVariant = vImports[vStorage.game.value],
 				)
 			}

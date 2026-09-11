@@ -206,10 +206,8 @@ fun SettingsContent(
 			Text(
 				// The clearing buttons moved to the storage screen. They belong next to what they
 				// delete, and "clear card data" here would have taken downloaded sets with it --
-				// which the limits below have no power over and never did.
-				text = "These limits bound what *browsing* accumulates. Sets you downloaded and " +
-					"catalogues you imported sit outside them and are never removed " +
-					"automatically.",
+				// which these limits have no power over and never did.
+				text = "Limits apply to cached data. Downloads are kept until you delete them.",
 				style = MaterialTheme.typography.bodySmall,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
 			)

@@ -86,6 +86,54 @@ class StorageContractTest {
 	}
 
 	// ============
+	//  What a row says
+
+	@Test
+	fun `a row says how much of the game is downloaded -- and of what`() {
+		// The reported gap: a row said "2 sets · 21.0 MB" and left both real questions
+		// unanswered -- how much of the game, and whether that is card info or pictures.
+		val vGame = KeptGame(
+			game = GameId("riftbound"),
+			displayName = "Riftbound",
+			sets = 2,
+			bytes = 21_000_000,
+			knownSets = 8,
+			thumbnailSets = 2,
+		)
+
+		assertEquals("Card info 2/8 · Thumbnails 2", vGame.summary)
+	}
+
+	@Test
+	fun `a denominator nobody can supply is not invented`() {
+		// `knownSets` goes missing exactly when the cache has been cleared, and "2/?" is worse
+		// than "2".
+		val vGame = KeptGame(
+			game = GameId("riftbound"),
+			displayName = "Riftbound",
+			sets = 2,
+			bytes = 21_000_000,
+			knownSets = null,
+		)
+
+		assertEquals("Card info 2", vGame.summary)
+	}
+
+	@Test
+	fun `pictures are mentioned only when there are some`() {
+		val vGame = KeptGame(
+			game = GameId("magic"),
+			displayName = "Magic",
+			sets = 988,
+			bytes = 441_000_000,
+			knownSets = 988,
+			thumbnailSets = 0,
+		)
+
+		assertEquals("Card info 988/988", vGame.summary)
+	}
+
+	// ============
 	//  Ordering and flow
 
 	@Test

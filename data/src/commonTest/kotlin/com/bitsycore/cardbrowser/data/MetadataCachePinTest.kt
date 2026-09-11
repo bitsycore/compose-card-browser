@@ -198,6 +198,44 @@ class MetadataCachePinTest {
 	}
 
 	@Test
+	fun `a pin says what it pins -- and survives the cache around it being cleared`() = runTest {
+		// The reported sequence: download Riftbound's card info, open storage and see it, clear
+		// cached data, and the row is gone -- while the download dialog still says the set is
+		// downloaded, because it is. The records were never deleted; the *index* that named them
+		// was. A set list is ordinary browsing data, and it used to be the only route from a
+		// hashed filename back to a set.
+		val vCache = cache(maxBytes = Long.MAX_VALUE)
+		val vKept = CacheKey.of("downloaded")
+		vCache.pin(vKept, "riftbound\triftcodex:OGN\ten")
+		vCache.put(vKept, "x".repeat(300))
+		// Stands in for the set list and anything else browsing leaves behind.
+		vCache.put(CacheKey.of("set-list"), "y".repeat(300))
+
+		vCache.clearUnpinned()
+
+		val vPinned = vCache.pinnedEntries()
+		assertEquals(1, vPinned.size, "the pin went with the cache")
+		assertEquals("riftbound\triftcodex:OGN\ten", vPinned.single().label)
+		assertTrue(vPinned.single().bytes > 0, "the record is still there and still measurable")
+	}
+
+	@Test
+	fun `a pin written without a label is still reported`() = runTest {
+		// Markers from before labels existed. The bytes are real, so hiding them would make a
+		// storage screen disagree with its own total.
+		val vCache = cache(maxBytes = Long.MAX_VALUE)
+		val vKey = CacheKey.of("old-download")
+		vCache.pin(vKey)
+		vCache.put(vKey, "x".repeat(300))
+
+		val vPinned = vCache.pinnedEntries()
+
+		assertEquals(1, vPinned.size)
+		assertEquals("", vPinned.single().label)
+		assertTrue(vPinned.single().bytes > 0)
+	}
+
+	@Test
 	fun `pinned bytes are reported apart from the rest`() = runTest {
 		// What the storage screen shows, and what the limit in settings does not govern.
 		val vCache = cache(maxBytes = Long.MAX_VALUE)

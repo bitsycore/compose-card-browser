@@ -141,4 +141,12 @@ data class GameStorage(
 	val game: com.bitsycore.cardbrowser.core.model.GameId,
 	val sets: Int,
 	val bytes: Long,
+	/**
+	 * How many sets the game has in total, or `null` when its catalogue is not cached.
+	 *
+	 * Null is shown as "3 sets" rather than "3 of ?", because a denominator nobody can supply is
+	 * not one worth inventing. It goes missing exactly when the cache has been cleared, which is
+	 * also when the kept records are still there -- so the two must not depend on each other.
+	 */
+	val knownSets: Int? = null,
 )

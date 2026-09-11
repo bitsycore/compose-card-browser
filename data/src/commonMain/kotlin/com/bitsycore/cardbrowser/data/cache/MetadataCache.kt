@@ -248,12 +248,25 @@ class MetadataCache(
 	 * listing, costs a directory entry, and -- unlike anything held in memory -- survives a restart,
 	 * which is the whole point.
 	 */
-	suspend fun pin(key: CacheKey) {
+	suspend fun pin(key: CacheKey, label: String = "") {
 		withContext(mIoDispatcher) {
 			mWriteLock.withLock {
 				try {
 					mFileSystem.createDirectories(mDirectory)
-					mFileSystem.sink(markerFor(key)).buffer().use { }
+					// The marker carries *what* it pins, not merely that something is pinned.
+					//
+					// It used to be zero bytes, which made a kept record anonymous: the only way
+					// back from a hashed filename to a set was the game's set list, and that is
+					// ordinary browsing data. Clearing the cache therefore deleted the index, and
+					// the storage screen stopped being able to name records that were still on
+					// disk -- they vanished from the screen while the download dialog went on
+					// correctly reporting them as downloaded.
+					//
+					// An opaque string, because this layer names no games. The caller decides what
+					// it means; see `CardRepository.pinLabel`.
+					mFileSystem.sink(markerFor(key)).buffer().use { vSink ->
+						if (label.isNotEmpty()) vSink.writeUtf8(label)
+					}
 					// Those bytes just left the budget. The running total is now an overestimate,
 					// and re-measuring is cheaper than being wrong in the direction of evicting
 					// things needlessly.
@@ -292,29 +305,6 @@ class MetadataCache(
 	 * Reported separately because it is the part of the cache the ceiling cannot reclaim, and a
 	 * settings screen that shows a limit should be able to say how much of it is spoken for.
 	 */
-	/**
-	 * How much [keys] occupy on disk, and how many of them are pinned.
-	 *
-	 * One listing for any number of keys, because the alternative -- a `metadataOrNull` per key --
-	 * is a syscall per set, and a storage screen asks about every set of every game at once.
-	 */
-	suspend fun usageOf(keys: Collection<CacheKey>): KeyUsage = withContext(mIoDispatcher) {
-		val vWanted = keys.mapTo(mutableSetOf()) { pathFor(it).name }
-		if (vWanted.isEmpty()) return@withContext KeyUsage(0, 0, 0L)
-		val vAll = entriesOnDisk()
-		val vPinnedNames = pinnedNamesIn(vAll)
-		var vPresent = 0
-		var vPinned = 0
-		var vBytes = 0L
-		for (vEntry in vAll) {
-			if (isMarker(vEntry.path.name) || vEntry.path.name !in vWanted) continue
-			vPresent++
-			vBytes += vEntry.sizeBytes
-			if (vEntry.path.name in vPinnedNames) vPinned++
-		}
-		KeyUsage(present = vPresent, pinned = vPinned, bytes = vBytes)
-	}
-
 	/**
 	 * Deletes every record the ceiling could have reclaimed, and keeps the pinned ones.
 	 *
@@ -565,6 +555,39 @@ class MetadataCache(
 
 	private fun countFor(key: CacheKey): Path = mDirectory / (key.fileName + COUNT_SUFFIX)
 
+	/**
+	 * Every pinned record: what it was pinned as, and what it occupies.
+	 *
+	 * Reads the markers rather than the records -- they are a few dozen bytes each -- so this
+	 * survives the cache being cleared around it, which is the whole reason the label is there.
+	 *
+	 * A marker written before labels existed, or by a caller that passed none, comes back with an
+	 * empty [PinnedEntry.label]. Reported rather than dropped: the bytes are real and a screen that
+	 * hid them would disagree with its own total.
+	 */
+	suspend fun pinnedEntries(): List<PinnedEntry> = withContext(mIoDispatcher) {
+		val vAll = entriesOnDisk()
+		val vBySize = vAll.associate { it.path.name to it.sizeBytes }
+		vAll
+			.filter { it.path.name.endsWith(PIN_SUFFIX) }
+			.map { vMarker ->
+				val vRecord = vMarker.path.name.removeSuffix(PIN_SUFFIX)
+				PinnedEntry(
+					label = readMarker(vMarker.path),
+					// Zero when the marker outlived its record, which a failed write can leave
+					// behind. Still listed, because the pin is real and a screen offering to
+					// delete it is right to.
+					bytes = vBySize[vRecord] ?: 0L,
+				)
+			}
+	}
+
+	private fun readMarker(path: Path): String = try {
+		mFileSystem.read(path) { readUtf8() }
+	} catch (vIo: IOException) {
+		""
+	}
+
 	/** The record names that carry a pin marker, from a listing the caller already has. */
 	private fun pinnedNamesIn(entries: List<DiskEntry>): Set<String> = entries
 		.asSequence()
@@ -658,13 +681,12 @@ data class CacheKey(val value: String) {
 	}
 }
 
+
+
 /**
- * What a set of keys occupies on disk.
+ * One pinned record, as the storage screen sees it.
  *
- * @property present how many of the asked-for keys have a record. Fewer than asked for is normal:
- *   a game's set list names every set, and only the ones downloaded or browsed are here
- * @property pinned how many of those are protected from eviction, which is what a storage screen
- *   reports as kept rather than cached
- * @property bytes what the present records occupy in total
+ * @property label whatever the caller pinned it as, or empty for a marker that carries none
+ * @property bytes what the record occupies
  */
-data class KeyUsage(val present: Int, val pinned: Int, val bytes: Long)
+data class PinnedEntry(val label: String, val bytes: Long)

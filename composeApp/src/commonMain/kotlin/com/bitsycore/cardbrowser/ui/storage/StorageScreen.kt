@@ -116,24 +116,23 @@ fun StorageContent(
 			}
 
 			state.usage?.let { vUsage ->
+				// ============
+				//  Downloaded
+
 				Spacer(Modifier.height(8.dp))
-				SectionHeading("Kept on this device")
-				Text(
-					// The sentence the whole screen is for.
-					text = "Sets you downloaded and catalogues you imported. These are not " +
-						"limited by the card-data setting and are never removed automatically, " +
-						"because you asked for them. Deleting one here is the only thing that " +
-						"removes it.",
-					style = MaterialTheme.typography.bodySmall,
-					color = MaterialTheme.colorScheme.onSurfaceVariant,
+				SectionHeading(
+					title = "Downloaded",
+					// One line, not a paragraph. The distinction between the two sections is the
+					// whole content of this screen, and it survives being said briefly.
+					subtitle = "Yours until you delete it.",
+					trailing = formatBytes(state.keptBytes + state.unattributedKeptBytes),
 				)
-				Spacer(Modifier.height(8.dp))
 
 				if (!state.hasKept && state.unattributedKeptBytes == 0L) {
 					Text(
-						text = "Nothing kept yet. Downloading a set or importing a catalogue " +
-							"will put it here.",
+						text = "Nothing downloaded yet.",
 						style = MaterialTheme.typography.bodyMedium,
+						color = MaterialTheme.colorScheme.onSurfaceVariant,
 					)
 				}
 
@@ -148,48 +147,39 @@ fun StorageContent(
 
 				if (state.unattributedKeptBytes > 0) {
 					Text(
-						// Shown rather than folded into a game's row, so the parts add up to the
-						// total. See `UiState.unattributedKeptBytes`.
-						text = "Other kept records: ${formatBytes(state.unattributedKeptBytes)}. " +
-							"These belong to a game whose set list is no longer cached, so they " +
-							"cannot be attributed. Clearing browsing data and reopening the game " +
-							"will name them.",
+						// Shown rather than folded into a row, so the parts add up to the heading.
+						text = "Other · ${formatBytes(state.unattributedKeptBytes)}",
 						style = MaterialTheme.typography.bodySmall,
 						color = MaterialTheme.colorScheme.onSurfaceVariant,
 					)
 					Spacer(Modifier.height(8.dp))
 				}
 
-				Spacer(Modifier.height(8.dp))
-				HorizontalDivider()
-				Spacer(Modifier.height(12.dp))
-
-				SectionHeading("Browsing data")
-				UsageLine(
-					used = vUsage.metadataBrowsingBytes,
-					limit = vUsage.metadataLimitBytes,
-					note = "Card records left behind by browsing. The card-data limit in " +
-						"settings governs this, and the oldest is dropped when it is reached.",
-				)
-				Spacer(Modifier.height(8.dp))
-				OutlinedButton(
-					onClick = { dispatch(StorageContract.Intent.ClearBrowsingData) },
-					enabled = vUsage.metadataBrowsingBytes > 0 && !state.isLoading,
-				) { Text("Clear browsing data") }
+				// ============
+				//  Cached
 
 				Spacer(Modifier.height(16.dp))
-				SectionHeading("Images")
-				UsageLine(
+				SectionHeading(
+					title = "Cached",
+					subtitle = "Kept within the limits in Settings, and dropped as needed.",
+					trailing = formatBytes(vUsage.metadataBrowsingBytes + vUsage.imageBytes),
+				)
+
+				CacheLine(
+					label = "Card data",
+					used = vUsage.metadataBrowsingBytes,
+					limit = vUsage.metadataLimitBytes,
+					onClear = { dispatch(StorageContract.Intent.ClearBrowsingData) },
+					enabled = vUsage.metadataBrowsingBytes > 0 && !state.isLoading,
+				)
+				Spacer(Modifier.height(12.dp))
+				CacheLine(
+					label = "Images",
 					used = vUsage.imageBytes,
 					limit = vUsage.imageLimitBytes,
-					note = "Card pictures, for every game. Downloaded art is here too and is " +
-						"re-fetched when it is looked at again.",
-				)
-				Spacer(Modifier.height(8.dp))
-				OutlinedButton(
-					onClick = { dispatch(StorageContract.Intent.ClearImages) },
+					onClear = { dispatch(StorageContract.Intent.ClearImages) },
 					enabled = vUsage.imageBytes > 0 && !state.isLoading,
-				) { Text("Clear images") }
+				)
 
 				Spacer(Modifier.height(24.dp))
 			}
@@ -199,19 +189,11 @@ fun StorageContent(
 	state.pendingDelete?.let { vGame ->
 		AlertDialog(
 			onDismissRequest = { dispatch(StorageContract.Intent.DeleteRequested(null)) },
-			title = { Text("Delete ${vGame.displayName} card data?") },
+			title = { Text("Delete ${vGame.displayName}?") },
 			text = {
 				Text(
-					// Says what it costs to undo, because that is the decision being made.
-					"This removes ${vGame.sets} downloaded " +
-						"${if (vGame.sets == 1) "set" else "sets"} and frees " +
-						"${formatBytes(vGame.bytes)}. Browsing ${vGame.displayName} will " +
-						"download what it needs again." +
-						if (vGame.importedVariant != null) {
-							" The imported catalogue would have to be imported again."
-						} else {
-							""
-						},
+					"${vGame.summary} · ${formatBytes(vGame.bytes)}." +
+						if (vGame.importedVariant != null) " The import would have to be run again." else "",
 				)
 			},
 			confirmButton = {
@@ -228,10 +210,53 @@ fun StorageContent(
 	}
 }
 
+/** A heading with its total on the right, so each section can be read in one glance. */
 @Composable
-private fun SectionHeading(text: String) {
-	Text(text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
-	Spacer(Modifier.height(4.dp))
+private fun SectionHeading(title: String, subtitle: String, trailing: String) {
+	Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+		Text(
+			text = title,
+			style = MaterialTheme.typography.titleMedium,
+			fontWeight = FontWeight.Medium,
+			modifier = Modifier.weight(1f),
+		)
+		Text(trailing, style = MaterialTheme.typography.titleMedium)
+	}
+	Text(
+		text = subtitle,
+		style = MaterialTheme.typography.bodySmall,
+		color = MaterialTheme.colorScheme.onSurfaceVariant,
+	)
+	Spacer(Modifier.height(10.dp))
+}
+
+/** One cache, its share of its limit, and the button that empties it. */
+@Composable
+private fun CacheLine(
+	label: String,
+	used: Long,
+	limit: Long,
+	onClear: () -> Unit,
+	enabled: Boolean,
+) {
+	Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+		Column(Modifier.weight(1f)) {
+			Text(
+				text = if (limit > 0) "$label · ${formatBytes(used)} of ${formatBytes(limit)}" else
+					"$label · ${formatBytes(used)}",
+				style = MaterialTheme.typography.bodyMedium,
+			)
+			if (limit > 0) {
+				Spacer(Modifier.height(4.dp))
+				LinearProgressIndicator(
+					progress = { (used.toFloat() / limit).coerceIn(0f, 1f) },
+					modifier = Modifier.fillMaxWidth(),
+				)
+			}
+		}
+		Spacer(Modifier.size(12.dp))
+		TextButton(onClick = onClear, enabled = enabled) { Text("Clear") }
+	}
 }
 
 /** One game's kept records, with the delete that is the only way to remove them. */
@@ -250,8 +275,11 @@ private fun KeptGameRow(
 				Text(game.displayName, style = MaterialTheme.typography.titleMedium)
 				Spacer(Modifier.height(2.dp))
 				Text(
+					// What was downloaded and how much of it -- "Card info 2/8 · Thumbnails 2".
+					// A row that said only "2 sets · 21.0 MB" left the two questions a person
+					// actually has unanswered: how much of the game, and of what.
 					text = buildList {
-						add("${game.sets} ${if (game.sets == 1) "set" else "sets"}")
+						add(game.summary)
 						add(formatBytes(game.bytes))
 						game.importedVariant?.let { add("imported ${it.updatedAt.take(10)}") }
 					}.joinToString(" · "),
@@ -330,6 +358,7 @@ private fun StoragePreview() = PreviewFrame {
 					displayName = "Magic: The Gathering",
 					sets = 988,
 					bytes = 441_000_000,
+					knownSets = 988,
 					importedVariant = BulkImportRecord("default_cards", "2026-09-10T09:14:00Z"),
 				),
 				StorageContract.KeptGame(
@@ -337,6 +366,8 @@ private fun StoragePreview() = PreviewFrame {
 					displayName = "Riftbound",
 					sets = 2,
 					bytes = 21_000_000,
+					knownSets = 8,
+					thumbnailSets = 2,
 				),
 			),
 			isLoading = false,

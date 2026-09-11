@@ -1502,7 +1502,7 @@ class CardRepository(
 					// evicted by the very write that stored it.
 					val vKey = completeSetKey(vProvider, vSetId, vLanguage)
 					val vDedupedBucket = dedupePrintings(vPrintings)
-					mCache.pin(vKey)
+					mCache.pin(vKey, pinLabel(game, vSetId, vLanguage))
 					mCache.write(
 						key = vKey,
 						envelope = CacheEnvelope(
@@ -1615,13 +1615,33 @@ class CardRepository(
 	 */
 	suspend fun keptByGame(): List<GameStorage> {
 		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardSet>()))
-		return mRegistry.games.mapNotNull { vGame ->
+		// From the pin markers, not from each game's set list.
+		//
+		// The set list is ordinary browsing data, so clearing the cache deleted it -- and with it
+		// the only route from a hashed filename back to a set. Kept records then disappeared from
+		// this screen while still being on disk and still being reported as downloaded by the
+		// download dialog, which is exactly the contradiction a storage screen must not produce.
+		val vByGame = mCache.pinnedEntries()
+			.mapNotNull { vEntry ->
+				val vParts = vEntry.label.split(TAB)
+				if (vParts.size < 2 || vParts[0].isEmpty()) null else vParts[0] to vEntry
+			}
+			.groupBy({ it.first }, { it.second })
+
+		return vByGame.mapNotNull { (vGameId, vEntries) ->
 			currentCoroutineContext().ensureActive()
-			val vProvider = mRegistry.resolve(vGame) ?: return@mapNotNull null
-			val vSets = setListOnDisk(vProvider, vGame.id, vSerializer) ?: return@mapNotNull null
-			val vKeys = keysFor(vProvider, vSets)
-			val vUsage = mCache.usageOf(vKeys)
-			if (vUsage.pinned == 0) null else GameStorage(vGame.id, vUsage.pinned, vUsage.bytes)
+			val vGame = GameId(vGameId)
+			// How many sets the game has, when its catalogue is still cached. Absent is a real
+			// answer -- the screen says "3 sets" rather than inventing a denominator.
+			val vKnownSets = mRegistry.resolve(vGame)
+				?.let { setListOnDisk(it, vGame, vSerializer) }
+				?.size
+			GameStorage(
+				game = vGame,
+				sets = vEntries.map { it.label }.distinct().size,
+				bytes = vEntries.sumOf { it.bytes },
+				knownSets = vKnownSets,
+			)
 		}
 	}
 
@@ -1633,30 +1653,22 @@ class CardRepository(
 	 * staying exempt from the ceiling forever.
 	 */
 	suspend fun deleteKept(game: GameId): Int {
+		// Rebuilt from the labels rather than from the set list, so this deletes what the screen
+		// showed even when the catalogue that named it has been cleared.
 		val vProvider = mRegistry.resolve(game) ?: return 0
-		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardSet>()))
-		val vSets = setListOnDisk(vProvider, game, vSerializer) ?: return 0
 		var vRemoved = 0
-		for (vKey in keysFor(vProvider, vSets)) {
+		for (vEntry in mCache.pinnedEntries()) {
 			currentCoroutineContext().ensureActive()
-			if (!mCache.isPinned(vKey)) continue
+			val vParts = vEntry.label.split(TAB)
+			if (vParts.size < 3 || vParts[0] != game.value) continue
+			val vSetId = SourceId.parse(vParts[1]) ?: continue
+			val vLanguage = vParts[2].ifEmpty { null }?.let(CardLanguage::fromCode)
+			val vKey = completeSetKey(vProvider, vSetId, vLanguage)
 			mCache.unpin(vKey)
 			mCache.remove(vKey)
 			vRemoved++
 		}
 		return vRemoved
-	}
-
-	/** Every cache key a game's sets could occupy: one per set per language it states. */
-	private fun keysFor(
-		provider: CardProvider<GameProfile>,
-		sets: List<CardSet>,
-	): List<CacheKey> = sets.flatMap { vSet ->
-		val vLanguages = (vSet.languages + setOfNotNull(vSet.languageFor(null)))
-			.mapNotNull { effectiveLanguage(provider, it) }
-			.distinct()
-			.ifEmpty { listOf(effectiveLanguage(provider, null)) }
-		vLanguages.map { completeSetKey(provider, vSet.id, it) }
 	}
 
 	/** A game's set list if one is cached in any language, without fetching. */
@@ -1687,8 +1699,18 @@ class CardRepository(
 	suspend fun setPinned(game: GameId, setId: SourceId, language: CardLanguage?, isPinned: Boolean) {
 		val vProvider = mRegistry.resolve(game, language) ?: return
 		val vKey = completeSetKey(vProvider, setId, effectiveLanguage(vProvider, language))
-		if (isPinned) mCache.pin(vKey) else mCache.unpin(vKey)
+		if (isPinned) mCache.pin(vKey, pinLabel(game, setId, effectiveLanguage(vProvider, language))) else mCache.unpin(vKey)
 	}
+
+	/**
+	 * What a pinned record is, written into its marker.
+	 *
+	 * Three fields and a separator rather than JSON: it is read once per record by the storage
+	 * screen and written once per download, and a tab-separated line is cheaper than a parser at
+	 * both ends. The language may be absent, which is a real state -- a source that states none.
+	 */
+	private fun pinLabel(game: GameId, setId: SourceId, language: CardLanguage?): String =
+		listOf(game.value, setId.qualified, language?.code.orEmpty()).joinToString(TAB.toString())
 
 	private fun completeSetKey(provider: CardProvider<GameProfile>, setId: SourceId, language: CardLanguage?) =
 		CacheKey.of("v${CacheEnvelope.CURRENT_SCHEMA_VERSION}", provider.id.value, "set", setId.qualified, language?.code ?: "-")
@@ -1696,6 +1718,14 @@ class CardRepository(
 	companion object {
 
 		/** Scratch directory for a bulk import's shards. Deleted when the import ends. */
+		/**
+		 * Separates the fields of a pin marker's label. See `pinLabel`.
+		 *
+		 * A tab because none of the three fields can contain one: a game id and a language code are
+		 * both slugs, and a qualified set id is a provider and a local id joined by a colon.
+		 */
+		private const val TAB: Char = '\t'
+
 		private const val BULK_SCRATCH_DIR = "bulk-scratch"
 
 		/**

@@ -54,20 +54,34 @@ object StorageContract :
 	}
 
 	/**
-	 * One game's kept records.
+	 * One game's downloaded records.
 	 *
-	 * @property sets how many set records are pinned, which for an imported catalogue is most of
-	 *   the game and for a few downloads is a handful
-	 * @property importedVariant the bulk dump this came from, when it came from one. Null for sets
-	 *   downloaded individually
+	 * @property sets how many sets have card info downloaded
+	 * @property knownSets how many the game has, or `null` when its catalogue is not cached and no
+	 *   denominator can honestly be given
+	 * @property thumbnailSets how many sets have their grid pictures downloaded. A count, not
+	 *   bytes: images live in the image cache, which is one pool for every game and cannot be
+	 *   attributed to one. Full-size art has no entry because it is never bulk-fetched -- it
+	 *   arrives as a card is read
+	 * @property importedVariant the bulk dump this came from, when it came from one
 	 */
 	data class KeptGame(
 		val game: GameId,
 		val displayName: String,
 		val sets: Int,
 		val bytes: Long,
+		val knownSets: Int? = null,
+		val thumbnailSets: Int = 0,
 		val importedVariant: BulkImportRecord? = null,
-	)
+	) {
+
+		/** "Card info 2/8 · Thumbnails 2" -- only the parts that are actually there. */
+		val summary: String
+			get() = buildList {
+				add(if (knownSets != null) "Card info $sets/$knownSets" else "Card info $sets")
+				if (thumbnailSets > 0) add("Thumbnails $thumbnailSets")
+			}.joinToString(" · ")
+	}
 
 	sealed interface Intent {
 

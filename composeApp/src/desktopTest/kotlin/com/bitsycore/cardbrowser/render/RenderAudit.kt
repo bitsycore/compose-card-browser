@@ -106,6 +106,7 @@ class DownloadRenderer {
 							displayName = "Magic: The Gathering",
 							sets = 988,
 							bytes = 441_000_000,
+							knownSets = 988,
 							importedVariant = com.bitsycore.cardbrowser.data.settings.BulkImportRecord(
 								"default_cards",
 								"2026-09-10T09:14:00Z",
@@ -116,6 +117,8 @@ class DownloadRenderer {
 							displayName = "Riftbound",
 							sets = 2,
 							bytes = 21_000_000,
+							knownSets = 8,
+							thumbnailSets = 2,
 						),
 					),
 					isLoading = false,
