@@ -43,6 +43,16 @@ class SetListRenderer {
 			SetListContent(riftboundState(), {}, onOpenSet = {}, onOpenSettings = {})
 		}
 
+		// Short enough that the footer is on screen: the tally and the option that moves it.
+		renderToPng(vOut, "sets-footer", width = 660, height = 760, density = 1.65f) {
+			SetListContent(
+				pokemonState().copy(sets = pokemonState().sets.filter { it.code in setOf("sv08", "base2") }),
+				{},
+				onOpenSet = {},
+				onOpenSettings = {},
+			)
+		}
+
 		assertTrue(vOut.listFiles().orEmpty().any { it.length() > 0 }, "nothing was rendered")
 		println("Wrote ${vOut.absolutePath}")
 	}
@@ -90,6 +100,9 @@ private fun pokemonState() = SetListContract.UiState(
 		),
 		set("SC1D", "劍&盾", PokemonGame.REGION_TAIWAN, 164, null, setOf(CardLanguage.TRADITIONAL_CHINESE)),
 		set("CBB2C", "宝石包Vol.2", PokemonGame.REGION_CHINA, 15, null, setOf(CardLanguage.SIMPLIFIED_CHINESE)),
+		// Listed by its catalogue and carrying none of its cards, which is the case the option is
+		// for. TCGdex has many.
+		set("base2", "Jungle", PokemonGame.REGION_INTERNATIONAL, 0, null, setOf(CardLanguage.ENGLISH)),
 		set(
 			"SM10", "ダブルブレイズ", PokemonGame.REGION_JAPAN, 116, null,
 			setOf(CardLanguage.JAPANESE),

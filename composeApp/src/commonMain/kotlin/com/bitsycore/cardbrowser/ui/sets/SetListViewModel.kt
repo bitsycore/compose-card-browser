@@ -66,6 +66,7 @@ class SetListViewModel(
 			dispatch(SetListContract.Intent.GamesRestored(games = vGames, game = vGame))
 			dispatch(SetListContract.Intent.LastOpenedSetRestored(vPreferences.lastSetId))
 			dispatch(SetListContract.Intent.FavouritesRestored(vPreferences.favouriteSets))
+			dispatch(SetListContract.Intent.HideEmptyToggled(vPreferences.hideEmptySets))
 			// A 3 KB question asked once, so the download-all dialog can state the size before
 			// anything large is fetched. Silent on failure: a source that will not answer about
 			// its bulk file simply does not offer one, which is the same as not having one.
@@ -107,6 +108,9 @@ class SetListViewModel(
 	override suspend fun handleIntent(intent: SetListContract.Intent) {
 		when (intent) {
 			SetListContract.Intent.Refresh -> startLoad()
+
+			is SetListContract.Intent.HideEmptyToggled ->
+				mPreferences.update { it.copy(hideEmptySets = intent.hide) }
 
 			is SetListContract.Intent.SetOpened -> {
 				mPreferences.update { it.copy(lastSetId = intent.setId) }
@@ -201,6 +205,16 @@ class SetListViewModel(
 		val vSets = stateFlow.value.sets
 		if (vSets.isEmpty()) return
 		val vPreferences = mPreferences.preferences.value
+		// The language the *source* will answer in, which is what a download is recorded under.
+		//
+		// An image-download record is keyed by (set, language, kind) and written by the queue with
+		// the job's own language. Once the queue started resolving that against the provider --
+		// Riftcodex serves English only -- a French-preferring user wrote `en` records and read
+		// `fr` ones, so a downloaded set went on offering its thumbnails for download forever.
+		//
+		// The repository resolves this for itself in `savedSetIds` and the rest; the image side
+		// reads preferences directly and has to do it here. Same function, same answer.
+		val vEffective = mRegistry.effectiveLanguage(game, language) ?: language
 		dispatch(
 			SetListContract.Intent.SavedSetsResolved(
 				setIds = mRepository.savedSetIds(game, vSets, language),
@@ -238,7 +252,7 @@ class SetListViewModel(
 					val vStatus = SetImageStatus(
 						thumbnails = vPreferences.imageDownloadFor(
 							vSet.id.qualified,
-							language,
+							vEffective,
 							DownloadKind.GRID_THUMBNAILS.name,
 						),
 					)

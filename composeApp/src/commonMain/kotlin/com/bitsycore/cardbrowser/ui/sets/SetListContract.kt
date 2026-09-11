@@ -128,6 +128,8 @@ object SetListContract :
 		 * showing the source's figure. Absent is not zero.
 		 */
 		val confirmedCardCounts: Map<String, Int> = emptyMap(),
+		/** Whether sets stated to hold no cards are left out. See `BrowsingPreferences`. */
+		val hideEmptySets: Boolean = true,
 		/**
 		 * Which languages each set is known to exist in, by qualified set id.
 		 *
@@ -188,11 +190,53 @@ object SetListContract :
 		val visibleSets: List<CardSet>
 			get() {
 				val vInRegion = if (region == null) sets else sets.filter { it.region == region }
+				val vNonEmpty = if (hideEmptySets) vInRegion.filterNot(::isEmptySet) else vInRegion
 				val vNeedle = search.trim()
-				if (vNeedle.isEmpty()) return vInRegion
-				return vInRegion.filter { vSet ->
+				if (vNeedle.isEmpty()) return vNonEmpty
+				return vNonEmpty.filter { vSet ->
 					vSet.name.contains(vNeedle, ignoreCase = true) ||
 						vSet.code.contains(vNeedle, ignoreCase = true)
+				}
+			}
+
+		/**
+		 * A set this list knows holds no cards.
+		 *
+		 * The count a fetch established wins over the one the catalogue claims, because the
+		 * catalogue can be wrong in exactly this way: TCGdex lists Spanish Base Set with 102 cards
+		 * and serves none of them.
+		 *
+		 * An unknown count is never empty. Four of the sources publish no count at all, and hiding
+		 * on a silence would empty their lists entirely.
+		 */
+		fun isEmptySet(set: CardSet): Boolean =
+			(confirmedCardCounts[set.id.qualified] ?: set.cardCount) == 0
+
+		/** How many sets the option is keeping off the screen, within the region being shown. */
+		val hiddenEmptyCount: Int
+			get() {
+				if (!hideEmptySets) return 0
+				val vInRegion = if (region == null) sets else sets.filter { it.region == region }
+				return vInRegion.count(::isEmptySet)
+			}
+
+		/**
+		 * The tally under the list: what is shown, out of what there is, and what is hidden.
+		 *
+		 * Both numbers, because either alone misleads. "187 sets" hides that a filter is on, and
+		 * "187 of 486" hides that some of the missing ones are empty rather than filtered out by a
+		 * search the reader could clear.
+		 */
+		val countsLine: String
+			get() {
+				val vShown = visibleSets.size
+				val vTotal = sets.size
+				val vHidden = hiddenEmptyCount
+				val vNoun = if (vShown == 1) "set" else "sets"
+				return when {
+					vShown == vTotal -> "$vTotal $vNoun"
+					vHidden > 0 -> "$vShown $vNoun / $vTotal ($vHidden empty hidden)"
+					else -> "$vShown $vNoun / $vTotal"
 				}
 			}
 
@@ -320,6 +364,9 @@ object SetListContract :
 
 		/** A product line was picked, or `null` to see every line again. */
 		data class RegionSelected(val region: String?) : Intent
+
+		/** The "hide empty sets" option was toggled. Persisted, so it survives a relaunch. */
+		data class HideEmptyToggled(val hide: Boolean) : Intent
 	}
 
 	sealed interface Effect
@@ -420,5 +467,8 @@ object SetListContract :
 		// Purely a view of what is already loaded: every line arrives in one request, so narrowing
 		// to one of them is not a reload.
 		is Intent.RegionSelected -> state.copy(region = intent.region)
+
+		// A view of what is already loaded, like the region chips: nothing is refetched.
+		is Intent.HideEmptyToggled -> state.copy(hideEmptySets = intent.hide)
 	}
 }

@@ -157,6 +157,103 @@ class SetListContractTest {
 	}
 
 	// ============
+	//  Empty sets
+
+	@Test
+	fun `a set stated to hold no cards is hidden by default`() {
+		// TCGdex lists these in quantity: a locale that carries a set's name but none of its cards
+		// still appears in that locale's catalogue, and the row leads to an empty grid.
+		val vState = loaded(
+			set("full", "intl").copy(cardCount = 102),
+			set("empty", "intl").copy(cardCount = 0),
+		)
+
+		assertTrue(vState.hideEmptySets, "the option should start on")
+		assertEquals(listOf("full"), vState.visibleSets.map { it.id.local })
+		assertEquals(1, vState.hiddenEmptyCount)
+	}
+
+	@Test
+	fun `an unknown card count is not an empty set`() {
+		// The rule this whole codebase turns on. Four sources publish no count at all, and hiding
+		// on a silence would empty their lists.
+		val vState = loaded(
+			set("unknown", "intl").copy(cardCount = null),
+			set("empty", "intl").copy(cardCount = 0),
+		)
+
+		assertEquals(listOf("unknown"), vState.visibleSets.map { it.id.local })
+	}
+
+	@Test
+	fun `a count a fetch established beats the one the catalogue claims`() {
+		// TCGdex says Spanish Base Set has 102 cards and serves none of them, so what was actually
+		// fetched is the better answer -- in both directions.
+		val vClaimed = loaded(set("base1", "intl").copy(cardCount = 102))
+		val vState = SetListContract.reduce(
+			vClaimed,
+			Intent.SavedSetsResolved(
+				setIds = emptySet(),
+				confirmedCardCounts = mapOf(vClaimed.sets.first().id.qualified to 0),
+			),
+		)
+
+		assertTrue(vState.visibleSets.isEmpty(), "a fetch proved it empty")
+		assertEquals(1, vState.hiddenEmptyCount)
+	}
+
+	@Test
+	fun `turning the option off shows them again`() {
+		var vState = loaded(
+			set("full", "intl").copy(cardCount = 102),
+			set("empty", "intl").copy(cardCount = 0),
+		)
+
+		vState = SetListContract.reduce(vState, Intent.HideEmptyToggled(false))
+
+		assertEquals(2, vState.visibleSets.size)
+		assertEquals(0, vState.hiddenEmptyCount)
+	}
+
+	// ============
+	//  The tally under the list
+
+	@Test
+	fun `the tally names both numbers when something is hidden`() {
+		val vState = loaded(
+			set("a", "intl").copy(cardCount = 10),
+			set("b", "intl").copy(cardCount = 10),
+			set("c", "intl").copy(cardCount = 0),
+		)
+
+		assertEquals("2 sets / 3 (1 empty hidden)", vState.countsLine)
+	}
+
+	@Test
+	fun `the tally is just a count when nothing is filtered`() {
+		// No filter on means no ratio to explain, and "3 sets / 3" is noise.
+		val vState = loaded(
+			set("a", "intl").copy(cardCount = 10),
+			set("b", "intl").copy(cardCount = 10),
+		)
+
+		assertEquals("2 sets", vState.countsLine)
+	}
+
+	@Test
+	fun `a search narrows the tally without claiming the missing ones are empty`() {
+		// The two reasons a set is absent are different, and the line must not conflate them.
+		var vState = loaded(
+			set("alpha", "intl", name = "Alpha").copy(cardCount = 10),
+			set("beta", "intl", name = "Beta").copy(cardCount = 10),
+		)
+
+		vState = SetListContract.reduce(vState, Intent.SearchChanged("alph"))
+
+		assertEquals("1 set / 2", vState.countsLine)
+	}
+
+	// ============
 	//  The language a set opens in
 
 	@Test

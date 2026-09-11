@@ -156,6 +156,17 @@ data class BrowsingPreferences(
 	/** Whether the set list is checked for new sets in the background on launch. */
 	val revalidateSetsOnLaunch: Boolean = true,
 	/**
+	 * Whether sets a source states have no cards are left out of the set list.
+	 *
+	 * On by default, because such a row leads to an empty grid and there is nothing to do with it.
+	 * TCGdex lists them in quantity -- a locale that carries a set's *name* but none of its cards
+	 * still appears in that locale's catalogue.
+	 *
+	 * Only a *stated* zero. A set whose count is unknown is never hidden: unknown is not zero, and
+	 * hiding on a silence would make sets disappear for every source that publishes no count.
+	 */
+	val hideEmptySets: Boolean = true,
+	/**
 	 * What an image download actually fetched, per set and language.
 	 *
 	 * Keyed by [imageDownloadKey]. Recorded because there is no cheap way to ask the question

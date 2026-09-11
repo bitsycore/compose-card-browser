@@ -130,6 +130,25 @@ class ProviderRegistry(
 		resolve(game.id, language)
 
 	/**
+	 * The language [game] will really be served in, given what the user would prefer.
+	 *
+	 * One function, because the answer is a key. A cache entry, an image-download record and a
+	 * queued job are all filed under it, so two callers working it out separately do not merely
+	 * differ in taste -- they read and write different places.
+	 *
+	 * They did. The download queue resolved the preference against the provider so that a job for
+	 * English-only Riftbound stopped being labelled French; the set list went on reading its
+	 * image-download records under the raw preference. A downloaded set then offered its
+	 * thumbnails for download again, for ever, because `fr` records were being looked for and `en`
+	 * ones had been written.
+	 *
+	 * Falls back to [language] for a game with no routed provider, which is the same thing every
+	 * other path here does with one.
+	 */
+	fun effectiveLanguage(game: GameId, language: CardLanguage?): CardLanguage? =
+		resolve(game, language)?.resolveLanguage(language) ?: language
+
+	/**
 	 * The provider serving [game], or a thrown error naming the gap.
 	 *
 	 * Used on paths where a missing route is a programming mistake rather than a user-facing state.

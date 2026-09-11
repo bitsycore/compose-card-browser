@@ -13,6 +13,9 @@ import com.bitsycore.cardbrowser.data.repository.SetCatalogueWarmer
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.ui.browse.BrowseSession
 import kotlin.test.AfterTest
+import com.bitsycore.cardbrowser.core.model.CardLanguage
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
+import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -204,6 +207,29 @@ class AppModuleTest {
 			setOf("optcg", "altered-db"),
 			vWithout,
 			"a source changed what renditions it publishes",
+		)
+	}
+
+	@Test
+	fun `an English-only source resolves a French preference to English`() {
+		// The key that a download, a cache entry and an image-download record are all filed under.
+		// Riftcodex serves English and nothing else, so a French-preferring user must still get
+		// `en` -- and every layer must get the same `en`, which is why this is one function on the
+		// registry rather than a `resolveLanguage` call in each of them.
+		//
+		// The bug: the queue started resolving and the set list did not, so a downloaded Riftbound
+		// set wrote `en` image records, the set list looked for `fr` ones, and the dialog offered
+		// its thumbnails for download again every time.
+		val vRegistry = graph().get<ProviderRegistry>()
+
+		assertEquals(
+			CardLanguage.ENGLISH,
+			vRegistry.effectiveLanguage(RiftboundGame.id, CardLanguage.FRENCH),
+		)
+		// And a source that really does serve French still gets it.
+		assertEquals(
+			CardLanguage.FRENCH,
+			vRegistry.effectiveLanguage(PokemonGame.id, CardLanguage.FRENCH),
 		)
 	}
 
