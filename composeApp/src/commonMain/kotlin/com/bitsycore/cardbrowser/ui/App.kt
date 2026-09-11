@@ -19,6 +19,7 @@ import org.koin.compose.koinInject
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
@@ -156,11 +157,15 @@ fun App() {
 			vWarmer.start()
 		}
 
-		// Setup first, and only on a fresh install. Read from the same `StateFlow` the theme
-		// uses, so re-running it from Settings puts the flow back on screen without a relaunch.
+		// Setup on a fresh install, and only there. Re-running it from Settings is an ordinary
+		// navigation now -- see `SettingsContract.Effect.OpenSetup` -- because having this effect
+		// serve both meant a flag and a pop racing over the same list.
 		val vBackStack = remember { mutableStateListOf<Route>(Route.Games) }
 		LaunchedEffect(vPrefs.hasCompletedSetup) {
-			if (!vPrefs.hasCompletedSetup && vBackStack.lastOrNull() != Route.Setup) {
+			// `!in`, not "is not on top". Pushing a second copy of a route that is already on the
+			// stack gives `NavDisplay` two entries with one key, and popping one of them is then
+			// a guess about which.
+			if (!vPrefs.hasCompletedSetup && Route.Setup !in vBackStack) {
 				vBackStack.add(Route.Setup)
 			}
 		}
@@ -171,7 +176,7 @@ fun App() {
 			CompositionLocalProvider(LocalSharedTransitionScope provides this) {
 		NavDisplay(
 			backStack = vBackStack,
-			onBack = { vBackStack.removeLastOrNull() },
+			onBack = { vBackStack.popRoute() },
 			entryDecorators = listOf(
 				rememberSaveableStateHolderNavEntryDecorator(),
 				rememberViewModelStoreNavEntryDecorator(),
@@ -193,7 +198,7 @@ fun App() {
 							// Replaced, not popped: the flow writes `hasCompletedSetup`, and
 							// removing it from the stack is what stops the effect above putting
 							// it straight back.
-							onDone = { vBackStack.remove(Route.Setup) },
+							onDone = { vBackStack.popRoute(Route.Setup) },
 						)
 					}
 
@@ -222,7 +227,7 @@ fun App() {
 							// restored back stack -- and rather than silently opening Riftbound,
 							// which is what the old fallback did.
 							game = GameId(vRoute.game),
-							onBack = { vBackStack.removeLastOrNull() },
+							onBack = { vBackStack.popRoute() },
 							onOpenSet = { vSet ->
 								vBackStack.add(
 									Route.Cards(
@@ -243,7 +248,7 @@ fun App() {
 						SearchScreen(
 							// Same null-game handling as the route above.
 							game = GameId(vRoute.game),
-							onBack = { vBackStack.removeLastOrNull() },
+							onBack = { vBackStack.popRoute() },
 							onOpenCard = { vCard ->
 								vBackStack.add(
 									Route.Detail(
@@ -276,7 +281,7 @@ fun App() {
 							setId = vRoute.setId,
 							setName = vRoute.setName,
 							setCode = vRoute.setCode,
-							onBack = { vBackStack.removeLastOrNull() },
+							onBack = { vBackStack.popRoute() },
 							onOpenCard = { vCard ->
 								vBackStack.add(
 									Route.Detail(cardId = vCard.id.qualified, setId = vRoute.setId),
@@ -290,17 +295,20 @@ fun App() {
 						CardDetailScreen(
 							cardId = vRoute.cardId,
 							setId = vRoute.setId,
-							onBack = { vBackStack.removeLastOrNull() },
+							onBack = { vBackStack.popRoute() },
 						)
 					}
 
 					is Route.Settings -> NavEntry(vRoute) {
-						SettingsScreen(onBack = { vBackStack.removeLastOrNull() })
+						SettingsScreen(
+						onBack = { vBackStack.popRoute() },
+						onOpenSetup = { vBackStack.add(Route.Setup) },
+					)
 					}
 
 					is Route.Storage -> NavEntry(vRoute) {
 						StorageScreen(
-							onBack = { vBackStack.removeLastOrNull() },
+							onBack = { vBackStack.popRoute() },
 							onOpenCacheSettings = { vBackStack.add(Route.Settings) },
 						)
 					}
@@ -310,7 +318,7 @@ fun App() {
 						val vJobs by vDownloads.jobs.collectAsState()
 						DownloadsScreen(
 							jobs = vJobs,
-							onBack = { vBackStack.removeLastOrNull() },
+							onBack = { vBackStack.popRoute() },
 							onCancel = vDownloads::cancel,
 							onCancelAll = vDownloads::cancelAll,
 							onClearFinished = vDownloads::clearFinished,
@@ -419,3 +427,30 @@ private fun <T : Any> fadeThrough(
 private const val ENTER_MILLIS = 280
 
 private const val EXIT_MILLIS = 180
+
+/**
+ * Pops the top route, unless it is the only one left.
+ *
+ * `NavDisplay` throws `IllegalArgumentException: NavDisplay backstack cannot be empty` rather than
+ * degrading, so an empty stack is a crash on the next recomposition -- and it was reachable. Every
+ * screen's back handler called `removeLastOrNull`, which will happily take the last entry, and the
+ * re-run-setup path could pop twice for one tap.
+ *
+ * Refusing is the right answer rather than pushing a home route back on: the root of this stack is
+ * the game picker, and "back from the first screen" is the platform's business -- on Android it
+ * leaves the app, on desktop it does nothing.
+ */
+internal fun SnapshotStateList<Route>.popRoute() {
+	if (size > 1) removeAt(lastIndex)
+}
+
+/**
+ * Removes [route] wherever it is, unless it is the only one left.
+ *
+ * By identity rather than by position, because the flow that uses it can be finished from anywhere
+ * the stack happens to be -- it is pushed over the picker on a first launch and over Settings on a
+ * re-run, and it must come off in both cases without assuming which.
+ */
+internal fun SnapshotStateList<Route>.popRoute(route: Route) {
+	if (size > 1) remove(route)
+}

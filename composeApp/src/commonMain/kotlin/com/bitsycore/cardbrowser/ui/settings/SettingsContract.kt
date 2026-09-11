@@ -110,6 +110,15 @@ object SettingsContract :
 	sealed interface Effect {
 
 		data object NavigateBack : Effect
+
+		/**
+		 * Open the first-launch flow again.
+		 *
+		 * A navigation, not a flag. This used to clear `hasCompletedSetup` and navigate *back*,
+		 * leaving a `LaunchedEffect` watching that flag to push the flow -- two asynchronous things
+		 * mutating one back stack with nothing ordering them. See `App()`.
+		 */
+		data object OpenSetup : Effect
 	}
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {

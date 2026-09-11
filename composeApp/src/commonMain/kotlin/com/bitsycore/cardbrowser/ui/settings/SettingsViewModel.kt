@@ -57,12 +57,16 @@ class SettingsViewModel(
 
 			SettingsContract.Intent.Refresh -> Unit
 
-			SettingsContract.Intent.RerunSetup -> {
-				// Only the flag. The choices themselves stay in force until the flow writes new
-				// ones, so backing out of a re-run leaves everything as it was.
-				mPreferences.update { it.copy(hasCompletedSetup = false) }
-				emitEffect(SettingsContract.Effect.NavigateBack)
-			}
+			// Just go there. Nothing is written: the choices stay in force until the flow writes
+			// new ones, so backing out of a re-run leaves everything as it was.
+			//
+			// This used to clear `hasCompletedSetup` and emit `NavigateBack`, and rely on a
+			// `LaunchedEffect` elsewhere to notice the flag and push the flow. Two asynchronous
+			// mutations of one back stack, in no particular order -- and when the pop won, it
+			// removed the entry the flag had just pushed. Worse, the flag was *already* false by
+			// then, so tapping again wrote the same value, the `StateFlow` did not emit, and the
+			// flow could not be opened again at all until the app was restarted.
+			SettingsContract.Intent.RerunSetup -> emitEffect(SettingsContract.Effect.OpenSetup)
 
 			is SettingsContract.Intent.ImageCacheLimitChosen -> {
 				mPreferences.update { it.copy(imageCacheLimitBytes = intent.bytes) }

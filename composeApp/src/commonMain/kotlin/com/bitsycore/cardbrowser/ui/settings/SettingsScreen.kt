@@ -59,6 +59,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun SettingsScreen(
 	onBack: () -> Unit,
+	onOpenSetup: () -> Unit,
 	viewModel: SettingsViewModel = koinViewModel(),
 ) {
 	// Where navigation is turned back into navigation. The body below dispatches an intent and knows
@@ -66,6 +67,7 @@ fun SettingsScreen(
 	viewModel.collectEffect { vEffect ->
 		when (vEffect) {
 			SettingsContract.Effect.NavigateBack -> onBack()
+			SettingsContract.Effect.OpenSetup -> onOpenSetup()
 		}
 	}
 	val vState by viewModel.collectAsStateWithLifecycle()
