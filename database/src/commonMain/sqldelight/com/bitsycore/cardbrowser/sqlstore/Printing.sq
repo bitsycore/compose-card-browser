@@ -141,6 +141,18 @@ WHERE game = :game
 ORDER BY name_folded
 LIMIT :limit;
 
+-- Which of a game's sets are held *whole*, for the set list.
+--
+-- `complete = 1` and not merely present. The difference is the whole point: a set fetched part-way
+-- leaves rows behind, so "is any of this here?" is true long before "is all of it here?" -- and the
+-- row that offers a download has to ask the second question.
+--
+-- One query for the game rather than one per row. The language comes back with the set id because
+-- completeness is per edition: a set held whole in English and part-way in French is complete in
+-- one and not the other, and the caller knows which one the row would open in.
+completeSetsInGame:
+SELECT set_id, language FROM cached_set WHERE game = ? AND complete = 1;
+
 -- What a game's downloaded cards actually contain, for the search screen's filters.
 --
 -- Read from the rows rather than from a game profile on purpose. A profile states what a game *can*

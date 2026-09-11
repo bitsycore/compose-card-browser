@@ -299,6 +299,9 @@ class SetListViewModel(
 				// established it. The source's own figure counts the English printing and is the
 				// wrong number to print beside a row that will open in French.
 				confirmedCardCounts = mRepository.confirmedCardCounts(game, vSets, language),
+				// Which sets have nothing left to fetch, so the row can stop offering a download.
+				// "Complete", not "saved": a set fetched part-way is on disk and is not finished.
+				completeSetIds = mRepository.completeSetIds(game, vSets, language),
 				// What is already known about each set's languages, with no requests: the record
 				// left by opening it, or the claim the catalogue came with. See
 				// `CardRepository.availableLanguages`.

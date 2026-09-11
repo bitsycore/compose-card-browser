@@ -138,6 +138,16 @@ class SqlCardStore(driver: SqlDriver) {
 	}
 
 	/**
+	 * Which of a game's sets are held whole, as `setId` to the languages it is complete in.
+	 *
+	 * Complete, not present. A set fetched part-way is in the store and is not in here.
+	 */
+	fun completeSetsForGame(game: String): Map<String, Set<String>> =
+		mQueries.completeSetsInGame(game).executeAsList()
+			.groupBy({ it.set_id }, { it.language })
+			.mapValues { it.value.toSet() }
+
+	/**
 	 * What a game's stored cards actually contain, for a filter list to offer.
 	 *
 	 * From the rows, not from a game profile. A profile says what a game *can* have; this says what

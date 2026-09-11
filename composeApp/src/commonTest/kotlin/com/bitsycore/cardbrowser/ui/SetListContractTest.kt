@@ -203,6 +203,29 @@ class SetListContractTest {
 	}
 
 	@Test
+	fun `a set is only finished when it is complete and its thumbnails are too`() {
+		// What the download button turns off. The distinction is the whole point and it is easy to
+		// lose: `savedSetIds` answers "is any of this here?", which is true the moment a set is
+		// opened once, and a row that stopped offering a download then would be refusing to fetch
+		// the rest of it.
+		val vLoaded = loaded(set("base1", null))
+		val vId = vLoaded.sets.first().id.qualified
+
+		val vSavedOnly = SetListContract.reduce(
+			vLoaded,
+			Intent.SavedSetsResolved(setIds = setOf(vId)),
+		)
+		assertTrue(vId in vSavedOnly.savedSetIds)
+		assertTrue(vId !in vSavedOnly.completeSetIds, "saved is not complete")
+
+		val vComplete = SetListContract.reduce(
+			vLoaded,
+			Intent.SavedSetsResolved(setIds = setOf(vId), completeSetIds = setOf(vId)),
+		)
+		assertTrue(vId in vComplete.completeSetIds)
+	}
+
+	@Test
 	fun `turning the option off shows them again`() {
 		var vState = loaded(
 			set("full", "intl").copy(cardCount = 102),

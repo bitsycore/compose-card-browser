@@ -741,6 +741,11 @@ private fun LazyListScope.setRows(
 			region = if (state.region != null) null else state.game?.regionFor(vSet.region),
 			isLastOpened = vId == state.lastOpenedSetId,
 			isSaved = vId in state.savedSetIds,
+			// Both halves, because a download is both: the records and the pictures. A set with
+			// its cards and none of its art still has something to fetch. Full-size art is not
+			// counted -- it is never bulk-downloaded, so it has no completed state to be in.
+			isFullyDownloaded = vId in state.completeSetIds &&
+				state.imageDownloads[vId]?.thumbnails?.isComplete == true,
 			onClick = { dispatch(SetListContract.Intent.SetOpened(vSet)) },
 			// Absent until the set has been fetched in the language it opens in, and the row then
 			// falls back to the figure the source states. See `UiState.confirmedCardCounts`.
@@ -794,6 +799,13 @@ private fun SetRow(
 	region: GameRegion?,
 	isLastOpened: Boolean,
 	isSaved: Boolean,
+	/**
+	 * Whether this set has nothing left to fetch: held whole *and* with its thumbnails.
+	 *
+	 * Not [isSaved], which answers the weaker question "is any of this here?" -- a set fetched
+	 * part-way is saved and still has something to download.
+	 */
+	isFullyDownloaded: Boolean = false,
 	onClick: () -> Unit,
 	confirmedCardCount: Int? = null,
 	availableLanguages: Set<CardLanguage> = emptySet(),
@@ -917,13 +929,22 @@ private fun SetRow(
 							modifier = Modifier.size(20.dp),
 						)
 					}
-					IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
-						Icon(
-							imageVector = AppIcons.Download,
-							contentDescription = "Download ${set.name}",
-							tint = MaterialTheme.colorScheme.onSurfaceVariant,
-							modifier = Modifier.size(20.dp),
-						)
+					// Offered only while there is something left to fetch. A button that starts a
+					// download of nothing is worse than no button: it invites a tap, does the work
+					// of checking, and reports that everything was already there.
+					//
+					// The marks below still say what is held -- this removes the *offer*, not the
+					// statement. Which is the right way round: "you have this" is information, and
+					// "get this" is an action that has nothing to act on.
+					if (!isFullyDownloaded) {
+						IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
+							Icon(
+								imageVector = AppIcons.Download,
+								contentDescription = "Download ${set.name}",
+								tint = MaterialTheme.colorScheme.onSurfaceVariant,
+								modifier = Modifier.size(20.dp),
+							)
+						}
 					}
 				}
 			}

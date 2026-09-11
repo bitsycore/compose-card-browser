@@ -158,6 +158,14 @@ interface SetRecordStore {
 
 	/** What a game's stored cards contain, so a filter cannot offer something that matches nothing. */
 	suspend fun facetsForGame(game: GameId): StoredFacets
+
+	/**
+	 * Which of a game's sets are held *whole*, by set id, to the languages each is complete in.
+	 *
+	 * Complete rather than present, which is a distinction this app makes everywhere: a set fetched
+	 * part-way is in the store and is not in here.
+	 */
+	suspend fun completeSetsForGame(game: GameId): Map<String, Set<String>>
 }
 
 /**
@@ -315,6 +323,9 @@ class SqlSetRecordStore(
 
 	override suspend fun facetsForGame(game: GameId): StoredFacets =
 		withContext(mIoDispatcher) { mStore.facetsForGame(game.value) }
+
+	override suspend fun completeSetsForGame(game: GameId): Map<String, Set<String>> =
+		withContext(mIoDispatcher) { mStore.completeSetsForGame(game.value) }
 
 	override suspend fun snapshot(): StoredCounts = withContext(mIoDispatcher) {
 		val vSnapshot = mStore.storageSnapshot()

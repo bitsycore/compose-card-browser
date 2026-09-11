@@ -1048,6 +1048,30 @@ class CardRepository(
 	}
 
 	/**
+	 * Which of [sets] are held whole *in the language the row would open in*.
+	 *
+	 * The question a download button has to answer, and not the same as "is any of this here?" --
+	 * a set fetched part-way is saved and is not complete. Per edition, because a set held whole in
+	 * English and part-way in French is finished in one and not the other, and the row is about the
+	 * one it would open in.
+	 *
+	 * One query for the game rather than one per set; the per-row work is a map lookup.
+	 */
+	suspend fun completeSetIds(
+		game: GameId,
+		sets: List<CardSet>,
+		language: CardLanguage? = null,
+	): Set<String> {
+		val vProvider = mRegistry.resolve(game, language) ?: return emptySet()
+		val vComplete = mSetStore.completeSetsForGame(game)
+		return sets.mapNotNullTo(mutableSetOf()) { vSet ->
+			val vLanguage = effectiveLanguage(vProvider, vSet.languageFor(language))
+			val vHeld = vComplete[vSet.id.qualified] ?: return@mapNotNullTo null
+			vSet.id.qualified.takeIf { (vLanguage?.code ?: "-") in vHeld }
+		}
+	}
+
+	/**
 	 * Which languages each of [sets] is known to exist in, for a set list to show.
 	 *
 	 * Deliberately **free of requests**. [languagesFor] gives the authoritative answer and costs a

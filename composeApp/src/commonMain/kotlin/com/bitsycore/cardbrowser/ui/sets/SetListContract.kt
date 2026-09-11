@@ -149,6 +149,13 @@ object SetListContract :
 		 * showing the source's figure. Absent is not zero.
 		 */
 		val confirmedCardCounts: Map<String, Int> = emptyMap(),
+		/**
+		 * Sets held *whole* in the language they would open in.
+		 *
+		 * Stricter than [savedSetIds], and the difference is what the download button turns on: a
+		 * set fetched part-way is saved and is not finished, so it still has something to fetch.
+		 */
+		val completeSetIds: Set<String> = emptySet(),
 		/** Whether sets stated to hold no cards are left out. See `BrowsingPreferences`. */
 		val hideEmptySets: Boolean = true,
 		/**
@@ -408,6 +415,7 @@ object SetListContract :
 			val imageDownloads: Map<String, SetImageStatus> = emptyMap(),
 			val savedLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
 			val confirmedCardCounts: Map<String, Int> = emptyMap(),
+			val completeSetIds: Set<String> = emptySet(),
 			val availableLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
 			val importedVariantIds: Set<String> = emptySet(),
 		) : Intent
@@ -567,6 +575,7 @@ object SetListContract :
 			imageDownloads = intent.imageDownloads,
 			savedLanguages = intent.savedLanguages,
 			confirmedCardCounts = intent.confirmedCardCounts,
+			completeSetIds = intent.completeSetIds,
 			availableLanguages = intent.availableLanguages,
 			importedVariantIds = intent.importedVariantIds,
 		)

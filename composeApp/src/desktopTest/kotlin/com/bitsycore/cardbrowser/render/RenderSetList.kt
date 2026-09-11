@@ -6,6 +6,8 @@ import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
+import com.bitsycore.cardbrowser.data.settings.ImageDownloadRecord
+import com.bitsycore.cardbrowser.ui.sets.SetImageStatus
 import com.bitsycore.cardbrowser.ui.sets.SetListContent
 import com.bitsycore.cardbrowser.ui.sets.SetListContract
 import kotlinx.datetime.LocalDate
@@ -30,12 +32,31 @@ import kotlin.test.assertTrue
 class SetListRenderer {
 
 	@Test
-	@Ignore("A rendering tool, not a check. Remove the annotation to write the PNGs.")
 	fun `writes the set list to build slash render`() {
 		val vOut = File("build/render")
 		vOut.mkdirs()
 
 		renderToPng(vOut, "sets-all-lines", width = 660, height = 1100, density = 1.65f) { SetListContent(pokemonState(), {}) }
+
+		// A row with nothing left to fetch, beside one that has been opened but not finished. The
+		// first should have no download button and the second should still have one.
+		renderToPng(vOut, "sets-download-offer", width = 660, height = 760, density = 1.65f) {
+			SetListContent(
+				pokemonState().copy(
+					savedSetIds = setOf(
+						SourceId(TCGDEX, "base1").qualified,
+						SourceId(TCGDEX, "sv08").qualified,
+					),
+					completeSetIds = setOf(SourceId(TCGDEX, "base1").qualified),
+					imageDownloads = mapOf(
+						SourceId(TCGDEX, "base1").qualified to SetImageStatus(
+							thumbnails = ImageDownloadRecord(fetched = 102, total = 102),
+						),
+					),
+				),
+				{},
+			)
+		}
 		// The bar has to say which language every row below it will open in.
 		renderToPng(vOut, "sets-browsing-language", width = 660, height = 420, density = 1.65f) {
 			SetListContent(

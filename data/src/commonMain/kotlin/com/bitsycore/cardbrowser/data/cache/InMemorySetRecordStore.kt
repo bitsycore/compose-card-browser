@@ -205,6 +205,11 @@ class InMemorySetRecordStore(
 		return true
 	}
 
+	override suspend fun completeSetsForGame(game: GameId): Map<String, Set<String>> = mRows.entries
+		.filter { it.value.game == game.value && it.value.isComplete }
+		.groupBy({ it.key.setId }, { it.key.language ?: "-" })
+		.mapValues { it.value.toSet() }
+
 	override suspend fun clear() = mRows.clear()
 
 	override suspend fun snapshot(): StoredCounts = StoredCounts(
