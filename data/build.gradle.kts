@@ -28,6 +28,9 @@ kotlin {
 	sourceSets {
 		commonMain.dependencies {
 			api(project(":core"))
+			// The card store. `:data` owns *what* is cached and when; `:database` owns how it is
+			// held. Neither knows a provider or a game -- `LayeringTest` covers both.
+			implementation(project(":database"))
 			api(libs.okio)
 			api(libs.ktor.client.core)
 			implementation(libs.ktor.client.content.negotiation)

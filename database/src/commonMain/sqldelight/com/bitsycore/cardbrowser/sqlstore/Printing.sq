@@ -47,6 +47,10 @@ CREATE TABLE cached_set (
     pinned      INTEGER NOT NULL DEFAULT 0,
     fetched_at  INTEGER NOT NULL,
     card_count  INTEGER NOT NULL,
+    -- Whether every page was fetched. A partial set is cached too -- that is the whole point of
+    -- `Completeness` -- and the grid says so on screen. Storing it is what keeps a filter applied
+    -- to three of four pages from being presented as the answer for the set.
+    complete    INTEGER NOT NULL DEFAULT 1,
     -- What this set occupies, so the budget is a SUM rather than a directory walk. Counted at
     -- write time from the payloads actually stored -- an estimate of the rows, not of the file,
     -- because SQLite's own page overhead is not a thing a user's ceiling should be spent on.
@@ -69,8 +73,8 @@ INSERT OR REPLACE INTO printing (
 
 upsertCachedSet:
 INSERT OR REPLACE INTO cached_set (
-    provider, set_id, language, label, pinned, fetched_at, card_count, bytes, accessed_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+    provider, set_id, language, label, pinned, fetched_at, card_count, complete, bytes, accessed_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- The set-open path.
 printingsInSet:
@@ -155,3 +159,18 @@ SELECT language FROM cached_set WHERE provider = ? AND set_id = ?;
 
 cardCountForSet:
 SELECT card_count FROM cached_set WHERE provider = ? AND set_id = ? AND language = ?;
+
+-- The set-open path needs the record's own metadata, not only its cards: how complete it is, and
+-- when it was fetched, which is what staleness is measured from.
+setMetadata:
+SELECT label, pinned, fetched_at, card_count, complete FROM cached_set
+WHERE provider = ? AND set_id = ? AND language = ?;
+
+isSetPinned:
+SELECT pinned FROM cached_set WHERE provider = ? AND set_id = ? AND language = ?;
+
+clearAll:
+DELETE FROM printing;
+
+clearAllSets:
+DELETE FROM cached_set;

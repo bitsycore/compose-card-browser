@@ -14,7 +14,7 @@ import app.cash.sqldelight.db.SqlDriver
  * @param path where to put the file, or `null` for an in-memory database. Desktop honours the
  *   path; Android and iOS use their own per-app locations and ignore it
  */
-expect class DriverFactory() {
+expect class DriverFactory {
 
 	fun create(path: String?): SqlDriver
 

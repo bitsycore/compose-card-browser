@@ -46,6 +46,7 @@ class SqlCardStore(driver: SqlDriver) {
 		isPinned: Boolean,
 		fetchedAt: Long,
 		printings: List<CardPrinting>,
+		isComplete: Boolean = true,
 	) {
 		val vLanguage = language?.code ?: "-"
 		var vBytes = 0L
@@ -89,6 +90,7 @@ class SqlCardStore(driver: SqlDriver) {
 				pinned = if (isPinned) 1L else 0L,
 				fetched_at = fetchedAt,
 				card_count = printings.size.toLong(),
+				complete = if (isComplete) 1L else 0L,
 				bytes = vBytes,
 				accessed_at = fetchedAt,
 			)
@@ -183,6 +185,39 @@ class SqlCardStore(driver: SqlDriver) {
 			.executeAsOneOrNull()
 			?.toInt()
 
+	/**
+	 * One set's own record: how complete it is, when it was fetched, what it is called.
+	 *
+	 * Separate from [readSet] because most callers want one or the other. The set list asks only
+	 * "is it here and how big", which is a row; the grid asks for the cards.
+	 */
+	fun setMetadata(provider: String, setId: String, language: CardLanguage?): StoredSetMetadata? =
+		mQueries.setMetadata(provider, setId, language?.code ?: "-")
+			.executeAsOneOrNull()
+			?.let {
+				StoredSetMetadata(
+					label = it.label,
+					isPinned = it.pinned > 0,
+					fetchedAtEpochMillis = it.fetched_at,
+					cardCount = it.card_count.toInt(),
+					isComplete = it.complete > 0,
+				)
+			}
+
+	/** Whether this edition was deliberately downloaded. */
+	fun isPinned(provider: String, setId: String, language: CardLanguage?): Boolean =
+		mQueries.isSetPinned(provider, setId, language?.code ?: "-")
+			.executeAsOneOrNull()
+			?.let { it > 0 } == true
+
+	/** Empties the store. What "clear cached data" means when the cache is a database. */
+	fun clear() {
+		mDatabase.transaction {
+			mQueries.clearAll()
+			mQueries.clearAllSets()
+		}
+	}
+
 	/** One set's cards, which is the set-open path. */
 	fun readSet(provider: String, setId: String, language: CardLanguage?): List<CardPrinting> =
 		mQueries.printingsInSet(provider, setId, language?.code ?: "-")
@@ -261,6 +296,15 @@ class SqlCardStore(driver: SqlDriver) {
 			.joinToString("")
 	}
 }
+
+/** A cached set's own record, without its cards. */
+data class StoredSetMetadata(
+	val label: String,
+	val isPinned: Boolean,
+	val fetchedAtEpochMillis: Long,
+	val cardCount: Int,
+	val isComplete: Boolean,
+)
 
 /** One downloaded set, named well enough for a screen to offer deleting it. */
 data class PinnedSet(
