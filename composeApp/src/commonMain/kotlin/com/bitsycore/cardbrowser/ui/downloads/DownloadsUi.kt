@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.FlowRow
@@ -555,7 +553,7 @@ private fun KindRow(
 				// A tick rather than a ticked checkbox: this is a statement about what is already
 				// there, not a control that happens to be on.
 				Icon(
-					imageVector = Icons.Outlined.CheckCircle,
+					imageVector = AppIcons.CheckCircle,
 					contentDescription = null,
 					tint = MaterialTheme.colorScheme.primary,
 					modifier = Modifier.size(24.dp),

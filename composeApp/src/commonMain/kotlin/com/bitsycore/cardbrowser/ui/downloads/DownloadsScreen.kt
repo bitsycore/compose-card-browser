@@ -14,10 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
@@ -93,7 +89,7 @@ fun DownloadsScreen(
 				title = { Text("Downloads") },
 				navigationIcon = {
 					IconButton(onClick = onBack) {
-						Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+						Icon(AppIcons.ArrowBack, contentDescription = "Back")
 					}
 				},
 			)
@@ -195,7 +191,7 @@ private fun DownloadCard(job: DownloadJob, onCancel: (String) -> Unit) {
 				if (job.isActive) {
 					IconButton(onClick = { onCancel(job.id) }) {
 						Icon(
-							Icons.Outlined.Close,
+							AppIcons.Close,
 							contentDescription = "Stop downloading ${job.request.setName}",
 						)
 					}
@@ -239,7 +235,7 @@ private fun DownloadCard(job: DownloadJob, onCancel: (String) -> Unit) {
 private fun StatusMark(job: DownloadJob) {
 	when (job.status) {
 		is DownloadStatus.Completed -> Icon(
-			imageVector = Icons.Outlined.Check,
+			imageVector = AppIcons.Check,
 			contentDescription = null,
 			tint = MaterialTheme.colorScheme.primary,
 			modifier = Modifier.size(20.dp),

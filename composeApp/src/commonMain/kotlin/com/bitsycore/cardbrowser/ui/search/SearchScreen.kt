@@ -17,10 +17,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -130,7 +126,7 @@ fun SearchContent(
 				title = { Text("Search ${vState.game?.shortName.orEmpty()}") },
 				navigationIcon = {
 					IconButton(onClick = { dispatch(SearchContract.Intent.BackPressed) }) {
-						Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+						Icon(AppIcons.ArrowBack, contentDescription = "Back")
 					}
 				},
 			)
@@ -142,11 +138,11 @@ fun SearchContent(
 				value = vState.query,
 				onValueChange = { dispatch(SearchContract.Intent.QueryChanged(it)) },
 				label = { Text("Card name") },
-				leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+				leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
 				trailingIcon = {
 					if (vState.query.isNotEmpty()) {
 						IconButton(onClick = { dispatch(SearchContract.Intent.Clear) }) {
-							Icon(Icons.Outlined.Close, contentDescription = "Clear")
+							Icon(AppIcons.Close, contentDescription = "Clear")
 						}
 					}
 				},

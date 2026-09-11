@@ -3,9 +3,6 @@ package com.bitsycore.cardbrowser.ui.common
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowDropDown
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -73,7 +70,7 @@ fun LanguageMenu(
 				style = MaterialTheme.typography.labelLarge,
 			)
 			Icon(
-				imageVector = Icons.Outlined.ArrowDropDown,
+				imageVector = AppIcons.ArrowDropDown,
 				contentDescription = "Change language",
 				modifier = Modifier.size(18.dp),
 			)
@@ -100,7 +97,7 @@ fun LanguageMenu(
 						// A tick on the current one rather than a highlight: the menu is short and
 						// the point is which one you are reading, not which row is hovered.
 						if (vLanguage == selected) {
-							Icon(Icons.Outlined.Check, contentDescription = "Showing")
+							Icon(AppIcons.Check, contentDescription = "Showing")
 						}
 					},
 				)

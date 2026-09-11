@@ -19,8 +19,6 @@ import com.bitsycore.cardbrowser.ui.common.focusOnFirstItem
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,7 +40,6 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
@@ -56,7 +53,6 @@ import com.bitsycore.cardbrowser.data.download.DownloadRequest
 import com.bitsycore.cardbrowser.ui.downloads.DownloadKindDialog
 import org.koin.compose.koinInject
 import androidx.compose.foundation.Image
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import com.bitsycore.cardbrowser.games.api.GameArt
@@ -270,7 +266,7 @@ fun SetListContent(
 					// back rather than a decoration.
 					IconButton(onClick = { dispatch(SetListContract.Intent.BackPressed) }) {
 						Icon(
-							Icons.AutoMirrored.Outlined.ArrowBack,
+							AppIcons.ArrowBack,
 							contentDescription = "Back to games",
 						)
 					}
@@ -389,7 +385,7 @@ fun SetListContent(
 				value = vState.search,
 				onValueChange = { dispatch(SetListContract.Intent.SearchChanged(it)) },
 				label = { Text("Search sets") },
-				leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+				leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
 				singleLine = true,
 				modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
 			)
@@ -854,7 +850,7 @@ private fun SetRow(
 					Spacer(Modifier.size(4.dp))
 					IconButton(onClick = onToggleFavourite, modifier = Modifier.size(32.dp)) {
 						Icon(
-							imageVector = if (isFavourite) Icons.Filled.Star else AppIcons.StarBorder,
+							imageVector = if (isFavourite) AppIcons.StarFilled else AppIcons.StarBorder,
 							contentDescription = if (isFavourite) {
 								"Remove ${set.name} from favourites"
 							} else {

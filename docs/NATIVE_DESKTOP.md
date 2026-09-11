@@ -71,7 +71,6 @@ Measured on 2026-09-11 against the versions this project pins, by resolving `:co
 | `io.coil-kt.coil3:coil-compose`, `-network-ktor3`, `-svg` | a mirror + an entry in the bridge's table | upstream, via a mirror |
 | `io.insert-koin:koin-compose`, `-viewmodel` | same | upstream, via a mirror |
 | `org.jetbrains.androidx.navigationevent:navigationevent-compose` | same | upstream, via a mirror |
-| `org.jetbrains.compose.material:material-icons-core` | nothing — see below | ours to delete |
 
 Notes:
 
@@ -86,14 +85,30 @@ Notes:
   No code here names it: it is declared because Navigation 3 needs it, and it also arrives
   transitively through `navigation3-ui`. On a desktop with no back gesture it does nothing at
   runtime, but `NavDisplay` still has to link against it.
-- **`material-icons-core` can simply go.** `dependencyInsight` shows it as a direct dependency with
-  no transitive parent, and this app draws **12** icons from it. `composeApp/tools/genicons.py`
-  already embeds 24 icons from `material-icons-extended` this way, so extending it is a list of 12
-  names plus support for the `filled` variant, which it does not handle yet. That removes the
-  dependency from the native build *and* from the JVM and Android ones.
+- **`material-icons-core` is gone**, so it is off this list. Every icon is generated from Material
+  Symbols into `AppIcons` by `composeApp/tools/gensymbols.py`, and the app now depends on no icon
+  library on any platform. That turned out to be more than a dozen glyphs: the twenty-four icons
+  already embedded were built with `materialIcon`/`materialPath`, which are *from* that library, so
+  dropping it broke icons that had nothing to do with it. All thirty-six are built from
+  `ImageVector.Builder` now.
 
 **macOS is the closest**: every upstream dependency already publishes `macosArm64`, so it is blocked
-on Pulse and on `material-icons-core` alone.
+on Pulse alone.
+
+## The plan for the rest
+
+Settled with the project owner on 2026-09-11:
+
+| Dependency | Plan |
+| --- | --- |
+| `com.bitsycore.lib:pulse` | a Desktop Native compatibility target, in its own repository |
+| `io.coil-kt.coil3:*` | fork and redirect, from compose-desktop-native |
+| `io.insert-koin:koin-compose`, `-viewmodel` | fork and redirect, from compose-desktop-native |
+| `org.jetbrains.androidx.navigationevent:navigationevent-compose` | fork and redirect, from compose-desktop-native |
+
+Each of the bottom three is an entry in the bridge's substitution table, alongside the
+`navigation3-ui` one that is already there — so nothing in this repository has to change for them to
+start resolving.
 
 ## What is still to write on this side
 

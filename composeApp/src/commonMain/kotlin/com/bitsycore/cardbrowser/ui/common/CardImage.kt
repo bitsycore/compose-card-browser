@@ -5,8 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -271,7 +269,7 @@ private fun ImagePlaceholder(
 
 		if (onRetry != null) {
 			Icon(
-				imageVector = Icons.Outlined.Refresh,
+				imageVector = AppIcons.Refresh,
 				contentDescription = "Image unavailable. Tap to try again.",
 				modifier = Modifier.size(32.dp).clickable(onClick = onRetry),
 				tint = MaterialTheme.colorScheme.onSurfaceVariant,

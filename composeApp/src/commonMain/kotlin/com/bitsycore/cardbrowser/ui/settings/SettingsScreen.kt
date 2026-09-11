@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,6 +42,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.data.settings.BrowsingPreferences
 import com.bitsycore.cardbrowser.data.settings.ThemeMode
+import com.bitsycore.cardbrowser.ui.common.AppIcons
 import com.bitsycore.cardbrowser.ui.common.FinePrint
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
@@ -90,7 +89,7 @@ fun SettingsContent(
 				title = { Text("Settings") },
 				navigationIcon = {
 					IconButton(onClick = { dispatch(SettingsContract.Intent.BackPressed) }) {
-						Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+						Icon(AppIcons.ArrowBack, contentDescription = "Back")
 					}
 				},
 			)

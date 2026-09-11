@@ -1,7 +1,5 @@
 package com.bitsycore.cardbrowser.ui.common
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
@@ -39,7 +37,7 @@ fun AppOverflowMenu(
 	BadgedBox(badge = { if (activeDownloads > 0) Badge { Text(activeDownloads.toString()) } }) {
 		IconButton(onClick = { vOpen = true }) {
 			Icon(
-				imageVector = Icons.Outlined.MoreVert,
+				imageVector = AppIcons.MoreVert,
 				contentDescription = if (activeDownloads > 0) {
 					"More, $activeDownloads downloads in progress"
 				} else {

@@ -10,9 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -39,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.data.cache.CacheUsage
 import com.bitsycore.cardbrowser.data.settings.BulkImportRecord
+import com.bitsycore.cardbrowser.ui.common.AppIcons
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import com.bitsycore.lib.pulse.compose.collectEffect
@@ -98,7 +96,7 @@ fun StorageContent(
 				title = { Text("Storage") },
 				navigationIcon = {
 					IconButton(onClick = { dispatch(StorageContract.Intent.BackPressed) }) {
-						Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+						Icon(AppIcons.ArrowBack, contentDescription = "Back")
 					}
 				},
 			)
@@ -324,7 +322,7 @@ private fun KeptGameRow(
 			}
 			IconButton(onClick = onDelete, enabled = !isBusy) {
 				Icon(
-					imageVector = Icons.Outlined.Delete,
+					imageVector = AppIcons.Delete,
 					contentDescription = "Delete ${game.displayName} card data",
 				)
 			}

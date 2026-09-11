@@ -23,8 +23,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +49,7 @@ import com.bitsycore.cardbrowser.games.onepiece.OnePieceGame
 import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.games.yugioh.YuGiOhGame
+import com.bitsycore.cardbrowser.ui.common.AppIcons
 import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
 import com.bitsycore.cardbrowser.ui.games.GameMark
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
@@ -327,7 +326,7 @@ private fun GameChoice(
 			GameMark(art = art, width = 84.dp, height = 56.dp)
 			if (isSelected) {
 				Icon(
-					imageVector = Icons.Filled.CheckCircle,
+					imageVector = AppIcons.CheckCircleFilled,
 					contentDescription = null,
 					tint = MaterialTheme.colorScheme.primary,
 					modifier = Modifier.padding(4.dp).size(20.dp),

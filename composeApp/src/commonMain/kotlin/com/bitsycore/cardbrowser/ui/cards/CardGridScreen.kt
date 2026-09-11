@@ -19,10 +19,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -255,7 +251,7 @@ fun CardGridContent(
 					},
 					navigationIcon = {
 						IconButton(onClick = { dispatch(CardGridContract.Intent.BackPressed) }) {
-							Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back to sets")
+							Icon(AppIcons.ArrowBack, contentDescription = "Back to sets")
 						}
 					},
 					actions = {
@@ -292,7 +288,7 @@ fun CardGridContent(
 								imageVector = if (vState.isSearchOpen) {
 									AppIcons.SearchOff
 								} else {
-									Icons.Outlined.Search
+									AppIcons.Search
 								},
 								contentDescription = if (vState.isSearchOpen) "Hide search" else "Search",
 								// Tinted while a search is active, so a hidden field is never a hidden filter.
@@ -506,11 +502,11 @@ private fun SearchField(text: String, onTextChanged: (String) -> Unit) {
 		value = text,
 		onValueChange = onTextChanged,
 		label = { Text("Name or collector number") },
-		leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+		leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
 		trailingIcon = {
 			if (text.isNotEmpty()) {
 				IconButton(onClick = { onTextChanged("") }) {
-					Icon(Icons.Outlined.Close, contentDescription = "Clear search")
+					Icon(AppIcons.Close, contentDescription = "Clear search")
 				}
 			}
 		},

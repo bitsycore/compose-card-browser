@@ -29,9 +29,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -204,7 +201,7 @@ fun GameListContent(
 					IconButton(onClick = { dispatch(GameListContract.Intent.EditingToggled) }) {
 						Icon(
 							imageVector = if (state.isEditing) {
-								Icons.Outlined.Check
+								AppIcons.Check
 							} else {
 								AppIcons.Tune
 							},
@@ -501,7 +498,7 @@ private fun GameRow(
 						contentAlignment = Alignment.Center,
 					) {
 						Icon(
-							imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+							imageVector = AppIcons.KeyboardArrowRight,
 							contentDescription = null,
 							tint = MaterialTheme.colorScheme.onSurfaceVariant,
 						)

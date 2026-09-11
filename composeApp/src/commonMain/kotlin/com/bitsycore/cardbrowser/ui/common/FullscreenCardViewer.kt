@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -158,7 +156,7 @@ fun FullscreenCardViewer(
 					.padding(8.dp),
 			) {
 				Icon(
-					imageVector = Icons.Outlined.Close,
+					imageVector = AppIcons.Close,
 					contentDescription = "Close full screen",
 					tint = Color.White,
 					modifier = Modifier.size(28.dp),
