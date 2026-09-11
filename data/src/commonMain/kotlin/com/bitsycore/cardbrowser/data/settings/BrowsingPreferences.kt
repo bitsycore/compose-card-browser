@@ -100,6 +100,24 @@ enum class CardRowHeight(val label: String) {
 	TALL("Tall"),
 }
 
+/**
+ * How wide a tile is in [CardViewMode.GRID], and so how many fit across.
+ *
+ * The grid's columns are adaptive, so this is a *minimum* width rather than a count: the same
+ * setting gives three across on a phone and seven on a desktop window, which is what makes it one
+ * setting rather than one per device.
+ *
+ * Separate from [CardRowHeight] despite both having three steps. They size different things -- a
+ * tile is the artwork, a row is mostly text -- and the words that read naturally for one read
+ * oddly for the other.
+ */
+@Serializable
+enum class CardTileSize(val label: String) {
+	SMALL("Small"),
+	MEDIUM("Medium"),
+	LARGE("Large"),
+}
+
 @Serializable
 enum class ThemeMode(val label: String) {
 
@@ -245,6 +263,8 @@ data class BrowsingPreferences(
 	val cardViewMode: CardViewMode = CardViewMode.GRID,
 	/** How tall the list's rows are. Only read in [CardViewMode.LIST]. */
 	val cardRowHeight: CardRowHeight = CardRowHeight.REGULAR,
+	/** How big the grid's tiles are. Only read in [CardViewMode.GRID]. */
+	val cardTileSize: CardTileSize = CardTileSize.MEDIUM,
 ) {
 
 	/** What [imageDownloads] recorded for one rendition, or `null` if it was never downloaded. */

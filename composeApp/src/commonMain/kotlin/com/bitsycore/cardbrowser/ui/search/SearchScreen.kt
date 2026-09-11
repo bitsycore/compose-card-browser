@@ -33,6 +33,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.text.input.KeyboardType
 import com.bitsycore.cardbrowser.data.cache.CardSearchFilter
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import com.bitsycore.cardbrowser.ui.common.sharedCardArt
@@ -415,6 +417,7 @@ private fun SearchFailedPreview() = PreviewFrame {
  *
  * Collapsed by default. Search is a text box for most people most of the time.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AdvancedFilterPanel(
 	state: SearchContract.UiState,
@@ -427,17 +430,18 @@ private fun AdvancedFilterPanel(
 			TextButton(onClick = { onToggle(!state.isAdvancedOpen) }) {
 				Icon(AppIcons.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
 				Spacer(Modifier.width(6.dp))
-				Text(if (state.isAdvancedOpen) "Hide filters" else "Filters")
-			}
-			// Said even while the panel is shut, because a filter you cannot see is the reason a
-			// search returns nothing and the cause has to be on screen.
-			if (state.hasAdvancedFilters) {
-				Spacer(Modifier.width(4.dp))
+				// The count is on the button and not beside it, because it is what the button is
+				// about. A filter you cannot see is the reason a search returns nothing, so how
+				// many are set has to be readable while the panel is shut.
 				Text(
-					text = "narrowing",
-					style = MaterialTheme.typography.labelSmall,
-					color = MaterialTheme.colorScheme.primary,
+					if (state.hasAdvancedFilters) {
+						"Filters (${state.activeAdvancedCount})"
+					} else {
+						"Filters"
+					},
 				)
+			}
+			if (state.hasAdvancedFilters) {
 				Spacer(Modifier.weight(1f))
 				TextButton(onClick = { onFilterChanged(CardSearchFilter()) }) { Text("Reset") }
 			}
@@ -455,30 +459,39 @@ private fun AdvancedFilterPanel(
 					modifier = Modifier.fillMaxWidth(),
 				)
 
-				if (vFacets != null && vFacets.cardTypes.isNotEmpty()) {
-					FilterChoice(
-						label = "Type",
-						options = vFacets.cardTypes,
-						selected = state.filter.cardType,
-						onSelected = { onFilterChanged(state.filter.copy(cardType = it)) },
-					)
-				}
-				if (vFacets != null && vFacets.rarities.isNotEmpty()) {
-					FilterChoice(
-						label = "Rarity",
-						options = vFacets.rarities,
-						selected = state.filter.rarity,
-						onSelected = { onFilterChanged(state.filter.copy(rarity = it)) },
-					)
-				}
-				if (vFacets != null && vFacets.domains.isNotEmpty()) {
-					FilterChoice(
-						// The game's own word for it -- "Colour" for Magic, "Faction" for Altered.
-						label = state.game?.vocabulary?.domain ?: "Domain",
-						options = vFacets.domains,
-						selected = state.filter.domain,
-						onSelected = { onFilterChanged(state.filter.copy(domain = it)) },
-					)
+				// The pills flow rather than stack. Their labels are a word each, so a column of
+				// them wasted most of the width and made the panel tall enough to push the results
+				// off a phone screen -- and a filter you have to scroll past is one you stop using.
+				// They wrap when the window is too narrow, which is the same behaviour, later.
+				FlowRow(
+					horizontalArrangement = Arrangement.spacedBy(8.dp),
+					verticalArrangement = Arrangement.spacedBy(8.dp),
+				) {
+					if (vFacets != null && vFacets.cardTypes.isNotEmpty()) {
+						FilterChoice(
+							label = state.game?.vocabulary?.cardType ?: "Type",
+							options = vFacets.cardTypes,
+							selected = state.filter.cardType,
+							onSelected = { onFilterChanged(state.filter.copy(cardType = it)) },
+						)
+					}
+					if (vFacets != null && vFacets.rarities.isNotEmpty()) {
+						FilterChoice(
+							label = "Rarity",
+							options = vFacets.rarities,
+							selected = state.filter.rarity,
+							onSelected = { onFilterChanged(state.filter.copy(rarity = it)) },
+						)
+					}
+					if (vFacets != null && vFacets.domains.isNotEmpty()) {
+						FilterChoice(
+							// The game's own word -- "Colour" for Magic, "Faction" for Altered.
+							label = state.game?.vocabulary?.domain ?: "Domain",
+							options = vFacets.domains,
+							selected = state.filter.domain,
+							onSelected = { onFilterChanged(state.filter.copy(domain = it)) },
+						)
+					}
 				}
 				// Pulled out of the facets first: it comes from another module, so it cannot be
 				// smart-cast out of the nullable property it lives on.

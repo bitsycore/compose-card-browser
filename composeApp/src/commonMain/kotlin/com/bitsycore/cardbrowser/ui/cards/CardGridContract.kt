@@ -4,6 +4,7 @@ import com.bitsycore.cardbrowser.core.filter.CardFacets
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.data.settings.CardRowHeight
+import com.bitsycore.cardbrowser.data.settings.CardTileSize
 import com.bitsycore.cardbrowser.data.settings.CardViewMode
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
@@ -64,6 +65,7 @@ object CardGridContract :
 		 */
 		val viewMode: CardViewMode = CardViewMode.GRID,
 		val rowHeight: CardRowHeight = CardRowHeight.REGULAR,
+		val tileSize: CardTileSize = CardTileSize.MEDIUM,
 		val isFilterSheetOpen: Boolean = false,
 		val isSearchOpen: Boolean = false,
 		/** Restored when coming back from detail, so the grid returns to where it was. */
@@ -232,10 +234,14 @@ object CardGridContract :
 		/** How tall a list row is. Persisted too. */
 		data class RowHeightChanged(val height: CardRowHeight) : Intent
 
+		/** How big a grid tile is. Persisted too. */
+		data class TileSizeChanged(val size: CardTileSize) : Intent
+
 		/** What preferences had when the screen opened. */
 		data class ViewPreferencesLoaded(
 			val mode: CardViewMode,
 			val height: CardRowHeight,
+			val tileSize: CardTileSize,
 		) : Intent
 
 		data class ScrollPositionChanged(val index: Int) : Intent
@@ -329,9 +335,12 @@ object CardGridContract :
 
 		is Intent.RowHeightChanged -> state.copy(rowHeight = intent.height)
 
+		is Intent.TileSizeChanged -> state.copy(tileSize = intent.size)
+
 		is Intent.ViewPreferencesLoaded -> state.copy(
 			viewMode = intent.mode,
 			rowHeight = intent.height,
+			tileSize = intent.tileSize,
 		)
 
 		Intent.Load -> state.copy(

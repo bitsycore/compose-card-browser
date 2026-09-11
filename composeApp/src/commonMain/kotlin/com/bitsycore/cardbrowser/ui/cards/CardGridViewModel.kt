@@ -53,6 +53,7 @@ class CardGridViewModel(
 				CardGridContract.Intent.ViewPreferencesLoaded(
 					mode = vPreferences.cardViewMode,
 					height = vPreferences.cardRowHeight,
+					tileSize = vPreferences.cardTileSize,
 				),
 			)
 		}
@@ -74,6 +75,9 @@ class CardGridViewModel(
 
 			is CardGridContract.Intent.RowHeightChanged ->
 				mPreferences.update { it.copy(cardRowHeight = intent.height) }
+
+			is CardGridContract.Intent.TileSizeChanged ->
+				mPreferences.update { it.copy(cardTileSize = intent.size) }
 
 			is CardGridContract.Intent.SetSelected -> {
 				mPreferences.update { it.copy(lastSetId = intent.setId) }

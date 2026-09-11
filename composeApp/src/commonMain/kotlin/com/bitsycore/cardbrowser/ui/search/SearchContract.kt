@@ -55,12 +55,26 @@ object SearchContract :
 		val requestGeneration: Int = 0,
 	) {
 
-		/** True when the advanced filter narrows on anything beyond the name. */
-		val hasAdvancedFilters: Boolean
+		/**
+		 * How many things the advanced filter narrows on, beyond the name.
+		 *
+		 * A number rather than a flag because it is shown: the button says how many are set, so a
+		 * search that returns nothing while the panel is shut still has a visible cause. A cost
+		 * range counts as one -- it is one control and one idea, whichever end is filled in.
+		 */
+		val activeAdvancedCount: Int
 			get() = with(filter) {
-				!excludeText.isNullOrBlank() || cardType != null || rarity != null ||
-					minCost != null || maxCost != null || domain != null
+				listOf(
+					!excludeText.isNullOrBlank(),
+					cardType != null,
+					rarity != null,
+					domain != null,
+					minCost != null || maxCost != null,
+				).count { it }
 			}
+
+		/** True when the advanced filter narrows on anything beyond the name. */
+		val hasAdvancedFilters: Boolean get() = activeAdvancedCount > 0
 
 		/** True before anything has been searched for. */
 		val isIdle: Boolean get() = submitted.isBlank() && !isLoading

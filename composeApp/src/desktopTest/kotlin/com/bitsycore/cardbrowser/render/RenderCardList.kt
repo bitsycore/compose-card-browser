@@ -1,6 +1,7 @@
 package com.bitsycore.cardbrowser.render
 
 import com.bitsycore.cardbrowser.data.settings.CardRowHeight
+import com.bitsycore.cardbrowser.data.settings.CardTileSize
 import com.bitsycore.cardbrowser.data.settings.CardViewMode
 import com.bitsycore.cardbrowser.ui.cards.CardGridContent
 import com.bitsycore.cardbrowser.ui.cards.CardGridContract
@@ -40,6 +41,25 @@ class CardListRenderer {
 						knownSetSize = 352,
 						viewMode = CardViewMode.LIST,
 						rowHeight = vHeight,
+					),
+					dispatch = {},
+				)
+			}
+		}
+
+		// And the grid's three, which are a minimum tile width rather than a row height -- so what
+		// is worth looking at is how many fit across, not how tall anything is.
+		CardTileSize.entries.forEach { vSize ->
+			renderToPng(vOut, "card-grid-${vSize.name.lowercase()}", 620, 700, density = 1.65f) {
+				CardGridContent(
+					state = CardGridContract.UiState(
+						setName = "Origins",
+						setCode = "OGN",
+						cards = PreviewData.CARDS,
+						isLoading = false,
+						knownSetSize = 352,
+						viewMode = CardViewMode.GRID,
+						tileSize = vSize,
 					),
 					dispatch = {},
 				)

@@ -61,6 +61,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import com.bitsycore.cardbrowser.data.settings.CardViewMode
 import androidx.compose.runtime.mutableStateOf
+import com.bitsycore.cardbrowser.data.settings.CardTileSize
+import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.Composable
 import com.bitsycore.cardbrowser.ui.common.sharedSetContainer
 import androidx.compose.runtime.LaunchedEffect
@@ -349,11 +351,15 @@ fun CardGridContent(
 						ViewModeButton(
 							mode = vState.viewMode,
 							rowHeight = vState.rowHeight,
+							tileSize = vState.tileSize,
 							onModeChanged = {
 								dispatch(CardGridContract.Intent.ViewModeChanged(it))
 							},
 							onRowHeightChanged = {
 								dispatch(CardGridContract.Intent.RowHeightChanged(it))
+							},
+							onTileSizeChanged = {
+								dispatch(CardGridContract.Intent.TileSizeChanged(it))
 							},
 						)
 					},
@@ -468,6 +474,7 @@ fun CardGridContent(
 				else -> CardGrid(
 					cards = vState.cards,
 					gridState = vGridState,
+					tileSize = vState.tileSize,
 					onOpenCard = { dispatch(CardGridContract.Intent.CardOpened(it)) },
 					contentPadding = vPadding,
 					selected = vSelected,
@@ -522,6 +529,7 @@ private fun CardGrid(
 	 * False while the search field is open, which has a better claim on it: the field focuses
 	 * itself as it appears, and a grid that grabbed the focus back would eat the first letter typed.
 	 */
+	tileSize: CardTileSize,
 	selected: Int,
 	onSelect: (Int) -> Unit,
 	canTakeFocus: Boolean = true,
@@ -539,7 +547,7 @@ private fun CardGrid(
 	}
 
 	LazyVerticalGrid(
-		columns = GridCells.Adaptive(minSize = MIN_TILE_WIDTH.dp),
+		columns = GridCells.Adaptive(minSize = tileSize.minWidth),
 		state = gridState,
 		contentPadding = PaddingValues(
 			start = TILE_GAP,
@@ -820,7 +828,19 @@ private fun tileSubtitle(card: CardPrinting): String = buildList {
 }.joinToString(" · ")
 
 /** Wide enough that a card's name and art stay legible on a phone. */
-private const val MIN_TILE_WIDTH = 108
+/**
+ * The narrowest a tile may be, per size step.
+ *
+ * A *minimum* rather than a count, because the grid's columns are adaptive: 108dp gives three
+ * across on a phone and seven in a desktop window, and the same setting keeps meaning the same
+ * thing on both. 108 was the single value before there were three, so it is the middle one.
+ */
+private val CardTileSize.minWidth: Dp
+	get() = when (this) {
+		CardTileSize.SMALL -> 76.dp
+		CardTileSize.MEDIUM -> 108.dp
+		CardTileSize.LARGE -> 164.dp
+	}
 
 /** The gap between tiles, and the margin around the grid. */
 private val TILE_GAP = 12.dp
@@ -927,8 +947,10 @@ private val SET_ROW_CORNER = 12.dp
 private fun ViewModeButton(
 	mode: CardViewMode,
 	rowHeight: CardRowHeight,
+	tileSize: CardTileSize,
 	onModeChanged: (CardViewMode) -> Unit,
 	onRowHeightChanged: (CardRowHeight) -> Unit,
+	onTileSizeChanged: (CardTileSize) -> Unit,
 ) {
 	var vIsOpen by remember { mutableStateOf(false) }
 	Box {
@@ -955,9 +977,11 @@ private fun ViewModeButton(
 					},
 				)
 			}
-			// The heights, shown only in list mode -- see this function's own note.
+			// The size steps for whichever mode is showing. Both modes have three, and only the one
+			// in force is offered -- a menu that lists the other mode's sizes is a menu with
+			// entries that do nothing.
+			HorizontalDivider()
 			if (mode == CardViewMode.LIST) {
-				HorizontalDivider()
 				CardRowHeight.entries.forEach { vHeight ->
 					DropdownMenuItem(
 						text = { Text(vHeight.label) },
@@ -967,6 +991,21 @@ private fun ViewModeButton(
 						},
 						trailingIcon = {
 							if (vHeight == rowHeight) {
+								Icon(AppIcons.Check, contentDescription = null)
+							}
+						},
+					)
+				}
+			} else {
+				CardTileSize.entries.forEach { vSize ->
+					DropdownMenuItem(
+						text = { Text(vSize.label) },
+						onClick = {
+							onTileSizeChanged(vSize)
+							vIsOpen = false
+						},
+						trailingIcon = {
+							if (vSize == tileSize) {
 								Icon(AppIcons.Check, contentDescription = null)
 							}
 						},
