@@ -88,13 +88,29 @@ object SettingsContract :
 		/** Moves a language to the front of the preference order. */
 		data class PromoteLanguage(val language: CardLanguage) : Intent
 
+		/** The back arrow. An intent like any other, so the screen body only ever dispatches. */
+		data object BackPressed : Intent
+
 	}
 
-	sealed interface Effect
+	/**
+	 * Navigation, as something the container emits rather than something the body is handed.
+	 *
+	 * A `Content` takes a state and a dispatch and nothing else. Passing an `onBack` down instead
+	 * would put one interaction outside the loop every other interaction goes through, and it is the
+	 * container -- not the layout -- that gets to decide a tap means "leave".
+	 */
+	sealed interface Effect {
+
+		data object NavigateBack : Effect
+	}
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
 
 		Intent.Refresh -> state
+
+		// Navigation changes no state. The view model turns it into an effect.
+		Intent.BackPressed -> state
 
 		is Intent.ApiCallsRead -> state.copy(
 			apiCalls = intent.counts.entries

@@ -635,15 +635,20 @@ class MetadataCache(
 	companion object {
 
 		/**
-		 * 1 GB, matching the image cache.
+		 * 256 MB, matching the image cache.
 		 *
 		 * The largest Riftbound set is 358 cards and its complete-set record is roughly 460 KB of
 		 * JSON, so every set the game has comes to a few megabytes. This is deliberately far above
 		 * that: card metadata is what makes the app work offline, it is the cheapest thing here by
 		 * two orders of magnitude next to images, and evicting it to save a few megabytes would be
-		 * a poor trade. Room for a second and third game later without revisiting the number.
+		 * a poor trade.
+		 *
+		 * It went to 1 GB when a bulk import of Magic -- larger than 256 MB on its own -- was
+		 * evicted by its own ceiling the moment it finished. That is fixed properly now: an
+		 * imported or downloaded record is pinned, and [trimLocked] leaves pinned bytes out of the
+		 * budget entirely. So this ceiling bounds *browsing* again, which is what it was for.
 		 */
-		const val DEFAULT_MAX_BYTES: Long = 1024L * 1024 * 1024
+		const val DEFAULT_MAX_BYTES: Long = 256L * 1024 * 1024
 
 		/** Marks a record as deliberately downloaded. A zero-byte sibling of the record itself. */
 		private const val PIN_SUFFIX: String = ".pin"

@@ -16,15 +16,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -46,28 +46,30 @@ import com.bitsycore.cardbrowser.data.settings.ThemeMode
 import com.bitsycore.cardbrowser.ui.common.FinePrint
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
+import com.bitsycore.lib.pulse.compose.collectEffect
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * Cache usage, cache clearing, and the card-language preference order.
+ * Preferences: theme, languages, browsing, the cache ceilings, and what the network did.
  *
- * The two caches are reported and cleared separately because they behave differently: metadata is
- * what makes offline browsing work and is cheap to refetch, images are most of the bytes.
+ * Limits only, never usage. What is *stored* and what can be deleted is the storage screen's job,
+ * and it links back here -- one direction only, so the two cannot be walked in a circle.
  */
 @Composable
 fun SettingsScreen(
 	onBack: () -> Unit,
-	onOpenStorage: () -> Unit = {},
 	viewModel: SettingsViewModel = koinViewModel(),
 ) {
+	// Where navigation is turned back into navigation. The body below dispatches an intent and knows
+	// nothing about a back stack; this is the only part that does, and it is not the part that draws.
+	viewModel.collectEffect { vEffect ->
+		when (vEffect) {
+			SettingsContract.Effect.NavigateBack -> onBack()
+		}
+	}
 	val vState by viewModel.collectAsStateWithLifecycle()
 
-	SettingsContent(
-		state = vState,
-		dispatch = viewModel::dispatch,
-		onBack = onBack,
-		onOpenStorage = onOpenStorage,
-	)
+	SettingsContent(state = vState, dispatch = viewModel::dispatch)
 }
 
 /** The settings screen, given a state and somewhere to send intents. */
@@ -76,8 +78,6 @@ fun SettingsScreen(
 fun SettingsContent(
 	state: SettingsContract.UiState,
 	dispatch: (SettingsContract.Intent) -> Unit,
-	onBack: () -> Unit,
-	onOpenStorage: () -> Unit = {},
 ) {
 	val vState = state
 
@@ -86,7 +86,7 @@ fun SettingsContent(
 			TopAppBar(
 				title = { Text("Settings") },
 				navigationIcon = {
-					IconButton(onClick = onBack) {
+					IconButton(onClick = { dispatch(SettingsContract.Intent.BackPressed) }) {
 						Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
 					}
 				},
@@ -170,43 +170,33 @@ fun SettingsContent(
 			)
 
 			// ============
-			//  Storage
+			//  Cache
 
-			SettingsSection("Storage")
+			// "Cache", not "Storage": every control under it bounds what browsing may accumulate,
+			// and nothing under it can touch a download. What is *stored* -- and what can be
+			// deleted -- is the storage screen's, which is reached from the bar menu.
+			SettingsSection("Cache")
 
 			Text(
-				// What is *used* is on the storage screen, which can also act on it. Reporting the
-				// same figures here left a reader looking at numbers with no button beside them.
 				text = "Limits apply to cached data. Downloads are kept until deleted.",
 				style = MaterialTheme.typography.bodySmall,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
 			)
 			Spacer(Modifier.height(8.dp))
 
-			ChoiceRow(
+			LimitRow(
 				label = "Image cache limit",
-				note = "Applies on next launch.",
-				options = BrowsingPreferences.IMAGE_CACHE_CHOICES,
+				note = "Applies on next launch. About 22 KB a thumbnail.",
 				selected = vState.imageLimitBytes,
-				render = ::formatBytes,
 				onSelect = { dispatch(SettingsContract.Intent.ImageCacheLimitChosen(it)) },
 			)
 
-			ChoiceRow(
+			LimitRow(
 				label = "Card data limit",
 				note = "Applies now. A whole set is a few megabytes.",
-				options = BrowsingPreferences.METADATA_CACHE_CHOICES,
 				selected = vState.metadataLimitBytes,
-				render = ::formatBytes,
 				onSelect = { dispatch(SettingsContract.Intent.MetadataCacheLimitChosen(it)) },
 			)
-
-			Spacer(Modifier.height(8.dp))
-			// Also in the bar menu one level up. Repeated here because this is where someone
-			// adjusting a limit finds out it is not the thing taking the space.
-			OutlinedButton(onClick = onOpenStorage, modifier = Modifier.fillMaxWidth()) {
-				Text("Manage storage")
-			}
 
 			// ============
 			//  Network
@@ -363,6 +353,116 @@ private fun <T> ChoiceRow(
 	}
 }
 
+/**
+ * A cache ceiling: the presets, plus whatever the user would rather type.
+ *
+ * The "Custom" chip is not a sixth preset -- it reads as selected whenever the stored value is off
+ * the list, and then carries that value as its label, so a limit set by hand is still legible at a
+ * glance rather than leaving every chip unselected and the real figure nowhere on screen. That also
+ * covers a value a previous build wrote and this one no longer offers.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LimitRow(
+	label: String,
+	note: String,
+	selected: Long,
+	onSelect: (Long) -> Unit,
+) {
+	var vEditing by remember { mutableStateOf(false) }
+	val vIsPreset = selected in BrowsingPreferences.CACHE_LIMIT_CHOICES
+
+	Spacer(Modifier.height(16.dp))
+	Text(label, style = MaterialTheme.typography.bodyMedium)
+	Spacer(Modifier.height(2.dp))
+	Text(
+		text = note,
+		style = MaterialTheme.typography.bodySmall,
+		color = MaterialTheme.colorScheme.onSurfaceVariant,
+	)
+	Spacer(Modifier.height(8.dp))
+	FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+		BrowsingPreferences.CACHE_LIMIT_CHOICES.forEach { vOption ->
+			FilterChip(
+				selected = vOption == selected,
+				onClick = { onSelect(vOption) },
+				label = { Text(formatBytes(vOption)) },
+			)
+		}
+		FilterChip(
+			selected = !vIsPreset,
+			onClick = { vEditing = true },
+			label = { Text(if (vIsPreset) "Custom" else formatBytes(selected)) },
+		)
+	}
+
+	if (vEditing) {
+		CustomLimitDialog(
+			label = label,
+			current = selected,
+			onDismiss = { vEditing = false },
+			onConfirm = {
+				vEditing = false
+				onSelect(it)
+			},
+		)
+	}
+}
+
+/**
+ * Types a limit in megabytes.
+ *
+ * Megabytes rather than bytes because nobody wants to count zeroes, and the confirm stays disabled
+ * on anything unparseable or out of range instead of silently rounding it into one -- a settings
+ * screen that quietly changed what you typed would be the same dishonesty as one that misreports a
+ * figure.
+ */
+@Composable
+private fun CustomLimitDialog(
+	label: String,
+	current: Long,
+	onDismiss: () -> Unit,
+	onConfirm: (Long) -> Unit,
+) {
+	val vMinMb = BrowsingPreferences.MIN_CACHE_LIMIT_BYTES / MB
+	val vMaxMb = BrowsingPreferences.MAX_CACHE_LIMIT_BYTES / MB
+	var vText by remember { mutableStateOf((current / MB).toString()) }
+	val vMegabytes = vText.trim().toLongOrNull()
+	val vIsValid = vMegabytes != null && vMegabytes in vMinMb..vMaxMb
+
+	AlertDialog(
+		onDismissRequest = onDismiss,
+		title = { Text(label) },
+		text = {
+			Column {
+				OutlinedTextField(
+					value = vText,
+					onValueChange = { vText = it.filter { vChar -> vChar.isDigit() } },
+					singleLine = true,
+					label = { Text("Megabytes") },
+					isError = vText.isNotBlank() && !vIsValid,
+				)
+				Spacer(Modifier.height(8.dp))
+				Text(
+					text = "$vMinMb to $vMaxMb MB.",
+					style = MaterialTheme.typography.bodySmall,
+					color = MaterialTheme.colorScheme.onSurfaceVariant,
+				)
+			}
+		},
+		confirmButton = {
+			TextButton(
+				onClick = { vMegabytes?.let { onConfirm(it * MB) } },
+				enabled = vIsValid,
+			) { Text("Set") }
+		},
+		dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+	)
+}
+
+/** One binary megabyte, the unit the custom-limit field is in. */
+private const val MB: Long = 1024L * 1024
+
 
 /**
  * Bytes as something a person reads.
@@ -373,9 +473,13 @@ private fun <T> ChoiceRow(
 internal fun formatBytes(bytes: Long): String = when {
 	bytes < 1024 -> "$bytes B"
 	bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-	bytes < 1024L * 1024 * 1024 -> "${(bytes * 10 / (1024 * 1024)) / 10.0} MB"
-	else -> "${(bytes * 10 / (1024L * 1024 * 1024)) / 10.0} GB"
+	bytes < 1024L * 1024 * 1024 -> "${trimTenth((bytes * 10 / (1024 * 1024)) / 10.0)} MB"
+	else -> "${trimTenth((bytes * 10 / (1024L * 1024 * 1024)) / 10.0)} GB"
 }
+
+/** Drops a trailing `.0`, so a row of chips reads "256 MB" rather than "256.0 MB". */
+private fun trimTenth(value: Double): String =
+	value.toString().removeSuffix(".0")
 
 // ==================
 // MARK: Previews
@@ -402,7 +506,6 @@ private fun SettingsPreview() = PreviewFrame {
 			),
 		),
 		dispatch = {},
-		onBack = {},
 	)
 }
 
@@ -417,6 +520,5 @@ private fun SettingsLightPreview() = PreviewFrame(isDark = false) {
 			revalidateSetsOnLaunch = false,
 		),
 		dispatch = {},
-		onBack = {},
 	)
 }

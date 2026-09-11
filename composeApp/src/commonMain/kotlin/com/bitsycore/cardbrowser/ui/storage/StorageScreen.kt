@@ -50,17 +50,20 @@ import org.koin.compose.viewmodel.koinViewModel
 /**
  * What the app is storing, and what can be removed.
  *
- * Reached from settings, which keeps the *limits*. The two were one section until a bulk import
- * made the difference matter: a limit bounds what browsing may accumulate, and an imported
- * catalogue is not bounded by it and never will be, because nothing evicts a thing the user asked
- * for. So the only way it leaves the device is from here.
+ * Settings keeps the *limits*, and there is a button here to reach them. The two were one section
+ * until a bulk import made the difference matter: a limit bounds what browsing may accumulate, and
+ * an imported catalogue is not bounded by it and never will be, because nothing evicts a thing the
+ * user asked for. So the only way it leaves the device is from here.
  */
 @Composable
 fun StorageScreen(
 	onBack: () -> Unit,
+	onOpenCacheSettings: () -> Unit = {},
 	viewModel: StorageViewModel = koinViewModel(),
 ) {
 	val vSnackbar = remember { SnackbarHostState() }
+	// Everything that is not drawing: a message to show, and two places to go. The body below only
+	// ever dispatches, so it can be previewed and rendered with no host and no back stack.
 	viewModel.collectEffect { vEffect ->
 		when (vEffect) {
 			is StorageContract.Effect.Deleted -> vSnackbar.showSnackbar(
@@ -70,6 +73,10 @@ fun StorageScreen(
 					"Deleted ${vEffect.sets} sets of ${vEffect.game}."
 				},
 			)
+
+			StorageContract.Effect.NavigateBack -> onBack()
+
+			StorageContract.Effect.OpenCacheSettings -> onOpenCacheSettings()
 		}
 	}
 	val vState by viewModel.collectAsStateWithLifecycle()
@@ -77,7 +84,6 @@ fun StorageScreen(
 	StorageContent(
 		state = vState,
 		dispatch = viewModel::dispatch,
-		onBack = onBack,
 		snackbarHostState = vSnackbar,
 	)
 }
@@ -87,7 +93,6 @@ fun StorageScreen(
 fun StorageContent(
 	state: StorageContract.UiState,
 	dispatch: (StorageContract.Intent) -> Unit,
-	onBack: () -> Unit = {},
 	snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
 	Scaffold(
@@ -95,7 +100,7 @@ fun StorageContent(
 			TopAppBar(
 				title = { Text("Storage") },
 				navigationIcon = {
-					IconButton(onClick = onBack) {
+					IconButton(onClick = { dispatch(StorageContract.Intent.BackPressed) }) {
 						Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
 					}
 				},
@@ -161,7 +166,7 @@ fun StorageContent(
 				Spacer(Modifier.height(16.dp))
 				SectionHeading(
 					title = "Cached",
-					subtitle = "Kept within the limits in Settings, and dropped as needed.",
+					subtitle = "Kept within these limits, and dropped as needed.",
 					trailing = formatBytes(vUsage.metadataBrowsingBytes + vUsage.imageBytes),
 				)
 
@@ -180,6 +185,16 @@ fun StorageContent(
 					onClear = { dispatch(StorageContract.Intent.ClearImages) },
 					enabled = vUsage.imageBytes > 0 && !state.isLoading,
 				)
+
+				Spacer(Modifier.height(12.dp))
+				// Beside the bars, because seeing a cache at its ceiling is the moment anyone
+				// wants to change the ceiling -- and the limits live in settings, not here.
+				OutlinedButton(
+					onClick = { dispatch(StorageContract.Intent.CacheSettingsRequested) },
+					modifier = Modifier.fillMaxWidth(),
+				) {
+					Text("Cache settings")
+				}
 
 				Spacer(Modifier.height(24.dp))
 			}
@@ -295,24 +310,6 @@ private fun KeptGameRow(
 			}
 		}
 	}
-}
-
-/** "18.4 MB of 1.0 GB", with the bar that makes a ratio readable at a glance. */
-@Composable
-private fun UsageLine(used: Long, limit: Long, note: String) {
-	Text(
-		text = if (limit > 0) "${formatBytes(used)} of ${formatBytes(limit)}" else formatBytes(used),
-		style = MaterialTheme.typography.bodyLarge,
-	)
-	if (limit > 0) {
-		Spacer(Modifier.height(4.dp))
-		LinearProgressIndicator(
-			progress = { (used.toFloat() / limit).coerceIn(0f, 1f) },
-			modifier = Modifier.fillMaxWidth(),
-		)
-	}
-	Spacer(Modifier.height(4.dp))
-	Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 /**

@@ -101,12 +101,22 @@ object StorageContract :
 		data object ClearBrowsingData : Intent
 
 		data object ClearImages : Intent
+
+		/** The back arrow. Navigation goes through the container like everything else. */
+		data object BackPressed : Intent
+
+		/** "Cache settings" -- the limits these bars are measured against live in settings. */
+		data object CacheSettingsRequested : Intent
 	}
 
 	sealed interface Effect {
 
 		/** Said after a deletion, because the number is the point of having asked. */
 		data class Deleted(val game: String, val sets: Int) : Effect
+
+		data object NavigateBack : Effect
+
+		data object OpenCacheSettings : Effect
 	}
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
@@ -128,5 +138,8 @@ object StorageContract :
 		Intent.DeleteFinished -> state.copy(isDeleting = false, isLoading = true)
 
 		Intent.ClearBrowsingData, Intent.ClearImages -> state.copy(isLoading = true)
+
+		// Navigation changes no state. The view model turns these into effects.
+		Intent.BackPressed, Intent.CacheSettingsRequested -> state
 	}
 }

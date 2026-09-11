@@ -59,6 +59,11 @@ class StorageViewModel(
 				load()
 			}
 
+			StorageContract.Intent.BackPressed -> emitEffect(StorageContract.Effect.NavigateBack)
+
+			StorageContract.Intent.CacheSettingsRequested ->
+				emitEffect(StorageContract.Effect.OpenCacheSettings)
+
 			else -> Unit
 		}
 	}

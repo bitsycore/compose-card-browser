@@ -509,12 +509,12 @@ Where the brief left a choice, these were taken. All are one edit to change.
 
 | Choice | Value | Why |
 |---|---|---|
-| Metadata cache ceiling | 1 GB | Card metadata is what makes the app work offline and is two orders of magnitude cheaper per card than images, so evicting it to save megabytes would be a poor trade. It was 256 MB, chosen when a game meant a few megabytes of JSON — a bulk import of Magic is larger than that on its own, so the first thing that ceiling did was evict what had just been imported. |
-| Image cache ceiling | 1 GB | A ceiling, not an allocation — a full browse of all 352 Origins cards came to under 4 MB. At ~22 KB a thumbnail this is room for tens of thousands of cards, so the limit stops being what evicts. On Android and iOS it sits in the OS cache directory, which the system may purge regardless. |
+| Metadata cache ceiling | 256 MB, adjustable | Bounds what *browsing* accumulates, and nothing else: an imported or downloaded record is pinned, and pinned bytes are outside the budget. It went to 1 GB when that was not yet true and a bulk import of Magic was evicted by its own ceiling. Every set of a game is a few megabytes of JSON, so this is far above what browsing needs. |
+| Image cache ceiling | 256 MB, adjustable | A ceiling, not an allocation — a full browse of all 352 Origins cards came to under 4 MB. At ~22 KB a thumbnail this is room for ~12,000 cards, so the limit stops being what evicts. Downloaded art is pinned and does not count against it. On Android and iOS it sits in the OS cache directory, which the system may purge regardless. |
 | Thumbnail format | WebP at `w=320` | Pinned, not negotiated — see [Known limitations](#known-limitations). ~22 KB against ~260 KB for the same image as PNG. |
 | Detail image | WebP at the asset's native width, `q=90` | ~180 KB against ~1.17 MB for the lossless PNG, and no visible difference. Decoded at source resolution rather than layout size so zoom has real pixels. |
 | First request when opening a set | 24 cards, thrown away | Time-to-first-card. This API's transfer time tracks payload and swings hard — a 100-card page measured between 1.6 s and 11.8 s, a 24-card one about 1 s. Skipped for a provider whose own pages are already that small. |
-| Card art prefetched around the open card | 3 either side | Enqueued into the cache without composing anything, so a swipe lands on finished art. ~180 KB apiece against a 1 GB ceiling. |
+| Card art prefetched around the open card | 3 either side | Enqueued into the cache without composing anything, so a swipe lands on finished art. ~180 KB apiece, against a ceiling that downloaded art does not count towards. |
 | Pages fetched at once | 4 | Page one is drawn before the rest are even requested; the remainder go out together. Four covers every Riftbound set in one batch while staying polite to a free API. |
 | Set list freshness | 24 hours | Set catalogues change when a set is announced. |
 | Card data freshness | 24 hours | Stale data still displays immediately; this only governs when a refresh is attempted. |

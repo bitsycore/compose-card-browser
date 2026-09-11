@@ -52,6 +52,9 @@ class SettingsViewModel(
 
 			is SettingsContract.Intent.ResetApiCalls -> mApiCalls.reset()
 
+			SettingsContract.Intent.BackPressed ->
+				emitEffect(SettingsContract.Effect.NavigateBack)
+
 			SettingsContract.Intent.Refresh -> Unit
 
 			is SettingsContract.Intent.ImageCacheLimitChosen -> {

@@ -210,30 +210,37 @@ data class BrowsingPreferences(
 	companion object {
 
 		/** Matches `CacheManager.DEFAULT_IMAGE_CACHE_MAX_BYTES`, restated to avoid a cycle. */
-		const val DEFAULT_IMAGE_CACHE_LIMIT_BYTES: Long = 1024L * 1024 * 1024
+		const val DEFAULT_IMAGE_CACHE_LIMIT_BYTES: Long = 256L * 1024 * 1024
 
 		/** Matches `MetadataCache.DEFAULT_MAX_BYTES`, restated to avoid a cycle. */
-		const val DEFAULT_METADATA_CACHE_LIMIT_BYTES: Long = 1024L * 1024 * 1024
+		const val DEFAULT_METADATA_CACHE_LIMIT_BYTES: Long = 256L * 1024 * 1024
 
 		const val DEFAULT_PREFETCH_RADIUS: Int = 3
 
-		/** What the settings screen offers for the image cache. */
-		val IMAGE_CACHE_CHOICES: List<Long> = listOf(
+		/**
+		 * What the settings screen offers for either cache, plus whatever the user types.
+		 *
+		 * One list for both, because both ceilings now bound the same thing: what *browsing* is
+		 * allowed to accumulate. They had different ranges when a limit also had to be large enough
+		 * to hold a bulk import -- card data went to 1 GB for exactly that reason -- and that is no
+		 * longer true, because a download is pinned and pinned bytes are outside the budget. So
+		 * these are scratch sizes: 256 MB is ~12,000 thumbnails or every set of several games'
+		 * JSON, and anything above 1 GB was only ever there to stop the ceiling evicting a
+		 * download.
+		 *
+		 * A value off this list is valid and reachable -- the screen offers "Custom".
+		 */
+		val CACHE_LIMIT_CHOICES: List<Long> = listOf(
+			64L * 1024 * 1024,
 			128L * 1024 * 1024,
 			256L * 1024 * 1024,
 			512L * 1024 * 1024,
 			1024L * 1024 * 1024,
-			4096L * 1024 * 1024,
 		)
 
-		/** What the settings screen offers for card data. */
-		val METADATA_CACHE_CHOICES: List<Long> = listOf(
-			32L * 1024 * 1024,
-			64L * 1024 * 1024,
-			128L * 1024 * 1024,
-			256L * 1024 * 1024,
-			1024L * 1024 * 1024,
-		)
+		/** Bounds for a typed-in limit. Below the floor the cache thrashes; above it is a typo. */
+		const val MIN_CACHE_LIMIT_BYTES: Long = 16L * 1024 * 1024
+		const val MAX_CACHE_LIMIT_BYTES: Long = 64L * 1024 * 1024 * 1024
 
 		/** How far ahead the detail screen may prefetch. Zero switches prefetching off. */
 		val PREFETCH_CHOICES: List<Int> = listOf(0, 1, 3, 5, 10)
