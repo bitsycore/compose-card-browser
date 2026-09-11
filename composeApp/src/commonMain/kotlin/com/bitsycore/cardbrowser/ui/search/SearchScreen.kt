@@ -243,11 +243,10 @@ private fun CoverageNotice(
  */
 private fun emptyMessageFor(state: SearchContract.UiState): String = when {
 	state.scope == SearchScope.LOCAL_CACHED_SETS && state.searchedSetCount == 0 ->
-		"No ${state.game?.shortName.orEmpty()} sets have been downloaded yet, so there was nothing to " +
-			"search. Open a set first."
+		"Nothing downloaded yet, so there was nothing to search."
 
 	state.scope == SearchScope.LOCAL_CACHED_SETS ->
-		"No card matching \"${state.submitted}\" in the ${state.searchedSetCount} " +
+		"No match in the ${state.searchedSetCount} " +
 			"${if (state.searchedSetCount == 1) "set" else "sets"} you have downloaded."
 
 	else -> "No ${state.game?.shortName.orEmpty()} card matches \"${state.submitted}\"."

@@ -12,10 +12,9 @@ object SettingsContract :
 	ContainerContract<SettingsContract.UiState, SettingsContract.Intent, SettingsContract.Effect>() {
 
 	data class UiState(
-		val metadataBytes: Long = 0,
-		val metadataEntries: Int = 0,
+		// Limits only. What is *used* belongs to the storage screen, and was being reported in two
+		// places with two layouts -- this one kept the numbers and could not act on them.
 		val metadataLimitBytes: Long = 0,
-		val imageBytes: Long = 0,
 		val imageLimitBytes: Long = CacheManager.DEFAULT_IMAGE_CACHE_MAX_BYTES,
 		val preferredLanguages: List<CardLanguage> = CardLanguage.PREFERENCE_ORDER,
 		val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -30,6 +29,8 @@ object SettingsContract :
 		val attributions: List<ProviderCredit> = emptyList(),
 		val prefetchRadius: Int = BrowsingPreferences.DEFAULT_PREFETCH_RADIUS,
 		val revalidateSetsOnLaunch: Boolean = true,
+		/** Whether the set list leaves out sets their source states hold no cards. */
+		val hideEmptySets: Boolean = true,
 		/**
 		 * Requests sent per host since launch, highest first.
 		 *
@@ -62,7 +63,6 @@ object SettingsContract :
 		/** Zero the counters, so one interaction can be measured on its own. */
 		data object ResetApiCalls : Intent
 
-		data class UsageRead(val usage: CacheUsage) : Intent
 
 		data class PreferencesRead(val preferences: BrowsingPreferences) : Intent
 
@@ -76,6 +76,9 @@ object SettingsContract :
 		data class PrefetchRadiusChosen(val radius: Int) : Intent
 
 		data class RevalidateOnLaunchChanged(val isEnabled: Boolean) : Intent
+
+		/** Whether the set list hides sets stated to hold no cards. */
+		data class HideEmptySetsChanged(val hide: Boolean) : Intent
 
 		/** Light, dark, or whatever the platform says. Applies immediately, not on next launch. */
 		data class ThemeModeChosen(val mode: ThemeMode) : Intent
@@ -102,20 +105,13 @@ object SettingsContract :
 		// The view model does the zeroing; the reducer only has to stop showing the old numbers.
 		Intent.ResetApiCalls -> state.copy(apiCalls = emptyList())
 
-		is Intent.UsageRead -> state.copy(
-			metadataBytes = intent.usage.metadataBytes,
-			metadataEntries = intent.usage.metadataEntries,
-			metadataLimitBytes = intent.usage.metadataLimitBytes,
-			imageBytes = intent.usage.imageBytes,
-			imageLimitBytes = intent.usage.imageLimitBytes,
-		)
-
 		is Intent.PreferencesRead -> state.copy(
 			preferredLanguages = intent.preferences.preferredLanguages,
 			metadataLimitBytes = intent.preferences.metadataCacheLimitBytes,
 			imageLimitBytes = intent.preferences.imageCacheLimitBytes,
 			prefetchRadius = intent.preferences.prefetchRadius,
 			revalidateSetsOnLaunch = intent.preferences.revalidateSetsOnLaunch,
+			hideEmptySets = intent.preferences.hideEmptySets,
 			themeMode = intent.preferences.themeMode,
 		)
 
@@ -126,6 +122,8 @@ object SettingsContract :
 		is Intent.PrefetchRadiusChosen -> state.copy(prefetchRadius = intent.radius)
 
 		is Intent.RevalidateOnLaunchChanged -> state.copy(revalidateSetsOnLaunch = intent.isEnabled)
+
+		is Intent.HideEmptySetsChanged -> state.copy(hideEmptySets = intent.hide)
 
 		is Intent.ThemeModeChosen -> state.copy(themeMode = intent.mode)
 

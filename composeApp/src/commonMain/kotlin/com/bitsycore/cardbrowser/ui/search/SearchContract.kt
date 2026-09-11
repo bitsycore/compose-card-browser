@@ -82,9 +82,9 @@ object SearchContract :
 				// reach: [isLimitedByCache] requires `searchedSetCount < knownSetCount`, so a
 				// `knownSetCount` of zero makes this null before it gets here. The old wording
 				// carried that branch and it was dead -- a test written for it is what showed it.
-				"This source cannot search across sets, so only the $searchedSetCount " +
-					"${if (searchedSetCount == 1) "set" else "sets"} you have downloaded " +
-					"were searched, of $knownSetCount in ${game?.shortName ?: "this game"}."
+				"Searched the $searchedSetCount " +
+					"${if (searchedSetCount == 1) "set" else "sets"} you have downloaded, of " +
+					"$knownSetCount. This source cannot search across sets."
 			}
 	}
 

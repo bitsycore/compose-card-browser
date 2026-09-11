@@ -76,6 +76,7 @@ import com.bitsycore.cardbrowser.ui.common.ReorderHandle
 import com.bitsycore.cardbrowser.ui.common.ReorderState
 import com.bitsycore.cardbrowser.ui.common.rememberReorder
 import com.bitsycore.cardbrowser.ui.common.reorderHandle
+import com.bitsycore.cardbrowser.ui.common.FinePrint
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.cardbrowser.ui.theme.isDarkTheme
 import org.koin.compose.koinInject
@@ -291,13 +292,9 @@ fun GameListContent(
 						}
 					} else {
 						item {
-							Text(
-								text = "Every game listed has a working data source. Card data is " +
-									"supplied by the projects named above; this app is not " +
-									"affiliated with any game's publisher. " +
+							FinePrint(
+								text = "Not affiliated with any game's publisher. " +
 									GameArt.LOGO_ATTRIBUTION,
-								style = MaterialTheme.typography.bodySmall,
-								color = MaterialTheme.colorScheme.onSurfaceVariant,
 								modifier = Modifier.padding(horizontal = 4.dp, vertical = 16.dp),
 							)
 						}
@@ -482,9 +479,7 @@ private fun ResetRow(isEnabled: Boolean, onReset: () -> Unit) {
 			Text("Reset to default order")
 		}
 		Text(
-			text = "Hiding a game only takes it off this list. Its data source stays registered " +
-				"and anything already downloaded stays on your device — but its set list is no " +
-				"longer fetched in the background.",
+			text = "Hidden games keep their downloads.",
 			style = MaterialTheme.typography.bodySmall,
 			color = MaterialTheme.colorScheme.onSurfaceVariant,
 			modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),

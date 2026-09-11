@@ -350,9 +350,7 @@ fun DownloadKindDialog(
 							// Scryfall calls it "English or the printed language", which reads as
 							// multilingual: sampled, it is 8780 English records against 92
 							// Spanish, 47 Japanese, 27 French and 1 German.
-							text = "The smaller file is almost entirely English. Pick every " +
-								"language only if you want to read cards in one you have not " +
-								"downloaded.",
+							text = "The smaller file is almost entirely English.",
 							style = MaterialTheme.typography.bodySmall,
 							color = MaterialTheme.colorScheme.onSurfaceVariant,
 						)

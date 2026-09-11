@@ -52,19 +52,21 @@ class SettingsViewModel(
 
 			is SettingsContract.Intent.ResetApiCalls -> mApiCalls.reset()
 
-			SettingsContract.Intent.Refresh -> readUsage()
+			SettingsContract.Intent.Refresh -> Unit
 
 			is SettingsContract.Intent.ImageCacheLimitChosen -> {
 				mPreferences.update { it.copy(imageCacheLimitBytes = intent.bytes) }
-				readUsage()
 			}
 
 			is SettingsContract.Intent.MetadataCacheLimitChosen -> {
 				mPreferences.update { it.copy(metadataCacheLimitBytes = intent.bytes) }
 				// The new ceiling applies to the next write, so evict down to it now rather than
-				// leaving the reported usage above a limit the user has just lowered.
+				// leaving the cache above a limit the user has just lowered.
 				mCacheManager.trimMetadata()
-				readUsage()
+			}
+
+			is SettingsContract.Intent.HideEmptySetsChanged -> {
+				mPreferences.update { it.copy(hideEmptySets = intent.hide) }
 			}
 
 			is SettingsContract.Intent.PrefetchRadiusChosen -> {
@@ -89,9 +91,4 @@ class SettingsViewModel(
 		}
 	}
 
-	private fun readUsage() {
-		viewModelScope.launch {
-			dispatch(SettingsContract.Intent.UsageRead(mCacheManager.usage()))
-		}
-	}
 }

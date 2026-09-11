@@ -258,6 +258,7 @@ fun App() {
 						SettingsScreen(
 							onBack = { vBackStack.removeLastOrNull() },
 							onOpenStorage = { vBackStack.add(Route.Storage) },
+							onOpenDownloads = { vBackStack.add(Route.Downloads) },
 						)
 					}
 

@@ -471,17 +471,15 @@ fun SetListContent(
 								onMove = vOnMove,
 							)
 
-							// The tally, and the one option that changes it. At the end of the
-							// list rather than in the bar: it is an account of what was just
-							// scrolled through, and it is where a reader who wondered "is that
-							// all of them?" has arrived.
+							// A tally and nothing else. The option that changes it lives in
+							// settings, where options live; this is the end of a list and the
+							// only thing wanted here is the answer to "is that all of them?".
 							item(key = "set-count-footer") {
-								SetCountFooter(
+								Text(
 									text = vState.countsLine,
-									hideEmpty = vState.hideEmptySets,
-									onHideEmptyChange = {
-										dispatch(SetListContract.Intent.HideEmptyToggled(it))
-									},
+									style = MaterialTheme.typography.bodySmall,
+									color = MaterialTheme.colorScheme.onSurfaceVariant,
+									modifier = Modifier.padding(top = 8.dp, bottom = 24.dp),
 								)
 							}
 						}
@@ -605,40 +603,6 @@ fun SetListContent(
 
 }
 
-
-/**
- * How many sets are on screen, out of how many there are, and the option that changes it.
- *
- * A footer rather than a bar item. The question it answers -- "is that all of them?" -- is one a
- * reader has at the *bottom* of a list, and the checkbox is next to the number it moves so the
- * relationship needs no explaining.
- */
-@Composable
-private fun SetCountFooter(
-	text: String,
-	hideEmpty: Boolean,
-	onHideEmptyChange: (Boolean) -> Unit,
-) {
-	Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 24.dp)) {
-		Text(
-			text = text,
-			style = MaterialTheme.typography.bodySmall,
-			color = MaterialTheme.colorScheme.onSurfaceVariant,
-		)
-		Row(
-			verticalAlignment = Alignment.CenterVertically,
-			modifier = Modifier
-				.fillMaxWidth()
-				.clickable { onHideEmptyChange(!hideEmpty) },
-		) {
-			Checkbox(checked = hideEmpty, onCheckedChange = onHideEmptyChange)
-			Text(
-				text = "Hide sets with no cards",
-				style = MaterialTheme.typography.bodyMedium,
-			)
-		}
-	}
-}
 
 /**
  * A game's product lines, as chips, with "All" first.

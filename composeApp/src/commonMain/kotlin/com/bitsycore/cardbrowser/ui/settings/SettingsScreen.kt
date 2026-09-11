@@ -31,6 +31,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +46,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.data.settings.BrowsingPreferences
 import com.bitsycore.cardbrowser.data.settings.ThemeMode
+import com.bitsycore.cardbrowser.ui.common.FinePrint
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import org.koin.compose.viewmodel.koinViewModel
@@ -54,6 +61,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun SettingsScreen(
 	onBack: () -> Unit,
 	onOpenStorage: () -> Unit = {},
+	onOpenDownloads: () -> Unit = {},
 	viewModel: SettingsViewModel = koinViewModel(),
 ) {
 	val vState by viewModel.collectAsStateWithLifecycle()
@@ -63,6 +71,7 @@ fun SettingsScreen(
 		dispatch = viewModel::dispatch,
 		onBack = onBack,
 		onOpenStorage = onOpenStorage,
+		onOpenDownloads = onOpenDownloads,
 	)
 }
 
@@ -74,8 +83,10 @@ fun SettingsContent(
 	dispatch: (SettingsContract.Intent) -> Unit,
 	onBack: () -> Unit,
 	onOpenStorage: () -> Unit = {},
+	onOpenDownloads: () -> Unit = {},
 ) {
 	val vState = state
+	var vMenuOpen by remember { mutableStateOf(false) }
 
 	Scaffold(
 		topBar = {
@@ -84,6 +95,30 @@ fun SettingsContent(
 				navigationIcon = {
 					IconButton(onClick = onBack) {
 						Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+					}
+				},
+				actions = {
+					// The screens settings *leads to*, rather than buttons buried among the
+					// switches. Neither is a preference, and both manage something that lives
+					// elsewhere, so neither belongs in the list below.
+					IconButton(onClick = { vMenuOpen = true }) {
+						Icon(Icons.Outlined.MoreVert, contentDescription = "More")
+					}
+					DropdownMenu(expanded = vMenuOpen, onDismissRequest = { vMenuOpen = false }) {
+						DropdownMenuItem(
+							text = { Text("Manage storage") },
+							onClick = {
+								vMenuOpen = false
+								onOpenStorage()
+							},
+						)
+						DropdownMenuItem(
+							text = { Text("Downloads") },
+							onClick = {
+								vMenuOpen = false
+								onOpenDownloads()
+							},
+						)
 					}
 				},
 			)
@@ -96,13 +131,24 @@ fun SettingsContent(
 				.verticalScroll(rememberScrollState())
 				.padding(horizontal = 20.dp, vertical = 8.dp),
 		) {
+			// ============
+			//  General
 
-			Text("Card language preference", style = MaterialTheme.typography.titleSmall)
-			Spacer(Modifier.height(4.dp))
+			SettingsSection("General", isFirst = true)
+
+			ChoiceRow(
+				label = "Theme",
+				note = "System follows the device.",
+				options = ThemeMode.entries,
+				selected = vState.themeMode,
+				render = { it.label },
+				onSelect = { dispatch(SettingsContract.Intent.ThemeModeChosen(it)) },
+			)
+
+			Spacer(Modifier.height(12.dp))
+			Text("Card language", style = MaterialTheme.typography.bodyMedium)
 			Text(
-				text = "The order cards are preferred in. This is a preference, not a guarantee: " +
-					"each card database supports only some languages, and a card's own page says " +
-					"which one you are actually looking at.",
+				text = "A preference, not a guarantee. Each card says which language it is.",
 				style = MaterialTheme.typography.bodySmall,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
 			)
@@ -117,32 +163,88 @@ fun SettingsContent(
 			}
 			Spacer(Modifier.height(4.dp))
 			Text(
-				text = "Tap a language to move it to the front.",
+				text = "Tap to move to the front.",
 				style = MaterialTheme.typography.labelSmall,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
 			)
 
-			Spacer(Modifier.height(20.dp))
-			HorizontalDivider()
-			Spacer(Modifier.height(16.dp))
+			// ============
+			//  Browsing
 
-			Row(verticalAlignment = Alignment.CenterVertically) {
-				Text(
-					text = "Network",
-					style = MaterialTheme.typography.titleSmall,
-					modifier = Modifier.weight(1f),
-				)
+			SettingsSection("Browsing")
+
+			SwitchRow(
+				label = "Hide sets with no cards",
+				note = "Sets a source states are empty.",
+				checked = vState.hideEmptySets,
+				onCheckedChange = { dispatch(SettingsContract.Intent.HideEmptySetsChanged(it)) },
+			)
+
+			Spacer(Modifier.height(12.dp))
+			SwitchRow(
+				label = "Check for new sets on launch",
+				note = "One small request. The saved list shows first either way.",
+				checked = vState.revalidateSetsOnLaunch,
+				onCheckedChange = {
+					dispatch(SettingsContract.Intent.RevalidateOnLaunchChanged(it))
+				},
+			)
+
+			Spacer(Modifier.height(12.dp))
+			ChoiceRow(
+				label = "Cards fetched ahead",
+				note = "Art fetched either side of the open card. About 180 KB each.",
+				options = BrowsingPreferences.PREFETCH_CHOICES,
+				selected = vState.prefetchRadius,
+				render = { if (it == 0) "Off" else "$it" },
+				onSelect = { dispatch(SettingsContract.Intent.PrefetchRadiusChosen(it)) },
+			)
+
+			// ============
+			//  Storage
+
+			SettingsSection("Storage")
+
+			Text(
+				// What is *used* is on the storage screen, which can also act on it. Reporting the
+				// same figures here left a reader looking at numbers with no button beside them.
+				text = "Limits apply to cached data. Downloads are kept until deleted.",
+				style = MaterialTheme.typography.bodySmall,
+				color = MaterialTheme.colorScheme.onSurfaceVariant,
+			)
+			Spacer(Modifier.height(8.dp))
+
+			ChoiceRow(
+				label = "Image cache limit",
+				note = "Applies on next launch.",
+				options = BrowsingPreferences.IMAGE_CACHE_CHOICES,
+				selected = vState.imageLimitBytes,
+				render = ::formatBytes,
+				onSelect = { dispatch(SettingsContract.Intent.ImageCacheLimitChosen(it)) },
+			)
+
+			ChoiceRow(
+				label = "Card data limit",
+				note = "Applies now. A whole set is a few megabytes.",
+				options = BrowsingPreferences.METADATA_CACHE_CHOICES,
+				selected = vState.metadataLimitBytes,
+				render = ::formatBytes,
+				onSelect = { dispatch(SettingsContract.Intent.MetadataCacheLimitChosen(it)) },
+			)
+
+			// ============
+			//  Network
+
+			SettingsSection("Network", action = {
 				if (vState.apiCalls.isNotEmpty()) {
 					TextButton(onClick = { dispatch(SettingsContract.Intent.ResetApiCalls) }) {
 						Text("Reset")
 					}
 				}
-			}
-			Spacer(Modifier.height(4.dp))
+			})
+
 			Text(
-				text = "Requests sent since the app started, by host. Card data is cached, so " +
-					"browsing a set you have already opened should not move these numbers -- and " +
-					"if it does, that is a bug worth reporting.",
+				text = "Requests since launch. Reopening a cached set should not move these.",
 				style = MaterialTheme.typography.bodySmall,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
 			)
@@ -151,7 +253,7 @@ fun SettingsContent(
 			if (vState.apiCalls.isEmpty()) {
 				Text(
 					// The honest reading of zero: everything on screen came off the disk.
-					text = "No requests yet this session.",
+					text = "No requests yet.",
 					style = MaterialTheme.typography.bodyMedium,
 					color = MaterialTheme.colorScheme.onSurfaceVariant,
 				)
@@ -181,136 +283,69 @@ fun SettingsContent(
 				)
 			}
 
-			Spacer(Modifier.height(20.dp))
-			HorizontalDivider()
-			Spacer(Modifier.height(16.dp))
-
-			Text("Storage", style = MaterialTheme.typography.titleSmall)
-			Spacer(Modifier.height(8.dp))
-
-			CacheRow(
-				label = "Card data",
-				detail = "${vState.metadataEntries} records",
-				usedBytes = vState.metadataBytes,
-				limitBytes = vState.metadataLimitBytes,
-			)
-			Spacer(Modifier.height(12.dp))
-			CacheRow(
-				label = "Images",
-				detail = "Downloaded as you browse",
-				usedBytes = vState.imageBytes,
-				limitBytes = vState.imageLimitBytes,
-			)
-
-			Spacer(Modifier.height(12.dp))
-			Text(
-				// The clearing buttons moved to the storage screen. They belong next to what they
-				// delete, and "clear card data" here would have taken downloaded sets with it --
-				// which these limits have no power over and never did.
-				text = "Limits apply to cached data. Downloads are kept until you delete them.",
-				style = MaterialTheme.typography.bodySmall,
-				color = MaterialTheme.colorScheme.onSurfaceVariant,
-			)
-			Spacer(Modifier.height(8.dp))
-			OutlinedButton(onClick = onOpenStorage, modifier = Modifier.fillMaxWidth()) {
-				Text("Manage storage")
-			}
-
-			Spacer(Modifier.height(16.dp))
-			ChoiceRow(
-				label = "Image cache limit",
-				note = "Applies the next time the app starts: the image loader fixes its ceiling " +
-					"when it is built.",
-				options = BrowsingPreferences.IMAGE_CACHE_CHOICES,
-				selected = vState.imageLimitBytes,
-				render = ::formatBytes,
-				onSelect = { dispatch(SettingsContract.Intent.ImageCacheLimitChosen(it)) },
-			)
-
-			ChoiceRow(
-				label = "Card data limit",
-				note = "Applies immediately. Card data is what makes the app work offline and is " +
-					"tiny next to images -- a whole set is a few megabytes.",
-				options = BrowsingPreferences.METADATA_CACHE_CHOICES,
-				selected = vState.metadataLimitBytes,
-				render = ::formatBytes,
-				onSelect = { dispatch(SettingsContract.Intent.MetadataCacheLimitChosen(it)) },
-			)
-
-			Spacer(Modifier.height(20.dp))
-			HorizontalDivider()
-			Spacer(Modifier.height(16.dp))
-
-			Text("Appearance", style = MaterialTheme.typography.titleSmall)
-
-			ChoiceRow(
-				label = "Theme",
-				note = "System follows the device, including when it switches itself in the " +
-					"evening. Light and dark override it for this app only.",
-				options = ThemeMode.entries,
-				selected = vState.themeMode,
-				render = { it.label },
-				onSelect = { dispatch(SettingsContract.Intent.ThemeModeChosen(it)) },
-			)
-
-			Spacer(Modifier.height(20.dp))
-			HorizontalDivider()
-			Spacer(Modifier.height(16.dp))
-
-			Text("Browsing", style = MaterialTheme.typography.titleSmall)
-
-			ChoiceRow(
-				label = "Cards fetched ahead",
-				note = "How many cards either side of the open one have their art downloaded " +
-					"before you swipe to them. Zero switches it off; each one is roughly 180 KB.",
-				options = BrowsingPreferences.PREFETCH_CHOICES,
-				selected = vState.prefetchRadius,
-				render = { if (it == 0) "Off" else "$it" },
-				onSelect = { dispatch(SettingsContract.Intent.PrefetchRadiusChosen(it)) },
-			)
-
-			Spacer(Modifier.height(12.dp))
-			Row(verticalAlignment = Alignment.CenterVertically) {
-				Column(Modifier.weight(1f)) {
-					Text("Check for new sets on launch", style = MaterialTheme.typography.bodyMedium)
-					Text(
-						text = "One small request in the background. The cached list is always " +
-							"shown first either way.",
-						style = MaterialTheme.typography.bodySmall,
-						color = MaterialTheme.colorScheme.onSurfaceVariant,
-					)
-				}
-				Spacer(Modifier.size(12.dp))
-				Switch(
-					checked = vState.revalidateSetsOnLaunch,
-					onCheckedChange = {
-						dispatch(SettingsContract.Intent.RevalidateOnLaunchChanged(it))
-					},
-				)
-			}
-
+			// Last on the screen and the quietest thing on it. Required, not worth reading twice.
 			if (vState.attributions.isNotEmpty()) {
 				Spacer(Modifier.height(20.dp))
 				HorizontalDivider()
 				Spacer(Modifier.height(12.dp))
-				Text(
-					text = if (vState.attributions.size == 1) "Data source" else "Data sources",
-					style = MaterialTheme.typography.titleSmall,
-				)
-				vState.attributions.forEach { vCredit ->
-					Spacer(Modifier.height(8.dp))
-					Text(
-						text = vCredit.source,
-						style = MaterialTheme.typography.labelMedium,
-					)
-					Text(
-						text = vCredit.text,
-						style = MaterialTheme.typography.bodySmall,
-						color = MaterialTheme.colorScheme.onSurfaceVariant,
-					)
-				}
+				FinePrint(vState.attributions.joinToString("\n") { "${it.source} — ${it.text}" })
 			}
+			Spacer(Modifier.height(24.dp))
 		}
+	}
+}
+
+/**
+ * A section rule and its heading, with an optional action on the right.
+ *
+ * The first section needs no rule above it, which is the only reason this takes a flag rather than
+ * being four lines repeated five times.
+ */
+@Composable
+private fun SettingsSection(
+	title: String,
+	isFirst: Boolean = false,
+	action: @Composable (() -> Unit)? = null,
+) {
+	if (!isFirst) {
+		Spacer(Modifier.height(20.dp))
+		HorizontalDivider()
+		Spacer(Modifier.height(16.dp))
+	}
+	if (action == null) {
+		Text(title, style = MaterialTheme.typography.titleSmall)
+	} else {
+		Row(verticalAlignment = Alignment.CenterVertically) {
+			Text(
+				text = title,
+				style = MaterialTheme.typography.titleSmall,
+				modifier = Modifier.weight(1f),
+			)
+			action()
+		}
+	}
+	Spacer(Modifier.height(8.dp))
+}
+
+/** A switch with its label and one line of explanation. */
+@Composable
+private fun SwitchRow(
+	label: String,
+	note: String,
+	checked: Boolean,
+	onCheckedChange: (Boolean) -> Unit,
+) {
+	Row(verticalAlignment = Alignment.CenterVertically) {
+		Column(Modifier.weight(1f)) {
+			Text(label, style = MaterialTheme.typography.bodyMedium)
+			Text(
+				text = note,
+				style = MaterialTheme.typography.bodySmall,
+				color = MaterialTheme.colorScheme.onSurfaceVariant,
+			)
+		}
+		Spacer(Modifier.size(12.dp))
+		Switch(checked = checked, onCheckedChange = onCheckedChange)
 	}
 }
 
@@ -352,33 +387,6 @@ private fun <T> ChoiceRow(
 	}
 }
 
-/** One cache, with a bar showing how close it is to its ceiling. */
-@Composable
-private fun CacheRow(label: String, detail: String, usedBytes: Long, limitBytes: Long) {
-	Column(Modifier.fillMaxWidth()) {
-		Row(Modifier.fillMaxWidth()) {
-			Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-			Text(
-				text = "${formatBytes(usedBytes)} / ${formatBytes(limitBytes)}",
-				style = MaterialTheme.typography.bodySmall,
-				color = MaterialTheme.colorScheme.onSurfaceVariant,
-			)
-		}
-		Spacer(Modifier.height(4.dp))
-		LinearProgressIndicator(
-			progress = {
-				if (limitBytes <= 0) 0f else (usedBytes.toFloat() / limitBytes.toFloat()).coerceIn(0f, 1f)
-			},
-			modifier = Modifier.fillMaxWidth(),
-		)
-		Spacer(Modifier.height(2.dp))
-		Text(
-			text = detail,
-			style = MaterialTheme.typography.labelSmall,
-			color = MaterialTheme.colorScheme.onSurfaceVariant,
-		)
-	}
-}
 
 /**
  * Bytes as something a person reads.
@@ -402,10 +410,7 @@ internal fun formatBytes(bytes: Long): String = when {
 private fun SettingsPreview() = PreviewFrame {
 	SettingsContent(
 		state = SettingsContract.UiState(
-			metadataBytes = 4L * 1024 * 1024,
-			metadataEntries = 9,
 			metadataLimitBytes = BrowsingPreferences.DEFAULT_METADATA_CACHE_LIMIT_BYTES,
-			imageBytes = 82L * 1024 * 1024,
 			imageLimitBytes = BrowsingPreferences.DEFAULT_IMAGE_CACHE_LIMIT_BYTES,
 			attributions = listOf(
 				SettingsContract.ProviderCredit(
@@ -430,10 +435,7 @@ private fun SettingsPreview() = PreviewFrame {
 private fun SettingsLightPreview() = PreviewFrame(isDark = false) {
 	SettingsContent(
 		state = SettingsContract.UiState(
-			metadataBytes = 240L * 1024 * 1024,
-			metadataEntries = 812,
 			metadataLimitBytes = 256L * 1024 * 1024,
-			imageBytes = 120L * 1024 * 1024,
 			imageLimitBytes = 128L * 1024 * 1024,
 			prefetchRadius = 0,
 			revalidateSetsOnLaunch = false,

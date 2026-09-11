@@ -45,7 +45,7 @@ class SearchCoverageTest {
 			"2 sets you have downloaded" in vNotice,
 			"the count of downloaded sets should be the small number: $vNotice",
 		)
-		assertTrue("of 486 in Pokémon" in vNotice, "the catalogue size should be attributed: $vNotice")
+		assertTrue("of 486" in vNotice, "the catalogue size should still be stated: $vNotice")
 		assertTrue(
 			"486 sets you have downloaded" !in vNotice,
 			"still claiming the user downloaded the whole catalogue: $vNotice",

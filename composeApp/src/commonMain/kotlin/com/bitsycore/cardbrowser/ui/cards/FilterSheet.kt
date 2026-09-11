@@ -215,8 +215,7 @@ fun FilterSheet(
 		if (state.facets.isEmpty && !state.isCompleteSet) {
 			Spacer(Modifier.height(16.dp))
 			Text(
-				text = "Filters appear once the whole set has been downloaded. " +
-					"Filtering part of a set would hide cards that exist.",
+				text = "Filters appear once the whole set is downloaded.",
 				style = MaterialTheme.typography.bodySmall,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
 			)
@@ -230,8 +229,7 @@ private fun unsupportedFilterNote(supported: Set<CardFilterField>): String {
 		if (CardFilterField.FINISH !in supported) add("finish")
 		if (CardFilterField.LANGUAGE !in supported) add("card language")
 	}
-	return "This card database does not record ${vMissing.joinToString(" or ")}, " +
-		"so there is nothing to filter on. It is not that these do not exist."
+	return "This source does not record ${vMissing.joinToString(" or ")}."
 }
 
 /** A titled row of chips that wraps. */

@@ -181,3 +181,22 @@ fun ProviderError.userMessage(): String = when (this) {
 	is ProviderError.MalformedResponse -> "The card database sent something this app could not read."
 	is ProviderError.Unknown -> "Something went wrong loading cards."
 }
+
+/**
+ * Attribution, trademark notices and anything else legally required.
+ *
+ * One treatment everywhere, and deliberately the quietest on the screen: smaller than body text and
+ * dimmed. These notices have to be present and do not have to be read -- setting them like ordinary
+ * copy is what made the bottom of a screen look like content worth stopping on.
+ *
+ * Belongs at the end of whatever it sits on. Nothing follows it.
+ */
+@Composable
+fun FinePrint(text: String, modifier: Modifier = Modifier) {
+	Text(
+		text = text,
+		style = MaterialTheme.typography.labelSmall,
+		color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+		modifier = modifier.fillMaxWidth(),
+	)
+}

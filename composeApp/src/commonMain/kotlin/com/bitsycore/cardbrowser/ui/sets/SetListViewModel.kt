@@ -103,14 +103,21 @@ class SetListViewModel(
 					resolveSavedSets(vGame.id, mPreferences.preferences.value.primaryLanguage)
 				}
 		}
+
+		// The option lives in settings, so this follows it rather than owning it. Without this the
+		// list kept whatever it read at construction and only picked up a change on the next visit
+		// that happened to rebuild this view model.
+		viewModelScope.launch {
+			mPreferences.preferences
+				.map { it.hideEmptySets }
+				.distinctUntilChanged()
+				.collect { dispatch(SetListContract.Intent.HideEmptyToggled(it)) }
+		}
 	}
 
 	override suspend fun handleIntent(intent: SetListContract.Intent) {
 		when (intent) {
 			SetListContract.Intent.Refresh -> startLoad()
-
-			is SetListContract.Intent.HideEmptyToggled ->
-				mPreferences.update { it.copy(hideEmptySets = intent.hide) }
 
 			is SetListContract.Intent.SetOpened -> {
 				mPreferences.update { it.copy(lastSetId = intent.setId) }

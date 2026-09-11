@@ -365,7 +365,12 @@ object SetListContract :
 		/** A product line was picked, or `null` to see every line again. */
 		data class RegionSelected(val region: String?) : Intent
 
-		/** The "hide empty sets" option was toggled. Persisted, so it survives a relaunch. */
+		/**
+		 * The "hide empty sets" preference changed.
+		 *
+		 * Reported *to* this screen rather than set by it: the option is in settings, and this
+		 * list follows it. Two owners of one preference is how they drift.
+		 */
 		data class HideEmptyToggled(val hide: Boolean) : Intent
 	}
 
