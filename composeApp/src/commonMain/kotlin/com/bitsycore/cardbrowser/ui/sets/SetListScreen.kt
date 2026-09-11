@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import com.bitsycore.cardbrowser.ui.common.focusOnFirstItem
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,7 +29,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.Composable
+import com.bitsycore.cardbrowser.ui.common.arrowSelection
 import com.bitsycore.cardbrowser.ui.common.reorderHandle
 import com.bitsycore.cardbrowser.ui.common.rememberReorder
 import com.bitsycore.cardbrowser.ui.common.ReorderState
@@ -425,13 +427,46 @@ fun SetListContent(
 							dispatch(SetListContract.Intent.FavouriteMovedTo(vKey, vTo))
 						}
 
+						// The keyboard's cursor, over the two groups as one run of sets.
+						val vSelectable = vFavourites + vState.otherSets
+						var vSelected by remember { mutableIntStateOf(0) }
+						LaunchedEffect(vSelectable.size) {
+							vSelected = vSelected.coerceIn(0, (vSelectable.size - 1).coerceAtLeast(0))
+						}
+						// The selection counts sets; the list counts *rows*, and the headings are
+						// rows too. This is the one place the two are converted between.
+						val vFavHeading = if (vFavourites.isNotEmpty()) 1 else 0
+						val vAllHeading =
+							if (vFavourites.isNotEmpty() && vState.otherSets.isNotEmpty()) 1 else 0
+						val vRowOf: (Int) -> Int = { vIndex ->
+							if (vIndex < vFavourites.size) {
+								vFavHeading + vIndex
+							} else {
+								vFavHeading + vFavourites.size + vAllHeading +
+									(vIndex - vFavourites.size)
+							}
+						}
+						LaunchedEffect(vSelected) {
+							val vRow = vRowOf(vSelected)
+							if (vListState.layoutInfo.visibleItemsInfo.none { it.index == vRow }) {
+								vListState.animateScrollToItem(vRow)
+							}
+						}
+
 						LazyColumn(
 							state = vListState,
 							contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
 							verticalArrangement = Arrangement.spacedBy(8.dp),
-							// See the game list: the rows are focusable already, this is only what
-							// gives one of them the focus to begin with.
-							modifier = Modifier.focusOnFirstItem(),
+							modifier = Modifier.arrowSelection(
+								count = vSelectable.size,
+								selected = vSelected,
+								onSelect = { vSelected = it },
+								onActivate = {
+									vSelectable.getOrNull(vSelected)?.let {
+										dispatch(SetListContract.Intent.SetOpened(it))
+									}
+								},
+							),
 						) {
 							if (vFavourites.isNotEmpty()) {
 								item(key = "favourites-heading") {
@@ -455,6 +490,7 @@ fun SetListContent(
 							}
 
 							setRows(
+								selectedId = vSelectable.getOrNull(vSelected)?.id?.qualified,
 								sets = vFavourites,
 								state = vState,
 								dispatch = dispatch,
@@ -470,6 +506,7 @@ fun SetListContent(
 							}
 
 							setRows(
+								selectedId = vSelectable.getOrNull(vSelected)?.id?.qualified,
 								sets = vState.otherSets,
 								state = vState,
 								dispatch = dispatch,
@@ -682,6 +719,8 @@ private fun emptyMessage(state: SetListContract.UiState): String {
  *   search running. Passing null is what removes the handles
  */
 private fun LazyListScope.setRows(
+	/** The set the keyboard is pointing at, if it is in this group. */
+	selectedId: String?,
 	sets: List<CardSet>,
 	state: SetListContract.UiState,
 	dispatch: (SetListContract.Intent) -> Unit,
@@ -696,6 +735,7 @@ private fun LazyListScope.setRows(
 		val vIsDragging = reorder?.draggedKey == vId
 		SetRow(
 			set = vSet,
+			isSelected = vId == selectedId,
 			// Badged only while every line is on screen: with one line selected the badge would
 			// repeat the chip on every single row.
 			region = if (state.region != null) null else state.game?.regionFor(vSet.region),
@@ -749,6 +789,8 @@ private fun SectionHeading(text: String, note: String? = null) {
 @Composable
 private fun SetRow(
 	set: CardSet,
+	/** Outlined, because the keyboard is pointing at it. */
+	isSelected: Boolean = false,
 	region: GameRegion?,
 	isLastOpened: Boolean,
 	isSaved: Boolean,
@@ -770,6 +812,15 @@ private fun SetRow(
 		onClick = onClick,
 		modifier = itemModifier
 			.fillMaxWidth()
+			// The keyboard's cursor. An outline, so it reads as pointing at a row rather than as
+			// the row being in some other state.
+			.then(
+				if (isSelected) {
+					Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CardDefaults.shape)
+				} else {
+					Modifier
+				},
+			)
 			// Rides above its neighbours while they slide underneath it.
 			.zIndex(if (isLifted) 1f else 0f)
 			.graphicsLayer { translationY = dragOffsetY }

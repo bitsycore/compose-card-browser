@@ -11,6 +11,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,7 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import com.bitsycore.cardbrowser.ui.common.focusOnFirstItem
+import com.bitsycore.cardbrowser.ui.common.arrowSelection
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -40,6 +41,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -245,14 +248,35 @@ fun GameListContent(
 					}
 				}
 
+				// Where the arrow keys are. An index the screen owns, not focus inside the list:
+				// see `arrowSelection` for why leaning on Compose's traversal does not work here.
+				var vSelected by remember { mutableIntStateOf(0) }
+				LaunchedEffect(vVisible.size) {
+					vSelected = vSelected.coerceIn(0, (vVisible.size - 1).coerceAtLeast(0))
+				}
+				// Only when it has gone out of sight, so walking within the window does not drag
+				// the list about underneath the selection.
+				LaunchedEffect(vSelected) {
+					val vVisibleRange = vListState.layoutInfo.visibleItemsInfo
+					if (vVisibleRange.none { it.index == vSelected }) {
+						vListState.animateScrollToItem(vSelected)
+					}
+				}
+
 				LazyColumn(
 					state = vListState,
 					contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
 					verticalArrangement = Arrangement.spacedBy(8.dp),
-					// So the arrow keys work on arrival rather than after a click. Each row is a
-					// `Card(onClick = ...)` and therefore already focusable; what was missing was
-					// anything holding focus to start with.
-					modifier = Modifier.focusOnFirstItem(enabled = !state.isEditing),
+					modifier = Modifier.arrowSelection(
+						count = vVisible.size,
+						selected = vSelected,
+						onSelect = { vSelected = it },
+						onActivate = {
+							vVisible.getOrNull(vSelected)?.let {
+								dispatch(GameListContract.Intent.GameOpened(it))
+							}
+						},
+					),
 				) {
 					itemsIndexed(vVisible, key = { _, vGame -> vGame.id.value }) { vIndex, vGame ->
 						val vIsDragging = vReorder.draggedKey == vGame.id.value
@@ -261,6 +285,7 @@ fun GameListContent(
 							source = state.sources[vGame],
 							isLastOpened = vGame == state.lastGame,
 							isEditing = state.isEditing,
+							isSelected = vIndex == vSelected,
 							isHidden = false,
 							isDragging = vIsDragging,
 							// The dragged row follows the finger, so it must not also be animated
@@ -364,6 +389,8 @@ private fun GameRow(
 	source: String?,
 	isLastOpened: Boolean,
 	isEditing: Boolean,
+	/** Drawn with an outline, because the keyboard is pointing at it. */
+	isSelected: Boolean = false,
 	isHidden: Boolean,
 	isDragging: Boolean,
 	itemModifier: Modifier,
@@ -526,6 +553,19 @@ private fun GameRow(
 	// composition, so the animations inside keep their state across the toggle.
 	Card(
 		modifier = vModifier
+			// What the keyboard is pointing at. An outline rather than a fill, so it reads as a
+			// cursor over the list rather than as a row in a different state.
+			.then(
+				if (isSelected) {
+					Modifier.border(
+						width = 2.dp,
+						color = MaterialTheme.colorScheme.primary,
+						shape = CardDefaults.shape,
+					)
+				} else {
+					Modifier
+				},
+			)
 			// Before the click, so the ripple stays inside the card's corners. A `Card(onClick =)`
 			// gets that for free by putting the clickable inside its own surface.
 			.clip(CardDefaults.shape)

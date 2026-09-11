@@ -2,6 +2,7 @@ package com.bitsycore.cardbrowser.ui.cards
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +44,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberTopAppBarState
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import com.bitsycore.cardbrowser.ui.common.arrowSelection
 import androidx.compose.runtime.Composable
 import com.bitsycore.cardbrowser.ui.common.sharedSetContainer
 import androidx.compose.runtime.LaunchedEffect
@@ -55,7 +59,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import com.bitsycore.cardbrowser.ui.common.focusOnFirstItem
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
@@ -466,6 +469,28 @@ private fun CardGrid(
 	 */
 	canTakeFocus: Boolean = true,
 ) {
+	// The keyboard's cursor over the tiles.
+	var vSelected by remember { mutableIntStateOf(0) }
+	LaunchedEffect(cards.size) {
+		vSelected = vSelected.coerceIn(0, (cards.size - 1).coerceAtLeast(0))
+	}
+	LaunchedEffect(vSelected) {
+		if (gridState.layoutInfo.visibleItemsInfo.none { it.index == vSelected }) {
+			gridState.animateScrollToItem(vSelected)
+		}
+	}
+	// How many tiles are on a row, read off the grid rather than recomputed from the window.
+	//
+	// The columns are `Adaptive`, so the number depends on the width the grid actually got --
+	// which only the grid knows. Counting the items laid out at the same vertical offset is that
+	// number. One until the first layout, which is the right answer for an empty grid too.
+	val vColumns = remember(gridState.layoutInfo) {
+		gridState.layoutInfo.visibleItemsInfo
+			.groupBy { it.offset.y }
+			.maxOfOrNull { it.value.size }
+			?: 1
+	}
+
 	LazyVerticalGrid(
 		columns = GridCells.Adaptive(minSize = MIN_TILE_WIDTH.dp),
 		state = gridState,
@@ -477,12 +502,22 @@ private fun CardGrid(
 		),
 		horizontalArrangement = Arrangement.spacedBy(10.dp),
 		verticalArrangement = Arrangement.spacedBy(14.dp),
-		// So the arrow keys work on arrival rather than after a click. Each tile is already
-		// focusable; what was missing was anything holding focus to start with.
-		modifier = Modifier.fillMaxSize().focusOnFirstItem(enabled = canTakeFocus),
+		modifier = Modifier.arrowSelection(
+			count = cards.size,
+			selected = vSelected,
+			onSelect = { vSelected = it },
+			// A grid, so up and down move by a row and left and right by one tile.
+			columns = vColumns,
+			onActivate = { cards.getOrNull(vSelected)?.let(onOpenCard) },
+			takeFocus = canTakeFocus,
+		),
 	) {
-		items(cards, key = { it.id.qualified }) { vCard ->
-			CardTile(card = vCard, onClick = { onOpenCard(vCard) })
+		itemsIndexed(cards, key = { _, vCard -> vCard.id.qualified }) { vIndex, vCard ->
+			CardTile(
+				card = vCard,
+				isSelected = vIndex == vSelected,
+				onClick = { onOpenCard(vCard) },
+			)
 		}
 	}
 }
@@ -520,9 +555,24 @@ private fun SearchField(text: String, onTextChanged: (String) -> Unit) {
 
 /** One tile: the art, then the name, collector number and whatever label distinguishes it. */
 @Composable
-private fun CardTile(card: CardPrinting, onClick: () -> Unit) {
+private fun CardTile(card: CardPrinting, onClick: () -> Unit, isSelected: Boolean = false) {
 	Column(
-		modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+		modifier = Modifier
+			.fillMaxWidth()
+			// The keyboard's cursor. Drawn around the tile rather than over the art, so it never
+			// obscures the card it is pointing at.
+			.then(
+				if (isSelected) {
+					Modifier.border(
+						width = 2.dp,
+						color = MaterialTheme.colorScheme.primary,
+						shape = RoundedCornerShape(10.dp),
+					)
+				} else {
+					Modifier
+				},
+			)
+			.clickable(onClick = onClick),
 	) {
 		CardImage(
 			artwork = card.artwork,
