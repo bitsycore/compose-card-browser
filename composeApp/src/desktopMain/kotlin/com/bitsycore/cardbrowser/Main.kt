@@ -2,7 +2,6 @@ package com.bitsycore.cardbrowser
 
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.res.loadImageBitmap
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -11,6 +10,7 @@ import androidx.compose.ui.window.rememberWindowState
 import com.bitsycore.cardbrowser.di.appModule
 import com.bitsycore.cardbrowser.di.platformModule
 import com.bitsycore.cardbrowser.ui.App
+import org.jetbrains.compose.resources.decodeToImageBitmap
 import org.koin.core.context.startKoin
 
 /**
@@ -49,7 +49,7 @@ fun main() {
  */
 private fun windowIcon(): Painter? = try {
 	Main::class.java.getResourceAsStream(WINDOW_ICON_PATH)?.use { vStream ->
-		BitmapPainter(loadImageBitmap(vStream))
+		BitmapPainter(vStream.readAllBytes().decodeToImageBitmap())
 	}
 } catch (vError: Exception) {
 	null
