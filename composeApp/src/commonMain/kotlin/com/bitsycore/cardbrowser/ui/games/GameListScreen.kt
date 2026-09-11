@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import com.bitsycore.cardbrowser.ui.common.focusOnFirstItem
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -251,6 +252,10 @@ fun GameListContent(
 					state = vListState,
 					contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
 					verticalArrangement = Arrangement.spacedBy(8.dp),
+					// So the arrow keys work on arrival rather than after a click. Each row is a
+					// `Card(onClick = ...)` and therefore already focusable; what was missing was
+					// anything holding focus to start with.
+					modifier = Modifier.focusOnFirstItem(enabled = !state.isEditing),
 				) {
 					itemsIndexed(vVisible, key = { _, vGame -> vGame.id.value }) { vIndex, vGame ->
 						val vIsDragging = vReorder.draggedKey == vGame.id.value

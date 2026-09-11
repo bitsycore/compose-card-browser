@@ -125,6 +125,8 @@ kotlin {
 		getByName("desktopMain").dependencies {
 			implementation(compose.desktop.currentOs)
 			implementation(libs.kotlinx.coroutines.swing)
+			// One native call, for the window's title bar. See `WindowChrome`.
+			implementation(libs.jna)
 		}
 
 		// Skia, so `DetailRenderer` can draw the UI into an off-screen surface and write a PNG.

@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
+import com.bitsycore.cardbrowser.ui.common.arrowKeys
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -343,7 +344,37 @@ private fun CardPager(
 	// What the card has to clear at rest: the app bar, then the strip if there is one.
 	val vHeaderHeight = vTopInset + if (state.canSwipe) PREVIEW_ROW_HEIGHT + STRIP_TO_CARD_GAP else 0.dp
 
-	Box(modifier.fillMaxSize()) {
+	// Left and right change the card, which is what a swipe does -- so they do it *through* the
+	// pager rather than by dispatching a page change. The pager already reports where it settles
+	// and the state already follows it; going the other way would be a second route to the same
+	// place, and the two effects above exist because that is hard to keep straight even once.
+	//
+	// Off while zoomed, for the same reason the swipe is: an arrow key panning a magnified card
+	// should not flick to the next one.
+	// Counted from where the pager is *heading*, not from `currentIndex`.
+	//
+	// `currentIndex` only moves when a page settles -- that is what makes a half-hearted swipe not
+	// count -- so during an animation it still names the card being left. Two quick presses of the
+	// same arrow both measured from there and asked for the same page twice, so the second did
+	// nothing. `targetPage` is where the pager has already committed to going, which makes the
+	// second press land one further on, as holding an arrow down should.
+	val vStep: (Int) -> (() -> Unit)? = { vDelta ->
+		val vTarget = vPagerState.targetPage + vDelta
+		if (state.isZoomed || vTarget !in state.cards.indices) {
+			null
+		} else {
+			{ vScope.launch { vPagerState.animateScrollToPage(vTarget) } }
+		}
+	}
+
+	Box(
+		modifier
+			.fillMaxSize()
+			// No handler at either end of the list, so the key is left unconsumed there rather
+			// than swallowed -- nothing else wants it today, but a swallowed key is invisible and
+			// a passed-on one is not.
+			.arrowKeys(onLeft = vStep(-1), onRight = vStep(1)),
+	) {
 		HorizontalPager(
 			state = vPagerState,
 			// One page either side stays composed, so the neighbour is already laid out and drawn

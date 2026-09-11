@@ -36,8 +36,13 @@ pulse = "0.3.7"
 # Data / IO
 okio = "3.18.1"
 
-# A spike, not a dependency of the app. `:experiments:sqlstore` is the only module that uses it --
-# see that module's README for what is being measured and why nothing else depends on it yet.
+# Desktop only, and for one call. Windows has no AWT or Compose route to a dark title bar -- it is
+# `DwmSetWindowAttribute`, which needs a native call from the JVM. The alternative was the FFM API,
+# which is final in JDK 22 and preview in the 21 this project's toolchain targets.
+jna = "5.17.0"
+
+# The card store. `:database` holds every complete set; see that module's README for what the
+# migration was measured to buy and what it had to answer first.
 sqldelight = "2.3.2"
 ktor = "3.5.2"
 
@@ -100,6 +105,7 @@ pulse-test = { module = "com.bitsycore.lib:pulse-test", version.ref = "pulse" }
 
 # Data / IO
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
+jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
 sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
 sqldelight-driver-jvm = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
 sqldelight-driver-android = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }

@@ -59,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import com.bitsycore.cardbrowser.ui.common.focusOnFirstItem
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
@@ -417,6 +418,7 @@ fun CardGridContent(
 					gridState = vGridState,
 					onOpenCard = { dispatch(CardGridContract.Intent.CardOpened(it)) },
 					contentPadding = vPadding,
+					canTakeFocus = !vState.isSearchOpen,
 				)
 			}
 		}
@@ -460,6 +462,13 @@ private fun CardGrid(
 	gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
 	onOpenCard: (CardPrinting) -> Unit,
 	contentPadding: PaddingValues,
+	/**
+	 * Whether the grid may take the focus.
+	 *
+	 * False while the search field is open, which has a better claim on it: the field focuses
+	 * itself as it appears, and a grid that grabbed the focus back would eat the first letter typed.
+	 */
+	canTakeFocus: Boolean = true,
 ) {
 	LazyVerticalGrid(
 		columns = GridCells.Adaptive(minSize = MIN_TILE_WIDTH.dp),
@@ -472,7 +481,9 @@ private fun CardGrid(
 		),
 		horizontalArrangement = Arrangement.spacedBy(10.dp),
 		verticalArrangement = Arrangement.spacedBy(14.dp),
-		modifier = Modifier.fillMaxSize(),
+		// So the arrow keys work on arrival rather than after a click. Each tile is already
+		// focusable; what was missing was anything holding focus to start with.
+		modifier = Modifier.fillMaxSize().focusOnFirstItem(enabled = canTakeFocus),
 	) {
 		items(cards, key = { it.id.qualified }) { vCard ->
 			CardTile(card = vCard, onClick = { onOpenCard(vCard) })

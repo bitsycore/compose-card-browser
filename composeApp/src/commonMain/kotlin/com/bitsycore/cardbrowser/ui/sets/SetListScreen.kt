@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import com.bitsycore.cardbrowser.ui.common.focusOnFirstItem
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -432,6 +433,9 @@ fun SetListContent(
 							state = vListState,
 							contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
 							verticalArrangement = Arrangement.spacedBy(8.dp),
+							// See the game list: the rows are focusable already, this is only what
+							// gives one of them the focus to begin with.
+							modifier = Modifier.focusOnFirstItem(),
 						) {
 							if (vFavourites.isNotEmpty()) {
 								item(key = "favourites-heading") {
