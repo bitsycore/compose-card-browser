@@ -79,6 +79,14 @@ Notes:
 - **Coil's Linux story is partial and its Windows story is not.** `coil-network-ktor3` and
   `coil-svg` do publish `linuxX64`/`linuxArm64`; `coil-compose` is macOS-only, and none of the three
   publishes `mingwX64`.
+- **`navigationevent-compose` may need no fork at all.** Google's own
+  `androidx.navigationevent:navigationevent-compose` publishes `mingwX64`, `linuxX64`, `linuxArm64`
+  and `macosArm64` from `1.2.0-alpha04` — checked on Google's maven, 2026-09-12. What this project
+  depends on is the JetBrains multiplatform wrapper,
+  `org.jetbrains.androidx.navigationevent:navigationevent-compose`, which tops out at `1.1.0` and is
+  macOS-only on *every* version it has published. So the artifact exists; what is missing is a
+  wrapper release that exposes it, or a substitution pointing at Google's coordinates directly.
+  Worth trying before forking anything.
 - **`navigationevent-compose` is predictive back.** NavigationEvent is the multiplatform successor
   to Android's `OnBackPressedDispatcher`, and the `-compose` artifact is the binding `NavDisplay`
   uses to drive a back *gesture* — which is what `predictivePopTransitionSpec` in `App.kt` renders.
@@ -104,7 +112,7 @@ Settled with the project owner on 2026-09-11:
 | `com.bitsycore.lib:pulse` | a Desktop Native compatibility target, in its own repository |
 | `io.coil-kt.coil3:*` | fork and redirect, from compose-desktop-native |
 | `io.insert-koin:koin-compose`, `-viewmodel` | fork and redirect, from compose-desktop-native |
-| `org.jetbrains.androidx.navigationevent:navigationevent-compose` | fork and redirect, from compose-desktop-native |
+| `org.jetbrains.androidx.navigationevent:navigationevent-compose` | fork and redirect — but try redirecting to Google's artifact first, which already publishes all four |
 
 Each of the bottom three is an entry in the bridge's substitution table, alongside the
 `navigation3-ui` one that is already there — so nothing in this repository has to change for them to

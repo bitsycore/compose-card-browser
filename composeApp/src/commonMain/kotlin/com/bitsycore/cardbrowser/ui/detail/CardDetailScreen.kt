@@ -32,6 +32,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import com.bitsycore.cardbrowser.ui.common.arrowKeys
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -73,6 +75,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.cardmarket.CardmarketLink
@@ -356,6 +359,14 @@ private fun CardPager(
 	// same arrow both measured from there and asked for the same page twice, so the second did
 	// nothing. `targetPage` is where the pager has already committed to going, which makes the
 	// second press land one further on, as holding an arrow down should.
+	// The scroll of whichever page is on screen, so up and down can move it. Held here because the
+	// state belongs to a page and the keys arrive outside every page.
+	var vCurrentScroll by remember { mutableStateOf<ScrollState?>(null) }
+	val vScrollStep = with(LocalDensity.current) { DETAIL_SCROLL_STEP.toPx() }
+	val vScrollBy: (Float) -> (() -> Unit)? = { vAmount ->
+		vCurrentScroll?.let { vState -> { vScope.launch { vState.animateScrollBy(vAmount) } } }
+	}
+
 	val vStep: (Int) -> (() -> Unit)? = { vDelta ->
 		val vTarget = vPagerState.targetPage + vDelta
 		if (state.isZoomed || vTarget !in state.cards.indices) {
@@ -371,7 +382,18 @@ private fun CardPager(
 			// No handler at either end of the list, so the key is left unconsumed there rather
 			// than swallowed -- nothing else wants it today, but a swallowed key is invisible and
 			// a passed-on one is not.
-			.arrowKeys(onLeft = vStep(-1), onRight = vStep(1)),
+			//
+			// `takeFocus = false` because the page on screen takes it instead, which is what lets
+			// up and down scroll that page. Left and right still arrive here: a key bubbles from
+			// the focused node up through its ancestors, and this is one.
+			.arrowKeys(
+				onLeft = vStep(-1),
+				onRight = vStep(1),
+				// A card's detail is a long column -- the art, then the stats, then the other
+				// printings -- and before this the keyboard could change card but not read one.
+				onUp = vScrollBy(-vScrollStep),
+				onDown = vScrollBy(vScrollStep),
+			),
 	) {
 		HorizontalPager(
 			state = vPagerState,
@@ -394,6 +416,11 @@ private fun CardPager(
 				// and flew three cards across the screen from wherever the off-screen pages happened to
 				// be laid out -- which is the mess that made the back animation look broken.
 				isSharedElement = vPage == state.currentIndex,
+				// Only the page on screen may hold the focus. Its neighbours are composed so a
+				// swipe is instant, and three pages each asking for focus would be three answers
+				// to a question with one.
+				isCurrentPage = vPage == vPagerState.currentPage,
+				onScrollStateReady = { vCurrentScroll = it },
 				onZoomToggle = onZoomToggle,
 				onLanguageSelected = onLanguageSelected,
 				onOpenCardmarket = { onOpenCardmarket(vCard.id.qualified) },
@@ -548,6 +575,9 @@ private fun CardDetailPage(
 	onOpenFullscreen: () -> Unit,
 	onSelectPrinting: (CardPrinting) -> Unit,
 	isSharedElement: Boolean,
+	isCurrentPage: Boolean,
+	/** Hands this page's scroll state up, while it is the page on screen. See the call site. */
+	onScrollStateReady: (ScrollState) -> Unit,
 	headerHeight: Dp = 0.dp,
 	bottomPadding: Dp = 0.dp,
 	modifier: Modifier = Modifier,
@@ -562,10 +592,21 @@ private fun CardDetailPage(
 		// screen it does not get all of and hang past the bottom.
 		val vMaxImageHeight = (maxHeight - headerHeight) * IMAGE_HEIGHT_FRACTION
 
+		// Reported upward rather than driven here, so the arrow keys can scroll it.
+		//
+		// A focusable *inside* the pager was the first attempt and it was worse than not working:
+		// taking focus within a page makes Compose bring that page into view, which scrolls the
+		// pager itself -- so opening a card jumped to a different one before a key was touched.
+		// One focus target, on the Box outside, is what avoids that.
+		val vScroll = rememberScrollState()
+		LaunchedEffect(vScroll, isCurrentPage) {
+			if (isCurrentPage) onScrollStateReady(vScroll)
+		}
+
 		Column(
 			modifier = Modifier
 				.fillMaxSize()
-				.verticalScroll(rememberScrollState())
+				.verticalScroll(vScroll)
 				.padding(horizontal = 20.dp),
 			horizontalAlignment = Alignment.CenterHorizontally,
 		) {
@@ -1164,3 +1205,6 @@ private fun CardDetailLoadingPreview() = PreviewFrame {
 		dispatch = {},
 	)
 }
+
+/** How far one press of up or down moves a card's detail. About three lines. */
+private val DETAIL_SCROLL_STEP = 64.dp

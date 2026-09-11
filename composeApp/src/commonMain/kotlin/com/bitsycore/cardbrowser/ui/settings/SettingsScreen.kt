@@ -44,6 +44,7 @@ import com.bitsycore.cardbrowser.data.settings.BrowsingPreferences
 import com.bitsycore.cardbrowser.data.settings.ThemeMode
 import com.bitsycore.cardbrowser.ui.common.AppIcons
 import com.bitsycore.cardbrowser.ui.common.FinePrint
+import com.bitsycore.cardbrowser.ui.common.arrowScroll
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import com.bitsycore.lib.pulse.compose.collectEffect
@@ -95,11 +96,15 @@ fun SettingsContent(
 			)
 		},
 	) { vPadding ->
+		// Long, and mostly prose. Focus traversal alone leaves the stretches between its controls
+		// unreachable from the keyboard, so the arrows scroll it.
+		val vScroll = rememberScrollState()
 		Column(
 			modifier = Modifier
 				.padding(vPadding)
 				.fillMaxSize()
-				.verticalScroll(rememberScrollState())
+				.verticalScroll(vScroll)
+				.arrowScroll(vScroll)
 				.padding(horizontal = 20.dp, vertical = 8.dp),
 		) {
 			// ============

@@ -37,6 +37,7 @@ import com.bitsycore.cardbrowser.data.download.DownloadJob
 import com.bitsycore.cardbrowser.data.download.DownloadKind
 import com.bitsycore.cardbrowser.data.download.DownloadStatus
 import com.bitsycore.cardbrowser.ui.common.EmptyState
+import com.bitsycore.cardbrowser.ui.common.focusOnFirstItem
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import androidx.compose.ui.tooling.preview.Preview
 import com.bitsycore.cardbrowser.ui.common.AppIcons
@@ -102,6 +103,8 @@ fun DownloadsScreen(
 				LazyColumn(
 					contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
 					verticalArrangement = Arrangement.spacedBy(10.dp),
+					// A list, so Compose's own traversal walks it once something holds the focus.
+					modifier = Modifier.focusOnFirstItem(),
 				) {
 					item(key = "summary") {
 						QueueSummary(

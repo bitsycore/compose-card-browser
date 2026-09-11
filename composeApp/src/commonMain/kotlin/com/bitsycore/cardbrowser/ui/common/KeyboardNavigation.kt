@@ -1,6 +1,9 @@
 package com.bitsycore.cardbrowser.ui.common
 
+import androidx.compose.animation.core.animateTo
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -13,6 +16,10 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * Keyboard navigation, for the platforms that have a keyboard.
@@ -31,6 +38,9 @@ import androidx.compose.ui.input.key.type
  *   only that.
  * - **Moving between cards on the detail screen** is not a focus traversal at all. There is one
  *   card on screen and the arrows change *which*, so it is handled explicitly by [arrowKeys].
+ * - **Scrolling a page that is not a list** is a third case. A `verticalScroll` column has nothing
+ *   to traverse between -- a settings page is mostly text -- so nothing moves and the arrows do
+ *   nothing at all. [arrowScroll] gives those the up and down keys.
  */
 
 /**
@@ -102,3 +112,36 @@ fun Modifier.arrowKeys(
 			vHandler != null
 		}
 }
+
+/**
+ * Scrolls a `verticalScroll` container with the up and down keys.
+ *
+ * For the pages that are not lists. Compose scrolls a lazy list as focus moves through its items,
+ * which is most of why the lists needed nothing but [focusOnFirstItem] -- but a column of text and
+ * headings has few focusable children and long stretches between them, so the arrows either did
+ * nothing or jumped past a screenful of content that was never scrolled to.
+ *
+ * Left and right are deliberately not handled, so a screen inside something that uses them -- the
+ * card detail's pager, which is exactly that -- still gets them.
+ *
+ * @param takeFocus false when something else on the screen has the better claim, such as a text
+ *   field that opens focused
+ */
+@Composable
+fun Modifier.arrowScroll(state: ScrollState, takeFocus: Boolean = true): Modifier {
+	val vScope = rememberCoroutineScope()
+	val vStep = with(LocalDensity.current) { SCROLL_STEP.toPx() }
+	return arrowKeys(
+		onUp = { vScope.launch { state.animateScrollBy(-vStep) } },
+		onDown = { vScope.launch { state.animateScrollBy(vStep) } },
+		takeFocus = takeFocus,
+	)
+}
+
+/**
+ * How far one press of an arrow key scrolls.
+ *
+ * About three lines of body text. A page at a time belongs to Page Up and Page Down; an arrow key
+ * that moved that far would be impossible to read along with.
+ */
+private val SCROLL_STEP = 64.dp

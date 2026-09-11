@@ -19,6 +19,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import javax.swing.SwingUtilities
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * Arrow keys really move between cards on the detail screen.
@@ -61,6 +62,33 @@ class ArrowKeyNavigationTest {
 		}
 
 		assertEquals(listOf(4), vSeen.movesFrom(2), "the second press did not add a card")
+	}
+
+	@Test
+	fun `down scrolls the card's detail and up brings it back`() = onSwingThread {
+		// The other half of the keyboard on this screen. Left and right change card; a card's
+		// detail is a long column -- art, then stats, then other printings -- and before this the
+		// keyboard could change card but not read one.
+		//
+		// Compared as whole frames rather than by looking for the artwork at a coordinate. A first
+		// attempt did the latter and measured the wrong band entirely, reporting "no movement" for
+		// a screen that was moving -- and a probe that can be wrong about the thing it is checking
+		// is worse than no probe.
+		lateinit var vStart: String
+		lateinit var vScrolled: String
+		lateinit var vBack: String
+		scene(currentIndex = 2, onPageChanged = {}).use { vScene ->
+			vStart = vScene.frame()
+			vScene.press(Key.DirectionDown)
+			vScene.press(Key.DirectionDown)
+			vScrolled = vScene.frame()
+			vScene.press(Key.DirectionUp)
+			vScene.press(Key.DirectionUp)
+			vBack = vScene.frame()
+		}
+
+		assertTrue(vScrolled != vStart, "down did not move the page")
+		assertEquals(vStart, vBack, "up did not bring it back to where it started")
 	}
 
 	@Test
@@ -137,6 +165,13 @@ class ArrowKeyNavigationTest {
 		mNanos = vAt
 	}
 
+	/** What the screen currently looks like, as something two frames can be compared by. */
+	@OptIn(ExperimentalComposeUiApi::class)
+	private fun ImageComposeScene.frame(): String {
+		val vBytes = render(mNanos).encodeToData()?.bytes ?: error("could not encode the frame")
+		return vBytes.contentHashCode().toString()
+	}
+
 	/** Where the scene's clock has got to. Frames must not go backwards between presses. */
 	private var mNanos = 0L
 
@@ -177,6 +212,7 @@ class ArrowKeyNavigationTest {
 		const val FRAMES_MID_ANIMATION = 2
 
 		const val FRAME_NANOS = 16_000_000L
+
 	}
 }
 

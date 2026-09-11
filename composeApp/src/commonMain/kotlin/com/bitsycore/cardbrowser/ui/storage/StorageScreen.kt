@@ -37,6 +37,7 @@ import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.data.cache.CacheUsage
 import com.bitsycore.cardbrowser.data.settings.BulkImportRecord
 import com.bitsycore.cardbrowser.ui.common.AppIcons
+import com.bitsycore.cardbrowser.ui.common.arrowScroll
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import com.bitsycore.lib.pulse.compose.collectEffect
@@ -103,11 +104,14 @@ fun StorageContent(
 		},
 		snackbarHost = { SnackbarHost(snackbarHostState) },
 	) { vPadding ->
+		// See the settings screen: a column of figures and prose has little to traverse between.
+		val vScroll = rememberScrollState()
 		Column(
 			Modifier
 				.padding(vPadding)
 				.fillMaxSize()
-				.verticalScroll(rememberScrollState())
+				.verticalScroll(vScroll)
+				.arrowScroll(vScroll)
 				.padding(horizontal = 16.dp),
 		) {
 			if (state.isLoading && state.usage == null) {
