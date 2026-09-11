@@ -18,6 +18,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,6 +62,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -533,13 +535,36 @@ private fun GameRow(
 		defaultElevation = if (isDragging) DRAGGED_ROW_ELEVATION else 0.dp,
 	)
 
-	if (isEditing) {
-		// Not clickable while editing: the row's job is to be rearranged, and opening a game from
-		// under a press that was aimed at the handle is the obvious way to get that wrong.
-		Card(modifier = vModifier, colors = vColors, elevation = vElevation) { vContent() }
-	} else {
-		Card(onClick = onClick, modifier = vModifier, colors = vColors) { vContent() }
-	}
+	// One `Card`, and that is the whole of why the row animates at all.
+	//
+	// This was two call sites -- `Card(onClick = ...)` while browsing, a plain `Card` while editing
+	// -- which reads like a parameter and is actually a composition identity. Toggling the mode
+	// destroyed one subtree and built the other, so everything inside started over at its target
+	// value: the handle appeared at full width instead of sliding in, the two icons swapped with no
+	// cross-fade, and the padding jumped. The row snapped while the rest of the list animated
+	// around it, which is what read as a bounce.
+	//
+	// The click is a modifier now. Swapping a modifier updates the node; it does not restart the
+	// composition, so the animations inside keep their state across the toggle.
+	Card(
+		modifier = vModifier
+			// Before the click, so the ripple stays inside the card's corners. A `Card(onClick =)`
+			// gets that for free by putting the clickable inside its own surface.
+			.clip(CardDefaults.shape)
+			.then(
+				// Absent while editing, not disabled. The row's job there is to be rearranged, and
+				// opening a game from under a press aimed at the handle is the obvious way to get
+				// that wrong -- but a disabled clickable would still announce itself to a screen
+				// reader as a button that does nothing.
+				if (isEditing) {
+					Modifier
+				} else {
+					Modifier.clickable(role = Role.Button, onClick = onClick)
+				},
+			),
+		colors = vColors,
+		elevation = vElevation,
+	) { vContent() }
 }
 
 /**
