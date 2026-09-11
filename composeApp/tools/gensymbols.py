@@ -64,6 +64,7 @@ WANTED = [
 	("DragHandle", "drag_handle", 0, False),
 	("ErrorOutline", "error", 0, False),
 	("FilterList", "filter_list", 0, False),
+	("FormatListBulleted", "format_list_bulleted", 0, False),
 	("GridView", "grid_view", 0, False),
 	("Inbox", "inbox", 0, False),
 	("KeyboardArrowRight", "keyboard_arrow_right", 0, True),

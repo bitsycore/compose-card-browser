@@ -3,6 +3,8 @@ package com.bitsycore.cardbrowser.ui.cards
 import com.bitsycore.cardbrowser.core.filter.CardFacets
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.CardLanguage
+import com.bitsycore.cardbrowser.data.settings.CardRowHeight
+import com.bitsycore.cardbrowser.data.settings.CardViewMode
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardPrinting
@@ -52,6 +54,16 @@ object CardGridContract :
 		val isStale: Boolean = false,
 		val error: ProviderError? = null,
 		val requestGeneration: Int = 0,
+		/**
+		 * Pictures or a list, and how tall a list's rows are.
+		 *
+		 * Seeded from preferences and written back when changed, so the choice follows the user to
+		 * the next set rather than being per-screen. [rowHeight] is only read in
+		 * [CardViewMode.LIST]; it is still remembered in grid mode, so switching back and forth
+		 * does not forget it.
+		 */
+		val viewMode: CardViewMode = CardViewMode.GRID,
+		val rowHeight: CardRowHeight = CardRowHeight.REGULAR,
 		val isFilterSheetOpen: Boolean = false,
 		val isSearchOpen: Boolean = false,
 		/** Restored when coming back from detail, so the grid returns to where it was. */
@@ -214,6 +226,18 @@ object CardGridContract :
 		/** The search button. Hides the field without discarding what was typed. */
 		data class SearchToggled(val isOpen: Boolean) : Intent
 
+		/** Grid or list. Persisted by the view model, so it outlives the screen. */
+		data class ViewModeChanged(val mode: CardViewMode) : Intent
+
+		/** How tall a list row is. Persisted too. */
+		data class RowHeightChanged(val height: CardRowHeight) : Intent
+
+		/** What preferences had when the screen opened. */
+		data class ViewPreferencesLoaded(
+			val mode: CardViewMode,
+			val height: CardRowHeight,
+		) : Intent
+
 		data class ScrollPositionChanged(val index: Int) : Intent
 
 		/** A result arrived, tagged with the load it belongs to. */
@@ -300,6 +324,15 @@ object CardGridContract :
 
 		// Navigation changes no state. The view model turns these into effects.
 		Intent.BackPressed, is Intent.CardOpened, Intent.DownloadsRequested -> state
+
+		is Intent.ViewModeChanged -> state.copy(viewMode = intent.mode)
+
+		is Intent.RowHeightChanged -> state.copy(rowHeight = intent.height)
+
+		is Intent.ViewPreferencesLoaded -> state.copy(
+			viewMode = intent.mode,
+			rowHeight = intent.height,
+		)
 
 		Intent.Load -> state.copy(
 			isLoading = true,

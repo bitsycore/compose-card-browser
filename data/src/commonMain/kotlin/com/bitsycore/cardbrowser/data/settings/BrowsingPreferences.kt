@@ -74,6 +74,32 @@ fun imageDownloadKey(setId: String, language: CardLanguage?, kind: String): Stri
  * platform when the user changes it there. [SYSTEM] is a real answer -- "whatever the device says"
  * -- and is not the same as either of the other two.
  */
+/**
+ * Whether a set's cards are shown as pictures or as a list.
+ *
+ * Two genuinely different jobs. The grid is for looking at art; the list is for finding a card you
+ * can name, or reading a set in collector order -- it fits four or five times as many rows on a
+ * screen and says the number of each one.
+ */
+@Serializable
+enum class CardViewMode(val label: String) {
+	GRID("Grid"),
+	LIST("List"),
+}
+
+/**
+ * How tall a row is in [CardViewMode.LIST].
+ *
+ * Three, because the useful range has three points in it and not more: a dense list to scan, a
+ * comfortable one to read, and one with artwork big enough to recognise a card by.
+ */
+@Serializable
+enum class CardRowHeight(val label: String) {
+	COMPACT("Compact"),
+	REGULAR("Regular"),
+	TALL("Tall"),
+}
+
 @Serializable
 enum class ThemeMode(val label: String) {
 
@@ -215,6 +241,10 @@ data class BrowsingPreferences(
 	 * it cannot open. `CacheReconciler` clears them and bumps this, once, at startup.
 	 */
 	val storeGeneration: Int = 0,
+	/** Grid or list, for every set. One choice rather than one per game -- it is a reading habit. */
+	val cardViewMode: CardViewMode = CardViewMode.GRID,
+	/** How tall the list's rows are. Only read in [CardViewMode.LIST]. */
+	val cardRowHeight: CardRowHeight = CardRowHeight.REGULAR,
 ) {
 
 	/** What [imageDownloads] recorded for one rendition, or `null` if it was never downloaded. */

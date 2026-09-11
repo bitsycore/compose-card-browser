@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,12 +47,23 @@ import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed as itemsIndexedInColumn
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import com.bitsycore.cardbrowser.ui.common.arrowSelection
+import com.bitsycore.cardbrowser.data.settings.CardRowHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import com.bitsycore.cardbrowser.data.settings.CardViewMode
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.Composable
 import com.bitsycore.cardbrowser.ui.common.sharedSetContainer
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -86,7 +99,6 @@ import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import com.bitsycore.lib.pulse.compose.collectEffect
 import kotlinx.coroutines.flow.distinctUntilChanged
-import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import com.bitsycore.cardbrowser.ui.common.AppIcons
 
@@ -183,6 +195,23 @@ fun CardGridContent(
 	val setName = fallbackSetName
 
 	val vGridState = rememberLazyGridState(initialFirstVisibleItemIndex = vState.firstVisibleIndex)
+	val vListState = rememberLazyListState(initialFirstVisibleItemIndex = vState.firstVisibleIndex)
+
+	// The keyboard's cursor, held here rather than inside either renderer: it is a position in the
+	// *set*, and switching between the grid and the list should not lose your place in it.
+	var vSelected by remember { mutableIntStateOf(0) }
+	LaunchedEffect(vState.cards.size) {
+		vSelected = vSelected.coerceIn(0, (vState.cards.size - 1).coerceAtLeast(0))
+	}
+	LaunchedEffect(vSelected, vState.viewMode) {
+		if (vState.viewMode == CardViewMode.LIST) {
+			if (vListState.layoutInfo.visibleItemsInfo.none { it.index == vSelected }) {
+				vListState.animateScrollToItem(vSelected)
+			}
+		} else if (vGridState.layoutInfo.visibleItemsInfo.none { it.index == vSelected }) {
+			vGridState.animateScrollToItem(vSelected)
+		}
+	}
 
 	// Coming back from a card that was swiped to rather than tapped, the grid may be nowhere near it.
 	// Scrolling it into view is worth doing for its own sake, and the shared-element transition needs
@@ -317,6 +346,16 @@ fun CardGridContent(
 								Icon(AppIcons.FilterList, contentDescription = "Filters")
 							}
 						}
+						ViewModeButton(
+							mode = vState.viewMode,
+							rowHeight = vState.rowHeight,
+							onModeChanged = {
+								dispatch(CardGridContract.Intent.ViewModeChanged(it))
+							},
+							onRowHeightChanged = {
+								dispatch(CardGridContract.Intent.RowHeightChanged(it))
+							},
+						)
 					},
 					scrollBehavior = vScrollBehavior,
 				)
@@ -412,11 +451,27 @@ fun CardGridContent(
 				// The scaffold's insets go to the grid as *content padding* rather than as a margin
 				// around it, which is what lets cards scroll up underneath the bar rather than
 				// stopping dead at its edge.
+				vState.viewMode == CardViewMode.LIST -> CardList(
+					cards = vState.cards,
+					listState = vListState,
+					rowHeight = vState.rowHeight,
+					// The denominator for "4/352". Null where the set's size is unknown, which the
+					// row prints as a bare number rather than inventing one.
+					knownSetSize = vState.knownSetSize,
+					onOpenCard = { dispatch(CardGridContract.Intent.CardOpened(it)) },
+					contentPadding = vPadding,
+					selected = vSelected,
+					onSelect = { vSelected = it },
+					canTakeFocus = !vState.isSearchOpen,
+				)
+
 				else -> CardGrid(
 					cards = vState.cards,
 					gridState = vGridState,
 					onOpenCard = { dispatch(CardGridContract.Intent.CardOpened(it)) },
 					contentPadding = vPadding,
+					selected = vSelected,
+					onSelect = { vSelected = it },
 					canTakeFocus = !vState.isSearchOpen,
 				)
 			}
@@ -467,18 +522,10 @@ private fun CardGrid(
 	 * False while the search field is open, which has a better claim on it: the field focuses
 	 * itself as it appears, and a grid that grabbed the focus back would eat the first letter typed.
 	 */
+	selected: Int,
+	onSelect: (Int) -> Unit,
 	canTakeFocus: Boolean = true,
 ) {
-	// The keyboard's cursor over the tiles.
-	var vSelected by remember { mutableIntStateOf(0) }
-	LaunchedEffect(cards.size) {
-		vSelected = vSelected.coerceIn(0, (cards.size - 1).coerceAtLeast(0))
-	}
-	LaunchedEffect(vSelected) {
-		if (gridState.layoutInfo.visibleItemsInfo.none { it.index == vSelected }) {
-			gridState.animateScrollToItem(vSelected)
-		}
-	}
 	// How many tiles are on a row, read off the grid rather than recomputed from the window.
 	//
 	// The columns are `Adaptive`, so the number depends on the width the grid actually got --
@@ -504,23 +551,181 @@ private fun CardGrid(
 		verticalArrangement = Arrangement.spacedBy(14.dp),
 		modifier = Modifier.arrowSelection(
 			count = cards.size,
-			selected = vSelected,
-			onSelect = { vSelected = it },
+			selected = selected,
+			onSelect = onSelect,
 			// A grid, so up and down move by a row and left and right by one tile.
 			columns = vColumns,
-			onActivate = { cards.getOrNull(vSelected)?.let(onOpenCard) },
+			onActivate = { cards.getOrNull(selected)?.let(onOpenCard) },
 			takeFocus = canTakeFocus,
 		),
 	) {
 		itemsIndexed(cards, key = { _, vCard -> vCard.id.qualified }) { vIndex, vCard ->
 			CardTile(
 				card = vCard,
-				isSelected = vIndex == vSelected,
+				isSelected = vIndex == selected,
 				onClick = { onOpenCard(vCard) },
 			)
 		}
 	}
 }
+
+/**
+ * The set as a list: a thumbnail, what the card is called, and the facts worth scanning for.
+ *
+ * A different job from the grid rather than a smaller version of it. The grid is for looking at
+ * art; this is for finding a card you can already name, or reading a set in collector order -- so
+ * it says the number, the rarity and the domain, which the grid can only show by being opened.
+ *
+ * Everything except the thumbnail is text, so a taller row buys a bigger picture and nothing else.
+ * That is why [CardRowHeight] scales the image and leaves the type scale alone: making the words
+ * bigger too would be three sizes of the same list rather than three amounts of card.
+ */
+@Composable
+private fun CardList(
+	cards: List<CardPrinting>,
+	listState: androidx.compose.foundation.lazy.LazyListState,
+	rowHeight: CardRowHeight,
+	knownSetSize: Int?,
+	onOpenCard: (CardPrinting) -> Unit,
+	contentPadding: PaddingValues,
+	selected: Int,
+	onSelect: (Int) -> Unit,
+	canTakeFocus: Boolean,
+) {
+	LazyColumn(
+		state = listState,
+		contentPadding = PaddingValues(
+			start = TILE_GAP,
+			end = TILE_GAP,
+			top = contentPadding.calculateTopPadding() + TILE_GAP,
+			bottom = contentPadding.calculateBottomPadding() + TILE_GAP,
+		),
+		verticalArrangement = Arrangement.spacedBy(6.dp),
+		modifier = Modifier.arrowSelection(
+			count = cards.size,
+			selected = selected,
+			onSelect = onSelect,
+			onActivate = { cards.getOrNull(selected)?.let(onOpenCard) },
+			takeFocus = canTakeFocus,
+		),
+	) {
+		itemsIndexedInColumn(cards, key = { _, vCard -> vCard.id.qualified }) { vIndex, vCard ->
+			CardRow(
+				card = vCard,
+				rowHeight = rowHeight,
+				knownSetSize = knownSetSize,
+				isSelected = vIndex == selected,
+				onClick = { onOpenCard(vCard) },
+			)
+		}
+	}
+}
+
+/** One card in [CardList]. */
+@Composable
+private fun CardRow(
+	card: CardPrinting,
+	rowHeight: CardRowHeight,
+	knownSetSize: Int?,
+	isSelected: Boolean,
+	onClick: () -> Unit,
+) {
+	val vImageHeight = when (rowHeight) {
+		CardRowHeight.COMPACT -> 40.dp
+		CardRowHeight.REGULAR -> 64.dp
+		CardRowHeight.TALL -> 96.dp
+	}
+	Card(
+		onClick = onClick,
+		modifier = Modifier
+			.fillMaxWidth()
+			.then(
+				if (isSelected) {
+					Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CardDefaults.shape)
+				} else {
+					Modifier
+				},
+			),
+	) {
+		Row(
+			modifier = Modifier.padding(8.dp).fillMaxWidth(),
+			verticalAlignment = Alignment.CenterVertically,
+		) {
+			CardImage(
+				artwork = card.artwork,
+				contentDescription = null,
+				variant = ImageVariant.THUMBNAIL,
+				contentScale = ContentScale.Crop,
+				modifier = Modifier
+					.height(vImageHeight)
+					// The card's own ratio, so a landscape card is a landscape thumbnail and the
+					// row does not crop it to a portrait window.
+					.aspectRatio(
+						if (card.orientation == CardOrientation.LANDSCAPE) {
+							1039f / 744f
+						} else {
+							744f / 1039f
+						},
+					)
+					.clip(RoundedCornerShape(4.dp)),
+			)
+			Spacer(Modifier.width(12.dp))
+			Column(Modifier.weight(1f)) {
+				Text(
+					text = card.displayName,
+					style = MaterialTheme.typography.bodyLarge,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis,
+				)
+				// Number, rarity and domain on one line: the three things worth scanning a set
+				// for, and short enough that they fit together on a phone.
+				val vSecondLine = buildList {
+					add(collectorLabel(card, knownSetSize))
+					card.classification.rarity?.takeIf { it.isNotBlank() }?.let(::add)
+					card.classification.domains.takeIf { it.isNotEmpty() }
+						?.let { add(it.joinToString(" / ")) }
+				}
+				Text(
+					text = vSecondLine.joinToString(SEPARATOR),
+					style = MaterialTheme.typography.bodySmall,
+					color = MaterialTheme.colorScheme.onSurfaceVariant,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis,
+				)
+				// Only where there is room for it. A compact row is one line of detail by
+				// definition; anything more and it is not compact.
+				if (rowHeight != CardRowHeight.COMPACT) {
+					card.classification.type?.takeIf { it.isNotBlank() }?.let { vType ->
+						Text(
+							text = vType,
+							style = MaterialTheme.typography.labelSmall,
+							color = MaterialTheme.colorScheme.onSurfaceVariant,
+							maxLines = 1,
+							overflow = TextOverflow.Ellipsis,
+						)
+					}
+				}
+			}
+		}
+	}
+}
+
+/**
+ * The card's number, over the set's size where that is known.
+ *
+ * `4/352` and not `4` -- a collector number means little without the denominator. The denominator
+ * is omitted rather than guessed when the set size is unknown, which is the same rule the grid's
+ * count label follows: two numbers either side of a slash must count the same population.
+ */
+private fun collectorLabel(card: CardPrinting, knownSetSize: Int?): String =
+	if (knownSetSize != null && knownSetSize > 0) {
+		"${card.collectorNumber}/$knownSetSize"
+	} else {
+		card.collectorNumber
+	}
+
+/** Between the facts on a row's second line. */
+private const val SEPARATOR = "  ·  "
 
 /**
  * The search field, shown only while the search button is on.
@@ -710,3 +915,64 @@ private fun CardGridLoadingPreview() = PreviewFrame {
 
 /** The corner radius a set row is drawn with, which the container transform grows out of. */
 private val SET_ROW_CORNER = 12.dp
+
+/**
+ * Switches between the grid and the list, and picks the list's row height.
+ *
+ * One control rather than two. The height only means anything in list mode, so a separate button
+ * for it would be disabled most of the time -- and a menu that opens on the mode it is *not* in is
+ * how a toggle turns into a thing to think about.
+ */
+@Composable
+private fun ViewModeButton(
+	mode: CardViewMode,
+	rowHeight: CardRowHeight,
+	onModeChanged: (CardViewMode) -> Unit,
+	onRowHeightChanged: (CardRowHeight) -> Unit,
+) {
+	var vIsOpen by remember { mutableStateOf(false) }
+	Box {
+		IconButton(onClick = { vIsOpen = true }) {
+			Icon(
+				imageVector = if (mode == CardViewMode.LIST) {
+					AppIcons.FormatListBulleted
+				} else {
+					AppIcons.GridView
+				},
+				contentDescription = "How cards are shown",
+			)
+		}
+		DropdownMenu(expanded = vIsOpen, onDismissRequest = { vIsOpen = false }) {
+			CardViewMode.entries.forEach { vMode ->
+				DropdownMenuItem(
+					text = { Text(vMode.label) },
+					onClick = {
+						onModeChanged(vMode)
+						vIsOpen = false
+					},
+					trailingIcon = {
+						if (vMode == mode) Icon(AppIcons.Check, contentDescription = null)
+					},
+				)
+			}
+			// The heights, shown only in list mode -- see this function's own note.
+			if (mode == CardViewMode.LIST) {
+				HorizontalDivider()
+				CardRowHeight.entries.forEach { vHeight ->
+					DropdownMenuItem(
+						text = { Text(vHeight.label) },
+						onClick = {
+							onRowHeightChanged(vHeight)
+							vIsOpen = false
+						},
+						trailingIcon = {
+							if (vHeight == rowHeight) {
+								Icon(AppIcons.Check, contentDescription = null)
+							}
+						},
+					)
+				}
+			}
+		}
+	}
+}

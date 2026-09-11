@@ -43,6 +43,21 @@ class CardGridViewModel(
 
 	private var mLoadJob: Job? = null
 
+	init {
+		// The view choice is a habit rather than a per-screen setting, so it arrives with the
+		// screen instead of resetting to grid every time a set is opened.
+		viewModelScope.launch {
+			mPreferences.load()
+			val vPreferences = mPreferences.preferences.value
+			dispatch(
+				CardGridContract.Intent.ViewPreferencesLoaded(
+					mode = vPreferences.cardViewMode,
+					height = vPreferences.cardRowHeight,
+				),
+			)
+		}
+	}
+
 	override suspend fun handleIntent(intent: CardGridContract.Intent) {
 		when (intent) {
 			CardGridContract.Intent.BackPressed ->
@@ -53,6 +68,12 @@ class CardGridViewModel(
 
 			CardGridContract.Intent.DownloadsRequested ->
 				emitEffect(CardGridContract.Effect.OpenDownloads)
+
+			is CardGridContract.Intent.ViewModeChanged ->
+				mPreferences.update { it.copy(cardViewMode = intent.mode) }
+
+			is CardGridContract.Intent.RowHeightChanged ->
+				mPreferences.update { it.copy(cardRowHeight = intent.height) }
 
 			is CardGridContract.Intent.SetSelected -> {
 				mPreferences.update { it.copy(lastSetId = intent.setId) }
