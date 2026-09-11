@@ -128,7 +128,9 @@ class DownloadRenderer {
 						coversAllLanguages = true,
 					),
 				),
+				infoLanguages = setOf(CardLanguage.ENGLISH),
 				importedVariantIds = setOf("default_cards"),
+				onCheckForUpdate = {},
 			)
 		}
 

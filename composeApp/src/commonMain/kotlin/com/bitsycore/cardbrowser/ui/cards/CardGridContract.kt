@@ -10,6 +10,7 @@ import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
+import com.bitsycore.cardbrowser.data.repository.LanguageSubstitution
 import com.bitsycore.lib.pulse.container.ContainerContract
 
 /**
@@ -63,8 +64,26 @@ object CardGridContract :
 		 * browse a set in another one was to change the global preference and come back.
 		 */
 		val language: CardLanguage? = null,
-		/** Every language the source behind this set can be asked for. Empty until resolved. */
+		/**
+		 * What the source *claims* for this set, or for its catalogue. A claim, not a fact.
+		 *
+		 * Used for one thing only: deciding whether a language control is worth showing at all. It
+		 * must never be listed as though it were the set's editions -- see [confirmedLanguages].
+		 */
 		val availableLanguages: Set<CardLanguage> = emptySet(),
+		/**
+		 * The languages this set is *known* to exist in: confirmed by the source, or on disk.
+		 *
+		 * What the menu lists. The menu used to list [availableLanguages] and then narrow to this
+		 * when the confirmation landed, so it opened with eleven entries for a Magic set and
+		 * collapsed to four under the user's finger. Both lists were shown the same way and only
+		 * one of them was ever true.
+		 */
+		val confirmedLanguages: Set<CardLanguage> = emptySet(),
+		/** True while the source is being asked which editions of this set exist. */
+		val isConfirmingLanguages: Boolean = false,
+		/** True when that ask failed, so the menu says so rather than looking merely short. */
+		val languageCheckFailed: Boolean = false,
 		/** The language to fall back to when a switch turns out to be impossible. */
 		val previousLanguage: CardLanguage? = null,
 		/**
@@ -76,6 +95,8 @@ object CardGridContract :
 		 * printing that does not exist would be a lie. See `CardRepository.OpeningLanguage`.
 		 */
 		val languageSubstitutedFor: CardLanguage? = null,
+		/** Which of the two substitutions happened, so the banner offers a fetch or does not. */
+		val languageSubstitution: LanguageSubstitution? = null,
 		/** True while a chosen language is being fetched, so the control can show it is busy. */
 		val isChangingLanguage: Boolean = false,
 	) {
@@ -87,11 +108,25 @@ object CardGridContract :
 		 * selected is furniture.
 		 */
 		val languageOptions: List<CardLanguage>
-			get() = if (availableLanguages.size <= 1) {
-				emptyList()
-			} else {
-				CardLanguage.PREFERENCE_ORDER.filter { it in availableLanguages }
+			get() {
+				// The language on screen is a fact by definition -- the source served it -- so it is
+				// always offered, even before anything has been confirmed. Without it a menu could
+				// open with no way back to what you are reading.
+				val vKnown = confirmedLanguages + setOfNotNull(language)
+				return CardLanguage.PREFERENCE_ORDER.filter { it in vKnown } +
+					vKnown.filterNot { it in CardLanguage.PREFERENCE_ORDER }
 			}
+
+		/**
+		 * Whether a language control belongs in the bar at all.
+		 *
+		 * Driven by the *claim*, because a claim is good enough to justify offering to look: a
+		 * source that says it serves eleven languages is reason to show a menu, and the menu itself
+		 * then shows only what is known. A source with one language gets no control -- a menu of
+		 * one item that is already selected is furniture.
+		 */
+		val hasLanguageChoice: Boolean
+			get() = availableLanguages.size > 1 || confirmedLanguages.size > 1
 
 		/** True when nothing has arrived yet and there is nothing to explain. */
 		val isInitialLoad: Boolean get() = isLoading && cards.isEmpty() && error == null
@@ -214,8 +249,12 @@ object CardGridContract :
 			val game: GameProfile,
 			val languages: Set<CardLanguage>,
 			val language: CardLanguage?,
-			/** What was wanted, when [language] is a downloaded stand-in for it. */
+			/** The editions already established, which is what the menu may list. */
+			val confirmed: Set<CardLanguage> = emptySet(),
+			/** What was wanted, when [language] is a stand-in for it. */
 			val substitutedFor: CardLanguage? = null,
+			/** Why it is a stand-in: not downloaded, or not published at all. */
+			val substitution: LanguageSubstitution? = null,
 		) : Intent
 
 		/**
@@ -331,20 +370,31 @@ object CardGridContract :
 			// Only seeded, never overwritten: a resolve that lands after the user has already
 			// chosen must not undo their choice.
 			language = state.language ?: intent.language,
+			confirmedLanguages = state.confirmedLanguages + intent.confirmed,
 			// Same rule, and for the same reason: once the user has picked a language, the notice
 			// about the one they were given instead is no longer about what is on screen.
 			languageSubstitutedFor = if (state.language == null) intent.substitutedFor else null,
+			languageSubstitution = if (state.language == null) intent.substitution else null,
 		)
 
-		is Intent.LanguageOptionsRequested -> state
+		// The menu was opened. It shows what is known plus "checking", never the claim.
+		is Intent.LanguageOptionsRequested ->
+			state.copy(isConfirmingLanguages = true, languageCheckFailed = false)
 
 		// Narrowing only. A confirmation that arrives after the user has already picked must not
 		// widen the menu back to the claim, and an empty answer is a failed probe rather than a
 		// set with no languages -- see `CardProvider.confirmLanguages`.
 		is Intent.LanguageOptionsResolved -> if (intent.languages.isEmpty()) {
-			state
+			// An empty answer is a probe that failed, not a set with no languages. The menu says
+			// which of those it is rather than silently showing a short list.
+			state.copy(isConfirmingLanguages = false, languageCheckFailed = true)
 		} else {
-			state.copy(availableLanguages = intent.languages)
+			state.copy(
+				availableLanguages = intent.languages,
+				confirmedLanguages = intent.languages,
+				isConfirmingLanguages = false,
+				languageCheckFailed = false,
+			)
 		}
 
 		// The cards on screen are kept while the new edition loads. Blanking the grid to a spinner
@@ -363,6 +413,7 @@ object CardGridContract :
 				// fetch works, or the set has no such edition and `LanguageUnavailable` puts the
 				// old one back -- "you were given a stand-in" is no longer the state of things.
 				languageSubstitutedFor = null,
+				languageSubstitution = null,
 			)
 		}
 
@@ -371,6 +422,9 @@ object CardGridContract :
 			previousLanguage = null,
 			isChangingLanguage = false,
 			isLoading = false,
+			// Asked for and not there: the strongest evidence available, so the menu stops
+			// offering it rather than waiting for a confirmation to say the same thing later.
+			confirmedLanguages = state.confirmedLanguages - setOfNotNull(state.language),
 		)
 	}
 

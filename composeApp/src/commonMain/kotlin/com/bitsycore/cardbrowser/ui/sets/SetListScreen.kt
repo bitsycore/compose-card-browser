@@ -90,6 +90,7 @@ import com.bitsycore.cardbrowser.ui.common.EmptyState
 import com.bitsycore.cardbrowser.ui.common.FastScroller
 import com.bitsycore.cardbrowser.ui.common.ErrorState
 import com.bitsycore.cardbrowser.ui.common.LoadingState
+import com.bitsycore.cardbrowser.ui.common.LanguageMenu
 import com.bitsycore.cardbrowser.ui.common.NoticeBanner
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.ui.common.sharedSetContainer
@@ -333,6 +334,22 @@ fun SetListContent(
 					}
 				},
 				actions = {
+					// What every set below will open in, and what a download will fetch. First in
+					// the row because it qualifies the whole list rather than acting on it.
+					if (vState.browsingLanguageOptions.size > 1) {
+						LanguageMenu(
+							options = CardLanguage.PREFERENCE_ORDER
+								.filter { it in vState.browsingLanguageOptions },
+							selected = vState.browsingLanguage,
+							// A preference, said plainly, because the menu lists what the *source*
+							// serves and not what each set is published in -- the rows answer that
+							// one, per set, and the grid confirms it when a set is opened.
+							header = "Browsing language",
+							onSelect = {
+								dispatch(SetListContract.Intent.BrowsingLanguageSelected(it))
+							},
+						)
+					}
 					// Whatever the list is currently showing, which is the useful scope: with a
 					// region chip or a search active, "all" means all of *those*, not all 988.
 					if (vState.visibleSets.isNotEmpty()) {
@@ -570,6 +587,10 @@ fun SetListContent(
 			onDismiss = { vPendingAll = false },
 			isImportingGame = vIsImportingGame,
 			importedVariantIds = state.importedVariantIds,
+			isCheckingForUpdate = state.isCheckingBulkUpdate,
+			onCheckForUpdate = {
+				dispatch(SetListContract.Intent.BulkUpdateCheckRequested)
+			},
 			onConfirm = { vKinds, vLanguages, vVariantId ->
 				// Where the source publishes a dump, the whole game's records come from it and
 				// there is no path here that fetches them a set at a time. That is not a

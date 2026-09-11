@@ -139,14 +139,31 @@ data class CardSearchResults(
  * - **The preferred language has no printing of this set.** Nothing to do about it. There is no
  *   Korean edition of Pokemon's Base Set and no button will produce one.
  * - **The preferred language is simply not downloaded, and another one is.** Entirely fixable, and
- *   the screen offers to fetch it. [substitutedFor] names the language that was wanted, and is
- *   null in every other case -- including the ordinary one where the wanted language is what
- *   opened.
+ *   the screen offers to fetch it.
+ *
+ * [substitutedFor] names the language that was wanted and [reason] says which of the two happened.
+ * Both are null in the ordinary case, where the wanted language is the one that opened.
  */
 data class OpeningLanguage(
 	val language: com.bitsycore.cardbrowser.core.model.CardLanguage?,
 	val substitutedFor: com.bitsycore.cardbrowser.core.model.CardLanguage? = null,
+	val reason: LanguageSubstitution? = null,
 )
+
+/** Why a set opened in a language the user did not ask for. Two different answers to give. */
+enum class LanguageSubstitution {
+
+	/** The source has it; this device does not. Fixable, and the screen offers to fetch it. */
+	NOT_DOWNLOADED,
+
+	/**
+	 * The source was asked and says it has no such edition of this set.
+	 *
+	 * Nothing to offer. There is no Korean printing of Pokemon's Base Set, and a button promising
+	 * to fetch one would be the app inventing a card. Said, not actioned.
+	 */
+	NOT_PUBLISHED,
+}
 
 /**
  * What one game is keeping on disk that the cache ceiling will not reclaim.

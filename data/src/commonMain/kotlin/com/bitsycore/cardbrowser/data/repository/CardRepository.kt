@@ -1090,6 +1090,39 @@ class CardRepository(
 	 * narrows step 3 to the truth is paid once, when the grid's menu is opened, and both screens
 	 * read it from then on.
 	 */
+	/**
+	 * The languages [setId] is **known** to exist in, without asking the source anything.
+	 *
+	 * Facts only, and that is the whole point of it being separate from [knownLanguagesFor]:
+	 *
+	 * 1. a confirmation record, meaning the source was asked and answered, and
+	 * 2. every language whose cards are on disk -- they are there only because the source served
+	 *    them, which is the strongest evidence there is.
+	 *
+	 * A source's *claim* -- per set or per catalogue -- is deliberately not in here. A language
+	 * menu built from a claim shows eleven entries and then collapses to four when the
+	 * confirmation lands, which is the app telling the user something it did not know. What it
+	 * knows is this; what it has merely been told is [knownLanguagesFor].
+	 *
+	 * Empty means "nothing established yet", never "one language".
+	 */
+	suspend fun confirmedLanguagesFor(setId: SourceId, game: GameId): Set<CardLanguage> {
+		val vProvider = mRegistry.byId(setId.provider) ?: return emptySet()
+		val vSerializer = CacheEnvelope.serializer(SetSerializer(serializer<CardLanguage>()))
+		val vConfirmed = mCache.read(setLanguagesKey(vProvider, setId), vSerializer)
+			?.takeIf { !it.isStale(mClock(), mSetListTtlMillis) }
+			?.payload
+			.orEmpty()
+		val vSet = setRecord(setId, game)
+		// The same candidate sweep the set list runs: file-existence checks, no requests.
+		val vHeld = (vSet?.let { languageCandidatesFor(vProvider, it, null) }
+			?: vProvider.capabilities.data.languages.asSequence()
+				.map { effectiveLanguage(vProvider, it) })
+			.filterNotNull()
+			.filterTo(mutableSetOf()) { mCache.exists(completeSetKey(vProvider, setId, it)) }
+		return vConfirmed + vHeld
+	}
+
 	suspend fun knownLanguagesFor(setId: SourceId, game: GameId): Set<CardLanguage> {
 		val vProvider = mRegistry.byId(setId.provider) ?: return emptySet()
 		val vSerializer = CacheEnvelope.serializer(SetSerializer(serializer<CardLanguage>()))
@@ -1153,7 +1186,9 @@ class CardRepository(
 
 		// 2. Not held in the wanted language, but downloaded in another.
 		downloadedLanguageFor(vProvider, setId, vSet, preferred, except = vWanted)
-			?.let { return OpeningLanguage(it, substitutedFor = vWanted) }
+			?.let {
+				return OpeningLanguage(it, vWanted, LanguageSubstitution.NOT_DOWNLOADED)
+			}
 
 		// A confirmation already on disk answers without asking again, and is what step 4 leaves
 		// behind -- so the expensive path is paid at most once per set per TTL.
@@ -1162,10 +1197,13 @@ class CardRepository(
 			?.takeIf { !it.isStale(mClock(), mSetListTtlMillis) }
 			?.payload
 			?.let { vConfirmed ->
-				return OpeningLanguage(
-					vConfirmed.firstOrNull { it == vWanted }
+				// A confirmation that does not list the wanted language is the source having said
+				// it has no such edition -- the same answer step 4 pays for, already on disk.
+				return substituted(
+					opened = vConfirmed.firstOrNull { it == vWanted }
 						?: vSet?.copy(languages = vConfirmed)?.languageFor(preferred)
 						?: vConfirmed.firstOrNull(),
+					wanted = vWanted,
 				)
 			}
 
@@ -1178,15 +1216,28 @@ class CardRepository(
 		if (vWanted in vHasWanted) return OpeningLanguage(vWanted)
 
 		// 4. It really has nothing. Now the full list is worth its cost, and it is cached.
-		//
-		// No `substitutedFor` from here down: the wanted language has been *asked about* and the
-		// source says it has no such edition. That is not a missing download and must not be
-		// offered as one.
 		val vConfirmed = languagesFor(setId, game)
-		return OpeningLanguage(
-			vSet?.copy(languages = vConfirmed)?.languageFor(preferred) ?: vConfirmed.firstOrNull(),
+		return substituted(
+			opened = vSet?.copy(languages = vConfirmed)?.languageFor(preferred)
+				?: vConfirmed.firstOrNull(),
+			wanted = vWanted,
 		)
 	}
+
+	/**
+	 * A result for the case where the source was *asked* about [wanted] and does not have it.
+	 *
+	 * Reported as [LanguageSubstitution.NOT_PUBLISHED], never as a missing download: the screen
+	 * says the edition does not exist and offers nothing, because there is nothing to fetch. The
+	 * silence this replaces was its own small lie -- a French-preferring user opened a Japan-only
+	 * set, got Japanese, and was told nothing at all about why.
+	 */
+	private fun substituted(opened: CardLanguage?, wanted: CardLanguage): OpeningLanguage =
+		if (opened == null || opened == wanted) {
+			OpeningLanguage(opened)
+		} else {
+			OpeningLanguage(opened, wanted, LanguageSubstitution.NOT_PUBLISHED)
+		}
 
 	/**
 	 * A language this set was deliberately downloaded in, best first, or `null` if none was.

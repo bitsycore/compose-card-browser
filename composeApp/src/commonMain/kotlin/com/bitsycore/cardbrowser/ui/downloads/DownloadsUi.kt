@@ -196,6 +196,18 @@ fun DownloadKindDialog(
 	 * empty and the dialog offers an import that would fetch nothing.
 	 */
 	importedVariantIds: Set<String> = emptySet(),
+	/**
+	 * Asks the source whether it has rebuilt the dump since it was imported, or `null` where the
+	 * question does not arise.
+	 *
+	 * A manifest request -- a few kilobytes -- not the file. It exists because "already imported"
+	 * is a claim with a date on it: Scryfall rebuilds daily, and the app only knows what it knew
+	 * the last time it looked. Without this the row could only be re-enabled by leaving the screen
+	 * and coming back, which is a strange thing to have to discover.
+	 */
+	onCheckForUpdate: (() -> Unit)? = null,
+	/** True while that check is in flight, so the button says so rather than looking inert. */
+	isCheckingForUpdate: Boolean = false,
 ) {
 	// Ticking is a fresh decision each time the dialog opens, so it is keyed on what is already
 	// held: reopening after a download must not restore a tick for something now on disk.
@@ -278,9 +290,25 @@ fun DownloadKindDialog(
 					// reason is indistinguishable from a broken one.
 					note = when {
 						isImportingGame -> "Already downloading for the whole game"
-						vVariant?.id in importedVariantIds ->
-							"\"${vVariant?.label}\" is already imported, and the source has not " +
-								"republished it since."
+						// Short, because the row is already ticked and disabled: the question a
+						// reader has here is "what have I got, and is it current?", and the answer
+						// is the language plus the button beside it. It used to be two sentences of
+						// explanation for a state that needs none.
+						//
+						// The languages are named only where they are known -- the intersection
+						// over every set shown -- and an import that left a set holding nothing
+						// makes that empty. Empty prints no language rather than guessing at one.
+						vVariant?.id in importedVariantIds -> buildString {
+							append("Imported")
+							if (infoLanguages.isNotEmpty()) {
+								append(" · ")
+								append(
+									CardLanguage.PREFERENCE_ORDER
+										.filter { it in infoLanguages }
+										.joinToString(", ") { it.displayName },
+								)
+							}
+						}
 						else -> null
 					},
 					// Deliberately not "small": the honest thing is to say what it is, since a set
@@ -307,7 +335,11 @@ fun DownloadKindDialog(
 						)
 						// What is already here, by name. "We don't see what language is
 						// downloaded" was the report; a tick cannot answer it and a list can.
-						if (infoLanguages.isNotEmpty()) {
+						//
+						// Not repeated for an import: the row above already names the file and the
+						// set list's own language control says what is being browsed in, so
+						// spelling the same fact out a third time here was noise.
+						if (infoLanguages.isNotEmpty() && vVariant?.id !in importedVariantIds) {
 							append("\nAlready have: ")
 							append(
 								CardLanguage.PREFERENCE_ORDER
@@ -360,28 +392,24 @@ fun DownloadKindDialog(
 							style = MaterialTheme.typography.bodySmall,
 							color = MaterialTheme.colorScheme.onSurfaceVariant,
 						)
-						// The consequence in the reader's own language, before the bytes are spent.
-						//
-						// Records are cached per language, so a dump of one language is not a
-						// download of this game for someone browsing in another: every set still
-						// costs a request when it is opened, and the import bought nothing. That is
-						// exactly what happened -- 78 MB imported under a French preference, and the
-						// grid went on fetching French set by set.
-						val vAlternative = bulkVariants.firstOrNull { it.coversAllLanguages }
-						if (vVariant?.coversAllLanguages == false &&
-							vAlternative != null &&
-							defaultLanguage != null
-						) {
-							Spacer(Modifier.height(4.dp))
-							Text(
-								text = "You browse in ${defaultLanguage.displayName}. " +
-									"Records are kept per language, so this file may leave " +
-									"every set still to fetch. " +
-									"${vAlternative.label} is the one that covers it.",
-								style = MaterialTheme.typography.bodySmall,
-								color = MaterialTheme.colorScheme.error,
-							)
+						// "Is what I have still current?", asked of the source rather than assumed.
+						if (vVariant?.id in importedVariantIds && onCheckForUpdate != null) {
+							TextButton(
+								onClick = onCheckForUpdate,
+								enabled = !isCheckingForUpdate,
+							) {
+								Text(
+									if (isCheckingForUpdate) "Checking…" else "Check for update",
+								)
+							}
 						}
+
+						// The warning that used to be here -- "you browse in French, this file may
+						// leave every set still to fetch" -- is gone on purpose. The set list now
+						// names the browsing language in its own bar, a set opened in a language
+						// it was not downloaded in says so with a way to fetch it, and the line
+						// above already says the smaller file is English. Three statements of the
+						// same fact, two of them in places the user was not looking.
 					}
 				}
 				}

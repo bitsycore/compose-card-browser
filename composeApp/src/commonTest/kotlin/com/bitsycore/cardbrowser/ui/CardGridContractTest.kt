@@ -412,9 +412,30 @@ class CardGridContractTest {
 	//  Changing the edition on screen
 
 	@Test
-	fun `only a real choice of language is offered`() {
+	fun `a claim opens the control -- it does not fill the menu`() {
+		// The reported behaviour: opening the language list on a Magic set showed a long list
+		// which then shrank. It was the source's *claim* being drawn as though it were the set's
+		// editions, replaced by the confirmed list when the probe landed.
+		val vClaimed = reduce(
+			UiState(),
+			Intent.CapabilitiesResolved(
+				supportedFilters = emptySet(),
+				game = MagicGame,
+				languages = setOf(CardLanguage.ENGLISH, CardLanguage.JAPANESE, CardLanguage.FRENCH),
+				language = CardLanguage.FRENCH,
+			),
+		)
+
+		// Worth offering to look, because the source says there may be more than one.
+		assertTrue(vClaimed.hasLanguageChoice)
+		// But the only edition anything is known about is the one on screen.
+		assertEquals(listOf(CardLanguage.FRENCH), vClaimed.languageOptions)
+	}
+
+	@Test
+	fun `a single-language source gets no control at all`() {
 		// A menu holding one already-selected item is furniture. Riftcodex describes English and
-		// nothing else, so the control does not appear for Riftbound at all.
+		// nothing else, so the control does not appear for Riftbound.
 		val vOne = reduce(
 			UiState(),
 			Intent.CapabilitiesResolved(
@@ -424,22 +445,44 @@ class CardGridContractTest {
 				language = CardLanguage.ENGLISH,
 			),
 		)
-		assertTrue(vOne.languageOptions.isEmpty())
 
-		val vMany = reduce(
-			UiState(),
-			Intent.CapabilitiesResolved(
-				supportedFilters = emptySet(),
-				game = MagicGame,
-				languages = setOf(CardLanguage.ENGLISH, CardLanguage.JAPANESE, CardLanguage.FRENCH),
-				language = CardLanguage.FRENCH,
+		assertFalse(vOne.hasLanguageChoice)
+	}
+
+	@Test
+	fun `what is confirmed is what the menu lists -- in preference order`() {
+		val vOpened = reduce(
+			UiState(language = CardLanguage.FRENCH),
+			Intent.LanguageOptionsRequested,
+		)
+		assertTrue(vOpened.isConfirmingLanguages, "the menu says it is still asking")
+
+		val vResolved = reduce(
+			vOpened,
+			Intent.LanguageOptionsResolved(
+				setOf(CardLanguage.ENGLISH, CardLanguage.JAPANESE, CardLanguage.FRENCH),
 			),
 		)
-		// In the app's preference order, not the set's iteration order.
+
+		assertFalse(vResolved.isConfirmingLanguages)
 		assertEquals(
 			listOf(CardLanguage.FRENCH, CardLanguage.JAPANESE, CardLanguage.ENGLISH),
-			vMany.languageOptions,
+			vResolved.languageOptions,
 		)
+	}
+
+	@Test
+	fun `a probe that answered nothing is a failure -- not a set with one language`() {
+		// An empty answer used to leave the state untouched, so the menu simply looked short. The
+		// two are opposite facts and the menu now says which one it is.
+		val vFailed = reduce(
+			reduce(UiState(language = CardLanguage.ENGLISH), Intent.LanguageOptionsRequested),
+			Intent.LanguageOptionsResolved(emptySet()),
+		)
+
+		assertFalse(vFailed.isConfirmingLanguages)
+		assertTrue(vFailed.languageCheckFailed)
+		assertEquals(listOf(CardLanguage.ENGLISH), vFailed.languageOptions, "what is on screen stays")
 	}
 
 	@Test

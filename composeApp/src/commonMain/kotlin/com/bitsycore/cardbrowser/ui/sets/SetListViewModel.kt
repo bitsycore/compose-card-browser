@@ -64,6 +64,7 @@ class SetListViewModel(
 			val vGame = vGames.firstOrNull { it.id == mArgs.game } ?: vGames.firstOrNull() ?: return@launch
 
 			dispatch(SetListContract.Intent.GamesRestored(games = vGames, game = vGame))
+			resolveBrowsingLanguage(vGame.id)
 			dispatch(SetListContract.Intent.LastOpenedSetRestored(vPreferences.lastSetId))
 			dispatch(SetListContract.Intent.FavouritesRestored(vPreferences.favouriteSets))
 			dispatch(SetListContract.Intent.HideEmptyToggled(vPreferences.hideEmptySets))
@@ -118,6 +119,37 @@ class SetListViewModel(
 	override suspend fun handleIntent(intent: SetListContract.Intent) {
 		when (intent) {
 			SetListContract.Intent.Refresh -> startLoad()
+
+			SetListContract.Intent.BulkUpdateCheckRequested -> {
+				val vGame = stateFlow.value.game ?: return
+				// Re-read the manifest, then re-derive what counts as imported from it. A source
+				// that will not answer leaves the previous list in place rather than clearing it:
+				// failing to check is not evidence that the import is stale.
+				runCatching { mRepository.bulkVariants(vGame.id) }
+					.getOrNull()
+					?.takeIf { it.isNotEmpty() }
+					?.let { dispatch(SetListContract.Intent.BulkAvailable(it)) }
+					?: dispatch(SetListContract.Intent.BulkAvailable(stateFlow.value.bulkVariants))
+				resolveSavedSets(vGame.id, mPreferences.preferences.value.primaryLanguage)
+			}
+
+			is SetListContract.Intent.BrowsingLanguageSelected -> {
+				// The app-wide preference, promoted rather than replaced, which is exactly what
+				// the card grid's language control does after a successful switch. One preference
+				// for the whole app was already the design; this makes it reachable from the one
+				// screen that shows every set it applies to.
+				mPreferences.update { vPreferences ->
+					vPreferences.copy(
+						preferredLanguages = listOf(intent.language) +
+							vPreferences.preferredLanguages.filter { it != intent.language },
+					)
+				}
+				val vGame = stateFlow.value.game ?: return
+				resolveBrowsingLanguage(vGame.id)
+				// The list itself is per language -- names, card counts and which sets exist at
+				// all -- so this is a reload, not a relabel.
+				startLoad()
+			}
 
 			is SetListContract.Intent.SetOpened -> {
 				mPreferences.update { it.copy(lastSetId = intent.set.id.qualified) }
@@ -214,6 +246,23 @@ class SetListViewModel(
 			// After the list settles, because it is a lookup *over* the list.
 			if (stateFlow.value.requestGeneration == vGeneration) resolveSavedSets(vGame.id, vLanguage)
 		}
+	}
+
+	/**
+	 * Resolves what the routed source will *actually* answer in, and what it can be asked for.
+	 *
+	 * Not simply the user's preference: Riftcodex serves English whoever is reading, so a bar that
+	 * showed "FR" over a list of English sets would be the same lie the download queue used to
+	 * tell. `effectiveLanguage` is the function the queue and the repository already use.
+	 */
+	private suspend fun resolveBrowsingLanguage(game: GameId) {
+		val vPreferred = mPreferences.preferences.value.primaryLanguage
+		dispatch(
+			SetListContract.Intent.BrowsingLanguageResolved(
+				language = mRegistry.effectiveLanguage(game, vPreferred) ?: vPreferred,
+				options = mRegistry.resolve(game)?.capabilities?.data?.languages.orEmpty(),
+			),
+		)
 	}
 
 	/**

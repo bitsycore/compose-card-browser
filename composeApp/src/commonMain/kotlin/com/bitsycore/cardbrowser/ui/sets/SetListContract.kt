@@ -49,6 +49,27 @@ object SetListContract :
 		 */
 		val game: GameProfile? = null,
 		/**
+		 * The language this list is being browsed in: what a set will open in, and what a download
+		 * will fetch.
+		 *
+		 * Shown because it was invisible. It is the user's global preference put through the
+		 * routed source -- Riftcodex serves English whatever you prefer -- and every screen below
+		 * this one obeys it, so a list that never named it left "why is this set in English?"
+		 * unanswerable without opening Settings. Changing it here changes the preference, which is
+		 * exactly what the card grid's own language control already did on a successful switch.
+		 */
+		val browsingLanguage: CardLanguage? = null,
+		/**
+		 * What the routed source states it can serve. A capability, measured per provider.
+		 *
+		 * Not a claim about any particular set: whether *this* set exists in Korean is the set
+		 * row's business and the grid's, both of which say so per set. This is the menu of what is
+		 * worth asking for at all.
+		 */
+		val browsingLanguageOptions: Set<CardLanguage> = emptySet(),
+		/** True while the source is being asked whether its dump has been rebuilt. */
+		val isCheckingBulkUpdate: Boolean = false,
+		/**
 		 * The games the app can actually serve, from the routing table.
 		 *
 		 * Whatever the registry routes. A game with no routed adapter is
@@ -324,6 +345,23 @@ object SetListContract :
 		 */
 		data class LoadFinished(val generation: Int) : Intent
 
+		/**
+		 * Ask the source whether it has rebuilt its dump since the import.
+		 *
+		 * A manifest request, not the file. "Already imported" carries a date and Scryfall rebuilds
+		 * daily, so the app's answer is only as fresh as the last time it looked.
+		 */
+		data object BulkUpdateCheckRequested : Intent
+
+		/** The browsing language, resolved against what the routed source can actually answer in. */
+		data class BrowsingLanguageResolved(
+			val language: CardLanguage?,
+			val options: Set<CardLanguage>,
+		) : Intent
+
+		/** The user picked a language from the bar. Becomes the app-wide preference. */
+		data class BrowsingLanguageSelected(val language: CardLanguage) : Intent
+
 		/** Preferences finished loading and told us where the user was. */
 		data class LastOpenedSetRestored(val setId: String?) : Intent
 
@@ -412,13 +450,35 @@ object SetListContract :
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
 
-		is Intent.BulkAvailable -> state.copy(bulkVariants = intent.variants)
+		is Intent.BulkAvailable -> state.copy(
+			bulkVariants = intent.variants,
+			isCheckingBulkUpdate = false,
+		)
+
+		Intent.BulkUpdateCheckRequested -> state.copy(isCheckingBulkUpdate = true)
 
 		// Nothing to reduce. The import is a job on the download queue now, and the queue is what
 		// reports its progress -- so this screen no longer holds a second, parallel account of it.
 		// Deliberately does not clear `bulkVariants` either: the files are still there, and offering
 		// the import again after one finishes is reasonable, since Scryfall rebuilds daily.
 		is Intent.BulkImportRequested -> state
+
+		is Intent.BrowsingLanguageResolved -> state.copy(
+			browsingLanguage = intent.language,
+			browsingLanguageOptions = intent.options,
+		)
+
+		// Shown immediately; the view model persists it and reloads. The list's saved marks and
+		// card counts are per language, so they are cleared rather than left describing the old
+		// one -- a row saying "downloaded" about French records under a Japanese heading is the
+		// same unit mismatch this screen keeps having to avoid.
+		is Intent.BrowsingLanguageSelected -> state.copy(
+			browsingLanguage = intent.language,
+			savedSetIds = emptySet(),
+			savedLanguages = emptyMap(),
+			confirmedCardCounts = emptyMap(),
+			imageDownloads = emptyMap(),
+		)
 
 		is Intent.FavouritesRestored -> state.copy(favouriteIds = intent.favouriteIds)
 

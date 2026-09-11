@@ -36,6 +36,20 @@ class SetListRenderer {
 		vOut.mkdirs()
 
 		renderToPng(vOut, "sets-all-lines", width = 660, height = 1100, density = 1.65f) { SetListContent(pokemonState(), {}) }
+		// The bar has to say which language every row below it will open in.
+		renderToPng(vOut, "sets-browsing-language", width = 660, height = 420, density = 1.65f) {
+			SetListContent(
+				pokemonState().copy(
+					browsingLanguage = CardLanguage.FRENCH,
+					browsingLanguageOptions = setOf(
+						CardLanguage.ENGLISH,
+						CardLanguage.FRENCH,
+						CardLanguage.JAPANESE,
+					),
+				),
+				{},
+			)
+		}
 		renderToPng(vOut, "sets-one-line", width = 660, height = 1100, density = 1.65f) {
 			SetListContent(pokemonState().copy(region = "jp"), {})
 		}

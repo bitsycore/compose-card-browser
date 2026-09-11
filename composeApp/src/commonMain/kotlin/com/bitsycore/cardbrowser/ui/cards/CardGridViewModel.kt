@@ -92,6 +92,12 @@ class CardGridViewModel(
 					val vOpening = vSetId?.let {
 						mRepository.openingLanguageFor(it, vGame.id, vPreferred)
 					}
+					// What is *established* about this set, as opposed to what `vClaimed` says: a
+					// confirmation already on disk, plus every language whose cards are held. This
+					// is what the menu may list -- see `UiState.confirmedLanguages`.
+					val vConfirmed = vSetId
+						?.let { mRepository.confirmedLanguagesFor(it, vGame.id) }
+						.orEmpty()
 					dispatch(
 						CardGridContract.Intent.CapabilitiesResolved(
 							supportedFilters = vProvider.capabilities.filtering.supported,
@@ -110,9 +116,11 @@ class CardGridViewModel(
 							// preferred language really has nothing. The rule it protects is the
 							// same: a set is never opened in a language with no cards.
 							language = vOpening?.language ?: vProvider.resolveLanguage(vPreferred),
-							// Non-null only when the set opened in a language that was downloaded
-							// because the preferred one was not -- see `OpeningLanguage`.
+							confirmed = vConfirmed,
+							// Non-null only when the set opened in a language other than the one
+							// asked for -- see `OpeningLanguage`.
 							substitutedFor = vOpening?.substitutedFor,
+							substitution = vOpening?.reason,
 						),
 					)
 				}
