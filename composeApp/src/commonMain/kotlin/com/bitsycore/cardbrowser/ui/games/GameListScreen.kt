@@ -1,5 +1,13 @@
 package com.bitsycore.cardbrowser.ui.games
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +57,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.compose.runtime.collectAsState
@@ -259,7 +268,15 @@ fun GameListContent(
 					}
 
 					if (state.isEditing && state.hiddenGames.isNotEmpty()) {
-						item { HiddenHeading(count = state.hiddenGames.size) }
+						// Keyed, so the lazy list can tell this heading from the rows around it and
+						// fade it rather than swapping it in whole. An unkeyed item is identified by
+						// its index, which changes the moment a game is hidden.
+						item(key = "hidden-heading") {
+							HiddenHeading(
+								count = state.hiddenGames.size,
+								modifier = Modifier.animateItem(),
+							)
+						}
 						items(state.hiddenGames, key = { "hidden-" + it.id.value }) { vGame ->
 							GameRow(
 								game = vGame,
@@ -283,19 +300,25 @@ fun GameListContent(
 						}
 					}
 
+					// The foot of the list swaps between the two modes. Both are keyed and both
+					// animate, so entering edit mode fades the attribution out and the reset row in
+					// where it used to be a hard cut mid-scroll.
 					if (state.isEditing) {
-						item {
+						item(key = "reset-row") {
 							ResetRow(
 								isEnabled = state.isCustomised,
 								onReset = { dispatch(GameListContract.Intent.CustomisationReset) },
+								modifier = Modifier.animateItem(),
 							)
 						}
 					} else {
-						item {
+						item(key = "fine-print") {
 							FinePrint(
 								text = "Not affiliated with any game's publisher. " +
 									GameArt.LOGO_ATTRIBUTION,
-								modifier = Modifier.padding(horizontal = 4.dp, vertical = 16.dp),
+								modifier = Modifier
+									.animateItem()
+									.padding(horizontal = 4.dp, vertical = 16.dp),
 							)
 						}
 					}
@@ -357,15 +380,33 @@ private fun GameRow(
 			},
 		)
 
+	// Tighter while editing: a mark plus two controls is a lot for one phone-width row. Animated
+	// rather than switched, because the handle expanding into a row whose padding jumps at the same
+	// moment reads as two separate things happening to one row.
+	val vHorizontalPadding by animateDpAsState(
+		targetValue = if (isEditing) 8.dp else 16.dp,
+		animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+		label = "row padding",
+	)
+
 	val vContent: @Composable () -> Unit = {
 		Row(
-			// Tighter while editing: a mark plus two controls is a lot for one phone-width row.
 			modifier = Modifier
-				.padding(horizontal = if (isEditing) 8.dp else 16.dp, vertical = 12.dp)
+				.padding(horizontal = vHorizontalPadding, vertical = 12.dp)
 				.fillMaxWidth(),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
-			if (isEditing) {
+			// Expands from the left edge rather than appearing at full width, so the mark and the
+			// name slide over to make room for it instead of being redrawn somewhere else.
+			//
+			// Clipped, which is the default and is the point: unclipped, the handle draws at full
+			// size from the first frame and sits on top of the game's mark while the space for it
+			// is still opening.
+			AnimatedVisibility(
+				visible = isEditing,
+				enter = expandHorizontally() + fadeIn(),
+				exit = shrinkHorizontally() + fadeOut(),
+			) {
 				ReorderHandle(handleModifier ?: Modifier)
 			}
 			GameMark(art)
@@ -385,32 +426,51 @@ private fun GameRow(
 					)
 				}
 			}
-			if (isEditing) {
-				IconButton(
-					onClick = { dispatch(GameListContract.Intent.GameVisibilityToggled(game)) },
-					// Disabled only for the last visible game. `GameOrder` refuses that case as
-					// well, so the button cannot promise something the reducer would decline.
-					enabled = isHidden || canHide,
-				) {
-					Icon(
-						imageVector = if (isHidden) {
-							AppIcons.VisibilityOff
-						} else {
-							AppIcons.Visibility
-						},
-						contentDescription = if (isHidden) {
-							"Show ${game.displayName}"
-						} else {
-							"Hide ${game.displayName}"
-						},
-					)
+			// A cross-fade rather than a swap: the chevron and the eye occupy the same corner and
+			// mean opposite things about what a tap does, so the one replacing the other is worth
+			// showing. Sized to the eye button either way, so the row does not resize mid-fade.
+			AnimatedContent(
+				targetState = isEditing,
+				transitionSpec = { fadeIn() togetherWith fadeOut() },
+				label = "row trailing control",
+			) { vIsEditing ->
+				if (vIsEditing) {
+					IconButton(
+						onClick = { dispatch(GameListContract.Intent.GameVisibilityToggled(game)) },
+						// Disabled only for the last visible game. `GameOrder` refuses that case as
+						// well, so the button cannot promise something the reducer would decline.
+						enabled = isHidden || canHide,
+					) {
+						Icon(
+							imageVector = if (isHidden) {
+								AppIcons.VisibilityOff
+							} else {
+								AppIcons.Visibility
+							},
+							contentDescription = if (isHidden) {
+								"Show ${game.displayName}"
+							} else {
+								"Hide ${game.displayName}"
+							},
+						)
+					}
+				} else {
+					// A box of the button's size rather than a disabled button. Both keep the row
+					// from resizing mid-fade, but a disabled `IconButton` also greys the chevron
+					// and announces a dead button on every row to a screen reader. The whole row is
+					// the target out here; the chevron is decoration and says so with a null
+					// description.
+					Box(
+						modifier = Modifier.size(CHEVRON_SLOT),
+						contentAlignment = Alignment.Center,
+					) {
+						Icon(
+							imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+							contentDescription = null,
+							tint = MaterialTheme.colorScheme.onSurfaceVariant,
+						)
+					}
 				}
-			} else {
-				Icon(
-					imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-					contentDescription = null,
-					tint = MaterialTheme.colorScheme.onSurfaceVariant,
-				)
 			}
 		}
 	}
@@ -452,10 +512,19 @@ internal fun logoTintFor(art: GameArt): ColorFilter? {
 /** How far a hidden row is faded. Enough to read as off, not so far it cannot be read. */
 private const val HIDDEN_ROW_ALPHA = 0.45f
 
+/**
+ * The width the row's trailing corner holds in both modes.
+ *
+ * Material's own minimum touch target, which is what an `IconButton` occupies. Stated so the
+ * browsing chevron reserves the same space as the editing eye: without it the row's text column
+ * resizes underneath the cross-fade and the name shuffles sideways while the icons swap.
+ */
+private val CHEVRON_SLOT = 48.dp
+
 /** Separates the hidden games from the listed ones, and says how many there are. */
 @Composable
-private fun HiddenHeading(count: Int) {
-	Column(Modifier.padding(top = 16.dp, bottom = 4.dp)) {
+private fun HiddenHeading(count: Int, modifier: Modifier = Modifier) {
+	Column(modifier.padding(top = 16.dp, bottom = 4.dp)) {
 		HorizontalDivider()
 		Text(
 			text = if (count == 1) "1 hidden game" else "$count hidden games",
@@ -473,8 +542,8 @@ private fun HiddenHeading(count: Int) {
  * is cheaper than a user wondering whether hiding a game threw away the sets they downloaded.
  */
 @Composable
-private fun ResetRow(isEnabled: Boolean, onReset: () -> Unit) {
-	Column(Modifier.padding(vertical = 8.dp)) {
+private fun ResetRow(isEnabled: Boolean, onReset: () -> Unit, modifier: Modifier = Modifier) {
+	Column(modifier.padding(vertical = 8.dp)) {
 		TextButton(onClick = onReset, enabled = isEnabled) {
 			Text("Reset to default order")
 		}
@@ -492,14 +561,18 @@ private fun ResetRow(isEnabled: Boolean, onReset: () -> Unit) {
  *
  * `null` art means the game's module ships no logo -- see [GameArtRegistry] for why that is a
  * missing logo rather than a missing game.
+ *
+ * Internal, and shared with the first-launch setup. Two surfaces drawing a logo their own way is
+ * how three of them ended up invisible on one screen and fine on the other -- see
+ * [logoBackdropFor], which exists because that already happened once.
  */
 @Composable
-private fun GameMark(art: GameArt?) {
+internal fun GameMark(art: GameArt?, width: Dp = 72.dp, height: Dp = 48.dp) {
 	Box(
 		modifier = Modifier
 			// Wider than it is tall, because most of these are wordmarks. A square tile squeezes a
 			// 960x275 logo into a smear; the icon rows simply centre their glyph in the space.
-			.size(width = 72.dp, height = 48.dp)
+			.size(width = width, height = height)
 			.clip(RoundedCornerShape(12.dp))
 			.background(backdropFor(art)),
 		contentAlignment = Alignment.Center,

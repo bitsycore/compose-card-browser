@@ -57,6 +57,7 @@ The same standard applies to **you**, in commit messages, in docs, and in what y
 :core            domain vocabulary, game profiles, the provider contract.
                  No Ktor. No Okio. No Compose. NAMES NO GAME.
 :data            HTTP stack, caches, preferences, repositories. No Compose.
+:database        the SQLite card store: schema, per-platform driver, eviction. NAMES NO GAME.
 :games:api       GameArt — a logo and accent colour. Compose resources live here, not in :core.
 :games:<name>    one module per game: its GameProfile, its GameArt, its logo file.
 :providers:<n>   one module per data source: endpoints, DTOs, mapping, its own quirks.
@@ -109,7 +110,7 @@ Follow the user's global conventions (Spirtech prefixes, tabs, KDoc). Specifical
 
 ```bash
 ./gradlew build -x lint          # everything, all four targets, including both iOS ones
-./gradlew desktopTest            # the deterministic suite (497 tests on 2026-09-11, 8 skipped)
+./gradlew desktopTest            # the deterministic suite (488 tests on 2026-09-11, 8 skipped)
 ./gradlew :androidApp:assembleDebug
 ./gradlew :composeApp:run        # desktop
 ```
@@ -268,15 +269,6 @@ Do not "fix" these without asking; each is a decision with a reason recorded nea
 Not decisions, not bugs with a ticket -- just the things that are half-finished or unverified, so
 nobody re-discovers them the slow way. Delete an entry when it stops being true.
 
-**Raised, not started**
-
-- **A SQLite migration**, for speed and for cross-set search that does more than match a name. The
-  owner mentioned it on 2026-09-11 as something they may ask for from a different machine. Read
-  `docs/ARCHITECTURE.md` § "If this becomes a database" before touching it: what it buys, the five
-  things it must not change, and the two benches it has to beat. The headline is that SQLite makes a
-  *local* search fast without making it *complete* -- `SearchScope.LOCAL_CACHED_SETS` still has to
-  say what it looked at.
-
 **Known debt**
 
 - **`SetListScreen` builds `DownloadRequest`s in the composition layer.** It reads the
@@ -284,12 +276,17 @@ nobody re-discovers them the slow way. Delete an entry when it stops being true.
   side-effecting work outside a view model now that navigation has moved. It belongs in
   `SetListViewModel`; it was left alone because it changes the download path and that cannot be
   exercised without a device.
-- **Pin markers written before labels existed come back unattributed.** They appear under "Other"
-  on the storage screen, with their bytes counted. A running install upgraded across that change
-  will show some. Correct, but it looks like a bug the first time.
+- **The advanced search the store made possible is not on screen yet.** `searchPrintings` narrows
+  on type, rarity, cost range, domain and a "does not contain" exclusion, and the search screen
+  still sends a name. The query is tested; nothing dispatches it.
 
 **Unverified, and why**
 
+- **The card store has never been opened on Android or iOS.** Both drivers compile; neither has
+  run. The desktop one is covered by tests that open, reopen, damage and recover a real file, and
+  `CardStoreFactory` discards anything that fails `integrity_check` -- but that path has only been
+  exercised on a JVM. The first launch on a phone also runs the one-off cleanup of a pre-store
+  install, which nothing can rehearse.
 - **iOS has never been linked or run.** Kotlin compiles for both iOS targets in every build; the
   framework, the Swift shell and a simulator run need a Mac.
 - **Scryfall's live suite has not had a clean run** since it tripped its own rate limit: 12 checks

@@ -1,6 +1,7 @@
 package com.bitsycore.cardbrowser.ui.setup
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,13 +14,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -31,11 +38,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.CardLanguage
+import com.bitsycore.cardbrowser.games.altered.AlteredGame
+import com.bitsycore.cardbrowser.games.api.GameArt
+import com.bitsycore.cardbrowser.games.magic.MagicGame
+import com.bitsycore.cardbrowser.games.onepiece.OnePieceGame
+import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
+import com.bitsycore.cardbrowser.games.yugioh.YuGiOhGame
+import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
+import com.bitsycore.cardbrowser.ui.games.GameMark
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
+import org.koin.compose.koinInject
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import com.bitsycore.lib.pulse.compose.collectEffect
 import org.koin.compose.viewmodel.koinViewModel
@@ -58,23 +77,49 @@ fun SetupScreen(
 	}
 	val vState by viewModel.collectAsStateWithLifecycle()
 
-	SetupContent(state = vState, dispatch = viewModel::dispatch)
+	// Resolved here, not in the picker: a `Content` and everything under it must stay free of Koin
+	// or its previews throw. Same hoist as `GameListScreen`, which draws the same marks.
+	val vArtRegistry = koinInject<GameArtRegistry>()
+
+	SetupContent(
+		state = vState,
+		dispatch = viewModel::dispatch,
+		artFor = vArtRegistry::forGame,
+	)
 }
 
 /**
  * The setup, given a state and somewhere to send intents.
  *
- * No view model, no Koin, no coroutines, so every page is previewable. Game art is deliberately
- * *not* resolved here -- the picker shows names, because a wall of ten logos is the thing this
- * screen exists to spare someone.
+ * No view model, no Koin, no coroutines, so every page is previewable.
+ *
+ * The column is centred and capped rather than filling the window. This is the one screen with no
+ * list long enough to justify full width, and in a desktop window a 1600 px line of body text with
+ * three controls stranded at the far left reads as an unfinished dialog. A phone is narrower than
+ * the cap, so nothing changes there.
  */
 @Composable
 fun SetupContent(
 	state: SetupContract.UiState,
 	dispatch: (SetupContract.Intent) -> Unit,
+	/**
+	 * A game's logo and accent colour, supplied by the caller.
+	 *
+	 * A parameter rather than a `koinInject` in the tile, so this composable and its previews need
+	 * no Koin graph. The default answers `null`, which `GameMark` draws a fallback for.
+	 */
+	artFor: (GameProfile) -> GameArt? = { null },
 ) {
 	Scaffold { vPadding ->
-		Column(Modifier.padding(vPadding).fillMaxSize().padding(horizontal = 24.dp)) {
+		Column(
+			modifier = Modifier
+				.padding(vPadding)
+				.fillMaxSize()
+				.wrapContentWidth()
+				.widthIn(max = 640.dp)
+				.padding(horizontal = 24.dp),
+			horizontalAlignment = Alignment.CenterHorizontally,
+		) {
 			Spacer(Modifier.height(24.dp))
 			PageDots(current = state.page.ordinal, count = SetupContract.SetupPage.entries.size)
 			Spacer(Modifier.height(20.dp))
@@ -83,14 +128,17 @@ fun SetupContent(
 			// game list scrolls under them rather than pushing them off a phone screen.
 			Box(Modifier.weight(1f)) {
 				when (state.page) {
-					SetupContract.SetupPage.GAMES -> GamesPage(state, dispatch)
+					SetupContract.SetupPage.GAMES -> GamesPage(state, dispatch, artFor)
 					SetupContract.SetupPage.LANGUAGE -> LanguagePage(state, dispatch)
 					SetupContract.SetupPage.ABOUT -> AboutPage()
 				}
 			}
 
 			Spacer(Modifier.height(12.dp))
-			Row(verticalAlignment = Alignment.CenterVertically) {
+			Row(
+				verticalAlignment = Alignment.CenterVertically,
+				modifier = Modifier.fillMaxWidth(),
+			) {
 				if (state.page.ordinal > 0) {
 					TextButton(onClick = { dispatch(SetupContract.Intent.WentBack) }) { Text("Back") }
 				} else {
@@ -125,34 +173,46 @@ fun SetupContent(
 // ==================
 
 @Composable
-private fun GamesPage(state: SetupContract.UiState, dispatch: (SetupContract.Intent) -> Unit) {
-	Column {
+private fun GamesPage(
+	state: SetupContract.UiState,
+	dispatch: (SetupContract.Intent) -> Unit,
+	artFor: (GameProfile) -> GameArt?,
+) {
+	Column(horizontalAlignment = Alignment.CenterHorizontally) {
 		PageHeading(
 			title = "Which games do you play?",
 			body = "Everything else is hidden from the list. Nothing is deleted, and you can " +
 				"change this any time from the game list.",
 		)
-		Spacer(Modifier.height(8.dp))
-		Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+		Row(
+			horizontalArrangement = Arrangement.spacedBy(8.dp),
+			modifier = Modifier.fillMaxWidth(),
+		) {
 			TextButton(onClick = { dispatch(SetupContract.Intent.AllGamesSelected) }) { Text("All") }
 			TextButton(onClick = { dispatch(SetupContract.Intent.NoGamesSelected) }) { Text("None") }
 		}
-		LazyColumn(Modifier.weight(1f)) {
+		// Marks rather than a column of checkboxes. Ten wordmarks are recognised at a glance where
+		// ten names have to be read, and this is the one moment the user has no idea yet which
+		// games the app even covers. Adaptive rather than a fixed column count, so the same grid is
+		// two across on a phone and four in a desktop window.
+		LazyVerticalGrid(
+			// 104dp so a 400px phone gets two across rather than one. Measured by rendering both
+			// widths -- see `SetupRenderer`; at 132dp the phone showed a single column of tiles
+			// twice the size they needed to be.
+			columns = GridCells.Adaptive(minSize = 104.dp),
+			horizontalArrangement = Arrangement.spacedBy(12.dp),
+			verticalArrangement = Arrangement.spacedBy(12.dp),
+			modifier = Modifier.weight(1f),
+		) {
+			// Keyed on the game id, which is unique by construction -- the routing table names one
+			// provider per game. A duplicate key throws in a lazy grid rather than degrading.
 			items(state.games, key = { it.id.value }) { vGame ->
-				val vChecked = vGame.id.value in state.selected
-				Row(
-					verticalAlignment = Alignment.CenterVertically,
-					modifier = Modifier
-						.fillMaxWidth()
-						.clickable { dispatch(SetupContract.Intent.GameToggled(vGame.id.value)) },
-				) {
-					Checkbox(
-						checked = vChecked,
-						onCheckedChange = { dispatch(SetupContract.Intent.GameToggled(vGame.id.value)) },
-					)
-					Spacer(Modifier.width(4.dp))
-					Text(vGame.displayName, style = MaterialTheme.typography.bodyLarge)
-				}
+				GameChoice(
+					game = vGame,
+					art = artFor(vGame),
+					isSelected = vGame.id.value in state.selected,
+					onToggle = { dispatch(SetupContract.Intent.GameToggled(vGame.id.value)) },
+				)
 			}
 		}
 		// Said where it happens rather than as a disabled button with no explanation.
@@ -230,6 +290,64 @@ private fun AboutPage() {
 // MARK: Parts
 // ==================
 
+/**
+ * One game, as a mark you tap.
+ *
+ * Selection is a border and a tick rather than a checkbox: the tile is the target, and a checkbox
+ * beside it gives two things to aim at for one decision. The tick sits over the corner of the mark
+ * so the tile does not change size when it appears.
+ */
+@Composable
+private fun GameChoice(
+	game: GameProfile,
+	art: GameArt?,
+	isSelected: Boolean,
+	onToggle: () -> Unit,
+) {
+	Column(
+		horizontalAlignment = Alignment.CenterHorizontally,
+		modifier = Modifier
+			.clip(RoundedCornerShape(16.dp))
+			.border(
+				width = if (isSelected) 2.dp else 1.dp,
+				color = if (isSelected) {
+					MaterialTheme.colorScheme.primary
+				} else {
+					MaterialTheme.colorScheme.outlineVariant
+				},
+				shape = RoundedCornerShape(16.dp),
+			)
+			.clickable(onClick = onToggle)
+			.padding(vertical = 12.dp, horizontal = 8.dp)
+			.fillMaxWidth(),
+	) {
+		Box(contentAlignment = Alignment.TopEnd) {
+			// The picker's own tile, at the same aspect ratio. Shared rather than redrawn: two
+			// surfaces with their own idea of a logo backdrop is a bug this codebase has had once.
+			GameMark(art = art, width = 84.dp, height = 56.dp)
+			if (isSelected) {
+				Icon(
+					imageVector = Icons.Filled.CheckCircle,
+					contentDescription = null,
+					tint = MaterialTheme.colorScheme.primary,
+					modifier = Modifier.padding(4.dp).size(20.dp),
+				)
+			}
+		}
+		Spacer(Modifier.height(8.dp))
+		Text(
+			text = game.displayName,
+			style = MaterialTheme.typography.labelLarge,
+			textAlign = TextAlign.Center,
+			// Always two lines' worth, so a row holding "Magic: The Gathering" beside "Altered"
+			// has tiles of one height rather than a short one floating beside a tall one.
+			minLines = 2,
+			maxLines = 2,
+			overflow = TextOverflow.Ellipsis,
+		)
+	}
+}
+
 @Composable
 private fun PageHeading(title: String, body: String) {
 	Column {
@@ -280,7 +398,15 @@ private fun PageDots(current: Int, count: Int) {
 // MARK: Previews
 // ==================
 
-private fun previewGames(): List<GameProfile> = emptyList()
+/**
+ * Real profiles, because the picker's whole subject is how a wall of marks reads.
+ *
+ * A preview has no Koin graph, so the *art* still resolves to `null` and the tiles draw their
+ * fallback -- see `SetupRenderer` for the version with logos.
+ */
+private fun previewGames(): List<GameProfile> = listOf(
+	RiftboundGame, PokemonGame, MagicGame, OnePieceGame, AlteredGame, YuGiOhGame,
+)
 
 @Preview
 @Composable
