@@ -27,11 +27,12 @@ sealed interface CardmarketLink {
 	val label: String
 
 	/**
-	 * One product page, from a product path a provider supplied.
+	 * One product page, resolved by the product id a provider supplied.
 	 *
-	 * Not reachable with the providers integrated today -- see [CardmarketLinkBuilder.linkFor].
+	 * Reachable for Magic and Pokemon, whose sources publish the id: Scryfall's `cardmarket_id`
+	 * and TCGdex's `thirdParty.cardmarket`.
 	 */
-	data class Product(override val url: String, val productPath: String) : CardmarketLink {
+	data class Product(override val url: String, val productId: String) : CardmarketLink {
 		override val label: String get() = "View on Cardmarket"
 	}
 
@@ -86,17 +87,28 @@ sealed interface CardmarketLink {
  * /{locale}/Riftbound/Products/Singles/Origins/KaiSa-Survivor-V1-Epic
  * ```
  *
- * ## Why no card-level link is generated
+ * ## Card-level links, and the two ways to ask for one
  *
- * The last example is the reason. A card slug is not the card's name: `KaiSa-Survivor-V1-Epic`
- * folds in the apostrophe-stripped name, an abbreviated subtitle, a variant ordinal and the rarity.
- * Riftcodex publishes none of that in a reconstructible form -- it has no variant ordinal at all --
- * so synthesising a slug would produce a 404 for every card whose name is not a single plain word.
- * Guessing product slugs is exactly what the brief forbids, so this builder stops at the expansion
- * and lets the user pick the printing on a page that really lists them.
+ * There are two, and only one works:
  *
- * The moment a provider supplies a real Cardmarket product path under
- * [ExternalIdKey.CARDMARKET_PRODUCT], [linkFor] uses it and the user gets the exact page.
+ * ```
+ * /{locale}/Magic/Products?idProduct=778435           lands on the card
+ * /{locale}/Magic/Products/Singles?idProduct=778435   does not
+ * ```
+ *
+ * Both were put in front of a browser on 2026-09-11, because Cardmarket answers 403 to every
+ * scripted request and blocks an automated browser too -- so this is a human's observation and
+ * there is no cheaper way to get one.
+ *
+ * That distinction had been missed here. A note in this project recorded the second shape failing
+ * and concluded product ids were useless, so this builder fell through to a search for cards whose
+ * exact page was one parameter away -- and the dormant branch that did fire built the failing
+ * shape, so the link was broken wherever an id existed.
+ *
+ * A *slug* path still cannot be synthesised, and that half of the old reasoning holds: a slug like
+ * `KaiSa-Survivor-V1-Epic` folds in the apostrophe-stripped name, an abbreviated subtitle, a
+ * variant ordinal and the rarity, and Riftcodex publishes no variant ordinal at all. Nothing here
+ * guesses one. The id is published, not guessed, which is the difference.
  *
  * ## Search parameters
  *
@@ -164,12 +176,20 @@ object CardmarketLinkBuilder {
 	fun linkFor(printing: CardPrinting, set: CardSet?, game: GameProfile): CardmarketLink? {
 		val vGame = game.cardmarketSlug ?: return null
 
-		// 1. An exact product path, if a provider ever supplies one.
-		val vProductPath = printing.externalIds[ExternalIdKey.CARDMARKET_PRODUCT]?.firstOrNull()
-		if (vProductPath != null) {
+		// 1. The exact product, by id.
+		//
+		//    `/{Game}/Products?idProduct={n}` -- and the missing `/Singles` segment is the whole
+		//    point. This used to build `/{Game}/Products/Singles/{n}`, treating the id as though
+		//    it were a path slug, which produced a broken link on every Magic and Pokemon card
+		//    that carried one. Both shapes were put in front of a browser on 2026-09-11: the one
+		//    here lands on the card, and `/Products/Singles?idProduct=` does not. An earlier note
+		//    in this project generalised from the second to "ids do not work at all", which is
+		//    what kept this branch dormant and wrong.
+		val vProductId = printing.externalIds[ExternalIdKey.CARDMARKET_PRODUCT]?.firstOrNull()
+		if (vProductId != null) {
 			return CardmarketLink.Product(
-				url = "$BASE_URL/$UI_LOCALE/$vGame/Products/Singles/$vProductPath",
-				productPath = vProductPath,
+				url = "$BASE_URL/$UI_LOCALE/$vGame/Products?idProduct=$vProductId",
+				productId = vProductId,
 			)
 		}
 

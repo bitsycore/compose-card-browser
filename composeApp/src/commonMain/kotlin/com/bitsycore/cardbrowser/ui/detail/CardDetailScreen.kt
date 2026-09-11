@@ -231,6 +231,7 @@ fun CardDetailContent(
 				onZoomToggle = { dispatch(CardDetailContract.Intent.ZoomToggled(it)) },
 				onLanguageSelected = { dispatch(CardDetailContract.Intent.LanguageSelected(it)) },
 				onOpenCardmarket = { dispatch(CardDetailContract.Intent.OpenCardmarket(it)) },
+				onOpenTcgplayer = { dispatch(CardDetailContract.Intent.OpenTcgplayer(it)) },
 				onOpenFullscreen = { dispatch(CardDetailContract.Intent.FullscreenToggled(true)) },
 			)
 		}
@@ -267,6 +268,7 @@ private fun CardPager(
 	onZoomToggle: (Boolean) -> Unit,
 	onLanguageSelected: (CardLanguage) -> Unit,
 	onOpenCardmarket: (String) -> Unit,
+	onOpenTcgplayer: (String) -> Unit,
 	onOpenFullscreen: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
@@ -368,6 +370,7 @@ private fun CardPager(
 				onZoomToggle = onZoomToggle,
 				onLanguageSelected = onLanguageSelected,
 				onOpenCardmarket = { onOpenCardmarket(vCard.id.qualified) },
+				onOpenTcgplayer = { onOpenTcgplayer(vCard.id.qualified) },
 				onOpenFullscreen = onOpenFullscreen,
 				// Tapping another artwork of the same card is a jump within the list already loaded,
 				// so it is the same move the preview strip makes rather than a new screen.
@@ -514,6 +517,7 @@ private fun CardDetailPage(
 	onZoomToggle: (Boolean) -> Unit,
 	onLanguageSelected: (CardLanguage) -> Unit,
 	onOpenCardmarket: () -> Unit,
+	onOpenTcgplayer: () -> Unit,
 	onOpenFullscreen: () -> Unit,
 	onSelectPrinting: (CardPrinting) -> Unit,
 	isSharedElement: Boolean,
@@ -667,8 +671,9 @@ private fun CardDetailPage(
 			}
 
 			// ============
-			//  Cardmarket
+			//  Where to buy it
 
+			val vTcgplayer = state.tcgplayerLinkFor(card)
 			state.cardmarketLinkFor(card)?.let { vLink ->
 				SectionDivider()
 				Spacer(Modifier.height(4.dp))
@@ -689,6 +694,28 @@ private fun CardDetailPage(
 						"A search for \"${vLink.terms}\" in ${vLink.expansion} — this database does " +
 							"not map cards to Cardmarket products.",
 					)
+				}
+			}
+
+			// Its own block rather than an `else`: the two marketplaces are independent, and a
+			// card can have an id for one and not the other. Four of the eight sources publish a
+			// TCGplayer id, so this appears for Magic, Pokemon, Riftbound and the three TCGCSV
+			// games, and simply does not for the rest.
+			vTcgplayer?.let { vLink ->
+				if (state.cardmarketLinkFor(card) == null) {
+					SectionDivider()
+					Spacer(Modifier.height(4.dp))
+				} else {
+					Spacer(Modifier.height(8.dp))
+				}
+				OutlinedButton(onClick = onOpenTcgplayer, modifier = Modifier.fillMaxWidth()) {
+					Icon(
+						imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+						contentDescription = null,
+						modifier = Modifier.size(16.dp),
+					)
+					Spacer(Modifier.size(8.dp))
+					Text(vLink.label)
 				}
 			}
 

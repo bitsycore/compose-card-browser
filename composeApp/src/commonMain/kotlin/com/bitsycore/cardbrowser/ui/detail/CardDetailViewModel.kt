@@ -60,6 +60,7 @@ class CardDetailViewModel(
 			is CardDetailContract.Intent.PageChanged ->
 				mSession.focus(stateFlow.value.card?.id?.qualified)
 			is CardDetailContract.Intent.OpenCardmarket -> openCardmarket(intent.cardId)
+			is CardDetailContract.Intent.OpenTcgplayer -> openTcgplayer(intent.cardId)
 			is CardDetailContract.Intent.LanguageSelected -> changeLanguage(intent.language)
 			else -> Unit
 		}
@@ -242,10 +243,21 @@ class CardDetailViewModel(
 	private fun openCardmarket(cardId: String) {
 		val vState = stateFlow.value
 		val vCard = vState.cards.firstOrNull { it.id.qualified == cardId } ?: return
-		val vLink = vState.cardmarketLinkFor(vCard) ?: return
+		openLink(vState.cardmarketLinkFor(vCard)?.url)
+	}
+
+	private fun openTcgplayer(cardId: String) {
+		val vState = stateFlow.value
+		val vCard = vState.cards.firstOrNull { it.id.qualified == cardId } ?: return
+		openLink(vState.tcgplayerLinkFor(vCard)?.url)
+	}
+
+	/** Hands a URL to the platform, and says so when the platform will not take it. */
+	private fun openLink(url: String?) {
+		if (url == null) return
 		viewModelScope.launch {
-			if (!mLinkOpener.open(vLink.url)) {
-				emitEffect(CardDetailContract.Effect.LinkFailed(vLink.url))
+			if (!mLinkOpener.open(url)) {
+				emitEffect(CardDetailContract.Effect.LinkFailed(url))
 			}
 		}
 	}

@@ -2,6 +2,8 @@ package com.bitsycore.cardbrowser.ui.detail
 
 import com.bitsycore.cardbrowser.core.cardmarket.CardmarketLink
 import com.bitsycore.cardbrowser.core.cardmarket.CardmarketLinkBuilder
+import com.bitsycore.cardbrowser.core.tcgplayer.TcgplayerLink
+import com.bitsycore.cardbrowser.core.tcgplayer.TcgplayerLinkBuilder
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.Availability
@@ -174,6 +176,15 @@ object CardDetailContract :
 			game?.let { CardmarketLinkBuilder.linkFor(card, set, it) }
 
 		/**
+		 * The TCGplayer link for one card, or `null` when no source published an id for it.
+		 *
+		 * No game argument, unlike the Cardmarket one: TCGplayer resolves a product from its id
+		 * alone, with no category segment to confirm per game. See `TcgplayerLinkBuilder`.
+		 */
+		fun tcgplayerLinkFor(card: CardPrinting): TcgplayerLink? =
+			TcgplayerLinkBuilder.linkFor(card)
+
+		/**
 		 * Everything the provider stated about one printing, as labelled rows.
 		 *
 		 * The chips above the rules text are the glance -- rarity, type, cost. This is the rest of
@@ -323,6 +334,9 @@ object CardDetailContract :
 
 		/** Opening a link never places an order. */
 		data class OpenCardmarket(val cardId: String) : Intent
+
+		/** The user asked for this card's TCGplayer page. */
+		data class OpenTcgplayer(val cardId: String) : Intent
 	}
 
 	sealed interface Effect {
@@ -416,5 +430,7 @@ object CardDetailContract :
 		is Intent.FullscreenToggled -> state.copy(isFullscreen = intent.isFullscreen)
 
 		is Intent.OpenCardmarket -> state
+
+		is Intent.OpenTcgplayer -> state
 	}
 }

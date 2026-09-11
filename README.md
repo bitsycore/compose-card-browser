@@ -667,15 +667,22 @@ the inline image and the fullscreen viewer now decode at source resolution.
   whose name is not a single plain word. The app links to a *search scoped to the expansion*
   instead, using the expansion id Riftcodex already supplies — which is precise enough to land on
   the card's own printings.
-- **`?idProduct=` alone does not resolve to a card.** Tested 2026-09-09 against a real product id
-  that TCGdex publishes: `…/Pokemon/Products/Singles?idProduct=482879` lands on an *unfiltered*
-  singles listing ten pages long, not on the card. The id is a disambiguator appended to an already
-  correct slug path, not a substitute for one — Cardmarket's own API returns the authoritative path
-  separately, as a `website` field like `/Products/Singles/Born+of+the+Gods/Shrike+Harpy`.
+- **`?idProduct=` resolves to a card, off the right path.** Two shapes, one works:
 
-  This matters because both TCGdex and Scryfall publish a numeric `cardmarket_id` per printing, so
-  it looked like exact card links were one line away. They are not, and a link built that way would
-  have looked plausible while dumping the user on a ten-page list.
+  ```
+  /en/Magic/Products?idProduct=778435           lands on the card
+  /en/Magic/Products/Singles?idProduct=778435   unfiltered listing
+  ```
+
+  Both put in front of a browser on 2026-09-11. This entry previously recorded only the second —
+  tested 2026-09-09 against `…/Pokemon/Products/Singles?idProduct=482879`, which lands on a
+  ten-page listing — and generalised from it to "ids do not work". That was wrong, and expensive:
+  both TCGdex and Scryfall publish a numeric `cardmarket_id` per printing, so exact card links
+  really were one parameter away, and `CardmarketLinkBuilder` was meanwhile building the *failing*
+  shape from those ids, giving a broken button on every Magic and Pokémon card that had one.
+
+  What has not changed: a *slug* path still cannot be synthesised. The id is published, not
+  guessed.
 - **Only six query parameters are used**, all seen on a working Cardmarket URL: `searchMode`,
   `idCategory`, `idExpansion`, `searchString`, `idRarity`, `perSite`. No language, condition, finish
   or seller-country preset — none has been observed surviving a page load.

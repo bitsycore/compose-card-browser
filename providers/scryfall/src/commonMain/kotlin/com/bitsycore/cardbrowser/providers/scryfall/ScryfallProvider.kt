@@ -72,9 +72,13 @@ import io.ktor.http.appendPathSegments
  *   populated -- a finish missing from the array really is absent.
  * - **Images**: `thumb`, `grid` and `display` are WebP. The grid uses `grid` and the detail screen
  *   `display`.
- * - **Cardmarket**: `cardmarket_id` is a product id, but it is a *number* and this app only builds
- *   Cardmarket URLs from path slugs it has seen. It is stored for provenance and no link is built
- *   from it -- see `GameProfile.cardmarketSlug`.
+ * - **Cardmarket**: `cardmarket_id` is a product id, and it is enough. `/en/Magic/Products?
+ *   idProduct={n}` resolves to the card -- confirmed in a browser on 2026-09-11, which is the only
+ *   way to confirm anything about Cardmarket, since it answers 403 to every scripted request. The
+ *   note this replaces said no link could be built from a number; that was drawn from testing
+ *   `/Products/Singles?idProduct=`, which is a different path and genuinely does not work.
+ * - **TCGplayer**: `tcgplayer_id`, which becomes `tcgplayer.com/product/{n}`. See
+ *   `TcgplayerLinkBuilder`, including what has *not* been confirmed about it.
  * - **Cross-set search**: the same `/cards/search` endpoint without a `set:` term.
  */
 class ScryfallProvider(
@@ -139,8 +143,11 @@ class ScryfallProvider(
 			cardIdentity = true,
 			artworkVariants = true,
 			finishes = true,
-			// A numeric id, not a URL path. Stored, but no link is built from it.
-			cardmarketProductMapping = false,
+			// `cardmarket_id`, and a link *is* built from it now. The shape is
+			// `/en/Magic/Products?idProduct={n}`, confirmed in a browser on 2026-09-11 -- see
+			// `CardmarketLinkBuilder`, which had been building the `/Products/Singles/{n}` shape
+			// that does not resolve.
+			cardmarketProductMapping = true,
 			crossSetSearch = true,
 		),
 		attribution = Attribution(

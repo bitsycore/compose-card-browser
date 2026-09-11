@@ -205,20 +205,28 @@ class CardmarketLinkBuilderTest {
 	}
 
 	@Test
-	fun `a provider-supplied product path wins over any search`() {
+	fun `a provider-supplied product id wins over any search`() {
+		// The shape confirmed in a browser on 2026-09-11, and the exact string is the assertion
+		// because the segment that is *missing* is what makes it work: `/Products?idProduct=`
+		// resolves to the card and `/Products/Singles?idProduct=` does not.
+		//
+		// This used to build the second shape from a value it treated as a path slug, so every
+		// Magic and Pokemon card that carried an id got a link to nowhere. Both sources publish
+		// a number, not a path.
 		val vLink = CardmarketLinkBuilder.linkFor(
 			game = TestGame,
 			printing = TestCards.printing(
-				externalIds = mapOf(ExternalIdKey.CARDMARKET_PRODUCT to listOf("Origins/KaiSa-Survivor-V1-Epic")),
+				externalIds = mapOf(ExternalIdKey.CARDMARKET_PRODUCT to listOf("778435")),
 			),
 			set = TestCards.ORIGINS,
 		)
 
 		val vProduct = assertIs<CardmarketLink.Product>(vLink)
 		assertEquals(
-			"https://www.cardmarket.com/en/Riftbound/Products/Singles/Origins/KaiSa-Survivor-V1-Epic",
+			"https://www.cardmarket.com/en/Riftbound/Products?idProduct=778435",
 			vProduct.url,
 		)
+		assertEquals("778435", vProduct.productId)
 	}
 
 	@Test

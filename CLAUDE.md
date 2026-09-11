@@ -146,9 +146,13 @@ Two results already bought with someone's time — do not spend it again:
 - **`idCategory` is optional.** Known for Riftbound (1655), Pokémon (51) and One Piece (1621); Magic
   and Yu-Gi-Oh's real URLs send none and `0` respectively, so they declare none and the parameter is
   omitted. A missing id costs the refinement, not the search — only a *wrong* one returns nothing.
-- **`?idProduct=<n>` alone does not work.** It is ignored and yields an unfiltered singles listing.
-  The numeric id both TCGdex and Scryfall publish is therefore *not* enough to build a card link;
-  the slug path is what identifies the product.
+- **`?idProduct=<n>` works, but only off the right path.** `/{Game}/Products?idProduct=778435`
+  lands on the card; `/{Game}/Products/Singles?idProduct=778435` is ignored and yields an
+  unfiltered listing. Both confirmed in a browser on 2026-09-11. This entry used to record only
+  the second and conclude that ids were useless, which was wrong and cost the app working
+  card links for Magic and Pokémon -- and worse, `CardmarketLinkBuilder` was building the
+  failing shape, so the link was broken wherever an id existed. A *slug* path still cannot be
+  synthesised; the id is published, not guessed, which is the difference.
 
 **Scryfall's live suite trips its own rate limit.** 12 checks in one run exceeds what the host
 accepts, and re-running alone after a pause did not clear it. Five failures there were the state on
