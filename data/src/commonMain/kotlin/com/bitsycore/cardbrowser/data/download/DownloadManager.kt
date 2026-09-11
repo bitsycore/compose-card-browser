@@ -135,7 +135,20 @@ sealed interface DownloadStatus {
 	 *   that is 98% cached is genuinely different from one that is complete, and the user should
 	 *   not discover the gap on a train
 	 */
-	data class Completed(val cards: Int, val imagesFetched: Int, val imagesFailed: Int) : DownloadStatus
+	data class Completed(
+		val cards: Int,
+		val imagesFetched: Int,
+		val imagesFailed: Int,
+		/**
+		 * Cards a bulk import left out because their set is not one the app can list.
+		 *
+		 * Said rather than swallowed. Scryfall's dump carries Arena and MTGO products and sets it
+		 * states are empty, none of which has a row to open, so importing them would cost disk for
+		 * nothing -- but a file that arrives 600 MB and writes a fraction of it must not look
+		 * identical to one that wrote all of it.
+		 */
+		val skippedCards: Int = 0,
+	) : DownloadStatus
 
 	/** Gave up. Only a failure that stopped the whole job lands here. */
 	data class Failed(val reason: String) : DownloadStatus
@@ -415,6 +428,7 @@ class DownloadManager(
 					cards = vImport.cards,
 					imagesFetched = 0,
 					imagesFailed = 0,
+					skippedCards = vImport.skippedCards,
 				)
 			}
 		}

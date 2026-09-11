@@ -220,6 +220,45 @@ class BulkImportTest {
 	}
 
 	@Test
+	fun `cards whose set the catalogue does not list are skipped`() = runTest {
+		// Scryfall's dump carries Arena and MTGO products, and `listSets` drops them because they
+		// have no printed cards. Importing them cost disk and a line in the storage screen for
+		// sets with no row to open -- which is also what made that screen read "1044 of 988".
+		val vCards = listOf(
+			printing("AAA", "001"),
+			printing("DIGITAL", "001"),
+			printing("DIGITAL", "002"),
+		)
+		val vProvider = FakeBulkProvider(mProviderId, vCards, listOf(set("AAA")))
+		val vRepository = repository(vProvider)
+
+		val vResult = assertNotNull(vRepository.importBulk(TestGameProfile.id))
+
+		assertEquals(1, vResult.cards, "only the card whose set can be opened")
+		assertEquals(1, vResult.sets)
+		assertEquals(2, vResult.skippedCards, "and the rest are reported rather than swallowed")
+		assertEquals(1, vResult.skippedSets)
+	}
+
+	@Test
+	fun `a catalogue that could not be fetched imports everything rather than nothing`() = runTest {
+		// The guard on the skip. `listSets` is one request and it can fail; an empty answer must
+		// not be read as "no set qualifies", which would turn a failed request into an import that
+		// silently wrote nothing at all.
+		val vProvider = FakeBulkProvider(
+			mProviderId,
+			listOf(printing("AAA", "001"), printing("BBB", "001")),
+			emptyList(),
+		)
+		val vRepository = repository(vProvider)
+
+		val vResult = assertNotNull(vRepository.importBulk(TestGameProfile.id))
+
+		assertEquals(2, vResult.cards)
+		assertEquals(0, vResult.skippedCards)
+	}
+
+	@Test
 	fun `an imported set reads back exactly like a downloaded one`() = runTest {
 		// The point of the whole exercise: a bulk import and a set-at-a-time download must leave
 		// the same cache, or the set list would mark one saved and not the other.

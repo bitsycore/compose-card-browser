@@ -711,6 +711,11 @@ internal fun describe(job: DownloadJob): String {
 				return@buildString
 			}
 			append("${vStatus.cards} cards")
+			// What the file held and this app cannot show. Left out on purpose -- see
+			// `DownloadStatus.Completed.skippedCards` -- and therefore worth one clause.
+			if (vStatus.skippedCards > 0) {
+				append(", ${vStatus.skippedCards} skipped (digital-only sets)")
+			}
 			if (vStatus.imagesFetched > 0) append(", ${vStatus.imagesFetched} images")
 			// Never rounded up to "done". A set that is four images short is not complete, and the
 			// user should find that out here rather than offline.

@@ -1492,6 +1492,13 @@ class CardRepository(
 	 * bulk import and 988 individual downloads produce the same cache, and the set list marks them
 	 * saved by the same check. Sets the bulk file does not mention are left untouched.
 	 *
+	 * Cards whose set the game's catalogue does not list are **skipped**, not written. A dump is
+	 * not a catalogue: Scryfall's carries Arena and MTGO products, which have no printed cards and
+	 * which `listSets` therefore drops, so writing them spent disk and write time on sets that have
+	 * no row to open and cannot be reached from anywhere in the app. They are counted and reported
+	 * -- see [BulkImportResult.skippedCards] -- because discarding most of a 600 MB file must not
+	 * look the same as importing it.
+	 *
 	 * @return what happened, or `null` when this game's source publishes no bulk file
 	 */
 	suspend fun importBulk(
@@ -1522,6 +1529,21 @@ class CardRepository(
 		// dates and symbols that the ordinary path has.
 		val vSets = runCatching { vProvider.listSets(vLanguage) }.getOrDefault(emptyList())
 		val vSetsById = vSets.associateBy { it.id.qualified }
+
+		// Whether a card's set has to be in that catalogue for the card to be kept.
+		//
+		// It does, when there is a catalogue to check against. A dump carries sets the app can
+		// never show: Scryfall's holds Arena and MTGO products, which `listSets` drops because
+		// they have no printed cards, and sets the source itself states are empty. Records for
+		// those cost disk, write time and a line in the storage screen for something that has no
+		// row to open.
+		//
+		// Guarded on the catalogue being non-empty, and that guard is the point rather than
+		// caution: `listSets` is one request and it can fail, and a failed request must not be
+		// read as "no set qualifies" and quietly import nothing at all.
+		val vFilterToCatalogue = vSetsById.isNotEmpty()
+		var vSkippedCards = 0
+		val vSkippedSets = mutableSetOf<String>()
 
 		val vScratch = vStorage.cacheRoot / BULK_SCRATCH_DIR
 		// Sharded, not one scratch file per set, and that is not a detail.
@@ -1558,6 +1580,14 @@ class CardRepository(
 					onProgress(BulkImportProgress.Downloading(vDone, vTotal))
 				},
 			) { vCard ->
+				// Not in the catalogue, so nothing in the app can ever open it. Counted, because
+				// silently dropping most of a file would be indistinguishable from a broken import
+				// -- see [BulkImportResult.skippedCards].
+				if (vFilterToCatalogue && vCard.setId.qualified !in vSetsById) {
+					vSkippedCards++
+					vSkippedSets += vCard.setId.qualified
+					return@streamAll
+				}
 				// Bucketed by set *and* language. A cache entry holds one language and this file
 				// carries several -- overwhelmingly English, with thousands of cards in six others
 				// -- so one bucket per set would mix them and store the lot under a single label
@@ -1652,6 +1682,8 @@ class CardRepository(
 			// than whatever the manifest happens to say by the time the import finishes.
 			variantId = vVariant.id,
 			dumpUpdatedAt = vVariant.updatedAt,
+			skippedCards = vSkippedCards,
+			skippedSets = vSkippedSets.size,
 		)
 	}
 
@@ -1985,6 +2017,16 @@ data class BulkImportResult(
 	 */
 	val variantId: String? = null,
 	val dumpUpdatedAt: LocalDate? = null,
+	/**
+	 * Cards left out because their set is not in the catalogue, and how many sets that was.
+	 *
+	 * Reported rather than passed over in silence. The skip is deliberate -- a set the app cannot
+	 * list is a set nothing can open, so keeping its cards costs disk for a row that will never
+	 * exist -- but "most of the file was discarded" and "the file was imported" must not look the
+	 * same from the outside. For Scryfall this is Arena and MTGO products.
+	 */
+	val skippedCards: Int = 0,
+	val skippedSets: Int = 0,
 )
 
 /** Where a bulk import has got to. Three phases, because they have very different durations. */

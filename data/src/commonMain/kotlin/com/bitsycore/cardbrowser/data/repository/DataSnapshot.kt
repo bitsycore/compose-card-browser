@@ -173,10 +173,12 @@ enum class LanguageSubstitution {
  *   counted records once, and the storage screen divided it by [knownSets] -- which is sets -- and
  *   reported "Card info 1111/988" for a Magic import and "1075/486" for Pokemon. Two different
  *   units either side of a slash is always wrong, however plausible the numbers look
- * @property extraSets sets held that the game's catalogue does not list. Scryfall's dump carries
- *   digital-only products and sets it states are empty, both of which `listSets` drops -- so they
- *   are on disk, they cannot be browsed, and they are not part of "how much of this game do I
- *   have". Counted apart rather than folded in, which is what made the row read 1044 of 988
+ * @property extraSets sets held that the game's catalogue does not list -- on disk, not browsable,
+ *   and not part of "how much of this game do I have". Counted apart rather than folded in, which
+ *   is what made the row read 1044 of 988. An import no longer creates them: `importBulk` skips
+ *   cards whose set the catalogue does not list. This stays because records written by an earlier
+ *   build are still there until they are deleted, and because a catalogue can shrink -- a source
+ *   withdrawing a set does not delete what was downloaded of it
  * @property languages how many *sets* each language covers. A count per language rather than a
  *   set of them, because "11 languages" for an English-only import is true and useless: Scryfall's
  *   cheap dump carries a handful of cards with no English printing, so ten of those eleven are one
