@@ -3,6 +3,7 @@ plugins {
 	alias(libs.plugins.androidKmpLibrary)
 	alias(libs.plugins.composeMultiplatform)
 	alias(libs.plugins.composeCompiler)
+	alias(libs.plugins.composeDesktopNativeBridge)
 }
 
 // What every `:games:*` module implements, and the one place the Compose dependency needed for a
@@ -25,6 +26,14 @@ kotlin {
 
 	iosArm64()
 	iosSimulatorArm64()
+
+	// The native desktop targets, behind a switch. See :core for why they are opt-in.
+	if (providers.gradleProperty("nativeDesktop").isPresent) {
+		mingwX64()
+		linuxX64()
+		linuxArm64()
+		macosArm64()
+	}
 
 	sourceSets {
 		commonMain.dependencies {

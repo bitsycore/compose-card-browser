@@ -5,6 +5,7 @@ plugins {
 	// `:games:api`, which is where the art abstraction and this dependency are justified.
 	alias(libs.plugins.composeMultiplatform)
 	alias(libs.plugins.composeCompiler)
+	alias(libs.plugins.composeDesktopNativeBridge)
 }
 
 // Yu-Gi-Oh!: what the app knows about the game itself, independent of any source that serves it.
@@ -24,6 +25,14 @@ kotlin {
 
 	iosArm64()
 	iosSimulatorArm64()
+
+	// The native desktop targets, behind a switch. See :core for why they are opt-in.
+	if (providers.gradleProperty("nativeDesktop").isPresent) {
+		mingwX64()
+		linuxX64()
+		linuxArm64()
+		macosArm64()
+	}
 
 	sourceSets {
 		commonMain.dependencies {

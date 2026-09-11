@@ -28,6 +28,14 @@ kotlin {
 	iosArm64()
 	iosSimulatorArm64()
 
+	// The native desktop targets, behind a switch. See :core for why they are opt-in.
+	if (providers.gradleProperty("nativeDesktop").isPresent) {
+		mingwX64()
+		linuxX64()
+		linuxArm64()
+		macosArm64()
+	}
+
 	sourceSets {
 		commonMain.dependencies {
 			// The domain vocabulary being stored. No provider, no Ktor, no Compose -- the same

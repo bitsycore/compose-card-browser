@@ -11,6 +11,10 @@ pluginManagement {
 		}
 		mavenCentral()
 		gradlePluginPortal()
+		// The compose-desktop-native bridge plugin, which is not on the plugin portal.
+		maven("https://maven.bitsycore.com/releases") {
+			mavenContent { includeGroupAndSubgroups("com.bitsycore") }
+		}
 	}
 }
 

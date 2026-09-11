@@ -41,6 +41,10 @@ okio = "3.18.1"
 # which is final in JDK 22 and preview in the 21 this project's toolchain targets.
 jna = "5.17.0"
 
+# Compose Desktop targeting Kotlin/Native instead of the JVM. The plugin substitutes the mirrored
+# klibs for `org.jetbrains.compose.*` on native targets; see docs/NATIVE_DESKTOP.md.
+composeDesktopNative = "0.4.2"
+
 # The card store. `:database` holds every complete set; see that module's README for what the
 # migration was measured to buy and what it had to answer first.
 sqldelight = "2.3.2"
@@ -151,6 +155,7 @@ kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-t
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
+composeDesktopNativeBridge = { id = "com.bitsycore.compose-desktop-native.bridge", version.ref = "composeDesktopNative" }
 composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 androidApplication = { id = "com.android.application", version.ref = "agp" }
 # AGP 9's KMP library plugin. `com.android.library` is deprecated for KMP under AGP 9 and removed in

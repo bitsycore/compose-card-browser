@@ -1,5 +1,9 @@
 plugins {
 	alias(libs.plugins.kotlinMultiplatform)
+	// Transitively resolves Compose klibs through its game module, so it needs the
+	// substitution too -- the bridge rewrites whatever a module *resolves*, not only
+	// what it declares.
+	alias(libs.plugins.composeDesktopNativeBridge)
 	alias(libs.plugins.androidKmpLibrary)
 	alias(libs.plugins.kotlinSerialization)
 }
@@ -22,6 +26,14 @@ kotlin {
 	// Intel-simulator artifact, and a target the app module cannot build is not worth declaring here.
 	iosArm64()
 	iosSimulatorArm64()
+
+	// The native desktop targets, behind a switch. See :core for why they are opt-in.
+	if (providers.gradleProperty("nativeDesktop").isPresent) {
+		mingwX64()
+		linuxX64()
+		linuxArm64()
+		macosArm64()
+	}
 
 	sourceSets {
 		commonMain.dependencies {

@@ -3,6 +3,7 @@ plugins {
 	alias(libs.plugins.androidKmpLibrary)
 	alias(libs.plugins.composeMultiplatform)
 	alias(libs.plugins.composeCompiler)
+	alias(libs.plugins.composeDesktopNativeBridge)
 	alias(libs.plugins.kotlinSerialization)
 }
 
@@ -34,9 +35,28 @@ kotlin {
 		}
 	}
 
+	// The native desktop targets, behind a switch. See :core for why they are opt-in, and
+	// docs/NATIVE_DESKTOP.md for what still has to land before this module can link.
+	if (providers.gradleProperty("nativeDesktop").isPresent) {
+		mingwX64 { binaries.executable { entryPoint = "com.bitsycore.cardbrowser.main" } }
+		linuxX64 { binaries.executable { entryPoint = "com.bitsycore.cardbrowser.main" } }
+		linuxArm64 { binaries.executable { entryPoint = "com.bitsycore.cardbrowser.main" } }
+		macosArm64 { binaries.executable { entryPoint = "com.bitsycore.cardbrowser.main" } }
+	}
+
 	@Suppress("OPT_IN_USAGE")
 	applyDefaultHierarchyTemplate {
 		common {
+			// One source set for the four native desktop targets, so the entry point is written
+			// once rather than per architecture.
+			if (providers.gradleProperty("nativeDesktop").isPresent) {
+				group("nativeDesktop") {
+					withMingwX64()
+					withLinuxX64()
+					withLinuxArm64()
+					withMacosArm64()
+				}
+			}
 			group("jvmShared") {
 				// AGP 9 registers its own multiplatform android target, which withAndroidTarget()
 				// does not recognise, so it is matched by name instead.

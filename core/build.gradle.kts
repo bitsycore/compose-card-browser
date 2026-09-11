@@ -29,6 +29,21 @@ kotlin {
 	iosArm64()
 	iosSimulatorArm64()
 
+	// The native desktop targets, behind a switch.
+	//
+	// Opt-in because the app cannot be *linked* for them yet -- several of its UI dependencies
+	// publish no klibs for Windows or Linux, and the list is in docs/NATIVE_DESKTOP.md. The layers
+	// below the UI have no such gap, so they are built and kept building today rather than being
+	// converted in one go on the day the last dependency lands.
+	//
+	// `./gradlew -PnativeDesktop=true :core:compileKotlinMingwX64`
+	if (providers.gradleProperty("nativeDesktop").isPresent) {
+		mingwX64()
+		linuxX64()
+		linuxArm64()
+		macosArm64()
+	}
+
 	sourceSets {
 		commonMain.dependencies {
 			api(libs.kotlinx.coroutines.core)
