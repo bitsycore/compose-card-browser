@@ -265,7 +265,8 @@ def align(raw):
 	return dict(vAligned)
 
 
-def build(raw):
+def build(raw, resolved=None, report=None):
+	vMajority = resolved or {}
 	vAligned = align(raw)
 	vMaps = {vLocale: label_ids(raw[vLocale]["options"]) for vLocale in LOCALES}
 
@@ -319,6 +320,14 @@ def build(raw):
 			fill("cost", number(vDetail.get("fee")))
 			fill("speed", number(vDetail.get("speed")))
 			fill("damage", number(vDetail.get("damage")))
+			# A field the locales disagreed about is taken from `verify`'s majority rather than
+			# from whichever locale this loop happened to reach first -- which, sorted, is always
+			# ja-jp. That would give the right answer today by accident, and the accident is the
+			# problem: it would go on being "right" if the origin locale were the odd one out.
+			for vField, _ in LANGUAGE_FREE:
+				if ((vCode, vTier), vField) in vMajority:
+					vCard[vField] = vMajority[((vCode, vTier), vField)]
+
 			# Where a card is actually found, which is not always the product its number was
 			# assigned under: six cards state a product that disagrees with their own code prefix.
 			if not vCard["products"]:
@@ -372,6 +381,11 @@ def build(raw):
 			"locales": {vTag: raw[vLocale]["total"] for vLocale, vTag in LOCALES.items()},
 			"note": "Unofficial snapshot of UCP's own card list. Regenerate with "
 			        "providers/wuwa/tools/scrape_wuwa.py.",
+			# Recorded, not hidden. Where UCP's locales disagreed about a language-free field the
+			# majority was taken, and this says which card, which field, what each locale claimed
+			# and what was written -- so a reader can see that a number in this file is one of two
+			# the source published, and a new disagreement is visible rather than absorbed.
+			"disagreements": report or [],
 		},
 		"imageBases": vImageBases,
 		"vocabulary": {
@@ -385,47 +399,94 @@ def build(raw):
 	}
 
 
+# The language-free fields, as (snapshot key, detail key). These are what alignment is checked
+# against: two locales pointed at one entry must agree about them, because none of them is text.
+LANGUAGE_FREE = (
+	("cardTypeId", "type_id"),
+	("level", "level"),
+	("cost", "fee"),
+	("speed", "speed"),
+	("damage", "damage"),
+)
+
+
 def verify(raw):
 	"""
-	Asserts the alignment against the card fields that carry no language.
+	Checks the alignment against the card fields that carry no language, and resolves what it can.
 
 	Two locales pointed at one entry must be describing the same card, and card type, level, cost,
-	speed and damage are the fields where that is checkable without reading any text. If this fails,
-	the snapshot is not written: an entry merging two different cards is worse than no snapshot.
+	speed and damage are where that is checkable without reading any text.
+
+	A disagreement used to abort the whole run. That was right while it had never happened and wrong
+	the first time it did: on 2026-09-11 UCP's Simplified Chinese catalogue gave `BP01-049` a damage
+	of 6 where Japanese and Korean both say 5, and refusing to write cost a 194-card update over one
+	number. An entry merging two different cards is still worse than no snapshot -- but that is not
+	what this is. Type, level, cost and speed all match; the locales plainly mean the same card and
+	one of them has a typo.
+
+	So a field with a strict majority is resolved to it and **recorded** in the snapshot's
+	provenance, and anything without one still aborts: two locales disagreeing with nothing to break
+	the tie is a genuine "we do not know", and this project does not guess at those.
+
+	Returns `(resolved, report)` -- `resolved` keyed by `(alignment key, snapshot field)`, and
+	`report` the human-readable account that goes into the file.
 	"""
 	vAligned = align(raw)
 	vProblems = []
+	vResolved = {}
+	vReport = []
 	vShared = 0
 	for vKey, vLocaleIds in sorted(vAligned.items(), key=lambda kv: str(kv[0])):
 		if len(vLocaleIds) < 2:
 			continue
 		vShared += 1
-		vSeen = {}
-		for vLocale, vId in vLocaleIds.items():
-			vDetail = raw[vLocale]["details"][vId]
-			vSeen[vLocale] = (
-				vDetail.get("type_id"),
-				number(vDetail.get("level")),
-				number(vDetail.get("fee")),
-				number(vDetail.get("speed")),
-				number(vDetail.get("damage")),
-			)
-		if len(set(vSeen.values())) != 1:
-			vProblems.append((vKey, vSeen))
+		for vField, vDetailKey in LANGUAGE_FREE:
+			vSeen = {}
+			for vLocale, vId in vLocaleIds.items():
+				vDetail = raw[vLocale]["details"][vId]
+				vRaw = vDetail.get(vDetailKey)
+				vSeen[vLocale] = vRaw if vField == "cardTypeId" else number(vRaw)
+			# A locale that states nothing is not disagreeing; `build` fills those from a locale
+			# that does, which is the whole reason the fields are pooled.
+			vStated = {k: v for k, v in vSeen.items() if v is not None}
+			if len(set(vStated.values())) <= 1:
+				continue
+			vCounts = collections.Counter(vStated.values())
+			vTop, vCount = vCounts.most_common(1)[0]
+			if list(vCounts.values()).count(vCount) > 1:
+				vProblems.append((vKey, vField, vSeen))
+				continue
+			vResolved[(vKey, vField)] = vTop
+			vReport.append({
+				"code": vKey[0],
+				"tier": vKey[1],
+				"field": vField,
+				"values": {k: v for k, v in sorted(vStated.items())},
+				"taken": vTop,
+			})
 	if vProblems:
-		for vKey, vSeen in vProblems[:10]:
-			print(f"  MISALIGNED {vKey}: {vSeen}", file=sys.stderr)
-		raise SystemExit(f"{len(vProblems)} printings disagree across locales; snapshot not written")
+		for vKey, vField, vSeen in vProblems[:10]:
+			print(f"  UNRESOLVED {vKey} {vField}: {vSeen}", file=sys.stderr)
+		raise SystemExit(
+			f"{len(vProblems)} fields disagree with no majority; snapshot not written"
+		)
+	for vEntry in vReport:
+		print(
+			f"  RESOLVED {vEntry['code']} tier={vEntry['tier']} {vEntry['field']}: "
+			f"{vEntry['values']} -> {vEntry['taken']}",
+			file=sys.stderr,
+		)
 	print(f"alignment verified across {vShared} printings carried by more than one locale",
 	      file=sys.stderr)
+	return vResolved, vReport
 
 
 def main():
 	if not os.path.isdir(os.path.join("providers", "wuwa")):
 		raise SystemExit("Run this from the repository root")
 	vRaw = scrape(use_cache="--refresh" not in sys.argv)
-	verify(vRaw)
-	vSnapshot = build(vRaw)
+	vResolved, vReport = verify(vRaw)
+	vSnapshot = build(vRaw, vResolved, vReport)
 	os.makedirs(os.path.dirname(OUT), exist_ok=True)
 	with io.open(OUT, "w", encoding="utf-8", newline="\n") as vFile:
 		json.dump(vSnapshot, vFile, ensure_ascii=False, indent="\t", sort_keys=False)

@@ -2,13 +2,26 @@
 	"schemaVersion": 1,
 	"source": {
 		"api": "https://mc-api.ucp-jp.com/api/web",
-		"scrapedOn": "2026-09-10",
+		"scrapedOn": "2026-09-11",
 		"locales": {
-			"ja": 191,
-			"zh-cn": 127,
-			"ko": 175
+			"ja": 194,
+			"zh-cn": 186,
+			"ko": 192
 		},
-		"note": "Unofficial snapshot of UCP's own card list. Regenerate with providers/wuwa/tools/scrape_wuwa.py."
+		"note": "Unofficial snapshot of UCP's own card list. Regenerate with providers/wuwa/tools/scrape_wuwa.py.",
+		"disagreements": [
+			{
+				"code": "BP01-049",
+				"tier": 3,
+				"field": "damage",
+				"values": {
+					"ja-jp": 5,
+					"ko-kr": 5,
+					"zh-cn": 6
+				},
+				"taken": 5
+			}
+		]
 	},
 	"imageBases": [
 		"https://mc-file01-1309577691.cos.ap-hongkong.myqcloud.com/kapai/kpupimg/compressed",
@@ -582,6 +595,13 @@
 					"rules": "【레벨업】이 카드를 캐릭터 덱으로 되돌린다.\n【리더】자신이 받는 데미지 +1. 자신의 【카멜리아】의 적색 카드 데미지 +1.",
 					"imageBase": 0,
 					"image": "kapai_c96fd19f90659794e449e8450fd212e7_613661d98a30_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1728,
+					"name": "椿",
+					"rules": "【升级】将此卡放回角色卡组。\n【领队】己方受到的伤害+1。己方<椿>的红色卡伤害+1。",
+					"imageBase": 0,
+					"image": "kapai_c38afcdccf37554d3648ec905dd64957_60acf01a5e1a_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -914,11 +934,11 @@
 					"image": "kapai_7160e578f20fc31a99d837d4be88c609_1bf37889b402_748ef9f347_preview_7cd1445775e84d4d.webp"
 				},
 				"ko": {
-					"providerId": 1974,
+					"providerId": 2612,
 					"name": "카멜리아",
 					"rules": "【리더】【판정】자신이 승리했을 경우, 트래시 에리어에서 <일반 공격> 카드 1장을 패에 추가 가능.",
 					"imageBase": 0,
-					"image": "kapai_de636406676d37c4d610e70c278c8545_293c58275ada_3e6a188f4a.webp"
+					"image": "kapai_d70ef716a089e9463a355e5b329ef7fd_a13e96ddad81_748ef9f347_preview_fed94f2a6b862ee3.webp"
 				},
 				"zh-cn": {
 					"providerId": 1646,
@@ -955,6 +975,13 @@
 					"rules": "■1ターン2回、自分のライフが回復した時、カード1枚を引いてもよい。",
 					"imageBase": 0,
 					"image": "kapai_9941281edc0971f5f0f3f8af03374c91_b396db71ba8c_3e6a188f4a.webp"
+				},
+				"ko": {
+					"providerId": 1906,
+					"name": "파수인",
+					"rules": "1턴 2회, 자신의 생명력 회복 시, 카드 1장 뽑기 가능.",
+					"imageBase": 0,
+					"image": "kapai_1d7db1f180d6b08f1d211819e609a5da_e44faa724493_3e6a188f4a.webp"
 				},
 				"zh-cn": {
 					"providerId": 1578,
@@ -998,6 +1025,13 @@
 					"rules": "1턴 2회, 자신의 생명력 회복 시, 카드 1장 뽑기 가능.",
 					"imageBase": 0,
 					"image": "kapai_f9b2d0473f5a7a40119a216cdf663a25_f1ad31b5b790_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1714,
+					"name": "守岸人",
+					"rules": "1回合2次，己方生命恢复时，可以抽1张卡。",
+					"imageBase": 0,
+					"image": "kapai_850192fa3ebab922a95a5baaf1d45f24_f0078d1c5fb5_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -1027,6 +1061,13 @@
 					"rules": "■【リーダー】【自分の対抗フェイズ開始時】自分の手札が4枚以下の場合、5枚になるまでカードを引く。",
 					"imageBase": 0,
 					"image": "kapai_665ea280d885e5b2ed79b2ad26eafd3b_5de747d583c7_3e6a188f4a.webp"
+				},
+				"ko": {
+					"providerId": 1907,
+					"name": "파수인",
+					"rules": "【리더】【자신의 배틀 페이즈 시작 시】자신의 패가 5장 미만인 경우, 패가 5장이 될 때까지 카드를 뽑는다.",
+					"imageBase": 0,
+					"image": "kapai_5fab1b5896f95108c19483fbd25f5874_10835e80bcab_3e6a188f4a.webp"
 				},
 				"zh-cn": {
 					"providerId": 1579,
@@ -1070,6 +1111,13 @@
 					"rules": "【리더】【자신의 배틀 페이즈 시작 시】자신의 패가 5장 미만인 경우, 패가 5장이 될 때까지 카드를 뽑는다.",
 					"imageBase": 0,
 					"image": "kapai_1cf4b2e5ddffd3d1a04c52e3d9f5d4bb_d8b0d7fcfe31_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1715,
+					"name": "守岸人",
+					"rules": "【领队】【己方对抗阶段开始时】若己方手牌未满5张，抽卡直到手牌变为5张。",
+					"imageBase": 0,
+					"image": "kapai_e55ddbf153d1d256e8dc83a23344d612_0f84a267ab5e_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -1106,6 +1154,13 @@
 					"rules": "【리더】【자신의 배틀 페이즈 시작 시】자신의 패가 5장 미만인 경우, 패가 5장이 될 때까지 카드를 뽑는다.",
 					"imageBase": 0,
 					"image": "kapai_dcf20acf77d0b098740c50aa37eacf86_b9ac821643fd_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1729,
+					"name": "守岸人",
+					"rules": "【领队】【己方对抗阶段开始时】若己方手牌未满5张，抽卡直到手牌变为5张。",
+					"imageBase": 0,
+					"image": "kapai_e6b441fb93dba1d0660296db0026ea82_237a226d6e40_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -1135,6 +1190,13 @@
 					"rules": "■【切り替え】カード1枚を引いてもよい。そうした場合、自分の手札1枚を捨てる。",
 					"imageBase": 0,
 					"image": "kapai_948a2c642bb042f59a2d6435a2400016_586063d56f4e_3e6a188f4a.webp"
+				},
+				"ko": {
+					"providerId": 1908,
+					"name": "파수인",
+					"rules": "【교체】카드 1장 뽑기 가능. 카드를 뽑았을 경우, 자신의 패 1장을 버린다.",
+					"imageBase": 0,
+					"image": "kapai_bafef971dbaf4628721ab37192e38863_e728d4f30af9_3e6a188f4a.webp"
 				},
 				"zh-cn": {
 					"providerId": 1580,
@@ -1215,6 +1277,13 @@
 					"imageBase": 0,
 					"image": "kapai_6111ead40833455466a86cb4bed174f0_0a0b0e0b016e_3e6a188f4a.webp"
 				},
+				"ko": {
+					"providerId": 1909,
+					"name": "파수인",
+					"rules": "【등장】/【레벨업】트래시 에리어에서 <변주 스킬> 카드 1장을 패에 추가 가능.",
+					"imageBase": 0,
+					"image": "kapai_d64be436f2d9f58c2d377e0f7e79ed14_1c724688cb30_3e6a188f4a.webp"
+				},
 				"zh-cn": {
 					"providerId": 1581,
 					"name": "守岸人",
@@ -1294,6 +1363,13 @@
 					"imageBase": 0,
 					"image": "kapai_5bd03be47c3c14c2eb00ddcd01e2abdb_89b3077c7ffd_3e6a188f4a.webp"
 				},
+				"ko": {
+					"providerId": 1910,
+					"name": "파수인",
+					"rules": "【리더】【배틀】자신이 녹색 카드로 배틀 시, 자신의 덱 위의 카드 1장을 공개하고 패에 추가 가능.\n【리더】【판정】자신이 녹색 카드로 승리했을 경우, 자신의 생명력을 1pt 회복한다.",
+					"imageBase": 0,
+					"image": "kapai_8dfdd02e8339c3bd04b8baa749436340_b3312dc2b2ed_3e6a188f4a.webp"
+				},
 				"zh-cn": {
 					"providerId": 1582,
 					"name": "守岸人",
@@ -1331,11 +1407,11 @@
 					"image": "kapai_31ccd2a30b804af6984a2db11435bee7_2ea35ed632a0_748ef9f347_preview_4785c1e518b7427f.webp"
 				},
 				"ko": {
-					"providerId": 1977,
+					"providerId": 2613,
 					"name": "파수인",
 					"rules": "【리더】【배틀】자신이 녹색 카드로 배틀 시, 자신의 덱 위의 카드 1장을 공개하고 패에 추가 가능.\n【리더】【판정】자신이 녹색 카드로 승리했을 경우, 자신의 생명력을 1pt 회복한다.",
 					"imageBase": 0,
-					"image": "kapai_96c9cf978c760a0ddba980cbc25217c8_fdb0ddc14448_3e6a188f4a.webp"
+					"image": "kapai_b3d346303935c7e916ab3e83f02df576_a1cd6ca7572d_748ef9f347_preview_61a87e355afa73fc.webp"
 				},
 				"zh-cn": {
 					"providerId": 1649,
@@ -1422,6 +1498,13 @@
 					"rules": "이 카드는 카드 효과로만 등장 가능.\n자신의 【앙코】의 적색 카드 데미지 +1.\n【자신의 턴 종료 시】이 카드가 이번 턴 이외에 등장한 경우, 이 카드를 캐릭터 덱으로 되돌린다.",
 					"imageBase": 0,
 					"image": "kapai_518b3699d4cb55d6d3bbd404a311b1e0_0371435db086_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1716,
+					"name": "安可",
+					"rules": "此卡只能通过卡牌效果登场。\n己方【安可】的红色卡伤害+1。\n【己方回合结束时】若此卡在本回合以外的回合登场，将此卡放回角色卡组。",
+					"imageBase": 0,
+					"image": "kapai_7940b4d49a43d3c2bf47c4909ea4f871_4c5c03f23120_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -1501,6 +1584,13 @@
 					"rules": "【리더】【각 턴 종료 시】이번 턴에 상대가 데미지를 받은 경우, 트래시 에리어에서 【앙코】카드 1장을 자신의 패에 추가 가능.",
 					"imageBase": 0,
 					"image": "kapai_0ce73c5b9f5d005a5275728e73f076b2_c77926ef41da_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1717,
+					"name": "安可",
+					"rules": "【领队】【各回合结束时】本回合中若对方受到过伤害，可以将弃牌区1张【安可】卡加入手牌。",
+					"imageBase": 0,
+					"image": "kapai_0bb74e57475b063dc44bd98c8e169252_73535a998e98_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -1537,6 +1627,13 @@
 					"rules": "【리더】【각 턴 종료 시】이번 턴에 상대가 데미지를 받은 경우, 트래시 에리어에서 【앙코】카드 1장을 자신의 패에 추가 가능.",
 					"imageBase": 0,
 					"image": "kapai_75d1076b509acdec177a40a99e27822c_d3ffcf0a5ccf_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1730,
+					"name": "安可",
+					"rules": "【领队】【各回合结束时】本回合中若对方受到过伤害，可以将弃牌区1张【安可】卡加入手牌。",
+					"imageBase": 0,
+					"image": "kapai_ecbec93cf90b7d100d3791f5331975ad_935cf63b5d72_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -1783,11 +1880,11 @@
 					"image": "kapai_6118502848bda4e57be041352492996c_c1b06743af05_748ef9f347_preview_5f2eeb964e7f1329.webp"
 				},
 				"ko": {
-					"providerId": 1980,
+					"providerId": 2614,
 					"name": "앙코",
 					"rules": "【리더】매 턴에 자신이 처음 사용한 【앙코】의 <기본 공격> 데미지 +2.",
 					"imageBase": 0,
-					"image": "kapai_d32d5e57d0250fe0fe1160f704496afc_acadcba897aa_3e6a188f4a.webp"
+					"image": "kapai_40f7af87b64c895665ac24c322a9ba19_94d4a0aa8d09_748ef9f347_preview_2ff7d7a16fbc9e54.webp"
 				},
 				"zh-cn": {
 					"providerId": 1652,
@@ -1917,6 +2014,13 @@
 					"rules": "【리더】【판정】자신의 녹색 카드가 배틀에서 청색 카드에 승리하고, 자신의 패가 8장 미만인 경우, 패가 8장이 될 때까지 카드를 뽑는다.",
 					"imageBase": 0,
 					"image": "kapai_7ccf4960aa4fcfa559163535fb6cfc87_3bb35dcb6dea_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1731,
+					"name": "漂泊者（女）",
+					"rules": "【领队】【判定】若己方以绿色卡对抗蓝色卡胜利且己方手牌未满8张，抽卡直到手牌变为8张。",
+					"imageBase": 0,
+					"image": "kapai_c2bbb1a36639c6ea161841e840a4a8e1_6d8e6d3d9fca_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -1953,6 +2057,13 @@
 					"rules": "【등장】/【레벨업】자신의 덱 위의 카드 1장을 공개하고 패에 추가 가능.",
 					"imageBase": 0,
 					"image": "kapai_c988b54f2ddde748fe9444b6ce85e956_a9e096819e7b_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1653,
+					"name": "漂泊者（女）",
+					"rules": "【登场】/【升级】可以公开己方卡组顶1张卡并加入手牌。",
+					"imageBase": 0,
+					"image": "kapai_f6a33c6cd6b72347d2fd73241e162593_c99c547cb79d_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -2162,6 +2273,13 @@
 					"rules": "【리더】【판정】자신이 녹색 카드로 승리했을 경우, 【추격 3】.",
 					"imageBase": 0,
 					"image": "kapai_f55dba9ecb0c46c4f52d9c1fb805269c_cbf494eeb27e_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1732,
+					"name": "漂泊者（男）",
+					"rules": "【领队】【判定】若己方以绿色卡胜利，【追击3】。",
+					"imageBase": 0,
+					"image": "kapai_17192cd68029938fcb62a8827e4f472c_f19e61fe3bb8_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -2198,6 +2316,13 @@
 					"rules": "【등장】/【레벨업】자신의 덱 위의 카드 1장을 공개하고 패에 추가 가능.",
 					"imageBase": 0,
 					"image": "kapai_1eb257437171645961df0f82e4823511_e7e310c59188_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1655,
+					"name": "漂泊者（男）",
+					"rules": "【登场】/【升级】可以公开己方卡组顶1张卡并加入手牌。",
+					"imageBase": 0,
+					"image": "kapai_bdb8f71f84c1b7e34e002c25ac682c85_a4c3d16a8c53_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -2315,6 +2440,13 @@
 					"imageBase": 0,
 					"image": "kapai_45fa602facbd1f38f409974ceab33d65_404f2d15ac8d_3e6a188f4a.webp"
 				},
+				"ko": {
+					"providerId": 1920,
+					"name": "양양",
+					"rules": "【자신의 턴 종료 시】자신의 패 1장을 버릴 수 있다. 패를 버렸을 경우, 자신의 리더를 「양양」으로 교체한다.",
+					"imageBase": 0,
+					"image": "kapai_66e0a26d7277471202f6dbcfacb19e82_970a77f2cfab_3e6a188f4a.webp"
+				},
 				"zh-cn": {
 					"providerId": 1592,
 					"name": "秧秧",
@@ -2400,6 +2532,13 @@
 					"rules": "【자신의 턴 종료 시】자신의 패 1장을 버릴 수 있다. 패를 버렸을 경우, 자신의 리더를 「양양」으로 교체한다.",
 					"imageBase": 0,
 					"image": "kapai_2e2581061f2269e2829fbd165f06a05e_ae17006a63ad_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1733,
+					"name": "秧秧",
+					"rules": "【己方回合结束时】己方可以丢弃1张手牌。若丢弃了手牌，将己方领队切换为「秧秧」。",
+					"imageBase": 0,
+					"image": "kapai_549fa263f62c4f2df305bf267db01aa1_52e8da56d506_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -2561,11 +2700,11 @@
 					"image": "kapai_f7bf7a7d0d44c3cc62a6bc225d132301_cd34d25ff64b_748ef9f347_preview_62dccafbbd671e25.webp"
 				},
 				"ko": {
-					"providerId": 1986,
+					"providerId": 2608,
 					"name": "양양",
 					"rules": "【리더】【배틀】자신이 청색 카드로 배틀 시, 자신의 덱 위의 카드 1장을 협주 에리어에 배치 가능.",
 					"imageBase": 0,
-					"image": "kapai_7b394f186f477a406fc014b835f0864b_b81421ea472e_3e6a188f4a.webp"
+					"image": "kapai_0dfca922f5d266c7d951726c43928491_2c35d951084d_748ef9f347_preview_a67e609d696085b9.webp"
 				},
 				"zh-cn": {
 					"providerId": 1658,
@@ -2602,6 +2741,13 @@
 					"rules": "■【リーダー】【各対抗フェイズ終了時】自分のアクションエリアに＜基本攻撃＞が2枚以上ある場合、相手にダメージ3を与える。",
 					"imageBase": 0,
 					"image": "kapai_9a4f86c886a36119342bea8b400a5b7d_b4592fae9a80_3e6a188f4a.webp"
+				},
+				"ko": {
+					"providerId": 1922,
+					"name": "치샤",
+					"rules": "【리더】【각 배틀 페이즈 종료 시】자신의 액션 에리어에 <기본 공격> 카드가 2장 이상 있을 경우, 상대에게 데미지를 3pt 입힌다.",
+					"imageBase": 0,
+					"image": "kapai_cd64d9970e813d75ff51b05b1476ae8d_38b3fd759121_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -2681,6 +2827,13 @@
 					"rules": "【리더】【각 배틀 페이즈 종료 시】자신의 액션 에리어에 <기본 공격> 카드가 2장 이상 있을 경우, 상대에게 데미지를 3pt 입힌다.",
 					"imageBase": 0,
 					"image": "kapai_18631c8cbabcb0d251af7e827394ac22_0ef9c2df592c_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1734,
+					"name": "炽霞",
+					"rules": "【领队】【各对抗阶段结束时】若己方行动区有2张或以上<常态攻击>，造成3点伤害。",
+					"imageBase": 0,
+					"image": "kapai_e84a4108d950e456f03a1a23de69eb86_9339d949b824_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -2842,11 +2995,11 @@
 					"image": "kapai_e4329b88f6c0766c1cb48b3ac5701965_e22137a194f6_748ef9f347_preview_485154083e848bce.webp"
 				},
 				"ko": {
-					"providerId": 1988,
+					"providerId": 2609,
 					"name": "치샤",
 					"rules": "【리더】【배틀】자신이 적색 카드로 배틀 시, 상대에게 데미지를 1pt 입힌다.",
 					"imageBase": 0,
-					"image": "kapai_cc88b7a879fdcf50565d18e8ef0ea735_995ed3c3952c_3e6a188f4a.webp"
+					"image": "kapai_c607cbe2de64ae4eaee9efe7504c876d_82ea1485001b_748ef9f347_preview_3cc0c68c22d8b04d.webp"
 				},
 				"zh-cn": {
 					"providerId": 1660,
@@ -2933,6 +3086,13 @@
 					"rules": "【리더】【판정】자신이 자신의 턴에 승리했을 경우, 자신의 덱 위의 카드 5장을 공개하고, 해당 카드 중 모든 【금희】카드를 패에 추가하고, 나머지는 트래시 에리어에 버린다.",
 					"imageBase": 0,
 					"image": "kapai_b2d6d2f65aeec84e118e8e88ff5a6133_ac58117765a5_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1725,
+					"name": "今汐",
+					"rules": "【领队】【判定】若己方在己方回合中胜利，可以公开己方卡组顶5张卡并将其中全部的【今汐】卡加入手牌，剩余的卡置于弃牌区。",
+					"imageBase": 0,
+					"image": "kapai_e8636dd66c0ea4877dc0320bfbbb10b5_16488bc41276_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -2969,6 +3129,13 @@
 					"rules": "【리더】【판정】자신이 자신의 턴에 승리했을 경우, 자신의 덱 위의 카드 5장을 공개하고, 해당 카드 중 모든 【금희】카드를 패에 추가하고, 나머지는 트래시 에리어에 버린다.",
 					"imageBase": 0,
 					"image": "kapai_cc9b21d2291de2cf34a502c77816a435_7c0c7471fe65_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1735,
+					"name": "今汐",
+					"rules": "【领队】【判定】若己方在己方回合中胜利，可以公开己方卡组顶5张卡并将其中全部的【今汐】卡加入手牌，剩余的卡置于弃牌区。",
+					"imageBase": 0,
+					"image": "kapai_4480ded663a1d6097339a99bb6c7ff2c_a720bc38dbe6_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -3130,11 +3297,11 @@
 					"image": "kapai_456cdb95a860691e9fbc4da0cdce4045_5536a4ea86ba_748ef9f347_preview_f1847f1daef8d4bb.webp"
 				},
 				"ko": {
-					"providerId": 1990,
+					"providerId": 2610,
 					"name": "금희",
 					"rules": "【리더】【배틀】자신이 적색 카드로 배틀 시, 상대에게 데미지를 1pt 입힌다.",
 					"imageBase": 0,
-					"image": "kapai_5762bd7fdad9d4ec48ef5c5e9014a8c9_c49d21ab11cb_3e6a188f4a.webp"
+					"image": "kapai_94fe413e98b5e2e8ef9424e0d3332648_ec01931c3e41_748ef9f347_preview_a3aaa61a5b18f6cf.webp"
 				},
 				"zh-cn": {
 					"providerId": 1662,
@@ -3264,6 +3431,13 @@
 					"rules": "【리더】【판정】자신이 청색 카드로 승리했을 경우, 자신의 리더 교체 가능 및【추격 3】.",
 					"imageBase": 0,
 					"image": "kapai_0e2b761bf696ab9c358d21fb6f6c2592_d2e10c23967c_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1736,
+					"name": "散华",
+					"rules": "【领队】【判定】若己方以蓝色卡胜利，可以切换己方领队，【追击3】。",
+					"imageBase": 0,
+					"image": "kapai_a0af5f3aaaf460e153a379e67a778616_7fac4219da4a_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -3425,11 +3599,11 @@
 					"image": "kapai_c743afdb1dbf4269b2e8af7e1ece14b2_5b41673f2224_748ef9f347_preview_edd1259d24a08b5d.webp"
 				},
 				"ko": {
-					"providerId": 1992,
+					"providerId": 2611,
 					"name": "산화",
 					"rules": "【리더】【배틀】자신이 청색 카드로 배틀 시, 자신의 덱 위의 카드 1장을 협주 에리어에 배치 가능.",
 					"imageBase": 0,
-					"image": "kapai_acb96026f6ce921a9fc04eae4df282fc_e925e555bf68_3e6a188f4a.webp"
+					"image": "kapai_1f5527b1ca8c6c4ac6f42f3a5dd868d4_d351f8cc4150_748ef9f347_preview_4dc2bcd63a000b4e.webp"
 				},
 				"zh-cn": {
 					"providerId": 1664,
@@ -3477,6 +3651,13 @@
 					"rules": "자신의 액션 에리어에는 동시에 1장의 <에코>만 존재할 수 있다.\n자신의 협주 에리어에 이 카드를 포함해 2종류 이상의 <솟구치는 용암>이 있을 경우, 매 턴에 자신이 처음 사용한 <용융> 데미지 +1.",
 					"imageBase": 0,
 					"image": "kapai_47964680f382e9b42e98fc55cb7e05d9_eb4d245cbaa9_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1665,
+					"name": "通行灯偶",
+					"rules": "己方行动区只能同时存在1张<声骸>。\n若己方协奏区有包含此卡在内的2种类或以上<熔山裂谷>，每回合己方首次使用的<热熔>伤害+1。",
+					"imageBase": 0,
+					"image": "kapai_9e2125fb0d4354986c95eb17185f0802_fe20673f9a62_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -3517,6 +3698,13 @@
 					"rules": "자신의 액션 에리어에는 동시에 1장의 <에코>만 존재할 수 있다.\n【우세】(지난 턴에 자신이 배틀에 승리했거나 상대가 배틀 페이즈를 패스할 경우 이 스킬을 획득) 상대에게 데미지를 입힐 시, 상대의 패 4장당 상대의 패 1장을 랜덤으로 제거한다.",
 					"imageBase": 0,
 					"image": "kapai_02e300d8eaafcc30190edb7d210fcd27_b1e4cfcecf18_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1666,
+					"name": "燎照之骑",
+					"rules": "己方行动区只能同时存在1张<声骸>。\n【优势】（若上个回合己方对抗胜利或对方跳过对抗阶段，获得此技能）造成伤害时，对方手牌每有4张，随机将对方1张手牌丢弃。",
+					"imageBase": 0,
+					"image": "kapai_1cba1f28efb9adf3acd1ddf61738d9fa_287e9c45bc43_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -3557,6 +3745,13 @@
 					"rules": "자신의 액션 에리어에는 동시에 1장의 <에코>만 존재할 수 있다.\n자신의 협주 에리어에 이 카드를 포함해 2종류 이상의 <야밤의 서리>가 있을 경우, 매 턴에 자신이 처음 사용한 <응결> 데미지 +1.",
 					"imageBase": 0,
 					"image": "kapai_e546c322075388ba776d4b49bb93834a_c958843282d2_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1667,
+					"name": "咕咕河豚",
+					"rules": "己方行动区只能同时存在1张<声骸>。\n若己方协奏区有包含此卡在内的2种类或以上<凝夜白霜>，每回合己方首次使用的<冷凝>伤害+1。",
+					"imageBase": 0,
+					"image": "kapai_1c99b13bf2c487d670f8814a7de72363_9f28e40651fc_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -3597,6 +3792,13 @@
 					"rules": "자신의 액션 에리어에는 동시에 1장의 <에코>만 존재할 수 있다.\n【우세】(지난 턴에 자신이 배틀에 승리했거나 상대가 배틀 페이즈를 패스할 경우 이 스킬을 획득) 상대에게 데미지를 입힐 시, 상대의 협주 에리어의 카드 1장을 트래시 에리어에 버린다.",
 					"imageBase": 0,
 					"image": "kapai_1eeaa2bbad323413d67704ebb81b4b8e_9bd235be559f_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1668,
+					"name": "辉萤军势",
+					"rules": "己方行动区只能同时存在1张<声骸>。\n【优势】（若上个回合己方对抗胜利或对方跳过对抗阶段，获得此技能）造成伤害时，选择对方协奏区1张卡置于弃牌区。",
+					"imageBase": 0,
+					"image": "kapai_03c96e01b5594d324d789755ddfbaddf_8b99350089e0_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -3637,6 +3839,13 @@
 					"rules": "자신의 액션 에리어에는 동시에 1장의 <에코>만 존재할 수 있다.\n자신의 협주 에리어에 이 카드를 포함해 2종류 이상의 <스쳐가는 바람>이 있을 경우, 매 턴에 자신이 처음 사용한 <기류> 데미지 +1.",
 					"imageBase": 0,
 					"image": "kapai_beb0526935bbd4f88efafd7d80b5fba0_494271f05de3_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1669,
+					"name": "啾啾河豚",
+					"rules": "己方行动区只能同时存在1张<声骸>。\n若己方协奏区有包含此卡在内的2种类或以上<啸谷长风>，每回合己方首次使用的<气动>伤害+1。",
+					"imageBase": 0,
+					"image": "kapai_e3268a75e4a032e0c05cb5e4ee70f615_f91d935ce074_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -3677,6 +3886,13 @@
 					"rules": "자신의 액션 에리어에는 동시에 1장의 <에코>만 존재할 수 있다.\n【우세】(지난 턴에 자신이 배틀에 승리했거나 상대가 배틀 페이즈를 패스할 경우 이 스킬을 획득) 상대에게 데미지를 입힐 시, 상대의 패에서 랜덤으로 1장을 덱 아래에 놓는다.",
 					"imageBase": 0,
 					"image": "kapai_f2cc41defe5d68c60648abfe05a3f56a_0d01c9223fc1_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1670,
+					"name": "飞廉之猩",
+					"rules": "己方行动区只能同时存在1张<声骸>。\n【优势】（若上个回合己方对抗胜利或对方跳过对抗阶段，获得此技能）造成伤害时，随机将对方1张手牌置于卡组底。",
+					"imageBase": 0,
+					"image": "kapai_84ad29f5ba9afeece4bab43e8f7e737f_0db7b84e93a4_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -3717,6 +3933,13 @@
 					"rules": "자신의 액션 에리어에는 동시에 1장의 <에코>만 존재할 수 있다.\n자신의 협주 에리어에 이 카드를 포함해 2종류 이상의 <빛을 삼키는 해>가 있을 경우, 매 턴에 자신이 처음 사용한 <인멸> 데미지 +1.",
 					"imageBase": 0,
 					"image": "kapai_7289e8cd133378e5a57a1c8eb6e9cce2_d833dca275d6_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1671,
+					"name": "刺玫菇",
+					"rules": "己方行动区只能同时存在1张<声骸>。\n若己方协奏区有包含此卡在内的2种类或以上<沉日劫明>，每回合己方首次使用的<湮灭>伤害+1。",
+					"imageBase": 0,
+					"image": "kapai_ef2fa20c1ac132fa6abf25b1455eaefc_af71dbc398f2_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -3757,6 +3980,13 @@
 					"rules": "자신의 액션 에리어에는 동시에 1장의 <에코>만 존재할 수 있다.\n【우세】(지난 턴에 자신이 배틀에 승리했거나 상대가 배틀 페이즈를 패스할 경우 이 스킬을 획득) 상대에게 데미지를 입힐 시, 상대의 덱 위의 카드 3장을 트래시 에리어에 버린다.",
 					"imageBase": 0,
 					"image": "kapai_af176d3fa8fc0eeab899e4b5970867dd_2fdd191a8d18_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1672,
+					"name": "无冠者",
+					"rules": "己方行动区只能同时存在1张<声骸>。\n【优势】（若上个回合己方对抗胜利或对方跳过对抗阶段，获得此技能）造成伤害时，将对方卡组顶3张卡置于弃牌区。",
+					"imageBase": 0,
+					"image": "kapai_f894c1e1ab87ec1fec52d0d55b9f4bea_4cc3b64c03c3_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -3797,6 +4027,13 @@
 					"rules": "자신의 액션 에리어에는 동시에 1장의 <에코>만 존재할 수 있다.\n자신의 협주 에리어에 이 카드를 포함해 2종류 이상의 <빛나는 별>이 있을 경우, 매 턴에 자신이 처음 사용한 <회절> 데미지 +1.",
 					"imageBase": 0,
 					"image": "kapai_91c2ec418a30e8f5560b4e74bf622299_da2200eae4b1_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1673,
+					"name": "游弋蝶",
+					"rules": "己方行动区只能同时存在1张<声骸>。\n若己方协奏区有包含此卡在内的2种类或以上<浮星祛暗>，每回合己方首次使用的<衍射>伤害+1。",
+					"imageBase": 0,
+					"image": "kapai_d2a15b3e374386dabd464ea2857acc38_1d4159f4b0d0_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -3837,6 +4074,13 @@
 					"rules": "자신의 액션 에리어에는 동시에 1장의 <에코>만 존재할 수 있다.\n【우세】(지난 턴에 자신이 배틀에 승리했거나 상대가 배틀 페이즈를 패스할 경우 이 스킬을 획득) 상대에게 데미지를 입힐 시, 상대의 트래시 에리어에서 최대 2장의 카드를 상대의 덱 아래에 놓는다.",
 					"imageBase": 0,
 					"image": "kapai_a995ff8215ebd5a475179944f6749836_ceaf1d523484_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1674,
+					"name": "哀声鸷",
+					"rules": "己方行动区只能同时存在1张<声骸>。\n【优势】（若上个回合己方对抗胜利或对方跳过对抗阶段，获得此技能）造成伤害时，将对方弃牌区中最多2张卡置于对方卡组底。",
+					"imageBase": 0,
+					"image": "kapai_a8d0d94d497b57f67e2c2367aa5dd650_96db1d5234ff_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -3877,6 +4121,13 @@
 					"rules": null,
 					"imageBase": 0,
 					"image": "kapai_0a28d393d70d57996c12b7426d857e6c_75b61f83f0a9_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1675,
+					"name": "育种·普攻",
+					"rules": null,
+					"imageBase": 0,
+					"image": "kapai_660fb1dbec781684ebb22a4ecb6d2390_dcecc0eb7d6f_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -3917,6 +4168,13 @@
 					"rules": null,
 					"imageBase": 0,
 					"image": "kapai_37e40400de29f91f1ee14a1227e03d93_83c573857741_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1676,
+					"name": "育种·闪避反击",
+					"rules": null,
+					"imageBase": 0,
+					"image": "kapai_f2d846a7000c59fe2ba6e3d9d7fa7b32_c2d7c272fdad_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -3955,6 +4213,13 @@
 					"rules": "【콤보】자신의 리더를 교체한다. 「카멜리아」가 리더로 교체된 경우, 자신의 「카멜리아」를 레벨업시킨다.",
 					"imageBase": 0,
 					"image": "kapai_559b9c4c2be0326d84c05419460bcd7e_12c66d55d7f6_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1677,
+					"name": "八千春秋",
+					"rules": "【连击】切换己方领队。若「椿」被切换为领队，升级己方「椿」。",
+					"imageBase": 0,
+					"image": "kapai_c9446d36fdb1f7f61c1bd3806b57b56a_a7ca578edaf5_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -3995,6 +4260,13 @@
 					"rules": "【판정】자신이 승리했을 경우, 카드 1장을 뽑는다.",
 					"imageBase": 0,
 					"image": "kapai_e7a4d5c854f801e5cde4785eac22d9b9_eb9cc1669093_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1678,
+					"name": "育种·重击",
+					"rules": "【判定】若己方胜利，抽1张卡。",
+					"imageBase": 0,
+					"image": "kapai_e51562a1d505ef7f342d2ecc631f71a4_a1b860023ecc_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -4080,6 +4352,52 @@
 					"rules": "【领队技】\n【对抗】升级己方「椿」。",
 					"imageBase": 0,
 					"image": "kapai_6c175a118238e100c2519bacfa6011a1_c7d1f9c68bcf_3e6a188f4a.webp"
+				}
+			}
+		},
+		{
+			"code": "BP01-049",
+			"stars": 3,
+			"rarity": null,
+			"set": "BP01",
+			"products": [
+				"BP01"
+			],
+			"cardTypeId": 1,
+			"level": null,
+			"cost": 2,
+			"speed": 13,
+			"damage": 5,
+			"attributeId": null,
+			"weaponTypeId": null,
+			"factionId": null,
+			"colorId": null,
+			"characterId": 8,
+			"featureIds": [
+				5,
+				23
+			],
+			"printings": {
+				"ja": {
+					"providerId": 2615,
+					"name": "花の余燼",
+					"rules": null,
+					"imageBase": 0,
+					"image": "kapai_b93fb68cbb276e3344d29cb838ada490_c79374706840_748ef9f347_preview_7af2761e6c10e4df.webp"
+				},
+				"ko": {
+					"providerId": 2621,
+					"name": "아름다운 결말",
+					"rules": null,
+					"imageBase": 0,
+					"image": "kapai_bc18468a6380f9446a07b4e3afbe4878_6ff16dbc511d_748ef9f347_preview_c8baccbd8aff8704.webp"
+				},
+				"zh-cn": {
+					"providerId": 2618,
+					"name": "芳华绽烬",
+					"rules": null,
+					"imageBase": 0,
+					"image": "kapai_2778e28bbf1257627d9c46e347db8b27_17449c2d66b3_748ef9f347_preview_f8ba862cb989a884.webp"
 				}
 			}
 		},
@@ -4211,6 +4529,13 @@
 					"rules": "【판정】자신이 승리했을 경우, 카드 1장을 뽑는다.",
 					"imageBase": 0,
 					"image": "kapai_297cabb9aa03b3dde22a844ba2f75e72_589401292ec0_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1681,
+					"name": "旋舞",
+					"rules": "【判定】若己方胜利，抽1张卡。",
+					"imageBase": 0,
+					"image": "kapai_467a83f5badd8716993035771ce42cc0_848b38cb708a_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -4251,6 +4576,13 @@
 					"rules": null,
 					"imageBase": 0,
 					"image": "kapai_fce25b50df3576c5c94881ced9c2eedc_d4dd969050b3_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1682,
+					"name": "真源构演·普攻",
+					"rules": null,
+					"imageBase": 0,
+					"image": "kapai_bb6ff9e84aafc8132b6a2c5948522e75_f2e6519b01a0_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -4379,6 +4711,13 @@
 					"rules": "【콤보】자신의 리더를 교체한다. 「파수인」이 교체될 경우, 자신의 생명력을 1pt 회복한다.",
 					"imageBase": 0,
 					"image": "kapai_a725d4e6a5474a641d100620b4afcde3_bccebd9a0e49_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1684,
+					"name": "启迪",
+					"rules": "【连击】切换己方领队。若「守岸人」是被切换的角色之一，恢复己方1点生命。",
+					"imageBase": 0,
+					"image": "kapai_777cb20aacb4f86530402e5a655301f9_bc4cf189b379_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -4419,6 +4758,13 @@
 					"rules": "자신의 생명력이 상대보다 많을 경우, 이 카드의 데미지 +1.",
 					"imageBase": 0,
 					"image": "kapai_5e436dfc6bdfbba8ff74f37dbd5f84ca_45d3f4052c5d_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1685,
+					"name": "真源构演·重击",
+					"rules": "若己方生命值高于对方生命值，此卡伤害+1。",
+					"imageBase": 0,
+					"image": "kapai_4d33aea63af1223acf54d6482a4849d2_b64d4c1c2022_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -4458,6 +4804,58 @@
 					"rules": "【리더 스킬】\n【판정】자신이 승리했을 경우, 자신의 「파수인」을 레벨업시킨다.",
 					"imageBase": 0,
 					"image": "kapai_a2feae9a8b519788e29bc4694395c55e_2d9b71146e67_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1686,
+					"name": "混沌理论",
+					"rules": "【领队技】\n【判定】若己方胜利，升级己方「守岸人」。",
+					"imageBase": 0,
+					"image": "kapai_8243f1b1b588b0eb82dffc3dcef1c50c_71daa9b82324_3e6a188f4a.webp"
+				}
+			}
+		},
+		{
+			"code": "BP01-057",
+			"stars": 3,
+			"rarity": null,
+			"set": "BP01",
+			"products": [
+				"BP01"
+			],
+			"cardTypeId": 1,
+			"level": null,
+			"cost": 1,
+			"speed": 11,
+			"damage": 0,
+			"attributeId": null,
+			"weaponTypeId": null,
+			"factionId": null,
+			"colorId": null,
+			"characterId": 9,
+			"featureIds": [
+				5
+			],
+			"printings": {
+				"ja": {
+					"providerId": 2616,
+					"name": "終末ループ",
+					"rules": "■【リーダースキル】\n■【対抗】このターン中、自分が次に使用する2枚の＜変奏スキル＞は、『【連撃】カード1枚を引く。』を得る。\n■【判定】自分が勝利した場合、自分のライフ1を回復し、【追撃8】。",
+					"imageBase": 0,
+					"image": "kapai_626174dda7d9519a977d9e166d780715_5894ba938c84_748ef9f347_preview_a68ce8220f3675a6.webp"
+				},
+				"ko": {
+					"providerId": 2622,
+					"name": "결말의 순환",
+					"rules": "■【리더 스킬】\n■【배틀】이번 턴에 자신이 다음 사용한 2장의 <변주 스킬>은 『【콤보】카드 1장을 뽑는다.』 스킬을 획득.\n■【판정】자신이 승리했을 경우, 자신의 생명력을 1pt 회복한다.【추격 8】.",
+					"imageBase": 0,
+					"image": "kapai_903e88dbf5a246d2b8ec0b2d41ff20e8_87ab6703f8ef_748ef9f347_preview_ce7952865b2ce927.webp"
+				},
+				"zh-cn": {
+					"providerId": 2619,
+					"name": "终末回环",
+					"rules": "【领队技】\n【对抗】本回合己方接下来使用的2张<变奏技>获得技能『【连击】抽1张卡。』\n【判定】若己方胜利，恢复己方1点生命，【追击8】。",
+					"imageBase": 0,
+					"image": "kapai_a17dfc1c0b178b516bebeaf2bcf91c33_efcefa91ecef_748ef9f347_preview_52b85a2e4d639dc4.webp"
 				}
 			}
 		},
@@ -4671,6 +5069,13 @@
 					"rules": "상대에게 데미지를 입힐 시, 자신의 리더가 「앙코」인 경우, 카드 1장을 뽑는다.",
 					"imageBase": 0,
 					"image": "kapai_fda9ca4403bc10942b02a893fb229d71_781349b05615_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1689,
+					"name": "羊咩出击·重击",
+					"rules": "造成伤害时，若己方领队为「安可」，抽1张卡。",
+					"imageBase": 0,
+					"image": "kapai_c5ebdd91b1862ab74126fa5990b3c7fd_9cf110150c25_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -4769,6 +5174,52 @@
 			}
 		},
 		{
+			"code": "BP01-062",
+			"stars": 3,
+			"rarity": null,
+			"set": "BP01",
+			"products": [
+				"BP01"
+			],
+			"cardTypeId": 1,
+			"level": null,
+			"cost": 2,
+			"speed": 11,
+			"damage": 3,
+			"attributeId": null,
+			"weaponTypeId": null,
+			"factionId": null,
+			"colorId": null,
+			"characterId": 7,
+			"featureIds": [
+				5,
+				25
+			],
+			"printings": {
+				"ja": {
+					"providerId": 2617,
+					"name": "黒メェ大暴走",
+					"rules": "■【優勢】このカードのコスト-1。\n■【対抗】自分のキャラデッキからレベル2の「アンコ」1枚を自分の「アンコ」の上に置く（この処理はレベルアップとしても扱う）。自分のリーダーを「アンコ」に切り替える。",
+					"imageBase": 0,
+					"image": "kapai_594021b02033ce014bf839352b7f999a_2a03d61a4218_748ef9f347_preview_587ae9d59d5af37a.webp"
+				},
+				"ko": {
+					"providerId": 2623,
+					"name": "그늘이의 대폭주",
+					"rules": "■【우세】해당 카드의 COST-1.\n■【배틀】자신의 캐릭터 덱에서 레벨 2의 「앙코」 1장을 자신의 「앙코」 위에 배치한다(해당 처리는 레벨업으로 간주). 자신의 리더를 「앙코」로 교체한다.",
+					"imageBase": 0,
+					"image": "kapai_1d4529563ef7e6ae1c8e0070e2a87bed_49eafd243124_748ef9f347_preview_78616a8b3766d140.webp"
+				},
+				"zh-cn": {
+					"providerId": 2620,
+					"name": "黑咩大暴走",
+					"rules": "【优势】此卡费用-1。\n【对抗】将角色卡组1张等级2的「安可」置于己方的「安可」最上方（此处理也视作角色升级）。将己方领队切换为「安可」。",
+					"imageBase": 0,
+					"image": "kapai_07964b3098577e7ae56223bbac0f772a_523510a52f2f_748ef9f347_preview_18998bdd74f28df8.webp"
+				}
+			}
+		},
+		{
 			"code": "BP01-063",
 			"stars": 2,
 			"rarity": null,
@@ -4803,6 +5254,13 @@
 					"rules": "【콤보】자신의 리더를 교체한다. 「앙코」가 교체될 경우, 트래시 에리어에서 <변주 스킬> 외의 【앙코】의 적색 카드 1장을 패에 추가한다.",
 					"imageBase": 0,
 					"image": "kapai_3d402d7b540cf177e858a5ed5df788b4_0c86fd5f045c_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1691,
+					"name": "咩咩帮手",
+					"rules": "【连击】切换己方领队。若「安可」是被切换的角色之一，将弃牌区1张除<变奏技>以外的【安可】的红色卡加入手牌。",
+					"imageBase": 0,
+					"image": "kapai_fb3674dcb4ff7e4cb0aeab415462e9ab_c2b9fe0b5c1e_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -4842,6 +5300,13 @@
 					"rules": null,
 					"imageBase": 0,
 					"image": "kapai_a2390a4e637440a5ba1013e5bffa553c_63922dc80240_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1692,
+					"name": "羊咩出击·闪避反击",
+					"rules": null,
+					"imageBase": 0,
+					"image": "kapai_996f0a3fc43a2af7cae34f7157a10d43_729f73e053f7_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -4881,6 +5346,13 @@
 					"rules": "【콤보】자신의 패 1장을 버릴 수 있다. 패를 버렸을 경우, 이 카드의 데미지 +1.",
 					"imageBase": 0,
 					"image": "kapai_339c39d5dfd633f620dbd55e3dd9699c_01b637d6315b_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1693,
+					"name": "化声为形·重击",
+					"rules": "【连击】己方可以丢弃1张手牌。若丢弃了手牌，此卡伤害+1。",
+					"imageBase": 0,
+					"image": "kapai_7a29235d9c562677feb5fab8b4c66113_1d791b8ee544_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -4920,6 +5392,13 @@
 					"rules": "【판정】자신이 승리했을 경우, 카드 1장을 뽑는다.",
 					"imageBase": 0,
 					"image": "kapai_284bc0f108f2170cd3e8c7d82e189fbc_e76cbad38be3_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1694,
+					"name": "化声为形·空中攻击",
+					"rules": "【判定】若己方胜利，抽1张卡。",
+					"imageBase": 0,
+					"image": "kapai_e773ab8be1b67cfb25fb442321d5ccfd_4f8a4aa1706b_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -4959,6 +5438,13 @@
 					"rules": "【콤보】자신의 패 1장을 버릴 수 있다. 패를 버렸을 경우, 이 카드의 데미지 +1.",
 					"imageBase": 0,
 					"image": "kapai_92c5b8bc81f1096dc8361e46f75ba02e_cda3d442d0dd_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1695,
+					"name": "化声为形·重击",
+					"rules": "【连击】己方可以丢弃1张手牌。若丢弃了手牌，此卡伤害+1。",
+					"imageBase": 0,
+					"image": "kapai_53a5a4d5020d4475eed4f72d04a9443b_415686c00ced_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -4998,6 +5484,13 @@
 					"rules": "【판정】자신이 승리했을 경우, 카드 1장을 뽑는다.",
 					"imageBase": 0,
 					"image": "kapai_c8939a8db2a1b057097ad421ca1199f2_74c1fecb7ea9_5750cf266d.webp"
+				},
+				"zh-cn": {
+					"providerId": 1696,
+					"name": "化声为形·空中攻击",
+					"rules": "【判定】若己方胜利，抽1张卡。",
+					"imageBase": 0,
+					"image": "kapai_f358c94086a14e04dc9aec0a5ceb5e9b_be31c469645a_5750cf266d.webp"
 				}
 			}
 		},
@@ -5037,6 +5530,13 @@
 					"rules": "【판정】자신이 승리했을 경우,【추격 1】.\n【각 배틀 페이즈 종료 시】자신의 리더가 「양양」인 경우, 1 COST를 지불하여 이 카드를 패에 추가 가능.",
 					"imageBase": 0,
 					"image": "kapai_8fc30105bd455921be1e38e01639f5d9_e6f6d305e89a_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1697,
+					"name": "释羽·闪避",
+					"rules": "【判定】若己方胜利，【追击1】。\n【对抗阶段结束时】若己方领队为「秧秧」，可以支付1点费用将此卡加入手牌。",
+					"imageBase": 0,
+					"image": "kapai_9781828aacd79852fa8616eb2043fe33_a993bd80a5b0_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -5168,6 +5668,13 @@
 					"rules": "【콤보】이번 턴에 자신이 방금 사용한 카드가 <체공>인 경우, 자신의 덱 위의 카드 1장을 협주 에리어에 배치한다.",
 					"imageBase": 0,
 					"image": "kapai_614fee93b6cdde6cf3d9661bfe7cc7ab_c1b025a2df58_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1637,
+					"name": "覆声裁羽",
+					"rules": "【连击】若本回合中己方上一张使用的是<滞空>卡，将己方卡组顶1张卡置于协奏区。",
+					"imageBase": 0,
+					"image": "kapai_ff8b8bf26f9228764e22bf033c53e06c_208de2e17e71_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -5207,6 +5714,13 @@
 					"rules": "【콤보】이번 턴에 자신이 방금 사용한 카드가 <체공>인 경우, 자신의 덱 위의 카드 1장을 협주 에리어에 배치한다.",
 					"imageBase": 0,
 					"image": "kapai_ade9dde71af8e8ec9e68add2c686c1d9_5afbe0c5e7e3_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1699,
+					"name": "覆声裁羽",
+					"rules": "【连击】若本回合中己方上一张使用的是<滞空>卡，将己方卡组顶1张卡置于协奏区。",
+					"imageBase": 0,
+					"image": "kapai_5e5c6199065e60c21b12f4a5c0483cf4_17372b0a2787_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -5525,6 +6039,13 @@
 					"rules": "【판정】자신이 승리했을 경우, 카드 1장을 뽑는다.",
 					"imageBase": 0,
 					"image": "kapai_6076f8c63e28028359ce2f5f028e21b1_efaac9ac47a8_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1641,
+					"name": "浮光霁寒·重击",
+					"rules": "【判定】若己方胜利，抽1张卡。",
+					"imageBase": 0,
+					"image": "kapai_07d2c3997511a63dfd2a7d134bd5e50a_767a52c1643e_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -5565,6 +6086,13 @@
 					"rules": "【판정】자신이 승리했을 경우, 카드 1장을 뽑는다.",
 					"imageBase": 0,
 					"image": "kapai_16b6ff21cb94e88108e0c3267d4e97f9_a37ed3a1bbd0_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1703,
+					"name": "浮光霁寒·重击",
+					"rules": "【判定】若己方胜利，抽1张卡。",
+					"imageBase": 0,
+					"image": "kapai_129aba972364657376d3352cb2e0b693_7b0a09d51cd7_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -5695,6 +6223,13 @@
 					"rules": "【리더 스킬】\n【판정】자신이 승리하고, 자신의 협주 에리어에【산화】가 있을 경우, 자신의 리더 교체 가능.",
 					"imageBase": 0,
 					"image": "kapai_e035c60a7f4b15e69c8d108b8fc33f16_ce08d53736a6_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1643,
+					"name": "冰绽",
+					"rules": "【领队技】\n【判定】若己方胜利且己方协奏区有【散华】卡，可以切换己方领队。",
+					"imageBase": 0,
+					"image": "kapai_cbc65ad172564fa77acf8903c6e264c7_3ad2f20e3783_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -5735,6 +6270,13 @@
 					"rules": "【리더 스킬】\n【판정】자신이 승리하고, 자신의 협주 에리어에【산화】가 있을 경우, 자신의 리더 교체 가능.",
 					"imageBase": 0,
 					"image": "kapai_467cf4dc5170dca05130827349b163ac_2bf0e98f8985_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1705,
+					"name": "冰绽",
+					"rules": "【领队技】\n【判定】若己方胜利且己方协奏区有【散华】卡，可以切换己方领队。",
+					"imageBase": 0,
+					"image": "kapai_5eb994e96b8a2ba08a17f674d4efa803_7b0cad816326_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -6349,6 +6891,13 @@
 					"rules": "【리더 스킬】(자신의 리더가 이 카드의 전용 캐릭터일 경우에만 사용 가능)",
 					"imageBase": 0,
 					"image": "kapai_f24a7dbf0c9e586d1ce5ccd1995f72fa_93f97d5f25b5_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1706,
+					"name": "炽烈焰火",
+					"rules": "【领队技】（己方领队为此卡专属角色时方可使用）",
+					"imageBase": 0,
+					"image": "kapai_c53f48b8dca19cc0091842374f02d610_84de5d4cf12e_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -6617,6 +7166,13 @@
 					"rules": "【리더 스킬】(자신의 리더가 이 카드의 전용 캐릭터일 경우에만 사용 가능)\n【판정】자신이 승리했을 경우, 다음 턴에 상대의 적색 카드 COST+1.",
 					"imageBase": 0,
 					"image": "kapai_6e69776c52f2ceed54b569d473e20038_2294dc0d0534_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1707,
+					"name": "朔风旋涌",
+					"rules": "【领队技】（己方领队为此卡专属角色时方可使用）\n【判定】若己方胜利，下个回合中，对方的红色卡费用+1。",
+					"imageBase": 0,
+					"image": "kapai_cd1206b2ac9fdd8143255dfcb112580b_84aae793770f_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -6976,6 +7532,13 @@
 					"rules": "【리더 스킬】(자신의 리더가 이 카드의 전용 캐릭터일 경우에만 사용 가능)\n【판정】자신이 승리했을 경우, 자신의 생명력을 5pt 회복한다.",
 					"imageBase": 0,
 					"image": "kapai_91dd04cc413584846ad88e59ecb7359e_6505cafceb7c_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1708,
+					"name": "回响奏鸣",
+					"rules": "【领队技】（己方领队为此卡专属角色时方可使用）\n【判定】若己方胜利，恢复己方5点生命。",
+					"imageBase": 0,
+					"image": "kapai_519bdc547676aeaeed05dcbe00f16729_55940db42aae_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -7270,6 +7833,13 @@
 					"rules": "【리더】자신의 적색 카드가 『【콤보】이 카드의 데미지 +1.』 효과를 획득한다.",
 					"imageBase": 0,
 					"image": "kapai_6b3b7164202cd647a7b6650a9d0680b8_4f234f204adf_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1724,
+					"name": "今汐",
+					"rules": "【领队】己方的红色卡获得技能『【连击】此卡伤害+1。』",
+					"imageBase": 0,
+					"image": "kapai_fecc5c72d2e85415463752c74efd6b5e_add5a197b1c8_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -7582,6 +8152,13 @@
 					"rules": "【리더 스킬】(자신의 리더가 이 카드의 전용 캐릭터일 경우에만 사용 가능)\n【콤보】자신의 액션 에리어에 카드가 3장 이상 있을 경우, 이 카드의 데미지 +3.",
 					"imageBase": 0,
 					"image": "kapai_4565a369fa95de4d0c86893a23cd2206_04b307542057_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1709,
+					"name": "移岁诛邪",
+					"rules": "【领队技】（己方领队为此卡专属角色时方可使用）\n【连击】若己方行动区有3张或以上的卡，此卡伤害+3。",
+					"imageBase": 0,
+					"image": "kapai_740cfe339b615b078a9f871963131822_12a19a2ed1ac_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -7850,6 +8427,13 @@
 					"rules": "【리더 스킬】(자신의 리더가 이 카드의 전용 캐릭터일 경우에만 사용 가능)\n【판정】자신이 승리했을 경우, 다음 턴에 상대는 콤보를 발동할 수 없다.",
 					"imageBase": 0,
 					"image": "kapai_9831fa0057d1fd466fbe9d5aa7fe0b6d_863424e9b0b0_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1710,
+					"name": "焦瞑冻土",
+					"rules": "【领队技】（己方领队为此卡专属角色时方可使用）\n【判定】若己方胜利，下个回合对方不能连击。",
+					"imageBase": 0,
+					"image": "kapai_434aa8567bc83d77261ffd2ecc48c97e_bf3ac3588ce1_3e6a188f4a.webp"
 				}
 			}
 		},
@@ -8209,6 +8793,13 @@
 					"rules": "【리더 스킬】(자신의 리더가 이 카드의 전용 캐릭터일 경우에만 사용 가능)",
 					"imageBase": 0,
 					"image": "kapai_45b92e03ea5c15c2f0b79069ea437515_c6960a917aa4_3e6a188f4a.webp"
+				},
+				"zh-cn": {
+					"providerId": 1711,
+					"name": "回响奏鸣",
+					"rules": "【领队技】（己方领队为此卡专属角色时方可使用）",
+					"imageBase": 0,
+					"image": "kapai_abb8d5bc4281806c135fabb9d1862334_d6b6df56ff1d_3e6a188f4a.webp"
 				}
 			}
 		}

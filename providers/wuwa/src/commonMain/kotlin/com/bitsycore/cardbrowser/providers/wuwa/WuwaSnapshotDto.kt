@@ -36,6 +36,34 @@ internal data class WuwaSourceDto(
 	/** Locale tag to how many records that catalogue held when the snapshot was taken. */
 	val locales: Map<String, Int> = emptyMap(),
 	val note: String = "",
+	/**
+	 * Fields UCP's own locales disagreed about, and what the scraper wrote instead.
+	 *
+	 * Declared rather than left to `ignoreUnknownKeys`, so it is visible to a reader and assertable
+	 * by a test. A number in this file that is one of two the source published is worth being able
+	 * to find, and a *new* disagreement is worth noticing rather than absorbing.
+	 */
+	val disagreements: List<WuwaDisagreementDto> = emptyList(),
+)
+
+/**
+ * One language-free field the locales did not agree on.
+ *
+ * Resolved by majority and recorded -- see `scrape_wuwa.py`. On 2026-09-11 there was exactly one:
+ * `BP01-049` at ★★★, whose damage UCP gives as 6 in Simplified Chinese and 5 in both Japanese and
+ * Korean. Type, level, cost and speed all match, so the locales plainly mean the same card and one
+ * of them has a typo.
+ *
+ * @property values what each locale claimed, by locale tag
+ * @property taken what the snapshot carries
+ */
+@Serializable
+internal data class WuwaDisagreementDto(
+	val code: String = "",
+	val tier: Int? = null,
+	val field: String = "",
+	val values: Map<String, Int> = emptyMap(),
+	val taken: Int? = null,
 )
 
 /**
