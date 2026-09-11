@@ -1,0 +1,221 @@
+package com.bitsycore.cardbrowser.sqlstore
+
+import com.bitsycore.cardbrowser.core.model.Artwork
+import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
+import com.bitsycore.cardbrowser.core.model.CardAttributes
+import com.bitsycore.cardbrowser.core.model.CardClassification
+import com.bitsycore.cardbrowser.core.model.CardLanguage
+import com.bitsycore.cardbrowser.core.model.CardPrinting
+import com.bitsycore.cardbrowser.core.model.FinishCoverage
+import com.bitsycore.cardbrowser.core.model.GameId
+import com.bitsycore.cardbrowser.core.model.LanguageCoverage
+import com.bitsycore.cardbrowser.core.model.LocalizedText
+import com.bitsycore.cardbrowser.core.model.ProviderId
+import com.bitsycore.cardbrowser.core.model.SourceId
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+/**
+ * The store's behaviour, and specifically the three things the spike deliberately did not model.
+ *
+ * Eviction, the pin budget, and identity. The first two are what the file cache spent three
+ * separate bug-fixes learning, and a database that reimplements them differently would relearn
+ * them the same way -- so each rule that was a bug there is a test here.
+ */
+class SqlCardStoreTest {
+
+	private val mDriver = DriverFactory().create(null)
+
+	private val mStore = SqlCardStore(mDriver)
+
+	@AfterTest
+	fun closeDriver() = mDriver.close()
+
+	// ==================
+	// MARK: Identity
+	// ==================
+
+	@Test
+	fun `language is part of a set's identity -- not a column to collapse`() {
+		// `(provider, set, language)` is the key everywhere in this app: cache, downloads, pins,
+		// image records. A schema that treated language as an attribute of one cached set would
+		// make an English import overwrite a French one.
+		mStore.writeSet("p", "s", CardLanguage.ENGLISH, "Set", false, 1L, listOf(card(1, CardLanguage.ENGLISH)))
+		mStore.writeSet("p", "s", CardLanguage.FRENCH, "Set", false, 1L, listOf(card(2, CardLanguage.FRENCH)))
+
+		assertEquals(2, mStore.storageSnapshot().sets)
+		assertEquals(1, mStore.readSet("p", "s", CardLanguage.ENGLISH).size)
+		assertEquals(1, mStore.readSet("p", "s", CardLanguage.FRENCH).size)
+		assertEquals(setOf("en", "fr"), mStore.languagesHeld("p", "s").toSet())
+	}
+
+	@Test
+	fun `rewriting a set replaces it rather than merging into it`() {
+		// A refetch that returns fewer cards must not leave the dropped ones behind. That is how
+		// a set ends up holding printings the source no longer serves, with nothing on screen to
+		// say where they came from.
+		mStore.writeSet("p", "s", null, "Set", false, 1L, (1..5).map { card(it) })
+		mStore.writeSet("p", "s", null, "Set", false, 2L, (1..2).map { card(it) })
+
+		assertEquals(2, mStore.readSet("p", "s", null).size)
+		assertEquals(2, mStore.cardCount("p", "s", null))
+	}
+
+	@Test
+	fun `a card count is known without reading the cards`() {
+		mStore.writeSet("p", "s", null, "Set", false, 1L, (1..7).map { card(it) })
+
+		assertEquals(7, mStore.cardCount("p", "s", null))
+		assertNull(mStore.cardCount("p", "absent", null), "unknown is not zero")
+	}
+
+	// ==================
+	// MARK: Eviction and the budget
+	// ==================
+
+	@Test
+	fun `eviction takes the least recently used -- not the least recently written`() {
+		// The property the file cache could not keep: it held access times in memory, so after a
+		// relaunch every record sorted equally old and the order collapsed to whatever the
+		// filesystem listed. A column survives the process.
+		mStore.writeSet("p", "old", null, "Old", false, 1L, (1..20).map { card(it) })
+		mStore.writeSet("p", "new", null, "New", false, 2L, (1..20).map { card(it) })
+		// "old" is written first but used last, so "new" is the one that should go.
+		mStore.touch("p", "old", null, at = 99L)
+
+		mStore.trim(ceilingBytes = mStore.unpinnedBytes() / 2)
+
+		assertTrue(mStore.hasSet("p", "old", null), "the recently used set must survive")
+		assertFalse(mStore.hasSet("p", "new", null))
+	}
+
+	@Test
+	fun `a pinned set is outside the budget, not merely skipped`() {
+		// The distinction that mattered: counting pinned bytes made one import exceed any sane
+		// ceiling, after which every write evicted browsing records that together came nowhere
+		// near it. The cache thrashed and re-fetched sets it had just cached.
+		mStore.writeSet("p", "downloaded", null, "Downloaded", true, 1L, (1..50).map { card(it) })
+
+		assertEquals(0L, mStore.unpinnedBytes(), "a pinned set contributes nothing to the budget")
+		assertTrue(mStore.pinnedBytes() > 0L, "and is reported separately")
+		assertEquals(0, mStore.trim(ceilingBytes = 1L), "so a tiny ceiling evicts nothing")
+		assertTrue(mStore.hasSet("p", "downloaded", null))
+	}
+
+	@Test
+	fun `the ceiling gives way rather than the pinned data`() {
+		mStore.writeSet("p", "kept", null, "Kept", true, 1L, (1..50).map { card(it) })
+		mStore.writeSet("p", "browsed", null, "Browsed", false, 2L, (1..50).map { card(it) })
+
+		mStore.trim(ceilingBytes = 1L)
+
+		assertTrue(mStore.hasSet("p", "kept", null), "a download is never evicted for a limit")
+		assertFalse(mStore.hasSet("p", "browsed", null))
+	}
+
+	@Test
+	fun `unpinning returns a set to ordinary eviction`() {
+		mStore.writeSet("p", "s", null, "Set", true, 1L, (1..50).map { card(it) })
+		assertEquals(0L, mStore.unpinnedBytes())
+
+		mStore.setPinned("p", "s", null, isPinned = false)
+
+		assertTrue(mStore.unpinnedBytes() > 0L, "the bytes rejoin the budget")
+		mStore.trim(ceilingBytes = 1L)
+		assertFalse(mStore.hasSet("p", "s", null))
+	}
+
+	@Test
+	fun `evicting a set takes its cards with it`() {
+		// Otherwise the rows outlive the set that owned them and every cross-set search answers
+		// from cards the app would say it does not have.
+		mStore.writeSet("p", "s", null, "Set", false, 1L, (1..30).map { card(it) })
+
+		mStore.trim(ceilingBytes = 0L)
+
+		assertEquals(0, mStore.storageSnapshot().printings, "orphaned rows would be invisible")
+	}
+
+	@Test
+	fun `a pinned set can still be named after everything else is gone`() {
+		// The storage screen has to list what a download left. The file cache learned this the
+		// hard way: its pin markers were zero bytes, so clearing the cache deleted the only index
+		// from a hashed filename back to a set, and downloaded sets vanished from the screen
+		// while the download dialog went on correctly reporting them as held.
+		mStore.writeSet("p", "s", CardLanguage.JAPANESE, "Base Set", true, 1L, (1..3).map { card(it) })
+		mStore.trim(ceilingBytes = 0L)
+
+		val vPinned = mStore.pinnedSets().single()
+		assertEquals("Base Set", vPinned.label)
+		assertEquals(3, vPinned.cardCount)
+		assertEquals("ja", vPinned.language)
+	}
+
+	// ==================
+	// MARK: Search
+	// ==================
+
+	@Test
+	fun `search narrows on every axis and excludes as well as includes`() {
+		mStore.writeSet("p", "s", null, "Set", false, 1L, (1..40).map { card(it) })
+
+		// The capability the file cache does not have at all: "does not contain" has no
+		// equivalent in a name match over whatever happens to be loaded.
+		val vAll = mStore.search(game = "test", text = "card")
+		val vExcluded = mStore.search(game = "test", text = "card", excludeText = "card 1")
+		assertTrue(vExcluded.size < vAll.size)
+		assertTrue(vExcluded.none { it.displayName.contains("Card 1") })
+
+		val vCheap = mStore.search(game = "test", maxCost = 2)
+		assertTrue(vCheap.isNotEmpty())
+		assertTrue(vCheap.all { (it.attributes.cost ?: 99) <= 2 })
+	}
+
+	@Test
+	fun `a cost filter does not sweep up cards whose cost is unknown`() {
+		// `Availability`'s third state, in schema form. A source that publishes no cost is not a
+		// source publishing zero, and "cost under 4" must not quietly include everything it could
+		// not measure.
+		mStore.writeSet("p", "s", null, "Set", false, 1L, listOf(card(1, cost = null), card(2, cost = 1)))
+
+		val vHits = mStore.search(game = "test", maxCost = 4)
+
+		assertEquals(1, vHits.size, "the unknown-cost card must not be counted as cheap")
+		assertEquals(1, vHits.single().attributes.cost)
+	}
+
+	private fun card(
+		number: Int,
+		language: CardLanguage = CardLanguage.ENGLISH,
+		cost: Int? = number % 5,
+	): CardPrinting {
+		val vProvider = ProviderId("p")
+		return CardPrinting(
+			id = SourceId(vProvider, "c$number-${language.code}"),
+			game = GameId("test"),
+			setId = SourceId(vProvider, "s"),
+			identity = null,
+			setCode = "S",
+			setName = "Set",
+			collectorNumber = number.toString(),
+			providerRawCollectorNumber = number.toString(),
+			text = LocalizedText(language, "Card $number"),
+			artwork = Artwork(
+				id = SourceId(vProvider, "a$number"),
+				imageUrl = "https://example.test/$number.png",
+				thumbnailUrl = null,
+				artist = null,
+				treatment = ArtworkTreatment.STANDARD,
+				language = language,
+			),
+			attributes = CardAttributes(cost = cost),
+			classification = CardClassification(type = "Unit", rarity = "Common", domains = listOf("Fury")),
+			languages = LanguageCoverage(confirmed = setOf(language)),
+			finishes = FinishCoverage(),
+		)
+	}
+}
