@@ -12,6 +12,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 /** Which game to search. Passed at construction so the first frame already knows. */
 data class SearchArgs(val game: GameId)
@@ -91,7 +92,7 @@ class SearchViewModel(
 					mLiveSearchJob = viewModelScope.launch {
 						// Short, and not about rate limiting: it is there so a set of 350 cards is
 						// not filtered five times while a five-letter word is typed.
-						delay(LIVE_SEARCH_DEBOUNCE_MILLIS)
+						delay(LIVE_SEARCH_DEBOUNCE_MILLIS.milliseconds)
 						dispatch(SearchContract.Intent.Submit)
 					}
 				}

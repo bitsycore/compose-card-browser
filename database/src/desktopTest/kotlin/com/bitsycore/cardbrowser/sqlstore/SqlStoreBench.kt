@@ -40,7 +40,7 @@ class SqlStoreBench {
 	fun `time a catalogue write, the storage counts and a filtered search`() {
 		val vFile = File(System.getProperty("java.io.tmpdir"), "cardbrowser-sqlspike.db")
 		vFile.delete()
-		val vDriver = DriverFactory().create(vFile.absolutePath)
+		val vDriver = DesktopDriverFactory().create(vFile.absolutePath)
 		val vStore = SqlCardStore(vDriver)
 
 		val vSets = 1000

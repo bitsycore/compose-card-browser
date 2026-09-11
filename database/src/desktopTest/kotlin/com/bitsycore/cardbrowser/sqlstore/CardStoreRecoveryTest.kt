@@ -30,14 +30,14 @@ class CardStoreRecoveryTest {
 
 	@AfterTest
 	fun cleanUp() {
-		DriverFactory().delete(mFile.absolutePath)
+		DesktopDriverFactory().delete(mFile.absolutePath)
 	}
 
-	private fun factory() = CardStoreFactory(DriverFactory())
+	private fun factory() = CardStoreFactory(DesktopDriverFactory())
 
 	@Test
 	fun `a sound store opens without being recovered`() {
-		DriverFactory().delete(mFile.absolutePath)
+		DesktopDriverFactory().delete(mFile.absolutePath)
 
 		val vOpened = factory().open(mFile.absolutePath)
 
@@ -50,7 +50,7 @@ class CardStoreRecoveryTest {
 		// The ordinary path, and the one an in-memory test cannot see. The desktop driver used to
 		// call `Schema.create` unconditionally, which throws against a file whose tables already
 		// exist -- so the app worked on a fresh install and threw on every launch after it.
-		DriverFactory().delete(mFile.absolutePath)
+		DesktopDriverFactory().delete(mFile.absolutePath)
 		factory().open(mFile.absolutePath).store.writeSet(
 			provider = "p", setId = "s", language = CardLanguage.ENGLISH, game = "test",
 			label = "A set", isPinned = true, fetchedAt = 1L, printings = emptyList(),
@@ -65,7 +65,7 @@ class CardStoreRecoveryTest {
 
 	@Test
 	fun `a garbage file is discarded and the store comes back usable`() {
-		DriverFactory().delete(mFile.absolutePath)
+		DesktopDriverFactory().delete(mFile.absolutePath)
 		// Not a database at all. This is what a truncated write or a bad sector looks like from
 		// the outside, and the app must survive it rather than refuse to start.
 		mFile.writeBytes(ByteArray(8192) { 0x7A })
@@ -86,7 +86,7 @@ class CardStoreRecoveryTest {
 
 	@Test
 	fun `a truncated database is discarded rather than half-read`() {
-		DriverFactory().delete(mFile.absolutePath)
+		DesktopDriverFactory().delete(mFile.absolutePath)
 		// A real database, then cut in half. Salvaging part of it would leave a store whose
 		// contents nobody can characterise, which is the one thing this app must never serve.
 		factory().open(mFile.absolutePath).store.writeSet(
@@ -116,7 +116,7 @@ class CardStoreRecoveryTest {
 		// of what is on disk live in preferences: which bulk import was taken, which sets had
 		// images fetched. A store that starts fresh without saying so leaves the download dialog
 		// reporting an import that is gone.
-		DriverFactory().delete(mFile.absolutePath)
+		DesktopDriverFactory().delete(mFile.absolutePath)
 		mFile.writeBytes("not a database".encodeToByteArray())
 
 		var vCleared = false

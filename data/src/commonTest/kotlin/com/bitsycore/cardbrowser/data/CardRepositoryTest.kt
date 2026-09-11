@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import kotlinx.serialization.json.Json
+import kotlin.time.Duration.Companion.milliseconds
 import okio.Path.Companion.toPath
 import okio.fakefilesystem.FakeFileSystem
 import kotlin.test.Test
@@ -118,7 +119,7 @@ class CardRepositoryTest {
 		override suspend fun listCards(request: CardPageRequest): CardPage {
 			listCardsCallCount++
 			requestedPageSizes += request.pageSize
-			mDelayByPage[request.page]?.let { kotlinx.coroutines.delay(it) }
+			mDelayByPage[request.page]?.let { kotlinx.coroutines.delay(it.milliseconds) }
 			if (mFailFromPage != null && request.page >= mFailFromPage) {
 				throw ProviderError.Offline()
 			}

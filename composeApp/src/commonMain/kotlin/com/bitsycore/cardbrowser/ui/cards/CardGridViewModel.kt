@@ -14,6 +14,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Loads one set's cards and keeps the grid in step with the filters.
@@ -207,7 +208,7 @@ class CardGridViewModel(
 
 		mLoadJob?.cancel()
 		mLoadJob = viewModelScope.launch {
-			if (debounce) delay(TEXT_DEBOUNCE_MILLIS)
+			if (debounce) delay(TEXT_DEBOUNCE_MILLIS.milliseconds)
 
 			mRepository.cards(
 				setId = vSetId,

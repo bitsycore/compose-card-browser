@@ -28,7 +28,7 @@ import kotlin.test.assertTrue
  */
 class SqlCardStoreTest {
 
-	private val mDriver = DriverFactory().create(null)
+	private val mDriver = DesktopDriverFactory().create(null)
 
 	private val mStore = SqlCardStore(mDriver)
 

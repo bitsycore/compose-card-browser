@@ -3,6 +3,7 @@ package com.bitsycore.cardbrowser.di
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.platform.LinkOpener
 import com.bitsycore.cardbrowser.sqlstore.DriverFactory
+import com.bitsycore.cardbrowser.sqlstore.IosDriverFactory
 import kotlinx.cinterop.ExperimentalForeignApi
 import okio.FileSystem
 import okio.Path.Companion.toPath
@@ -32,7 +33,7 @@ actual fun platformModule(): Module = module {
 		).also { it.prepare() }
 	}
 
-	single { DriverFactory() }
+	single<DriverFactory> { IosDriverFactory() }
 
 	single<LinkOpener> { IosLinkOpener() }
 }

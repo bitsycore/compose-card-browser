@@ -16,16 +16,16 @@ import java.io.File
  * the file where the framework wants it, which is not where `AppStorage` says the cache root is,
  * and two opinions about where the database lives is one too many.
  */
-actual class DriverFactory(private val mContext: Context) {
+class AndroidDriverFactory(private val mContext: Context) : DriverFactory {
 
-	actual fun create(path: String?): SqlDriver = AndroidSqliteDriver(
+	override fun create(path: String?): SqlDriver = AndroidSqliteDriver(
 		schema = CardDatabase.Schema,
 		context = mContext,
 		// A null path means in-memory, which is what `AndroidSqliteDriver` does for a null name.
 		name = path?.let { File(it).name },
 	)
 
-	actual fun delete(path: String) {
+	override fun delete(path: String) {
 		for (vSuffix in listOf("", "-wal", "-shm")) {
 			File(path + vSuffix).delete()
 			// And the framework's own location, which is where `create` actually put it.

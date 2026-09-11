@@ -22,6 +22,7 @@ import com.bitsycore.cardbrowser.ui.common.ImageVariant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -111,7 +112,7 @@ class ImageFallbackTest {
 		try {
 			repeat(40) {
 				vScene.render()
-				delay(25)
+				delay(25.milliseconds)
 			}
 		} finally {
 			vScene.close()

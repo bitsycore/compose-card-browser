@@ -11,16 +11,16 @@ import com.bitsycore.cardbrowser.sqlstore.db.CardDatabase
  * add to targets this project has compiled but never linked or run, and referencing it here is
  * what makes the ordinary build prove at least that it resolves and compiles.
  */
-actual class DriverFactory {
+class IosDriverFactory : DriverFactory {
 
-	actual fun create(path: String?): SqlDriver =
+	override fun create(path: String?): SqlDriver =
 		NativeSqliteDriver(CardDatabase.Schema, path ?: "cardbrowser.db")
 
 	// `removeItemAtPath` takes an error out-parameter, which is cinterop and therefore opt-in.
 	// Errors are ignored on purpose: this is called to clear a database already established as
 	// unusable, and a file that will not delete is no worse than one that will not open.
 	@kotlin.OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
-	actual fun delete(path: String) {
+	override fun delete(path: String) {
 		val vManager = platform.Foundation.NSFileManager.defaultManager
 		for (vSuffix in listOf("", "-wal", "-shm")) {
 			vManager.removeItemAtPath(path + vSuffix, null)

@@ -2,6 +2,7 @@ package com.bitsycore.cardbrowser.di
 
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.platform.LinkOpener
+import com.bitsycore.cardbrowser.sqlstore.DesktopDriverFactory
 import com.bitsycore.cardbrowser.sqlstore.DriverFactory
 import java.awt.Desktop
 import java.net.URI
@@ -30,7 +31,7 @@ actual fun platformModule(): Module = module {
 		).also { it.prepare() }
 	}
 
-	single { DriverFactory() }
+	single<DriverFactory> { DesktopDriverFactory() }
 
 	single<LinkOpener> { DesktopLinkOpener() }
 }

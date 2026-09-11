@@ -10,7 +10,7 @@ import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
 import com.bitsycore.cardbrowser.data.cache.SqlSetRecordStore
-import com.bitsycore.cardbrowser.sqlstore.DriverFactory
+import com.bitsycore.cardbrowser.sqlstore.DesktopDriverFactory
 import com.bitsycore.cardbrowser.sqlstore.SqlCardStore
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
 import com.bitsycore.cardbrowser.data.repository.CardRepository
@@ -52,7 +52,7 @@ class RiftcodexLiveSmokeTest {
 	 * another, which is the offline path they exist to prove.
 	 */
 	private val mStore = SqlSetRecordStore(
-		SqlCardStore(DriverFactory().create(null)),
+		SqlCardStore(DesktopDriverFactory().create(null)),
 		Dispatchers.IO,
 	)
 
