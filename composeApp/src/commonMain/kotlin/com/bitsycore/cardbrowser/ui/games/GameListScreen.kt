@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -56,7 +55,6 @@ import androidx.compose.runtime.collectAsState
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.data.download.DownloadJob
 import com.bitsycore.cardbrowser.data.download.DownloadManager
-import com.bitsycore.cardbrowser.ui.downloads.DownloadsButton
 import com.bitsycore.cardbrowser.games.api.GameArt
 import com.bitsycore.cardbrowser.games.lorcana.LorcanaGame
 import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesGame
@@ -80,6 +78,7 @@ import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
 import com.bitsycore.cardbrowser.ui.common.AppIcons
+import com.bitsycore.cardbrowser.ui.common.AppOverflowMenu
 
 /**
  * The app's first screen: pick a game.
@@ -110,6 +109,7 @@ import com.bitsycore.cardbrowser.ui.common.AppIcons
 fun GameListScreen(
 	onOpenGame: (GameProfile) -> Unit,
 	onOpenSettings: () -> Unit,
+	onOpenStorage: () -> Unit = {},
 	onOpenDownloads: () -> Unit = {},
 	viewModel: GameListViewModel = koinViewModel(),
 ) {
@@ -132,6 +132,7 @@ fun GameListScreen(
 		dispatch = viewModel::dispatch,
 		onOpenGame = onOpenGame,
 		onOpenSettings = onOpenSettings,
+		onOpenStorage = onOpenStorage,
 		onOpenDownloads = onOpenDownloads,
 		downloads = vJobs,
 		artFor = vArtRegistry::forGame,
@@ -150,6 +151,7 @@ fun GameListContent(
 	dispatch: (GameListContract.Intent) -> Unit,
 	onOpenGame: (GameProfile) -> Unit = {},
 	onOpenSettings: () -> Unit = {},
+	onOpenStorage: () -> Unit = {},
 	onOpenDownloads: () -> Unit = {},
 	downloads: List<DownloadJob> = emptyList(),
 	/**
@@ -166,9 +168,6 @@ fun GameListContent(
 			TopAppBar(
 				title = { Text(if (state.isEditing) "Customise list" else "Card Browser") },
 				actions = {
-					// Draws nothing when the queue is empty, so it costs no space until there is
-					// something to see -- see `DownloadsButton`.
-					DownloadsButton(jobs = downloads, onClick = onOpenDownloads)
 					IconButton(onClick = { dispatch(GameListContract.Intent.EditingToggled) }) {
 						Icon(
 							imageVector = if (state.isEditing) {
@@ -183,12 +182,15 @@ fun GameListContent(
 							},
 						)
 					}
-					// Hidden while editing. Settings is a different screen, and leaving mid-edit is
-					// a good way to forget the list is in a mode at all.
+					// Hidden while editing. All three lead somewhere else, and leaving mid-edit
+					// is a good way to forget the list is in a mode at all.
 					if (!state.isEditing) {
-						IconButton(onClick = onOpenSettings) {
-							Icon(Icons.Outlined.Settings, contentDescription = "Settings")
-						}
+						AppOverflowMenu(
+							onOpenSettings = onOpenSettings,
+							onOpenStorage = onOpenStorage,
+							onOpenDownloads = onOpenDownloads,
+							activeDownloads = downloads.count { it.isActive },
+						)
 					}
 				},
 			)

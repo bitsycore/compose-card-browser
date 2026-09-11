@@ -163,6 +163,7 @@ fun App() {
 						GameListScreen(
 							onOpenGame = { vGame -> vBackStack.add(Route.Sets(vGame.id.value)) },
 							onOpenSettings = { vBackStack.add(Route.Settings) },
+							onOpenStorage = { vBackStack.add(Route.Storage) },
 							onOpenDownloads = { vBackStack.add(Route.Downloads) },
 						)
 					}
@@ -194,6 +195,7 @@ fun App() {
 								)
 							},
 							onOpenSettings = { vBackStack.add(Route.Settings) },
+							onOpenStorage = { vBackStack.add(Route.Storage) },
 							onOpenSearch = { vGame -> vBackStack.add(Route.Search(vGame.id.value)) },
 							onOpenDownloads = { vBackStack.add(Route.Downloads) },
 						)
@@ -258,7 +260,6 @@ fun App() {
 						SettingsScreen(
 							onBack = { vBackStack.removeLastOrNull() },
 							onOpenStorage = { vBackStack.add(Route.Storage) },
-							onOpenDownloads = { vBackStack.add(Route.Downloads) },
 						)
 					}
 

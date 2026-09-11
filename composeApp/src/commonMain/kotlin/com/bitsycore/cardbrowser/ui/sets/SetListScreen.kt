@@ -22,7 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -56,7 +55,6 @@ import com.bitsycore.cardbrowser.data.download.DownloadKind
 import com.bitsycore.cardbrowser.data.download.DownloadManager
 import com.bitsycore.cardbrowser.data.download.DownloadRequest
 import com.bitsycore.cardbrowser.ui.downloads.DownloadKindDialog
-import com.bitsycore.cardbrowser.ui.downloads.DownloadsButton
 import org.koin.compose.koinInject
 import androidx.compose.foundation.Image
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -101,6 +99,7 @@ import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import com.bitsycore.cardbrowser.ui.common.AppIcons
+import com.bitsycore.cardbrowser.ui.common.AppOverflowMenu
 
 /**
  * The Riftbound set list: the app's first screen.
@@ -114,6 +113,7 @@ fun SetListScreen(
 	onBack: () -> Unit,
 	onOpenSet: (CardSet) -> Unit,
 	onOpenSettings: () -> Unit,
+	onOpenStorage: () -> Unit,
 	onOpenSearch: (GameProfile) -> Unit,
 	onOpenDownloads: () -> Unit,
 	viewModel: SetListViewModel = koinViewModel { parametersOf(SetListArgs(game)) },
@@ -148,6 +148,7 @@ fun SetListScreen(
 		onBack = onBack,
 		onOpenSet = onOpenSet,
 		onOpenSettings = onOpenSettings,
+		onOpenStorage = onOpenStorage,
 		onOpenSearch = onOpenSearch,
 		onOpenDownloads = onOpenDownloads,
 		downloads = vJobs,
@@ -235,6 +236,7 @@ fun SetListContent(
 	onBack: () -> Unit = {},
 	onOpenSet: (CardSet) -> Unit,
 	onOpenSettings: () -> Unit,
+	onOpenStorage: () -> Unit = {},
 	onOpenSearch: (GameProfile) -> Unit = {},
 	/** Opens the download queue, which is a screen rather than a dialog. See `DownloadsScreen`. */
 	onOpenDownloads: () -> Unit = {},
@@ -343,16 +345,18 @@ fun SetListContent(
 							)
 						}
 					}
-					DownloadsButton(jobs = downloads, onClick = onOpenDownloads)
 					IconButton(onClick = { vState.game?.let(onOpenSearch) }) {
 						Icon(
 							AppIcons.TravelExplore,
 							contentDescription = "Search cards across all sets",
 						)
 					}
-					IconButton(onClick = onOpenSettings) {
-						Icon(Icons.Outlined.Settings, contentDescription = "Settings")
-					}
+					AppOverflowMenu(
+						onOpenSettings = onOpenSettings,
+						onOpenStorage = onOpenStorage,
+						onOpenDownloads = onOpenDownloads,
+						activeDownloads = downloads.count { it.isActive },
+					)
 				},
 			)
 		},

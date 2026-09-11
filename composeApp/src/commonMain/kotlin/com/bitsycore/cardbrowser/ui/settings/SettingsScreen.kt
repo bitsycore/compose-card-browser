@@ -31,9 +31,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -61,7 +58,6 @@ import org.koin.compose.viewmodel.koinViewModel
 fun SettingsScreen(
 	onBack: () -> Unit,
 	onOpenStorage: () -> Unit = {},
-	onOpenDownloads: () -> Unit = {},
 	viewModel: SettingsViewModel = koinViewModel(),
 ) {
 	val vState by viewModel.collectAsStateWithLifecycle()
@@ -71,7 +67,6 @@ fun SettingsScreen(
 		dispatch = viewModel::dispatch,
 		onBack = onBack,
 		onOpenStorage = onOpenStorage,
-		onOpenDownloads = onOpenDownloads,
 	)
 }
 
@@ -83,10 +78,8 @@ fun SettingsContent(
 	dispatch: (SettingsContract.Intent) -> Unit,
 	onBack: () -> Unit,
 	onOpenStorage: () -> Unit = {},
-	onOpenDownloads: () -> Unit = {},
 ) {
 	val vState = state
-	var vMenuOpen by remember { mutableStateOf(false) }
 
 	Scaffold(
 		topBar = {
@@ -95,30 +88,6 @@ fun SettingsContent(
 				navigationIcon = {
 					IconButton(onClick = onBack) {
 						Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
-					}
-				},
-				actions = {
-					// The screens settings *leads to*, rather than buttons buried among the
-					// switches. Neither is a preference, and both manage something that lives
-					// elsewhere, so neither belongs in the list below.
-					IconButton(onClick = { vMenuOpen = true }) {
-						Icon(Icons.Outlined.MoreVert, contentDescription = "More")
-					}
-					DropdownMenu(expanded = vMenuOpen, onDismissRequest = { vMenuOpen = false }) {
-						DropdownMenuItem(
-							text = { Text("Manage storage") },
-							onClick = {
-								vMenuOpen = false
-								onOpenStorage()
-							},
-						)
-						DropdownMenuItem(
-							text = { Text("Downloads") },
-							onClick = {
-								vMenuOpen = false
-								onOpenDownloads()
-							},
-						)
 					}
 				},
 			)
@@ -231,6 +200,13 @@ fun SettingsContent(
 				render = ::formatBytes,
 				onSelect = { dispatch(SettingsContract.Intent.MetadataCacheLimitChosen(it)) },
 			)
+
+			Spacer(Modifier.height(8.dp))
+			// Also in the bar menu one level up. Repeated here because this is where someone
+			// adjusting a limit finds out it is not the thing taking the space.
+			OutlinedButton(onClick = onOpenStorage, modifier = Modifier.fillMaxWidth()) {
+				Text("Manage storage")
+			}
 
 			// ============
 			//  Network
