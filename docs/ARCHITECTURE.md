@@ -476,6 +476,57 @@ Consequences worth knowing before touching any of it:
   and the pinned entries from a single listing, because the storage screen needs all four and the
   directory holds three files per cached set. `StorageScreenCostBench` measures it.
 
+### If this becomes a database
+
+A SQLite migration has been raised as a possibility -- for speed, and to make cross-set search do
+more than match a name. Nothing has been started. This is the brief for whoever does it, written
+while the reasons were still in one head.
+
+**What it would genuinely buy.** Most of what is slow here is slow because a record is a *file*:
+
+- The storage screen's counts are a directory walk today and would be
+  `SELECT COUNT(DISTINCT set_id)`. The same goes for pinned bytes, the language breakdown, and the
+  per-set existence checks that `savedLanguages` and `availableLanguages` run per row.
+- Filtering across sets is the real prize. `CardFilterEngine` filters in memory over whatever is
+  loaded; a table of printings with indexed columns makes "every Fury card under 4 cost across
+  every downloaded set" a query rather than a fan-out over hundreds of parsed JSON documents.
+- A bulk import becomes one transaction over a stream instead of 64 shard files and a write per
+  set. The sharding exists *only* because the cache is a filesystem -- see below.
+
+**What it must not change.**
+
+1. **A local search is still local.** SQLite makes that search fast; it does not put a single extra
+   card on the device. `SearchScope.LOCAL_CACHED_SETS`, its set count and `isLimitedByCache` must
+   survive intact, and an empty result must keep meaning "not in what you have downloaded" rather
+   than "does not exist". This is the single most likely thing to be lost in a rewrite, because a
+   fast complete-feeling search *feels* authoritative.
+2. **Unknown stays distinct from absent.** Columns are nullable for a reason; a schema that defaults
+   a missing language or rarity to a value has thrown away `Availability`'s third state.
+3. **Pinned records stay outside the eviction budget**, and a pin still has to name its set well
+   enough to be listed after everything else is cleared. Today that is the label on the marker file;
+   in a schema it is a row that eviction skips and a join that does not depend on the set list.
+4. **Interrupted writes cannot corrupt a good record, and a corrupt one reads as a miss.** Per-file
+   atomic replacement gives both for free today. SQLite gives the first with WAL and a transaction;
+   the second needs a deliberate answer for a corrupt *database*, which is a single point of failure
+   where today the blast radius is one set.
+5. **Language is part of a record's identity**, not a column to be collapsed. `(provider, set,
+   language)` is the key everywhere -- cache, downloads, pins, image records.
+
+**Costs to weigh before starting.**
+
+- A multiplatform driver is a dependency decision in a project that pins and records every version
+  it uses. It also adds native linkage to the **iOS targets, which have never been linked** -- so
+  the one target that cannot be tested here gains the most new risk.
+- Okio is the storage abstraction throughout, including `AppStorage`'s roots and the image cache.
+  A database replaces the metadata half only; the image cache stays a directory.
+- Existing data does not need migrating -- the owner has said a wipe is acceptable at this stage --
+  but `bulkImports` and the download records in `BrowsingPreferences` describe what is on disk, so
+  they have to be cleared with it or they will claim a catalogue that is gone.
+
+**Measure it.** `CacheWriteCostBench` and `StorageScreenCostBench` exist and both print figures; a
+migration that cannot beat them on the same machine has not earned itself. The current numbers to
+beat are in each file's KDoc.
+
 ### A bulk import is not a catalogue
 
 `BulkCatalogue` is optional and additive — a `CardProvider` implements it *as well as* the ordinary

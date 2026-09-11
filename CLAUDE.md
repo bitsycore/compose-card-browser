@@ -268,6 +268,15 @@ Do not "fix" these without asking; each is a decision with a reason recorded nea
 Not decisions, not bugs with a ticket -- just the things that are half-finished or unverified, so
 nobody re-discovers them the slow way. Delete an entry when it stops being true.
 
+**Raised, not started**
+
+- **A SQLite migration**, for speed and for cross-set search that does more than match a name. The
+  owner mentioned it on 2026-09-11 as something they may ask for from a different machine. Read
+  `docs/ARCHITECTURE.md` § "If this becomes a database" before touching it: what it buys, the five
+  things it must not change, and the two benches it has to beat. The headline is that SQLite makes a
+  *local* search fast without making it *complete* -- `SearchScope.LOCAL_CACHED_SETS` still has to
+  say what it looked at.
+
 **Known debt**
 
 - **`SetListScreen` builds `DownloadRequest`s in the composition layer.** It reads the
