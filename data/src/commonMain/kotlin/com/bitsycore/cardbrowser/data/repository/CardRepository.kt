@@ -1428,6 +1428,11 @@ class CardRepository(
 		// letting the catalogue choose it.
 		val vShards = mutableMapOf<Int, okio.BufferedSink>()
 		var vCards = 0
+		// Just the keys, gathered while streaming, purely to have an honest denominator for the
+		// writing phase. Keys only: roughly 1100 short strings for the English dump and some
+		// thousands for the every-language one, which is a rounding error against holding their
+		// cards. Counting them here is what lets the write phase handle one shard at a time.
+		val vBucketKeys = mutableSetOf<String>()
 
 		try {
 			vStorage.fileSystem.createDirectories(vScratch)
@@ -1442,6 +1447,7 @@ class CardRepository(
 				// -- so one bucket per set would mix them and store the lot under a single label
 				// that is wrong for most of it.
 				val vBucketKey = bucketKey(vCard.setId, vCard.text.language)
+				vBucketKeys += vBucketKey
 				val vSink = vShards.getOrPut(shardOf(vBucketKey)) {
 					vStorage.fileSystem.sink(vScratch / shardName(shardOf(vBucketKey))).buffer()
 				}
@@ -1462,49 +1468,59 @@ class CardRepository(
 		}
 
 		var vSetsWritten = 0
-		// Counted from the shards rather than known up front, so the progress denominator is the
-		// real number of sets and not the number of shards.
-		var vBucketTotal = 0
-		val vGrouped = mutableListOf<Pair<String, List<CardPrinting>>>()
+		// Known from the keys seen while streaming, not by reading the shards first.
+		val vBucketTotal = vBucketKeys.size
 		try {
+			// One shard read, written and released before the next is touched. Sharding exists to
+			// bound exactly this: [BULK_SHARDS] is chosen so a shard is a few megabytes, and
+			// `readShard` says so.
+			//
+			// It used to read *every* shard into one list and only then write, which threw that
+			// away -- peak memory became the whole catalogue as parsed objects rather than a
+			// sixty-fourth of it. Scryfall's English dump is 598 MB of JSON and about 300 MB once
+			// re-encoded as `CardPrinting`, and the every-language dump is several times that, so
+			// it exhausted the heap on a phone. Not for want of RAM, either: Android caps an app's
+			// heap in the hundreds of megabytes whatever the device has, so a 16 GB phone gets no
+			// further than a 4 GB one.
+			//
+			// The only reason it accumulated was to count buckets for the progress denominator,
+			// and [vBucketKeys] now has that for the price of a set of short strings.
 			for (vShard in vShards.keys.sorted()) {
 				currentCoroutineContext().ensureActive()
 				val vByBucket = readShard(vStorage, vScratch / shardName(vShard))
-				vBucketTotal += vByBucket.size
-				vGrouped += vByBucket.toList()
-			}
-			for ((_, vPrintings) in vGrouped) {
-				currentCoroutineContext().ensureActive()
-				if (vPrintings.isEmpty()) continue
-				// Read off the records rather than parsed back out of the key, so the cache is
-				// written under the language the cards in it actually state.
-				val vSetId = vPrintings.first().setId
-				val vLanguage = vPrintings.first().text.language
+				for (vPrintings in vByBucket.values) {
+					currentCoroutineContext().ensureActive()
+					if (vPrintings.isEmpty()) continue
+					// Read off the records rather than parsed back out of the key, so the cache is
+					// written under the language the cards in it actually state.
+					val vSetId = vPrintings.first().setId
+					val vLanguage = vPrintings.first().text.language
 
-				// Pinned before the write, for the same reason a download is: writing runs a trim,
-				// and a set large enough to breach the ceiling would otherwise be evicted by the
-				// very write that stored it.
-				val vKey = completeSetKey(vProvider, vSetId, vLanguage)
-				val vDedupedBucket = dedupePrintings(vPrintings)
-				mCache.pin(vKey)
-				mCache.write(
-					key = vKey,
-					envelope = CacheEnvelope(
-						schemaVersion = CacheEnvelope.CURRENT_SCHEMA_VERSION,
-						provider = vProvider.id,
-						language = vLanguage,
-						scope = CacheScope.CompleteSet(vSetId.qualified),
-						fetchedAtEpochMillis = mClock(),
-						// The bulk file is the whole catalogue by definition, so a set drawn from
-						// it is complete in a way a paged fetch has to prove.
-						completeness = Completeness.COMPLETE,
-						payload = vDedupedBucket,
-					),
-					serializer = CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>())),
-				)
-				mCache.recordCardCount(vKey, vDedupedBucket.size)
-				vSetsWritten++
-				onProgress(BulkImportProgress.Writing(vSetsWritten, vBucketTotal))
+					// Pinned before the write, for the same reason a download is: writing runs a
+					// trim, and a set large enough to breach the ceiling would otherwise be
+					// evicted by the very write that stored it.
+					val vKey = completeSetKey(vProvider, vSetId, vLanguage)
+					val vDedupedBucket = dedupePrintings(vPrintings)
+					mCache.pin(vKey)
+					mCache.write(
+						key = vKey,
+						envelope = CacheEnvelope(
+							schemaVersion = CacheEnvelope.CURRENT_SCHEMA_VERSION,
+							provider = vProvider.id,
+							language = vLanguage,
+							scope = CacheScope.CompleteSet(vSetId.qualified),
+							fetchedAtEpochMillis = mClock(),
+							// The bulk file is the whole catalogue by definition, so a set drawn
+							// from it is complete in a way a paged fetch has to prove.
+							completeness = Completeness.COMPLETE,
+							payload = vDedupedBucket,
+						),
+						serializer = CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>())),
+					)
+					mCache.recordCardCount(vKey, vDedupedBucket.size)
+					vSetsWritten++
+					onProgress(BulkImportProgress.Writing(vSetsWritten, vBucketTotal))
+				}
 			}
 		} finally {
 			runCatching { vStorage.fileSystem.deleteRecursively(vScratch) }

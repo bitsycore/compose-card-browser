@@ -158,7 +158,9 @@ class BulkImportTest {
 
 	private fun repository(
 		provider: FakeBulkProvider,
-		fileSystem: FakeFileSystem = FakeFileSystem(),
+		// Typed as the interface, not `FakeFileSystem`, so a test can wrap it -- see
+		// [RecordingFileSystem].
+		fileSystem: okio.FileSystem = FakeFileSystem(),
 	): CardRepository {
 		val vStorage = AppStorage(fileSystem, "/cache".toPath(), "/prefs".toPath())
 			.also { it.prepare() }
@@ -330,4 +332,73 @@ class BulkImportTest {
 		assertTrue(vPeak in 1..128, "held $vPeak files open at once")
 	}
 
+	@Test
+	fun `a shard is written out before the next one is read`() = runTest {
+		// The other half of what sharding is for, and the half that was missing: descriptors were
+		// bounded but memory was not. Every shard was read into one list and only then written, so
+		// peak memory was the whole catalogue as parsed objects rather than a sixty-fourth of it.
+		// Scryfall's English dump is 598 MB of JSON and about 300 MB once re-encoded as
+		// `CardPrinting`; the every-language one is several times that. It exhausted the heap on a
+		// phone -- and physical RAM does not help, since Android caps an app's heap in the
+		// hundreds of megabytes however much the device has.
+		//
+		// Asserted through the file system rather than by measuring memory, which would be flaky:
+		// if a shard's cards are written before the last shard is read, the import cannot be
+		// holding them all. The old code produced every read and then every write.
+		val vEvents = mutableListOf<String>()
+		val vFileSystem = RecordingFileSystem(FakeFileSystem(), vEvents)
+		val vSets = (0 until 600).map { set("S$it") }
+		val vCards = (0 until 600).map { printing("S$it", "1") }
+
+		val vResult = assertNotNull(
+			repository(FakeBulkProvider(mProviderId, vCards, vSets), vFileSystem).importBulk(
+				TestGameProfile.id,
+			),
+		)
+
+		assertEquals(600, vResult.sets)
+		val vFirstWrite = vEvents.indexOfFirst { it == WRITE }
+		val vLastRead = vEvents.indexOfLast { it == READ }
+		assertTrue(vFirstWrite >= 0, "nothing was written")
+		assertTrue(vLastRead >= 0, "no shard was read back")
+		assertTrue(
+			vFirstWrite < vLastRead,
+			"every shard was read before anything was written, so the whole catalogue was held " +
+				"in memory at once",
+		)
+		// And the interleaving is real rather than one lucky ordering: with 600 buckets spread
+		// over the shards, reads and writes should alternate many times.
+		val vAlternations = vEvents.zipWithNext().count { (vLeft, vRight) -> vLeft != vRight }
+		assertTrue(vAlternations > 10, "only $vAlternations changes between reading and writing")
+	}
+
+	private companion object {
+
+		const val READ = "read-shard"
+		const val WRITE = "write-cache"
+	}
+
+	/**
+	 * Records when shards are read and when cache entries are written.
+	 *
+	 * A forwarding file system rather than a mock: the real `FakeFileSystem` still does the work,
+	 * so what is observed is the import's actual file access and not a stand-in for it.
+	 */
+	private class RecordingFileSystem(
+		delegate: okio.FileSystem,
+		private val mEvents: MutableList<String>,
+	) : okio.ForwardingFileSystem(delegate) {
+
+		override fun source(file: okio.Path): okio.Source {
+			if (file.name.startsWith("shard-")) mEvents += READ
+			return super.source(file)
+		}
+
+		override fun sink(file: okio.Path, mustCreate: Boolean): okio.Sink {
+			// The metadata cache writes to a temp file and moves it into place, so the sink is
+			// where a write begins. Shard sinks are excluded: those belong to the streaming phase.
+			if (!file.name.startsWith("shard-")) mEvents += WRITE
+			return super.sink(file, mustCreate)
+		}
+	}
 }
