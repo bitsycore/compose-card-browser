@@ -181,10 +181,14 @@ class AppModuleTest {
 	}
 
 	@Test
-	fun `a source states whether it publishes thumbnails -- and only three do not`() {
+	fun `a source states whether it publishes thumbnails -- and only two do not`() {
 		// The capability exists because the app falls back to the full image where there is no
 		// small one, and a download offering "Thumbnails -- about 3 MB" then fetches six times
-		// that. Measured 2026-09-11: Wuthering Waves' single rendition is 196 KB a card.
+		// that.
+		//
+		// Wuthering Waves was on this list and is not any more, which is the pattern worth
+		// noticing: its CDN resizes on request, so the rendition existed and nobody had asked for
+		// it. A source with no *second file* may still have a second size.
 		//
 		// Pinned as a table rather than asserted loosely, so a provider that gains or loses a
 		// rendition has to come here and say so.
@@ -197,7 +201,7 @@ class AppModuleTest {
 			.toSet()
 
 		assertEquals(
-			setOf("ucp-wuwa", "optcg", "altered-db"),
+			setOf("optcg", "altered-db"),
 			vWithout,
 			"a source changed what renditions it publishes",
 		)

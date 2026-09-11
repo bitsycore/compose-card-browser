@@ -302,9 +302,17 @@ internal object WuwaCatalogue {
 			// Per language: each locale has its own scan, with its own text burned into it.
 			id = SourceId(provider, "${card.key}@${language.code}"),
 			imageUrl = vUrl,
-			// Already WebP and already compressed -- the CDN path says `compressed` -- and there is
-			// no second size, so the grid and the detail screen load the same file.
-			thumbnailUrl = null,
+			// A real thumbnail, asked of the CDN rather than published as a second file.
+			//
+			// The bucket is Tencent COS and honours `imageMogr2`, which is the same arrangement
+			// Riftcodex has with Sanity: there is one asset and the size is a query parameter.
+			// Measured across five random cards on 2026-09-11, `thumbnail/320x` turns 168-188 KB
+			// into 22-43 KB -- a genuine pixel resize, 1055x1473 down to 320x447, not a
+			// re-compression. That is the difference between a grid tile costing 33 KB and 180 KB.
+			//
+			// Left as `null` until then, on the grounds that the path already said `compressed`
+			// and there was no second file. There is no second file; there is a second size.
+			thumbnailUrl = vUrl.ifBlank { null }?.plus(THUMBNAIL_PARAMS),
 			displayUrl = vUrl.ifBlank { null },
 			artist = null,
 			treatment = if (card.stars != null && vLowestTier != null && card.stars > vLowestTier) {
@@ -328,6 +336,19 @@ internal object WuwaCatalogue {
 		val vTerm = snapshot.vocabulary[facet]?.firstOrNull { it.id == id } ?: return null
 		return (vTerm.labels[language.code] ?: vTerm.labels.values.firstOrNull())?.ifBlank { null }
 	}
+
+	/**
+	 * What turns a full asset into a grid thumbnail, appended to the URL.
+	 *
+	 * Tencent COS image processing. 320 px wide to match what every other adapter here asks for,
+	 * which is wide enough for a two-to-four column grid on a phone at 3x. The format is left
+	 * alone: these are already WebP.
+	 *
+	 * If the bucket ever stops honouring it the request still succeeds and returns the full asset,
+	 * so the failure is silent and expensive rather than visible -- which is why
+	 * `WuwaLiveSmokeTest` checks the resize really happens.
+	 */
+	internal const val THUMBNAIL_PARAMS = "?imageMogr2/thumbnail/320x"
 
 	/** Where the asset lives, relative to `composeResources`. */
 	private const val ASSET_PATH = "files/wuwa-cards.json"

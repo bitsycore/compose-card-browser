@@ -8,11 +8,13 @@ import io.ktor.client.request.head
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.readRawBytes
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.appendPathSegments
 import io.ktor.serialization.kotlinx.json.json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerialName
@@ -136,6 +138,33 @@ class WuwaSnapshotFreshnessTest {
 				"${vCard.collectorNumber} art is gone: ${vCard.artwork.imageUrl}",
 			)
 		}
+	}
+
+	@Test
+	fun `the CDN still resizes -- so a thumbnail is really a thumbnail`() = runBlocking {
+		// The adapter asks the bucket for a 320 px rendition rather than shipping a second file --
+		// see `WuwaCatalogue.THUMBNAIL_PARAMS`. If Tencent COS ever stops honouring `imageMogr2`
+		// the request still succeeds and returns the full asset, so the app would quietly fetch
+		// 180 KB a card for a grid tile and nothing would look wrong.
+		//
+		// Measured 2026-09-11 across five random cards: 168-188 KB down to 22-43 KB.
+		val vCard = WuwaCatalogue
+			.printings(CardLanguage.JAPANESE, WuwaProvider.PROVIDER_ID)
+			.first { it.artwork.thumbnailUrl != null }
+		val vThumbnail = assertNotNull(vCard.artwork.thumbnailUrl)
+		assertTrue(
+			vThumbnail.endsWith(WuwaCatalogue.THUMBNAIL_PARAMS),
+			"the adapter stopped asking for a resize: $vThumbnail",
+		)
+
+		val vFullBytes = mClient.get(vCard.artwork.imageUrl).readRawBytes().size
+		val vThumbBytes = mClient.get(vThumbnail).readRawBytes().size
+
+		assertTrue(vFullBytes > 100_000, "the full asset looks wrong at $vFullBytes bytes")
+		assertTrue(
+			vThumbBytes < vFullBytes / 2,
+			"the CDN is no longer resizing: $vThumbBytes against $vFullBytes",
+		)
 	}
 
 	// ==================

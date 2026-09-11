@@ -109,6 +109,10 @@ class WuwaProvider : CardProvider<WutheringWavesGame> {
 			// app can call for records, which is why the snapshot exists, so there is never
 			// anything to fetch, keep or delete for them.
 			bundledCardData = true,
+			// The records are bundled; the pictures are not, and they do have two sizes. The CDN
+			// resizes on request, so a thumbnail is a real 33 KB rendition rather than the 180 KB
+			// asset relabelled. See `WuwaCatalogue.THUMBNAIL_PARAMS`.
+			thumbnailImages = true,
 		),
 		attribution = Attribution(
 			text = "Wuthering Waves TCG card data and images from UCP's official card list. " +
