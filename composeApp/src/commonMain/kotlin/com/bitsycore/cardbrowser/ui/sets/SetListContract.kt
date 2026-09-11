@@ -156,6 +156,16 @@ object SetListContract :
 		 * set fetched part-way is saved and is not finished, so it still has something to fetch.
 		 */
 		val completeSetIds: Set<String> = emptySet(),
+		/**
+		 * Whether the list is being arranged rather than browsed.
+		 *
+		 * The same split the game picker makes, for the same reason: favouriting and reordering are
+		 * things you do occasionally and deliberately, and a control for each of them on every row
+		 * is a column of targets to miss while trying to open a set. Off, a favourite still shows
+		 * its star -- that is information about the set and is worth keeping -- but it is a mark
+		 * rather than a button.
+		 */
+		val isEditing: Boolean = false,
 		/** Whether sets stated to hold no cards are left out. See `BrowsingPreferences`. */
 		val hideEmptySets: Boolean = true,
 		/**
@@ -290,7 +300,7 @@ object SetListContract :
 		 * Rather than guess, the handles go away and the list says why.
 		 */
 		val canReorderFavourites: Boolean
-			get() = favouriteSets.size > 1 && search.isBlank() && region == null
+			get() = isEditing && favouriteSets.size > 1 && search.isBlank() && region == null
 
 		/** True when there is nothing to draw and no reason yet to explain why. */
 		val isInitialLoad: Boolean get() = isLoading && sets.isEmpty() && error == null
@@ -386,6 +396,9 @@ object SetListContract :
 		data object DownloadsRequested : Intent
 
 		data object SearchRequested : Intent
+
+		/** Arranging or browsing. Screen state only -- nothing about it is persisted. */
+		data object EditingToggled : Intent
 
 		/**
 		 * The user picked a different game.
@@ -541,6 +554,10 @@ object SetListContract :
 		Intent.DownloadsRequested,
 		Intent.SearchRequested,
 		-> state
+
+		// Leaving edit mode does not undo anything: every change it allows is written as it is
+		// made, exactly as the game picker does it.
+		Intent.EditingToggled -> state.copy(isEditing = !state.isEditing)
 
 		is Intent.GameChanged ->
 			if (intent.game == state.game) {

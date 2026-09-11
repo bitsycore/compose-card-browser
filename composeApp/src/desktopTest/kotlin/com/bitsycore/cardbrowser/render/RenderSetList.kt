@@ -38,6 +38,24 @@ class SetListRenderer {
 
 		renderToPng(vOut, "sets-all-lines", width = 660, height = 1100, density = 1.65f) { SetListContent(pokemonState(), {}) }
 
+		// Browsing and arranging, side by side. Browsing should show a star only on a favourite and
+		// no handles; arranging should show a star on every row, a handle on each favourite, and no
+		// download button.
+		listOf(false to "sets-browsing", true to "sets-arranging").forEach { (vEditing, vName) ->
+			renderToPng(vOut, vName, width = 660, height = 700, density = 1.65f) {
+				SetListContent(
+					pokemonState().copy(
+						isEditing = vEditing,
+						favouriteIds = listOf(
+							SourceId(TCGDEX, "sv08").qualified,
+							SourceId(TCGDEX, "base1").qualified,
+						),
+					),
+					{},
+				)
+			}
+		}
+
 		// A row with nothing left to fetch, beside one that has been opened but not finished. The
 		// first should have no download button and the second should still have one.
 		renderToPng(vOut, "sets-download-offer", width = 660, height = 760, density = 1.65f) {

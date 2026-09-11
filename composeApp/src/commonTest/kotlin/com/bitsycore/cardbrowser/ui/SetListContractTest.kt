@@ -13,6 +13,7 @@ import com.bitsycore.cardbrowser.ui.sets.SetListContract.Intent
 import com.bitsycore.cardbrowser.ui.sets.SetListContract.UiState
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -200,6 +201,30 @@ class SetListContractTest {
 
 		assertTrue(vState.visibleSets.isEmpty(), "a fetch proved it empty")
 		assertEquals(1, vState.hiddenEmptyCount)
+	}
+
+	@Test
+	fun `favourites can only be reordered while arranging`() {
+		// The mode exists so the list is not covered in controls while it is being read. Dragging
+		// is the half that would otherwise fire by accident, so it is gated on the mode as well as
+		// on the search -- and a list that let a drag start outside the mode would be offering an
+		// edit the screen is not drawing handles for.
+		val vLoaded = loaded(set("a", null), set("b", null))
+		val vWithFavourites = SetListContract.reduce(
+			vLoaded,
+			Intent.FavouritesRestored(vLoaded.sets.map { it.id.qualified }),
+		)
+
+		assertFalse(vWithFavourites.canReorderFavourites, "browsing is not arranging")
+
+		val vEditing = SetListContract.reduce(vWithFavourites, Intent.EditingToggled)
+		assertTrue(vEditing.isEditing)
+		assertTrue(vEditing.canReorderFavourites)
+
+		// And a search still blocks it, for the reason it always did: a drag reorders the stored
+		// list, and dropping between two visible rows has no answer when others are hidden.
+		val vSearching = SetListContract.reduce(vEditing, Intent.SearchChanged("base"))
+		assertFalse(vSearching.canReorderFavourites, "a search still blocks a reorder")
 	}
 
 	@Test

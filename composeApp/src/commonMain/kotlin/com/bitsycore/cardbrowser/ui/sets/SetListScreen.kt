@@ -31,6 +31,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.runtime.Composable
 import com.bitsycore.cardbrowser.ui.common.arrowSelection
 import com.bitsycore.cardbrowser.ui.common.reorderHandle
@@ -362,6 +364,18 @@ fun SetListContent(
 							contentDescription = "Search cards across all sets",
 						)
 					}
+					// Arranging, as its own mode. The same control the game picker has, in the same
+					// place, because it does the same thing to the same kind of list.
+					IconButton(onClick = { dispatch(SetListContract.Intent.EditingToggled) }) {
+						Icon(
+							imageVector = if (vState.isEditing) AppIcons.Check else AppIcons.Tune,
+							contentDescription = if (vState.isEditing) {
+								"Done arranging favourites"
+							} else {
+								"Arrange favourites"
+							},
+						)
+					}
 					AppOverflowMenu(
 						onOpenSettings = { dispatch(SetListContract.Intent.SettingsRequested) },
 						onOpenStorage = { dispatch(SetListContract.Intent.StorageRequested) },
@@ -478,7 +492,10 @@ fun SetListContent(
 										},
 										// Said once, where the handles would otherwise have been,
 										// rather than leaving the user to wonder where they went.
-										note = if (vState.canReorderFavourites) {
+										// Only while arranging: outside that mode there are no
+										// handles to be missing, so explaining their absence
+										// answers a question nobody asked.
+										note = if (!vState.isEditing || vState.canReorderFavourites) {
 											null
 										} else if (vFavourites.size > 1) {
 											"Clear the search to reorder"
@@ -741,6 +758,7 @@ private fun LazyListScope.setRows(
 			region = if (state.region != null) null else state.game?.regionFor(vSet.region),
 			isLastOpened = vId == state.lastOpenedSetId,
 			isSaved = vId in state.savedSetIds,
+			isEditing = state.isEditing,
 			// Both halves, because a download is both: the records and the pictures. A set with
 			// its cards and none of its art still has something to fetch. Full-size art is not
 			// counted -- it is never bulk-downloaded, so it has no completed state to be in.
@@ -806,6 +824,8 @@ private fun SetRow(
 	 * part-way is saved and still has something to download.
 	 */
 	isFullyDownloaded: Boolean = false,
+	/** Whether the list is being arranged. Off, the star is a mark rather than a button. */
+	isEditing: Boolean = false,
 	onClick: () -> Unit,
 	confirmedCardCount: Int? = null,
 	availableLanguages: Set<CardLanguage> = emptySet(),
@@ -821,7 +841,15 @@ private fun SetRow(
 	handleModifier: Modifier? = null,
 ) {
 	Card(
-		onClick = onClick,
+		// Not clickable while arranging, for the reason the game picker is not: the row's job there
+		// is to be dragged, and opening a set from under a press aimed at its handle is the obvious
+		// way to get that wrong.
+		//
+		// Absent rather than disabled, and one `Card` rather than one per mode. A disabled `Card`
+		// greys everything inside it -- the set's name reads as unavailable when it is merely not
+		// tappable -- and announces itself to a screen reader as a button that does nothing. Two
+		// call sites would be worse still: that is a composition identity, and toggling the mode
+		// would throw away everything inside, which is the bug the game picker's rows had.
 		modifier = itemModifier
 			.fillMaxWidth()
 			// The keyboard's cursor. An outline, so it reads as pointing at a row rather than as
@@ -838,7 +866,12 @@ private fun SetRow(
 			.graphicsLayer { translationY = dragOffsetY }
 			// The row is one half of the container transform into the card grid; the grid screen's
 			// root is the other. See `Modifier.sharedSetContainer`.
-			.sharedSetContainer(set.id.qualified),
+			.sharedSetContainer(set.id.qualified)
+			// Before the click, so the ripple keeps to the card's corners.
+			.clip(CardDefaults.shape)
+			.then(
+				if (isEditing) Modifier else Modifier.clickable(role = Role.Button, onClick = onClick),
+			),
 		elevation = CardDefaults.cardElevation(
 			defaultElevation = if (isDragging) DRAGGED_ROW_ELEVATION else 0.dp,
 		),
@@ -909,6 +942,25 @@ private fun SetRow(
 					}
 				}
 
+				// A star you can press, but only while arranging.
+				//
+				// Browsing, a favourite still shows its star and a non-favourite shows nothing at
+				// all: the mark is a fact about the set and worth keeping, while an empty outline
+				// on every row is a column of targets to miss on the way to opening one.
+				!isEditing -> {
+					if (isFavourite) {
+						Spacer(Modifier.size(4.dp))
+						Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+							Icon(
+								imageVector = AppIcons.StarFilled,
+								contentDescription = "${set.name} is a favourite",
+								tint = MaterialTheme.colorScheme.primary,
+								modifier = Modifier.size(20.dp),
+							)
+						}
+					}
+				}
+
 				else -> {
 					Spacer(Modifier.size(4.dp))
 					IconButton(onClick = onToggleFavourite, modifier = Modifier.size(32.dp)) {
@@ -929,14 +981,16 @@ private fun SetRow(
 							modifier = Modifier.size(20.dp),
 						)
 					}
-					// Offered only while there is something left to fetch. A button that starts a
-					// download of nothing is worse than no button: it invites a tap, does the work
-					// of checking, and reports that everything was already there.
+					// Offered only while there is something left to fetch, and only while browsing.
+					// A button that starts a download of nothing is worse than no button: it
+					// invites a tap, does the work of checking, and reports that everything was
+					// already there. Arranging is a different job, and a row being dragged should
+					// not also be a row that starts a download.
 					//
 					// The marks below still say what is held -- this removes the *offer*, not the
 					// statement. Which is the right way round: "you have this" is information, and
 					// "get this" is an action that has nothing to act on.
-					if (!isFullyDownloaded) {
+					if (!isFullyDownloaded && !isEditing) {
 						IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
 							Icon(
 								imageVector = AppIcons.Download,

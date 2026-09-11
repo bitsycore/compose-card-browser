@@ -81,10 +81,12 @@ class SetFavouritesReducerTest {
 	fun `dragging is refused while a search narrows the list`() {
 		// The drag reorders the stored list, and what is on screen may be a subset of it -- so a
 		// drop between two visible rows has no single right answer. The handles go away instead.
-		var vState = loaded()
+		var vState = SetListContract.reduce(loaded(), SetListContract.Intent.EditingToggled)
 		for (vCode in listOf("OGN", "VEN", "SPF")) {
 			vState = SetListContract.reduce(vState, SetListContract.Intent.FavouriteToggled(id(vCode)))
 		}
+		// Arranging, because dragging is gated on that too now. Stated here so what follows is
+		// about the search and nothing else.
 		assertTrue(vState.canReorderFavourites)
 
 		val vSearching = SetListContract.reduce(vState, SetListContract.Intent.SearchChanged("e"))
@@ -94,7 +96,11 @@ class SetFavouritesReducerTest {
 
 	@Test
 	fun `one favourite is not worth dragging`() {
-		val vState = SetListContract.reduce(loaded(), SetListContract.Intent.FavouriteToggled(id("OGN")))
+		// Arranging, so this still fails for the reason it is named after. Without it the
+		// assertion would hold because the list is merely not in edit mode, which is a different
+		// rule and one the test above covers.
+		val vEditing = SetListContract.reduce(loaded(), SetListContract.Intent.EditingToggled)
+		val vState = SetListContract.reduce(vEditing, SetListContract.Intent.FavouriteToggled(id("OGN")))
 
 		assertFalse(vState.canReorderFavourites)
 	}
