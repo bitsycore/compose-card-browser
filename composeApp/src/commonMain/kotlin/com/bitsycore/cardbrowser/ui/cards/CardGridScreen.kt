@@ -24,9 +24,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
@@ -95,6 +93,7 @@ import com.bitsycore.lib.pulse.compose.collectEffect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import com.bitsycore.cardbrowser.ui.common.AppIcons
 
 /**
  * One set's cards, as a grid of readable card images.
@@ -290,7 +289,7 @@ fun CardGridContent(
 						) {
 							Icon(
 								imageVector = if (vState.isSearchOpen) {
-									Icons.Outlined.SearchOff
+									AppIcons.SearchOff
 								} else {
 									Icons.Outlined.Search
 								},
@@ -315,7 +314,7 @@ fun CardGridContent(
 									dispatch(CardGridContract.Intent.FilterSheetToggled(true))
 								},
 							) {
-								Icon(Icons.Outlined.FilterList, contentDescription = "Filters")
+								Icon(AppIcons.FilterList, contentDescription = "Filters")
 							}
 						}
 					},

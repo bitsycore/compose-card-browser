@@ -11,9 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CloudOff
-import androidx.compose.material.icons.outlined.Inbox
-import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
@@ -28,6 +25,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.provider.ProviderError
+import com.bitsycore.cardbrowser.ui.common.AppIcons
 
 /**
  * The states every data screen in this app has to be able to show.
@@ -73,7 +71,7 @@ fun ErrorState(
 		horizontalAlignment = Alignment.CenterHorizontally,
 	) {
 		Icon(
-			imageVector = Icons.Outlined.CloudOff,
+			imageVector = AppIcons.CloudOff,
 			contentDescription = null,
 			modifier = Modifier.size(40.dp),
 			tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -105,7 +103,7 @@ fun EmptyState(
 		horizontalAlignment = Alignment.CenterHorizontally,
 	) {
 		Icon(
-			imageVector = Icons.Outlined.Inbox,
+			imageVector = AppIcons.Inbox,
 			contentDescription = null,
 			modifier = Modifier.size(40.dp),
 			tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -133,7 +131,7 @@ fun EmptyState(
 @Composable
 fun NoticeBanner(
 	text: String,
-	icon: ImageVector = Icons.Outlined.Storage,
+	icon: ImageVector = AppIcons.Storage,
 	onAction: (() -> Unit)? = null,
 	actionLabel: String = "Retry",
 	modifier: Modifier = Modifier,

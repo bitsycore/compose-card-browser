@@ -20,9 +20,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -67,6 +65,7 @@ import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
+import com.bitsycore.cardbrowser.ui.common.AppIcons
 
 /**
  * Search every set of one game.
@@ -224,13 +223,13 @@ private fun CoverageNotice(
 	when {
 		state.error != null && state.results.isNotEmpty() -> NoticeBanner(
 			text = "Showing matches from saved sets. The search request failed.",
-			icon = Icons.Outlined.CloudOff,
+			icon = AppIcons.CloudOff,
 			onAction = { dispatch(SearchContract.Intent.Submit) },
 		)
 
 		state.coverageNotice != null -> NoticeBanner(
 			text = state.coverageNotice.orEmpty(),
-			icon = Icons.Outlined.Storage,
+			icon = AppIcons.Storage,
 			onAction = null,
 		)
 	}

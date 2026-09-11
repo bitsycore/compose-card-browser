@@ -18,7 +18,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
@@ -44,6 +43,7 @@ import com.bitsycore.cardbrowser.data.download.DownloadStatus
 import com.bitsycore.cardbrowser.ui.common.EmptyState
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import androidx.compose.ui.tooling.preview.Preview
+import com.bitsycore.cardbrowser.ui.common.AppIcons
 
 /**
  * The download queue, as a screen.
@@ -245,7 +245,7 @@ private fun StatusMark(job: DownloadJob) {
 			modifier = Modifier.size(20.dp),
 		)
 		is DownloadStatus.Failed -> Icon(
-			imageVector = Icons.Outlined.ErrorOutline,
+			imageVector = AppIcons.ErrorOutline,
 			contentDescription = null,
 			tint = MaterialTheme.colorScheme.error,
 			modifier = Modifier.size(20.dp),

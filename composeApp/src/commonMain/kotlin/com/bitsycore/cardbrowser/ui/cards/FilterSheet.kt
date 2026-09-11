@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowDownward
-import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -34,6 +32,7 @@ import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.SortDirection
 import com.bitsycore.cardbrowser.ui.cards.CardGridContract.toggle
+import com.bitsycore.cardbrowser.ui.common.AppIcons
 
 /**
  * The filter sheet.
@@ -105,9 +104,9 @@ fun FilterSheet(
 						{
 							Icon(
 								imageVector = if (vIsDescending) {
-									Icons.Outlined.ArrowDownward
+									AppIcons.ArrowDownward
 								} else {
-									Icons.Outlined.ArrowUpward
+									AppIcons.ArrowUpward
 								},
 								contentDescription = if (vIsDescending) "Descending" else "Ascending",
 								modifier = Modifier.size(16.dp),

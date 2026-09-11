@@ -64,9 +64,11 @@ kotlin {
 			implementation(libs.jetbrains.compose.runtime)
 			implementation(libs.jetbrains.compose.foundation)
 			implementation(libs.jetbrains.compose.material3)
+			// Only the ~50 icons Material ships in core. The other 24 this app draws are
+			// generated into `AppIcons` -- see that file for why the extended set is not here.
+			implementation(libs.jetbrains.compose.material.icons.core)
 			implementation(libs.jetbrains.compose.ui)
 			implementation(libs.jetbrains.compose.components.resources)
-			implementation(libs.jetbrains.compose.material.icons.extended)
 			// `@Preview` in common code. The annotation only -- the renderer is the IDE's, and on
 			// Android it is `ui-tooling`, added to androidMain below.
 			implementation(libs.jetbrains.compose.ui.tooling.preview)

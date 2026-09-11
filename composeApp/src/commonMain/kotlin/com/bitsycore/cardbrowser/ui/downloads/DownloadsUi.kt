@@ -18,8 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.DownloadDone
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.FlowRow
@@ -54,6 +52,7 @@ import com.bitsycore.cardbrowser.data.download.DownloadRequest
 import com.bitsycore.cardbrowser.data.download.DownloadStatus
 import com.bitsycore.cardbrowser.data.download.ProgressUnit
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
+import com.bitsycore.cardbrowser.ui.common.AppIcons
 
 // ==================
 // MARK: Choosing what to download
@@ -581,7 +580,7 @@ fun DownloadsButton(jobs: List<DownloadJob>, onClick: () -> Unit) {
 	) {
 		IconButton(onClick = onClick) {
 			Icon(
-				imageVector = if (vActive > 0) Icons.Outlined.Download else Icons.Outlined.DownloadDone,
+				imageVector = if (vActive > 0) AppIcons.Download else AppIcons.DownloadDone,
 				contentDescription = if (vActive > 0) "$vActive downloads in progress" else "Downloads",
 			)
 		}

@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -19,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import com.bitsycore.cardbrowser.ui.common.AppIcons
 
 /**
  * Drag-to-reorder for a `LazyColumn`, shared by the game picker and the set list's favourites.
@@ -184,7 +184,7 @@ fun Modifier.reorderHandle(
 @Composable
 fun ReorderHandle(modifier: Modifier = Modifier) {
 	Icon(
-		imageVector = Icons.Outlined.DragHandle,
+		imageVector = AppIcons.DragHandle,
 		contentDescription = null,
 		tint = MaterialTheme.colorScheme.onSurfaceVariant,
 		modifier = modifier.padding(horizontal = 6.dp).size(24.dp),

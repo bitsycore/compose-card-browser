@@ -23,7 +23,6 @@ kotlinxDatetime = "0.8.0"
 # Compose
 composeMultiplatform = "1.12.0"
 material3 = "1.12.0-alpha03"
-materialIconsExtended = "1.7.3"
 
 # AndroidX (KMP)
 androidxLifecycle = "2.11.0"
@@ -40,6 +39,7 @@ ktor = "3.5.2"
 
 # Images. Coil 3 is the only mainstream image loader that targets Android, iOS and JVM desktop from
 # one API, and it accepts a Ktor engine so the app keeps a single HTTP stack.
+materialIconsCore = "1.7.3"
 coil = "3.6.2"
 
 # DI
@@ -76,8 +76,8 @@ jetbrains-compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", 
 jetbrains-compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "composeMultiplatform" }
 jetbrains-compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMultiplatform" }
 jetbrains-compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "composeMultiplatform" }
+jetbrains-compose-material-icons-core = { module = "org.jetbrains.compose.material:material-icons-core", version.ref = "materialIconsCore" }
 jetbrains-compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "material3" }
-jetbrains-compose-material-icons-extended = { module = "org.jetbrains.compose.material:material-icons-extended", version.ref = "materialIconsExtended" }
 jetbrains-compose-ui-tooling = { module = "org.jetbrains.compose.ui:ui-tooling", version.ref = "composeMultiplatform" }
 # The @Preview annotation only. The renderer lives in the IDE, and in ui-tooling on Android.
 jetbrains-compose-ui-tooling-preview = { module = "org.jetbrains.compose.ui:ui-tooling-preview", version.ref = "composeMultiplatform" }

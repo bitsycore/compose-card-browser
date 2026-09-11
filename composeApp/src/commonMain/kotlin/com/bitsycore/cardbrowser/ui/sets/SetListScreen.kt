@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,9 +44,7 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
@@ -70,10 +67,7 @@ import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
 import com.bitsycore.cardbrowser.ui.games.logoBackdropFor
 import com.bitsycore.cardbrowser.ui.games.logoTintFor
 import org.jetbrains.compose.resources.painterResource
-import androidx.compose.material.icons.outlined.CloudDownload
-import androidx.compose.material.icons.outlined.Description
 import com.bitsycore.cardbrowser.data.settings.ImageDownloadRecord
-import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -106,6 +100,7 @@ import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
+import com.bitsycore.cardbrowser.ui.common.AppIcons
 
 /**
  * The Riftbound set list: the app's first screen.
@@ -343,7 +338,7 @@ fun SetListContent(
 					if (vState.visibleSets.isNotEmpty()) {
 						IconButton(onClick = { vPendingAll = true }) {
 							Icon(
-								Icons.Outlined.CloudDownload,
+								AppIcons.CloudDownload,
 								contentDescription = "Download all ${vState.visibleSets.size} sets shown",
 							)
 						}
@@ -351,7 +346,7 @@ fun SetListContent(
 					DownloadsButton(jobs = downloads, onClick = onOpenDownloads)
 					IconButton(onClick = { vState.game?.let(onOpenSearch) }) {
 						Icon(
-							Icons.Outlined.TravelExplore,
+							AppIcons.TravelExplore,
 							contentDescription = "Search cards across all sets",
 						)
 					}
@@ -841,7 +836,7 @@ private fun SetRow(
 					Spacer(Modifier.size(4.dp))
 					IconButton(onClick = onToggleFavourite, modifier = Modifier.size(32.dp)) {
 						Icon(
-							imageVector = if (isFavourite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+							imageVector = if (isFavourite) Icons.Filled.Star else AppIcons.StarBorder,
 							contentDescription = if (isFavourite) {
 								"Remove ${set.name} from favourites"
 							} else {
@@ -859,7 +854,7 @@ private fun SetRow(
 					}
 					IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
 						Icon(
-							imageVector = Icons.Outlined.Download,
+							imageVector = AppIcons.Download,
 							contentDescription = "Download ${set.name}",
 							tint = MaterialTheme.colorScheme.onSurfaceVariant,
 							modifier = Modifier.size(20.dp),
@@ -876,7 +871,7 @@ private fun SetRow(
 				Row(verticalAlignment = Alignment.CenterVertically) {
 					if (isSaved) {
 						Icon(
-							imageVector = Icons.Outlined.Description,
+							imageVector = AppIcons.Description,
 							// "Saved", not "complete". A set interrupted part-way through leaves a
 							// file behind too, and the mark must not promise more than that.
 							contentDescription = "Card info saved on this device",
@@ -886,7 +881,7 @@ private fun SetRow(
 					}
 					ImageMark(
 						record = images?.thumbnails,
-						icon = Icons.Outlined.GridView,
+						icon = AppIcons.GridView,
 						label = "Thumbnails",
 						leadingSpace = isSaved,
 					)

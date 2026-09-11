@@ -21,10 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Style
-import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -83,6 +79,7 @@ import org.koin.compose.koinInject
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
+import com.bitsycore.cardbrowser.ui.common.AppIcons
 
 /**
  * The app's first screen: pick a game.
@@ -177,7 +174,7 @@ fun GameListContent(
 							imageVector = if (state.isEditing) {
 								Icons.Outlined.Check
 							} else {
-								Icons.Outlined.Tune
+								AppIcons.Tune
 							},
 							contentDescription = if (state.isEditing) {
 								"Done customising"
@@ -394,9 +391,9 @@ private fun GameRow(
 				) {
 					Icon(
 						imageVector = if (isHidden) {
-							Icons.Outlined.VisibilityOff
+							AppIcons.VisibilityOff
 						} else {
-							Icons.Outlined.Visibility
+							AppIcons.Visibility
 						},
 						contentDescription = if (isHidden) {
 							"Show ${game.displayName}"
@@ -563,7 +560,7 @@ internal fun logoBackdropFor(art: GameArt): Color? {
 @Composable
 private fun GameMarkFallback(art: GameArt?) {
 	Icon(
-		imageVector = Icons.Outlined.Style,
+		imageVector = AppIcons.Style,
 		contentDescription = null,
 		tint = art?.accent ?: MaterialTheme.colorScheme.primary,
 		modifier = Modifier.size(26.dp),

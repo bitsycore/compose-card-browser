@@ -13,8 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -96,7 +96,7 @@ fun StorageContent(
 				title = { Text("Storage") },
 				navigationIcon = {
 					IconButton(onClick = onBack) {
-						Icon(Icons.Outlined.ArrowBack, contentDescription = "Back")
+						Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
 					}
 				},
 			)

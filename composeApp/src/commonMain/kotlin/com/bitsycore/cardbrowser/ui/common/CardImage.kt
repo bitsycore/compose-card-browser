@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,6 +39,7 @@ import com.bitsycore.cardbrowser.core.model.Artwork
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.bitsycore.cardbrowser.ui.common.AppIcons
 
 /**
  * A card image, with the three states a network image really has, and a way out of the third.
@@ -278,7 +278,7 @@ private fun ImagePlaceholder(
 			)
 		} else {
 			Icon(
-				imageVector = Icons.Outlined.BrokenImage,
+				imageVector = AppIcons.BrokenImage,
 				contentDescription = "Image unavailable",
 				modifier = Modifier.size(24.dp),
 				tint = MaterialTheme.colorScheme.onSurfaceVariant,

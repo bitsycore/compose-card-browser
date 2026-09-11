@@ -36,9 +36,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.ChevronLeft
-import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -103,6 +100,7 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
+import com.bitsycore.cardbrowser.ui.common.AppIcons
 
 /**
  * One printing, in full, with the rest of the set a swipe away.
@@ -679,7 +677,7 @@ private fun CardDetailPage(
 				Spacer(Modifier.height(4.dp))
 				OutlinedButton(onClick = onOpenCardmarket, modifier = Modifier.fillMaxWidth()) {
 					Icon(
-						imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+						imageVector = AppIcons.OpenInNew,
 						contentDescription = null,
 						modifier = Modifier.size(16.dp),
 					)
@@ -710,7 +708,7 @@ private fun CardDetailPage(
 				}
 				OutlinedButton(onClick = onOpenTcgplayer, modifier = Modifier.fillMaxWidth()) {
 					Icon(
-						imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+						imageVector = AppIcons.OpenInNew,
 						contentDescription = null,
 						modifier = Modifier.size(16.dp),
 					)
@@ -731,9 +729,9 @@ private fun CardDetailPage(
 
 		// Hints, on the edges, only while there is somewhere to go and nothing is magnified.
 		if (state.canSwipe && !state.isZoomed) {
-			SwipeHint(Icons.Outlined.ChevronLeft, Alignment.CenterStart, state.currentIndex > 0)
+			SwipeHint(AppIcons.ChevronLeft, Alignment.CenterStart, state.currentIndex > 0)
 			SwipeHint(
-				icon = Icons.Outlined.ChevronRight,
+				icon = AppIcons.ChevronRight,
 				alignment = Alignment.CenterEnd,
 				isVisible = state.currentIndex < state.cards.size - 1,
 			)
