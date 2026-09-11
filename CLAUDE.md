@@ -34,6 +34,11 @@ the tests pass.
 - A cross-set search that only looked at downloaded sets says so, with a count. An empty result
   from a whole-catalogue search and an empty result from a cache-scoped one mean opposite things.
 - Two printings are the same card because a provider said so, never because they share a name.
+- A **claim** and a **confirmation** are drawn differently. A source saying it serves eleven
+  languages is reason to offer to look; it is not a list of this set's editions. A menu that opens
+  on the claim and narrows when the probe lands has told the user something it did not know --
+  which is exactly what the card grid's language menu used to do. "Could not check" and "there are
+  none" are opposite facts and must not render the same way.
 
 The same standard applies to **you**, in commit messages, in docs, and in what you tell the user:
 
@@ -104,7 +109,7 @@ Follow the user's global conventions (Spirtech prefixes, tabs, KDoc). Specifical
 
 ```bash
 ./gradlew build -x lint          # everything, all four targets, including both iOS ones
-./gradlew desktopTest            # the deterministic suite (412 tests on 2026-09-10)
+./gradlew desktopTest            # the deterministic suite (474 tests on 2026-09-11, 7 skipped)
 ./gradlew :androidApp:assembleDebug
 ./gradlew :composeApp:run        # desktop
 ```
@@ -124,6 +129,31 @@ Actions workflow deliberately runs `build -x lint` and nothing else, for that re
 
 Each of these was a real debugging session. They are listed because none is discoverable by reading
 the code that fails.
+
+**Two numbers either side of a slash must count the same population.** This has now been shipped
+three times, and each time it looked plausible on screen:
+
+- `227 of 358` -- distinct cards against *records*, one per printing variant. A fully downloaded set
+  read as a download that gave up two thirds of the way through.
+- `Card info 1111/988` -- pinned *records*, one per set **per language**, against a catalogue of
+  sets. A set held in two languages is two records and one set.
+- `Card info 1044/988` -- sets from a bulk *file* against sets in the *catalogue*. A dump carries
+  digital-only products that `listSets` drops, so the numerator drew from a larger universe.
+
+Before writing `$a/$b`, say out loud what each side counts. If the sentence needs two different
+nouns, the ratio is wrong. `CardGridContract.countLabel` and `StorageContract.KeptGame.summary`
+both carry the scar tissue.
+
+**A `Content` takes a state and a dispatch.** Navigation is an intent that comes back as an effect,
+collected in `XScreen`. Threading an `onBack` through a body splits one interaction across two
+mechanisms -- opening a set both dispatched `SetOpened`, which remembers the last set, and called
+`onOpenSet`, which navigated.
+
+**Heredocs eat backslash escapes.** Editing Kotlin through `bash <<'EOF'` with an embedded
+backslash-n or backslash-t put literal newlines and tabs inside string literals more than once in
+one session, and an escaped quote inside a heredoc-fed Python string arrived as a bare quote that
+broke compilation. It even mangled the first draft of this paragraph. Use the `Write` and `Edit`
+tools for anything containing a backslash, and assert on the replacement either way.
 
 **Koin: register providers with `bind`, never `single<CardProvider> { … }`.** Ten definitions
 sharing one primary type and no qualifier means Koin keeps only the last, `getAll` returns one
@@ -230,3 +260,36 @@ Do not "fix" these without asking; each is a decision with a reason recorded nea
   ever a step towards a complete set, which *is* cached.
 - **Prices are not mapped**, even where a source supplies them. This is a browser, not a price
   guide, and the figures carry no currency or timestamp.
+
+---
+
+## Open threads, as of 2026-09-11
+
+Not decisions, not bugs with a ticket -- just the things that are half-finished or unverified, so
+nobody re-discovers them the slow way. Delete an entry when it stops being true.
+
+**Known debt**
+
+- **`SetListScreen` builds `DownloadRequest`s in the composition layer.** It reads the
+  `DownloadManager` through `koinInject` and enqueues from a lambda, which is the last piece of
+  side-effecting work outside a view model now that navigation has moved. It belongs in
+  `SetListViewModel`; it was left alone because it changes the download path and that cannot be
+  exercised without a device.
+- **Pin markers written before labels existed come back unattributed.** They appear under "Other"
+  on the storage screen, with their bytes counted. A running install upgraded across that change
+  will show some. Correct, but it looks like a bug the first time.
+
+**Unverified, and why**
+
+- **iOS has never been linked or run.** Kotlin compiles for both iOS targets in every build; the
+  framework, the Swift shell and a simulator run need a Mac.
+- **Scryfall's live suite has not had a clean run** since it tripped its own rate limit: 12 checks
+  in one burst exceeds what the host accepts, and a pause did not clear it. The per-set language
+  check written for it is therefore unconfirmed against the live API.
+- **The storage screen's figures have not been read on a device** since the counting was fixed, and
+  its speed was measured on a desktop SSD rather than a phone.
+- **The bulk import has not been re-run against the real 598 MB dump** since it started skipping
+  digital-only sets. The rule and its guard are unit-tested against a fake.
+- **The project owner's phone is deliberately not used for testing.** Desktop, and headless
+  renderers under `composeApp/src/desktopTest/.../render/` for anything visual. They are `@Ignore`d
+  tools: remove the annotation, run, look at `composeApp/build/render/*.png`, put it back.

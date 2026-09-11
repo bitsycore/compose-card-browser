@@ -18,6 +18,8 @@ in detail. No backend: the apps talk to each game's card database directly over 
 - [Build, run, test](#build-run-test)
 - [Verified dependency versions](#verified-dependency-versions)
 - [Games and providers](#games-and-providers)
+- [Languages, and how the app knows](#languages-and-how-the-app-knows)
+- [Downloading, and what is on the device](#downloading-and-what-is-on-the-device)
 - [Chosen defaults](#chosen-defaults)
 - [Known limitations](#known-limitations)
 - [Architecture](docs/ARCHITECTURE.md)
@@ -35,8 +37,9 @@ in detail. No backend: the apps talk to each game's card database directly over 
 | **iOS** | **Kotlin now compiles** for `iosArm64` and `iosSimulatorArm64`, from scratch, as part of `./gradlew build`. Linking the framework and building the Swift shell still need a Mac and have never been done. See [`iosApp/README.md`](iosApp/README.md). |
 
 **The deterministic suite passes and `./gradlew build` is green end to end**, including both iOS
-targets. `./gradlew desktopTest` ran 412 checks on 2026-09-10. See
-[Build, run, test](#build-run-test).
+targets. `./gradlew desktopTest` ran **474 checks on 2026-09-11**, 0 failures, 7 skipped -- the
+skips are the headless renderers and the two benchmarks, which are tools rather than checks and
+carry `@Ignore` saying so. See [Build, run, test](#build-run-test).
 
 The live provider checks are a separate story: **63 of 68 pass**. The five failures are all
 Scryfall and all `429 Rate limited` — not assertion failures. The client paces itself at 150 ms and
@@ -418,12 +421,67 @@ A third trap, avoided rather than hit: `UiState.games` derives a fresh list on e
 anything keyed on its identity re-runs constantly. The screen memoises it against the three fields
 it actually depends on.
 
-### Changing the language of a set you are looking at
+### Cross-set search
 
-The language preference picks a default; a set can also be switched in place, and only to languages
-that set was really printed in. `CardSet.languages` carries what the source stated, so the picker
-offers Japanese for a Japanese-line Pokémon set and does not offer Russian for a game that has none.
-A switch that fails says so rather than silently showing the previous language.
+Search every set of a game by card name. Most sources can search their whole catalogue. Riftcodex,
+the Altered mirror and TCGCSV cannot — TCGCSV has no search endpoint at all, only per-group product
+listings — so for Riftbound, Altered, Disney Lorcana, Cyberpunk TCG and the WoW TCG the app searches
+**only the sets already downloaded** and says exactly that, with a count of how many of the game's
+sets that was.
+
+The distinction is not cosmetic. A whole-catalogue search finding nothing means the card does not
+exist; a cache-scoped search finding nothing usually means you have never opened the set it is in.
+Presenting the second as the first would be the app lying about what it knows.
+
+## Languages, and how the app knows
+
+One preference drives the whole app, and every screen that depends on it now says so.
+
+### The browsing language is visible, and changeable where you are
+
+The set list's bar carries the language every row below it will open in, and the menu behind it
+changes the app-wide preference. It was invisible before, which was a real problem rather than a
+cosmetic one: the card grid's own language control **rewrites the global preference** when a switch
+succeeds, so browsing one set in Portuguese quietly moved the whole app to Portuguese and nothing
+outside Settings ever said so.
+
+What the bar shows is not the raw preference but what the routed source will *actually* answer in.
+Riftcodex serves English whoever is reading, so a bar reading "FR" over a list of English sets would
+be the same lie the download queue used to tell. `ProviderRegistry.effectiveLanguage` is the one
+function that resolves this, and the queue, the repository and this bar all call it.
+
+### A menu lists what is known, never what is claimed
+
+Opening the card grid's language menu used to show the source's *claim* -- eleven entries for a
+Magic set -- and then collapse to the confirmed list when the probe landed, under the user's finger.
+Both lists were drawn identically and only one of them was ever true.
+
+The menu now lists only what is **established**: a confirmation the source has answered, plus every
+language whose cards are on disk, plus whatever is on screen (the source served it, so it is a
+fact). While the probe runs there is a row saying *"Checking for other editions…"*, and if it fails
+there is one saying *"Could not check for other editions."* -- because that is not the same fact as
+"there are none", and a silently short list said both.
+
+The claim still decides whether the control appears at all. A source stating it serves eleven
+languages is reason to offer to look; it is not reason to list ten of them as editions of this set.
+
+### A set that opens in another language says which of two things happened
+
+| What happened | What the grid says | What it offers |
+|---|---|---|
+| The preferred language is not downloaded, another one is | *Showing English — French is not downloaded.* | **Fetch French**, which is the same intent the menu dispatches |
+| The source has no such edition of this set | *No French edition of this set. Showing English.* | nothing, because there is nothing to fetch |
+
+Keeping those apart is the whole point. There is no Korean printing of Pokémon's Base Set, and a
+button promising to fetch one would be the app inventing a card.
+
+The first row is also what makes a one-language bulk import useful. Records are cached per language,
+so importing Scryfall's English dump while preferring French used to leave 988 sets on disk that
+every read missed. `CardRepository.openingLanguageFor` now falls back to a language the set was
+**downloaded** in before it goes to the network -- pinned records only, since a set glanced at in
+English last week is not a request to stop showing French today.
+
+## Downloading, and what is on the device
 
 ### The download queue is a screen
 
@@ -489,17 +547,75 @@ with a percentage when a download did not finish. The marks are records of a *do
 of *presence* — the image cache is an LRU and the OS may purge it — so they read "downloaded", and
 art that arrived through ordinary browsing is not counted at all.
 
-### Cross-set search
+### Downloading a whole game, from the source's own dump
 
-Search every set of a game by card name. Most sources can search their whole catalogue. Riftcodex,
-the Altered mirror and TCGCSV cannot — TCGCSV has no search endpoint at all, only per-group product
-listings — so for Riftbound, Altered, Disney Lorcana, Cyberpunk TCG and the WoW TCG the app searches
-**only the sets already downloaded** and says exactly that, with a count of how many of the game's
-sets that was.
+Scryfall publishes its entire catalogue as one file, which is what it publishes it *for*: the
+alternative is 988 requests against a service run on donations. Where a source offers one
+(`BulkCatalogue`, and Scryfall is the only implementer today), "download all" uses it.
 
-The distinction is not cosmetic. A whole-catalogue search finding nothing means the card does not
-exist; a cache-scoped search finding nothing usually means you have never opened the set it is in.
-Presenting the second as the first would be the app lying about what it knows.
+It publishes **two**, and they are a real choice rather than a detail, so the dialog offers both
+with their sizes and a line saying what the cheap one actually is:
+
+| File | Size | What it holds |
+|---|---|---|
+| `default_cards` | ~78 MB | one printing per card, in the language it was printed in — **almost entirely English** |
+| `all_cards` | ~393 MB | every printing in every language |
+
+Scryfall describes the first as "English, or the printed language where there is no English
+printing", which reads as multilingual and is not: sampled on 2026-09-11, 8780 English records
+against 92 Spanish, 47 Japanese, 27 French and 1 German.
+
+Three things the import does that are worth knowing:
+
+- **It never holds the file.** 598 MB of JSON, streamed one card at a time into 64 hash-sharded
+  scratch files, then grouped and written a shard at a time. Holding a sink per set instead was
+  ~1100 open descriptors against a 256 limit on iOS, and holding the parsed catalogue was a heap
+  exhaustion on a 16 GB phone — Android caps an app's heap whatever the device has.
+- **It skips sets the app can never show.** `listSets` drops digital-only Arena and MTGO products
+  and sets the source states are empty, so importing their cards spent disk on rows that cannot be
+  opened. Skipped cards are counted and reported — a 600 MB file that writes a fraction of itself
+  must not look identical to one that wrote all of it. Guarded on the catalogue being non-empty, so
+  a failed `listSets` imports everything rather than nothing.
+- **It is a job on the download queue**, not a screen-scoped coroutine. Navigation 3 scopes a view
+  model to its back-stack entry, so going back to the game picker used to cancel the import and
+  delete the 74 MB already fetched.
+
+"Already imported" is recorded as the file's id **and** the day the source last rebuilt it, so
+taking the English dump never stops the every-language one being offered, and Scryfall rebuilding
+daily makes last week's import worth taking again. The dialog's card-info row reads
+*"Imported · English"* with a **Check for update** beside it, which re-reads the manifest rather
+than assuming yesterday's answer.
+
+### What is on the device, and what only you can remove
+
+The **⋮** menu in the game picker and the set list carries Settings, **Manage storage** and
+Downloads. Manage storage splits what is on disk in two, because the two obey different rules:
+
+- **Downloaded** — sets you asked for and imported catalogues. Pinned, outside the cache ceiling,
+  and nothing evicts them. The only thing that removes them is the delete button on that screen.
+- **Cached** — what browsing accumulated. Bounded by the limits in Settings → Cache and dropped
+  least-recently-used as needed.
+
+That split is the reason the screen exists. A limit bounds browsing; an import is not bounded by it
+and never will be, because nothing should evict a thing the user explicitly asked for.
+
+Each downloaded game reads `Card info 988/988 · English +10 · 441 MB · imported 2026-09-11`, and
+every part of that has been wrong at least once:
+
+- **Both sides of the slash count sets**, and the same population of them. It counted *records* —
+  one per set per language — and divided by the catalogue's set count, so a Magic import read
+  "1044/988" and Pokémon "1075/486".
+- **Sets outside the catalogue are counted apart.** They are on disk and not browsable, so they are
+  not part of "how much of this game do I have". New imports no longer create any.
+- **Languages are weighed, not listed.** "11 languages" was true of an English-only import and read
+  as ten extra editions; ten of them are one or two sets apiece. The delete dialog has room for the
+  full breakdown with a set count per language.
+
+Opening the screen takes one pass over each cache directory. It took five over the metadata one —
+`sizeInBytes`, `entryCount`, `pinnedBytes`, `pinnedEntries`, then the kept records — over a
+directory holding three files per cached set, and only then walked the image cache. Measured with
+`StorageScreenCostBench` on 2026-09-11, 1000 pinned records, desktop SSD, warm: **261.7 ms → 93.5
+ms**, with the image walk now concurrent rather than sequential.
 
 ---
 
@@ -645,6 +761,19 @@ the inline image and the fullscreen viewer now decode at source resolution.
 - **Non-Latin text rendering is untested in practice.** French accents render correctly on desktop
   and are covered by tests (accent folding in search and sorting). Japanese and Korean cannot be
   tested because no integrated provider supplies any — there is no such text to render.
+- **The storage screen's figures have not been read on a device since the counting was fixed.**
+  They are covered by unit tests and rendered headless, and the pre-existing pin markers a running
+  install carries are the case those tests cannot reproduce: markers written before labels existed
+  come back unattributed and appear under "Other".
+- **The storage screen's speed was measured on desktop, not on a phone.** 261.7 ms → 93.5 ms for
+  1000 pinned records on an SSD; a phone's filesystem is slower, so the saving should be larger,
+  but that is inference rather than measurement.
+- **Scryfall's live suite has not had a clean run since its rate limit was tripped.** See
+  [Status](#status). The per-set language check added for it is therefore unconfirmed against the
+  live API.
+- **The bulk import has not been re-run against the real 598 MB dump since it started skipping
+  digital-only sets.** The skip and its guard are unit-tested against a fake; the figure it will
+  actually skip for Magic is unmeasured.
 
 ### Cardmarket
 

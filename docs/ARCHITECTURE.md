@@ -449,6 +449,52 @@ Every record carries source, language, query/pagination scope, fetch time, schem
 completeness — see `CacheEnvelope`. A cache that stores only the data cannot answer "is this stale",
 "did this come from the provider I am now asking", or "was this the whole set".
 
+### Pinned records: what the ceiling may not touch
+
+A record written by a download or a bulk import is **pinned** — a zero-byte sibling file, plus a
+label — and pinned bytes are left out of the budget entirely rather than merely evicted last.
+
+That is not a tuning choice. A bulk import of Magic is larger than any sane browsing ceiling, so
+counting it against one meant the ceiling was breached the moment the import finished and the trim
+evicted what had just been written. Raising the ceiling to 1 GB papered over it; taking pinned bytes
+out of the budget is the actual fix, and it is what let the ceilings come back down.
+
+The label is the game id, the set id and the language joined by tabs, and it is there because the
+alternative failed. The
+route from a hashed cache filename back to a set used to be the game's cached *set list*, which is
+ordinary browsing data — so clearing the cache deleted the only thing that could name a downloaded
+set, and the storage screen went blank while the download dialog still reported the same sets as
+held. Two screens contradicting each other about the same disk.
+
+Consequences worth knowing before touching any of it:
+
+- **`clearUnpinned()` is what "clear cached data" runs.** `clear()` takes the downloads too.
+- **Counting is per set, per language.** A set held in two languages is two records and one set.
+  Every count on the storage screen has had that wrong at least once; see the trap in
+  [`CLAUDE.md`](../CLAUDE.md).
+- **One walk, not five.** `MetadataCache.snapshot()` produces total bytes, entry count, pinned bytes
+  and the pinned entries from a single listing, because the storage screen needs all four and the
+  directory holds three files per cached set. `StorageScreenCostBench` measures it.
+
+### A bulk import is not a catalogue
+
+`BulkCatalogue` is optional and additive — a `CardProvider` implements it *as well as* the ordinary
+contract. Only Scryfall does today.
+
+Three rules the import obeys, each of which was a bug first:
+
+1. **Nothing holds the file.** 598 MB of JSON streams one card at a time into 64 hash-sharded
+   scratch files, which are then grouped and written a shard at a time. A sink per set was ~1100
+   open descriptors against iOS's 256; a map of set to cards was the whole catalogue on the heap.
+2. **Each card is filed under the language its own record states**, never under one asked for.
+   `streamAll` deliberately has no language parameter: a dump contains what it contains, and
+   `resolveLanguage(null)` walks the preference order — so an overwhelmingly English file was once
+   imported, cached and reported as French.
+3. **Cards whose set the catalogue does not list are skipped.** `listSets` drops digital-only and
+   empty sets, so those cards have no row to open. Guarded on the catalogue being non-empty:
+   `listSets` is one request and it can fail, and an empty answer must not be read as "skip
+   everything". Skipped cards are counted and reported.
+
 ---
 
 ## Presentation: Pulse MVI
@@ -525,6 +571,54 @@ just cleared.
 
 ---
 
+## What the app knows about a set's languages
+
+Three different questions, three different answers, and conflating any two of them has produced a
+user-visible bug:
+
+| Question | Answered by | Strength |
+|---|---|---|
+| What could this source serve at all? | `ProviderCapabilities.data.languages` | a **capability**, measured per provider |
+| What does the source say about *this set*? | `CardSet.languages` | a **claim**, and sources over-claim |
+| What has the source actually served or confirmed? | `CardRepository.confirmedLanguagesFor` | a **fact** |
+
+`confirmedLanguagesFor` is the union of a confirmation record (`languagesFor` asked and the source
+answered) and every language whose cards are on disk — cards are there only because they were
+served, which is the strongest evidence available.
+
+**A menu lists facts. A claim only decides whether the menu is worth offering.** The card grid's
+language menu used to list the claim and then narrow to the confirmed set when the probe landed,
+which is the app showing something it had not checked. It now lists `confirmedLanguages` plus what
+is on screen, with an explicit "checking" row while the probe runs and an explicit "could not check"
+row when it fails — *could not check* and *there are none* being opposite facts that a short list
+expressed identically.
+
+`knownLanguagesFor` still returns claim-or-confirmation and is what the **detail** screen offers,
+deliberately: narrowing that one to on-disk languages is a bug this codebase has already had, where
+detail listed two languages while the grid beside it offered eleven.
+
+### Opening a set in a language nobody asked for
+
+`openingLanguageFor` returns an `OpeningLanguage`, not a bare language, because "you are reading
+English" is not the whole answer. Its steps, cheapest first:
+
+1. the wanted language is on disk — no request at all;
+2. it is not, but the set was **downloaded** in another (pinned records only) — open that one,
+   `LanguageSubstitution.NOT_DOWNLOADED`;
+3. one probe for the wanted language;
+4. the full confirmation, and if the source has no such edition, `NOT_PUBLISHED`.
+
+The two substitutions are different facts and the grid says different things about them: one offers
+to fetch, the other offers nothing because there is nothing to fetch. Step 2 is what makes a
+one-language bulk import usable — records are cached per language, so an English import under a
+French preference otherwise left 988 sets on disk that every read missed.
+
+Pinned-only is the load-bearing part of step 2: a set browsed in English last week is not a request
+to stop showing French today, and treating incidental cache as a preference would make the app's
+language drift with its history.
+
+---
+
 ## Where each brief-critical behaviour lives
 
 | Behaviour | File |
@@ -536,5 +630,10 @@ just cleared.
 | Partial-set honesty | `data/repository/CardRepository.kt`, `ui/cards/CardGridContract.kt` (`coverageNotice`) |
 | Stale response suppression | `ui/cards/CardGridContract.kt` (`requestGeneration`) |
 | Corruption recovery, LRU, atomic writes | `data/cache/MetadataCache.kt` |
+| Downloads outliving the cache ceiling | `data/cache/MetadataCache.kt` (`pin`, `trimLocked`) |
+| What is on disk, and what may be deleted | `data/repository/CardRepository.kt` (`keptByGame`), `ui/storage/` |
+| Claim vs confirmed languages | `data/repository/CardRepository.kt` (`confirmedLanguagesFor`, `knownLanguagesFor`) |
+| Opening a set in a substituted language | `data/repository/CardRepository.kt` (`openingLanguageFor`), `data/repository/DataSnapshot.kt` (`OpeningLanguage`) |
+| Streaming a whole catalogue without holding it | `data/repository/CardRepository.kt` (`importBulk`) |
 | Cardmarket URLs | `core/cardmarket/CardmarketLinks.kt` |
 | Provider routing | `core/provider/ProviderRegistry.kt`, `di/AppModule.kt` |
