@@ -2,6 +2,8 @@ package com.bitsycore.cardbrowser.ui.search
 
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.CardPrinting
+import com.bitsycore.cardbrowser.data.cache.CardSearchFilter
+import com.bitsycore.cardbrowser.sqlstore.StoredFacets
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.cardbrowser.data.repository.SearchScope
@@ -39,8 +41,26 @@ object SearchContract :
 		val isLoading: Boolean = false,
 		val origin: DataOrigin = DataOrigin.NONE,
 		val error: ProviderError? = null,
+		/**
+		 * The advanced filter, and what this game has to offer one.
+		 *
+		 * [filter] carries the text too, so a search is one value rather than a box plus a panel
+		 * that can disagree with it. [facets] is what is *stored* -- an empty list means the
+		 * sources served none of it, and the screen leaves that control out rather than showing an
+		 * empty menu.
+		 */
+		val filter: CardSearchFilter = CardSearchFilter(),
+		val facets: StoredFacets? = null,
+		val isAdvancedOpen: Boolean = false,
 		val requestGeneration: Int = 0,
 	) {
+
+		/** True when the advanced filter narrows on anything beyond the name. */
+		val hasAdvancedFilters: Boolean
+			get() = with(filter) {
+				!excludeText.isNullOrBlank() || cardType != null || rarity != null ||
+					minCost != null || maxCost != null || domain != null
+			}
 
 		/** True before anything has been searched for. */
 		val isIdle: Boolean get() = submitted.isBlank() && !isLoading
@@ -129,6 +149,15 @@ object SearchContract :
 
 		/** Start over. */
 		data object Clear : Intent
+
+		/** The advanced panel opened or closed. Closing does not clear what it holds. */
+		data class AdvancedToggled(val isOpen: Boolean) : Intent
+
+		/** Any part of the advanced filter changed. One intent, because it is one value. */
+		data class FilterChanged(val filter: CardSearchFilter) : Intent
+
+		/** What this game's stored cards contain, once the store has been asked. */
+		data class FacetsLoaded(val facets: StoredFacets) : Intent
 	}
 
 	/**
@@ -191,9 +220,18 @@ object SearchContract :
 		is Intent.LoadFinished ->
 			if (intent.generation == state.requestGeneration) state.copy(isLoading = false) else state
 
+		is Intent.AdvancedToggled -> state.copy(isAdvancedOpen = intent.isOpen)
+
+		is Intent.FilterChanged -> state.copy(filter = intent.filter)
+
+		is Intent.FacetsLoaded -> state.copy(facets = intent.facets)
+
 		Intent.Clear -> state.copy(
 			query = "",
 			submitted = "",
+			// The advanced filter goes with it. "Clear" that left a rarity selected would produce
+			// an empty result the user could not see the cause of.
+			filter = CardSearchFilter(),
 			results = emptyList(),
 			scope = null,
 			totalCount = null,

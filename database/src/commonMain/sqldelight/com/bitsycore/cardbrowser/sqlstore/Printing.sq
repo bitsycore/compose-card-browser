@@ -36,6 +36,25 @@ CREATE INDEX printing_set ON printing (provider, set_id, language);
 -- Cross-set search, which is the query the file cache genuinely cannot do.
 CREATE INDEX printing_name ON printing (game, name_folded);
 
+-- The advanced search's narrowing columns, one index per axis it filters on.
+--
+-- All three lead with `game`, because every query this app makes is about one game -- a search is
+-- launched from a game's set list and there is no "search everything". That prefix is what lets
+-- SQLite use the index at all for those queries.
+--
+-- What these do *not* help is the text predicate. `name_folded LIKE '%annie%'` has a leading
+-- wildcard, and no B-tree index can serve one: SQLite has to look at every row it is given. That is
+-- exactly why the rest are worth having -- with a type or a rarity chosen, the scan the text
+-- predicate has to do is over what those left behind rather than over the game.
+--
+-- The usual answer for the text half is FTS5, and it was considered and not taken: it would have to
+-- work on Android's bundled SQLite, on the JVM driver, and on the two native ones, and this project
+-- cannot run three of those four. A trigram index is the other option and costs the write path.
+-- Neither is worth adding unverified for a search over a set of at most a few hundred thousand rows.
+CREATE INDEX printing_type ON printing (game, card_type);
+CREATE INDEX printing_rarity ON printing (game, rarity);
+CREATE INDEX printing_cost ON printing (game, cost);
+
 -- What a download put on disk, so eviction and the storage screen can work in SQL rather than by
 -- walking a directory. `pinned` is a flag rather than a separate table because it is one bit and
 -- every query that cares about it also wants the row.
@@ -121,6 +140,30 @@ WHERE game = :game
   AND (:domain IS NULL OR (domains IS NOT NULL AND domains LIKE '%' || :domain || '%'))
 ORDER BY name_folded
 LIMIT :limit;
+
+-- What a game's downloaded cards actually contain, for the search screen's filters.
+--
+-- Read from the rows rather than from a game profile on purpose. A profile states what a game *can*
+-- have; these state what is on this device, so the filter list cannot offer a rarity that would
+-- match nothing. Nulls are dropped: a source that publishes no type is not a type.
+cardTypesInGame:
+SELECT DISTINCT card_type FROM printing
+WHERE game = ? AND card_type IS NOT NULL AND card_type != ''
+ORDER BY card_type;
+
+raritiesInGame:
+SELECT DISTINCT rarity FROM printing
+WHERE game = ? AND rarity IS NOT NULL AND rarity != ''
+ORDER BY rarity;
+
+domainsInGame:
+SELECT DISTINCT domains FROM printing
+WHERE game = ? AND domains IS NOT NULL AND domains != ''
+ORDER BY domains;
+
+costRangeInGame:
+SELECT MIN(cost) AS low, MAX(cost) AS high FROM printing
+WHERE game = ? AND cost IS NOT NULL;
 
 -- ==========================================================================
 -- Eviction, the budget, and what a download left

@@ -8,6 +8,7 @@ import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.sqlstore.GameStorageRow
 import com.bitsycore.cardbrowser.sqlstore.PinnedSet
 import com.bitsycore.cardbrowser.sqlstore.SqlCardStore
+import com.bitsycore.cardbrowser.sqlstore.StoredFacets
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 
@@ -141,7 +142,53 @@ interface SetRecordStore {
 
 	/** Counts for a storage screen, in one read rather than a directory walk. */
 	suspend fun snapshot(): StoredCounts
+
+	/**
+	 * The advanced search: one indexed query over every stored card of a game.
+	 *
+	 * The thing the file cache could not do at all. Its equivalent was loading every cached set off
+	 * disk and matching names in memory, which is why the app's cross-set search offered a name and
+	 * nothing else.
+	 *
+	 * Still a search of what is **downloaded**, and the screen has to keep saying so. A query that
+	 * runs in 15 ms over a hundred thousand rows feels like a search of everything, and that is
+	 * precisely the reading this codebase must not allow.
+	 */
+	suspend fun search(game: GameId, filter: CardSearchFilter, limit: Int = SEARCH_LIMIT): List<CardPrinting>
+
+	/** What a game's stored cards contain, so a filter cannot offer something that matches nothing. */
+	suspend fun facetsForGame(game: GameId): StoredFacets
 }
+
+/**
+ * Everything the advanced search can narrow on, as one value.
+ *
+ * Null means "not filtering on this" throughout, which is what lets the SQL be one statement with a
+ * NULL guard per predicate rather than a query built by string concatenation.
+ *
+ * @property text what a name must contain
+ * @property excludeText what a name must *not* contain -- the half a name match cannot express, and
+ *   the reason this exists rather than a longer search box
+ */
+data class CardSearchFilter(
+	val text: String? = null,
+	val excludeText: String? = null,
+	val cardType: String? = null,
+	val rarity: String? = null,
+	val minCost: Int? = null,
+	val maxCost: Int? = null,
+	val domain: String? = null,
+	val language: CardLanguage? = null,
+) {
+
+	/** True when nothing is set, which is a request to show nothing rather than everything. */
+	val isEmpty: Boolean
+		get() = text.isNullOrBlank() && excludeText.isNullOrBlank() && cardType == null &&
+			rarity == null && minCost == null && maxCost == null && domain == null
+}
+
+/** How many rows one search returns. A screenful many times over; not a paging story yet. */
+const val SEARCH_LIMIT: Int = 200
 
 /** The real one: SQLite, off the UI thread. */
 class SqlSetRecordStore(
@@ -246,6 +293,28 @@ class SqlSetRecordStore(
 		withContext(mIoDispatcher) { mStore.trim(ceilingBytes) }
 
 	override suspend fun clear() = withContext(mIoDispatcher) { mStore.clear() }
+
+	override suspend fun search(
+		game: GameId,
+		filter: CardSearchFilter,
+		limit: Int,
+	): List<CardPrinting> = withContext(mIoDispatcher) {
+		mStore.search(
+			game = game.value,
+			language = filter.language,
+			text = filter.text?.takeIf { it.isNotBlank() },
+			excludeText = filter.excludeText?.takeIf { it.isNotBlank() },
+			cardType = filter.cardType,
+			rarity = filter.rarity,
+			minCost = filter.minCost,
+			maxCost = filter.maxCost,
+			domain = filter.domain,
+			limit = limit,
+		)
+	}
+
+	override suspend fun facetsForGame(game: GameId): StoredFacets =
+		withContext(mIoDispatcher) { mStore.facetsForGame(game.value) }
 
 	override suspend fun snapshot(): StoredCounts = withContext(mIoDispatcher) {
 		val vSnapshot = mStore.storageSnapshot()

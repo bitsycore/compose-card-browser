@@ -5,6 +5,7 @@ import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.repository.CardRepository
+import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.cardbrowser.data.repository.SearchScope
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.lib.pulse.viewmodel.PulseViewModel
@@ -60,6 +61,9 @@ class SearchViewModel(
 		viewModelScope.launch {
 			mPreferences.load()
 			loadSets()
+			// What this game's stored cards actually contain, so the filter list offers nothing
+			// that would match nothing.
+			dispatch(SearchContract.Intent.FacetsLoaded(mRepository.searchFacets(mArgs.game)))
 		}
 	}
 
@@ -73,6 +77,19 @@ class SearchViewModel(
 			SearchContract.Intent.Submit -> {
 				mLiveSearchJob?.cancel()
 				startSearch()
+			}
+
+			is SearchContract.Intent.AdvancedToggled, is SearchContract.Intent.FacetsLoaded -> Unit
+
+			// A filtered search runs as you type, always. It is a local query over indexed columns
+			// and costs nobody a request -- which is the same rule `QueryChanged` follows, for the
+			// same reason.
+			is SearchContract.Intent.FilterChanged -> {
+				mLiveSearchJob?.cancel()
+				mLiveSearchJob = viewModelScope.launch {
+					delay(LIVE_SEARCH_DEBOUNCE_MILLIS.milliseconds)
+					dispatch(SearchContract.Intent.Submit)
+				}
 			}
 
 			/**
@@ -128,6 +145,18 @@ class SearchViewModel(
 		val vState = stateFlow.value
 		val vGeneration = vState.requestGeneration
 		val vText = vState.submitted
+
+		// Two searches, and which one runs is decided by what the user filled in.
+		//
+		// Anything beyond a name -- an exclusion, a type, a rarity, a cost, a domain -- can only be
+		// answered by the store, so it goes to the indexed query. A bare name still goes to the
+		// provider where the provider can search, because that one can see sets this device has
+		// never downloaded. Sending a name to the store instead would quietly shrink what a search
+		// covers, which is the opposite of what this screen is for.
+		if (vState.hasAdvancedFilters) {
+			startStoredSearch(vState, vGeneration)
+			return
+		}
 		if (vText.isBlank()) return
 
 		mSearchJob?.cancel()
@@ -171,4 +200,41 @@ class SearchViewModel(
 		const val LIVE_SEARCH_DEBOUNCE_MILLIS = 180L
 	}
 
+
+	/**
+	 * The advanced search, against the store.
+	 *
+	 * Reports [SearchScope.LOCAL_CACHED_SETS] always, because that is what it is. The screen's
+	 * coverage notice is doing real work here: this query is fast enough over a hundred thousand
+	 * rows to feel like a search of everything, and an empty result means "not in what you have
+	 * downloaded" rather than "does not exist".
+	 */
+	private fun startStoredSearch(state: SearchContract.UiState, generation: Int) {
+		mSearchJob?.cancel()
+		mSearchJob = viewModelScope.launch {
+			if (mSets.isEmpty()) loadSets()
+			val vResults = mRepository.searchStoredCards(
+				game = mArgs.game,
+				filter = state.filter.copy(
+					text = state.submitted.takeIf { it.isNotBlank() },
+					language = mPreferences.preferences.value.primaryLanguage,
+				),
+				knownSets = mSets,
+			)
+			dispatch(
+				SearchContract.Intent.Loaded(
+					generation = generation,
+					results = vResults.cards,
+					scope = vResults.scope,
+					searchedSetCount = vResults.searchedSetCount,
+					knownSetCount = vResults.knownSetCount,
+					totalCount = vResults.totalCount,
+					hasMore = vResults.hasMore,
+					origin = DataOrigin.CACHE,
+					error = null,
+				),
+			)
+			dispatch(SearchContract.Intent.LoadFinished(generation))
+		}
+	}
 }

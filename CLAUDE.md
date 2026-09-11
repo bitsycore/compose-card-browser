@@ -110,7 +110,7 @@ Follow the user's global conventions (Spirtech prefixes, tabs, KDoc). Specifical
 
 ```bash
 ./gradlew build -x lint          # everything, all four targets, including both iOS ones
-./gradlew desktopTest            # the deterministic suite (504 tests on 2026-09-12, 10 skipped)
+./gradlew desktopTest            # the deterministic suite (509 tests on 2026-09-12, 12 skipped)
 ./gradlew :androidApp:assembleDebug
 ./gradlew :composeApp:run        # desktop
 ```
@@ -295,9 +295,12 @@ nobody re-discovers them the slow way. Delete an entry when it stops being true.
   side-effecting work outside a view model now that navigation has moved. It belongs in
   `SetListViewModel`; it was left alone because it changes the download path and that cannot be
   exercised without a device.
-- **The advanced search the store made possible is not on screen yet.** `searchPrintings` narrows
-  on type, rarity, cost range, domain and a "does not contain" exclusion, and the search screen
-  still sends a name. The query is tested; nothing dispatches it.
+- **The advanced search uses no index for its text half, and that is deliberate.**
+  `name_folded LIKE '%x%'` has a leading wildcard, which no B-tree index can serve. The other axes
+  -- type, rarity, cost -- have one each, leading with `game`, so choosing any of them shrinks what
+  the text scan has to look at. FTS5 is the usual answer and was not taken: it would have to work on
+  Android's bundled SQLite, the JVM driver and both native ones, and three of those four cannot be
+  run here.
 
 **Unverified, and why**
 

@@ -30,7 +30,9 @@ import com.bitsycore.cardbrowser.data.cache.CacheKey
 import com.bitsycore.cardbrowser.data.cache.CacheScope
 import com.bitsycore.cardbrowser.data.cache.Completeness
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.CardSearchFilter
 import com.bitsycore.cardbrowser.data.cache.SetRecordStore
+import com.bitsycore.cardbrowser.sqlstore.StoredFacets
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -617,6 +619,57 @@ class CardRepository(
 	 * @param knownSets the game's sets, which the caller already has from [setList]. Used both to
 	 *   know which cached sets to look in and to say how much of the game a local search covered
 	 */
+	/**
+	 * The advanced search: one indexed query over every card of a game that is on this device.
+	 *
+	 * What [searchAllSets] cannot do. That one matches a name, because matching anything else meant
+	 * loading every cached set off disk and filtering in memory; this is a single SQL statement over
+	 * indexed columns, so it can narrow on type, rarity, a cost range, a domain -- and on what a
+	 * name must *not* contain, which a name match has no way to express at all.
+	 *
+	 * **It is a local search and it says so.** The scope is always [SearchScope.LOCAL_CACHED_SETS],
+	 * and `searchedSetCount` against `knownSetCount` is what the screen prints. That matters more
+	 * here than it did for the name search: this one is fast enough over a hundred thousand rows to
+	 * feel like a search of everything, and an empty result means "not in what you have downloaded"
+	 * rather than "does not exist".
+	 *
+	 * An empty filter returns nothing rather than everything. "No criteria" is a screen nobody has
+	 * filled in yet, not a request for the entire game.
+	 */
+	suspend fun searchStoredCards(
+		game: GameId,
+		filter: CardSearchFilter,
+		knownSets: List<CardSet>,
+	): CardSearchResults {
+		if (filter.isEmpty) {
+			return CardSearchResults(
+				cards = emptyList(),
+				scope = SearchScope.LOCAL_CACHED_SETS,
+				searchedSetCount = 0,
+				knownSetCount = knownSets.size,
+			)
+		}
+		val vCards = mSetStore.search(game, filter)
+		return CardSearchResults(
+			cards = vCards,
+			scope = SearchScope.LOCAL_CACHED_SETS,
+			// How much of the game was actually searched, from what is stored rather than from
+			// what the results happen to span -- a filter that matches three cards has not
+			// searched three sets.
+			searchedSetCount = storedSetCount(game, knownSets),
+			knownSetCount = knownSets.size,
+		)
+	}
+
+	/** What a game's stored cards contain, so the filter list offers nothing that matches nothing. */
+	suspend fun searchFacets(game: GameId): StoredFacets = mSetStore.facetsForGame(game)
+
+	/** How many of [knownSets] are held in any language. The denominator of a local search. */
+	private suspend fun storedSetCount(game: GameId, knownSets: List<CardSet>): Int {
+		val vProvider = mRegistry.resolve(game) ?: return 0
+		return knownSets.count { mSetStore.languagesHeld(vProvider.id, it.id).isNotEmpty() }
+	}
+
 	fun searchAllSets(
 		game: GameId,
 		text: String,

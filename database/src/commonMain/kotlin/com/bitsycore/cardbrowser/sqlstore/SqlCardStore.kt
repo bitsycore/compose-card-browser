@@ -79,7 +79,7 @@ class SqlCardStore(driver: SqlDriver) {
 					cost = vCard.attributes.cost?.toLong(),
 					domains = vCard.classification.domains
 						.takeIf { it.isNotEmpty() }
-						?.joinToString("|") { fold(it) },
+						?.joinToString(DOMAIN_SEPARATOR) { fold(it) },
 					payload = vPayload,
 				)
 			}
@@ -136,6 +136,33 @@ class SqlCardStore(driver: SqlDriver) {
 			)
 		}
 	}
+
+	/**
+	 * What a game's stored cards actually contain, for a filter list to offer.
+	 *
+	 * From the rows, not from a game profile. A profile says what a game *can* have; this says what
+	 * is on the device, so the search cannot offer a rarity that would match nothing.
+	 *
+	 * Domains are stored joined, because a card can have several, so they are split back apart and
+	 * de-duplicated here rather than in SQL -- `DISTINCT` over the joined string would offer
+	 * "Fury / Calm" as though it were one domain.
+	 */
+	fun facetsForGame(game: String): StoredFacets = StoredFacets(
+		cardTypes = mQueries.cardTypesInGame(game).executeAsList().filterNotNull().sorted(),
+		rarities = mQueries.raritiesInGame(game).executeAsList().filterNotNull().sorted(),
+		domains = mQueries.domainsInGame(game).executeAsList()
+			.filterNotNull()
+			.flatMap { it.split(DOMAIN_SEPARATOR) }
+			.map { it.trim() }
+			.filter { it.isNotEmpty() }
+			.distinct()
+			.sorted(),
+		costRange = mQueries.costRangeInGame(game).executeAsOne().let { vRow ->
+			val vLow = vRow.low
+			val vHigh = vRow.high
+			if (vLow == null || vHigh == null) null else vLow.toInt()..vHigh.toInt()
+		},
+	)
 
 	/** What browsing occupies. Pinned sets excluded -- see [setPinned]. */
 	fun unpinnedBytes(): Long = mQueries.unpinnedBytes().executeAsOne()
@@ -389,4 +416,27 @@ data class StorageSnapshot(
 	val pinnedSets: Int,
 	val printings: Int,
 	val byLanguage: Map<String, Int>,
+)
+
+/**
+ * What joins a card's domains in the `domains` column.
+ *
+ * A character no domain contains, because the column is matched with `LIKE '%fury%'` and a
+ * separator that could appear inside a name would make one domain match another.
+ */
+private const val DOMAIN_SEPARATOR = "|"
+
+/**
+ * What a game's stored cards contain, for the search screen's filters.
+ *
+ * Every list is what is *on this device*. An empty one means the sources served none of it, which
+ * is a different thing from the game not having it -- and the screen draws that difference by
+ * leaving the filter out rather than showing an empty menu.
+ */
+data class StoredFacets(
+	val cardTypes: List<String>,
+	val rarities: List<String>,
+	val domains: List<String>,
+	/** The costs actually present, or null where no card in the game publishes one. */
+	val costRange: IntRange?,
 )

@@ -7,6 +7,7 @@ import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.sqlstore.GameStorageRow
 import com.bitsycore.cardbrowser.sqlstore.PinnedSet
+import com.bitsycore.cardbrowser.sqlstore.StoredFacets
 
 /**
  * A [SetRecordStore] held in maps, for tests and previews.
@@ -160,6 +161,48 @@ class InMemorySetRecordStore(
 		val vGoing = mRows.filterValues { !it.isPinned }.keys.toList()
 		vGoing.forEach { mRows.remove(it) }
 		return vGoing.size
+	}
+
+	/**
+	 * The filters applied in memory, which is what this double is for.
+	 *
+	 * Deliberately simple and deliberately not the SQL. The rules that are the query's own -- how a
+	 * cost filter treats an unknown cost, how folding works -- are tested against the real database
+	 * in `SqlCardStoreTest`. What a repository test needs from here is that a filter narrows.
+	 */
+	override suspend fun search(
+		game: GameId,
+		filter: CardSearchFilter,
+		limit: Int,
+	): List<CardPrinting> = mRows.entries
+		.filter { it.value.game == game.value }
+		.flatMap { it.value.cards }
+		.filter { vCard -> filter.matches(vCard) }
+		.take(limit)
+
+	override suspend fun facetsForGame(game: GameId): StoredFacets {
+		val vCards = mRows.entries.filter { it.value.game == game.value }.flatMap { it.value.cards }
+		val vCosts = vCards.mapNotNull { it.attributes.cost }
+		return StoredFacets(
+			cardTypes = vCards.mapNotNull { it.classification.type }.distinct().sorted(),
+			rarities = vCards.mapNotNull { it.classification.rarity }.distinct().sorted(),
+			domains = vCards.flatMap { it.classification.domains }.distinct().sorted(),
+			costRange = if (vCosts.isEmpty()) null else vCosts.min()..vCosts.max(),
+		)
+	}
+
+	private fun CardSearchFilter.matches(card: CardPrinting): Boolean {
+		val vName = card.text.name.lowercase()
+		if (!text.isNullOrBlank() && !vName.contains(text!!.lowercase())) return false
+		if (!excludeText.isNullOrBlank() && vName.contains(excludeText!!.lowercase())) return false
+		if (cardType != null && card.classification.type != cardType) return false
+		if (rarity != null && card.classification.rarity != rarity) return false
+		if (domain != null && card.classification.domains.none { it.equals(domain, true) }) return false
+		// Unknown is not zero, which is the one rule worth keeping in step with the SQL.
+		val vCost = card.attributes.cost
+		if (minCost != null && (vCost == null || vCost < minCost!!)) return false
+		if (maxCost != null && (vCost == null || vCost > maxCost!!)) return false
+		return true
 	}
 
 	override suspend fun clear() = mRows.clear()

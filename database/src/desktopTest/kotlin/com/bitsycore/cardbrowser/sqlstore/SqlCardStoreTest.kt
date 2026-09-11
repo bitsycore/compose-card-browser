@@ -192,6 +192,52 @@ class SqlCardStoreTest {
 	}
 
 	@Test
+	fun `the advanced search narrows on every axis at once`() {
+		// The query the whole feature rests on. Each predicate is NULL-guarded so one statement
+		// serves any combination of chips, and the combination is what is worth asserting: a
+		// filter that works alone and not with its neighbours is the usual way this breaks.
+		write("s", null, "Set", false, 1L, (1..40).map { card(it) })
+
+		val vHits = mStore.search(
+			game = "test",
+			text = "card",
+			excludeText = "card 3",
+			cardType = "Unit",
+			rarity = "Common",
+			maxCost = 3,
+		)
+
+		assertTrue(vHits.isNotEmpty(), "every axis at once matched nothing at all")
+		assertTrue(vHits.all { it.classification.type == "Unit" })
+		assertTrue(vHits.all { it.classification.rarity == "Common" })
+		assertTrue(vHits.all { (it.attributes.cost ?: 99) <= 3 })
+		assertTrue(vHits.none { it.displayName.contains("Card 3") }, "the exclusion was ignored")
+	}
+
+	@Test
+	fun `the filter lists offer only what the game actually has`() {
+		// Read from the rows rather than from a game profile, so the search cannot offer a rarity
+		// that would match nothing on this device.
+		write("s", null, "Set", false, 1L, (1..10).map { card(it) })
+
+		val vFacets = mStore.facetsForGame("test")
+
+		assertEquals(listOf("Unit"), vFacets.cardTypes)
+		assertEquals(listOf("Common"), vFacets.rarities)
+		assertEquals(listOf("fury"), vFacets.domains, "domains are stored joined and split back")
+		assertEquals(0..4, vFacets.costRange, "the costs that are actually present")
+	}
+
+	@Test
+	fun `a game with nothing stored offers no filters rather than empty ones`() {
+		val vFacets = mStore.facetsForGame("a-game-with-no-cards")
+
+		assertTrue(vFacets.cardTypes.isEmpty())
+		assertTrue(vFacets.rarities.isEmpty())
+		assertNull(vFacets.costRange, "no cost range is not a range of zero")
+	}
+
+	@Test
 	fun `a cost filter does not sweep up cards whose cost is unknown`() {
 		// `Availability`'s third state, in schema form. A source that publishes no cost is not a
 		// source publishing zero, and "cost under 4" must not quietly include everything it could

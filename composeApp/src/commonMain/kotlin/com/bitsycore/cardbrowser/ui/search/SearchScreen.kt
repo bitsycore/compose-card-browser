@@ -26,6 +26,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.input.KeyboardType
+import com.bitsycore.cardbrowser.data.cache.CardSearchFilter
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import com.bitsycore.cardbrowser.ui.common.sharedCardArt
@@ -157,6 +164,14 @@ fun SearchContent(
 					.fillMaxWidth()
 					.padding(horizontal = 16.dp, vertical = 8.dp)
 					.focusRequester(vFocus),
+			)
+
+			// The advanced filter, folded away until asked for. Search is a text box for most
+			// people most of the time, and a screen that opens on six controls says otherwise.
+			AdvancedFilterPanel(
+				state = vState,
+				onToggle = { dispatch(SearchContract.Intent.AdvancedToggled(it)) },
+				onFilterChanged = { dispatch(SearchContract.Intent.FilterChanged(it)) },
 			)
 
 			CoverageNotice(vState, dispatch)
@@ -384,4 +399,177 @@ private fun SearchFailedPreview() = PreviewFrame {
 		),
 		dispatch = {},
 	)
+}
+
+// ==================
+// MARK: The advanced filter
+// ==================
+
+/**
+ * Everything a search can narrow on beyond a name.
+ *
+ * Only the controls this game's stored cards can actually fill. A source that publishes no rarity
+ * leaves the rarity menu out entirely rather than showing an empty one -- which is the same rule
+ * the rest of this app follows about claims: an empty menu says "there are none", and the truth is
+ * "this source does not say".
+ *
+ * Collapsed by default. Search is a text box for most people most of the time.
+ */
+@Composable
+private fun AdvancedFilterPanel(
+	state: SearchContract.UiState,
+	onToggle: (Boolean) -> Unit,
+	onFilterChanged: (CardSearchFilter) -> Unit,
+) {
+	val vFacets = state.facets
+	Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+		Row(verticalAlignment = Alignment.CenterVertically) {
+			TextButton(onClick = { onToggle(!state.isAdvancedOpen) }) {
+				Icon(AppIcons.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
+				Spacer(Modifier.width(6.dp))
+				Text(if (state.isAdvancedOpen) "Hide filters" else "Filters")
+			}
+			// Said even while the panel is shut, because a filter you cannot see is the reason a
+			// search returns nothing and the cause has to be on screen.
+			if (state.hasAdvancedFilters) {
+				Spacer(Modifier.width(4.dp))
+				Text(
+					text = "narrowing",
+					style = MaterialTheme.typography.labelSmall,
+					color = MaterialTheme.colorScheme.primary,
+				)
+				Spacer(Modifier.weight(1f))
+				TextButton(onClick = { onFilterChanged(CardSearchFilter()) }) { Text("Reset") }
+			}
+		}
+
+		AnimatedVisibility(visible = state.isAdvancedOpen) {
+			Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+				OutlinedTextField(
+					value = state.filter.excludeText.orEmpty(),
+					onValueChange = {
+						onFilterChanged(state.filter.copy(excludeText = it.takeIf(String::isNotBlank)))
+					},
+					label = { Text("Name does not contain") },
+					singleLine = true,
+					modifier = Modifier.fillMaxWidth(),
+				)
+
+				if (vFacets != null && vFacets.cardTypes.isNotEmpty()) {
+					FilterChoice(
+						label = "Type",
+						options = vFacets.cardTypes,
+						selected = state.filter.cardType,
+						onSelected = { onFilterChanged(state.filter.copy(cardType = it)) },
+					)
+				}
+				if (vFacets != null && vFacets.rarities.isNotEmpty()) {
+					FilterChoice(
+						label = "Rarity",
+						options = vFacets.rarities,
+						selected = state.filter.rarity,
+						onSelected = { onFilterChanged(state.filter.copy(rarity = it)) },
+					)
+				}
+				if (vFacets != null && vFacets.domains.isNotEmpty()) {
+					FilterChoice(
+						// The game's own word for it -- "Colour" for Magic, "Faction" for Altered.
+						label = state.game?.vocabulary?.domain ?: "Domain",
+						options = vFacets.domains,
+						selected = state.filter.domain,
+						onSelected = { onFilterChanged(state.filter.copy(domain = it)) },
+					)
+				}
+				// Pulled out of the facets first: it comes from another module, so it cannot be
+				// smart-cast out of the nullable property it lives on.
+				val vCostRange = vFacets?.costRange
+				if (vCostRange != null) {
+					CostRangeFields(
+						label = state.game?.vocabulary?.cost ?: "Cost",
+						range = vCostRange,
+						min = state.filter.minCost,
+						max = state.filter.maxCost,
+						onChanged = { vMin, vMax ->
+							onFilterChanged(state.filter.copy(minCost = vMin, maxCost = vMax))
+						},
+					)
+				}
+			}
+		}
+	}
+}
+
+/** One menu of values, with "Any" as the way back out of a choice. */
+@Composable
+private fun FilterChoice(
+	label: String,
+	options: List<String>,
+	selected: String?,
+	onSelected: (String?) -> Unit,
+) {
+	var vIsOpen by remember { mutableStateOf(false) }
+	Box {
+		OutlinedButton(onClick = { vIsOpen = true }) {
+			Text(if (selected == null) label else "$label: $selected")
+			Icon(AppIcons.ArrowDropDown, contentDescription = null)
+		}
+		DropdownMenu(expanded = vIsOpen, onDismissRequest = { vIsOpen = false }) {
+			DropdownMenuItem(
+				text = { Text("Any") },
+				onClick = {
+					onSelected(null)
+					vIsOpen = false
+				},
+			)
+			options.forEach { vOption ->
+				DropdownMenuItem(
+					text = { Text(vOption) },
+					onClick = {
+						onSelected(vOption)
+						vIsOpen = false
+					},
+					trailingIcon = {
+						if (vOption == selected) Icon(AppIcons.Check, contentDescription = null)
+					},
+				)
+			}
+		}
+	}
+}
+
+/**
+ * The cost range, as two numbers.
+ *
+ * Blank means "no bound", which is not the same as the range's own end: leaving the maximum empty
+ * asks for everything upwards, including a card whose cost is higher than anything currently
+ * stored. The placeholders show what is actually present so the fields are not typed into blind.
+ */
+@Composable
+private fun CostRangeFields(
+	label: String,
+	range: IntRange,
+	min: Int?,
+	max: Int?,
+	onChanged: (Int?, Int?) -> Unit,
+) {
+	Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+		OutlinedTextField(
+			value = min?.toString().orEmpty(),
+			onValueChange = { onChanged(it.toIntOrNull(), max) },
+			label = { Text("$label from") },
+			placeholder = { Text(range.first.toString()) },
+			singleLine = true,
+			keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+			modifier = Modifier.weight(1f),
+		)
+		OutlinedTextField(
+			value = max?.toString().orEmpty(),
+			onValueChange = { onChanged(min, it.toIntOrNull()) },
+			label = { Text("$label to") },
+			placeholder = { Text(range.last.toString()) },
+			singleLine = true,
+			keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+			modifier = Modifier.weight(1f),
+		)
+	}
 }
