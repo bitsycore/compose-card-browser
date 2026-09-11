@@ -23,6 +23,8 @@ import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.InMemorySetRecordStore
+import com.bitsycore.cardbrowser.data.cache.SetRecordStore
 import com.bitsycore.cardbrowser.data.repository.BulkImportProgress
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import kotlinx.coroutines.Dispatchers
@@ -156,10 +158,19 @@ class BulkImportTest {
 		releaseDate = null,
 	)
 
+	private val mStores = mutableMapOf<okio.FileSystem, SetRecordStore>()
+
 	private fun repository(
 		provider: FakeBulkProvider,
 		// Typed as the interface, not `FakeFileSystem`, so a test can wrap it -- see
 		// [RecordingFileSystem].
+	/**
+	 * One store per file system, so "the same disk" keeps meaning what it meant.
+	 *
+	 * These tests simulate a restart by building a second repository over the first one's
+	 * `FakeFileSystem`. Complete sets are not files any more, so the store has to be shared on the
+	 * same terms or every such test reads an empty disk and looks like a cache that forgot.
+	 */
 		fileSystem: okio.FileSystem = FakeFileSystem(),
 	): CardRepository {
 		val vStorage = AppStorage(fileSystem, "/cache".toPath(), "/prefs".toPath())
@@ -175,6 +186,7 @@ class BulkImportTest {
 				mIoDispatcher = Dispatchers.Unconfined,
 				mClock = { 0L },
 			),
+			mSetStore = mStores.getOrPut(fileSystem) { InMemorySetRecordStore() },
 			mClock = { 0L },
 			mStorage = vStorage,
 			mJson = Json { ignoreUnknownKeys = true },
@@ -305,6 +317,7 @@ class BulkImportTest {
 				mIoDispatcher = Dispatchers.Unconfined,
 				mClock = { 0L },
 			),
+			mSetStore = InMemorySetRecordStore(),
 			mClock = { 0L },
 			mStorage = vStorage,
 		)
@@ -388,6 +401,9 @@ class BulkImportTest {
 		val vFileSystem = RecordingFileSystem(FakeFileSystem(), vEvents)
 		val vSets = (0 until 600).map { set("S$it") }
 		val vCards = (0 until 600).map { printing("S$it", "1") }
+		// Reading a shard is a file the import opens; storing a set is a row. Both land in one
+		// list, so the assertion below is about their order rather than about either alone.
+		mStores[vFileSystem] = InMemorySetRecordStore(mOnWrite = { vEvents += WRITE })
 
 		val vResult = assertNotNull(
 			repository(FakeBulkProvider(mProviderId, vCards, vSets), vFileSystem).importBulk(
@@ -433,11 +449,8 @@ class BulkImportTest {
 			return super.source(file)
 		}
 
-		override fun sink(file: okio.Path, mustCreate: Boolean): okio.Sink {
-			// The metadata cache writes to a temp file and moves it into place, so the sink is
-			// where a write begins. Shard sinks are excluded: those belong to the streaming phase.
-			if (!file.name.startsWith("shard-")) mEvents += WRITE
-			return super.sink(file, mustCreate)
-		}
+		// No `sink` override: a set is a row in the store now, not a file, so the write half of the
+		// interleaving is recorded by the store itself. See the `WRITE` events in the test above.
+
 	}
 }

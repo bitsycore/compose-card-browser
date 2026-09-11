@@ -330,6 +330,7 @@ class DownloadManagerTest {
 				mIoDispatcher = kotlinx.coroutines.Dispatchers.Unconfined,
 				mClock = { 0L },
 			),
+			mSetStore = com.bitsycore.cardbrowser.data.cache.InMemorySetRecordStore(),
 			mClock = { 0L },
 		)
 }

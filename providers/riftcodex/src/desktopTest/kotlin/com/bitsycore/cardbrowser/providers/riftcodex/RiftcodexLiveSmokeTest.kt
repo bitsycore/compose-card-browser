@@ -9,6 +9,9 @@ import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.SqlSetRecordStore
+import com.bitsycore.cardbrowser.sqlstore.DriverFactory
+import com.bitsycore.cardbrowser.sqlstore.SqlCardStore
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
@@ -41,6 +44,17 @@ import okio.Path.Companion.toPath
  * about exact values, apart from a couple of anchors solid enough to be worth pinning.
  */
 class RiftcodexLiveSmokeTest {
+
+	/**
+	 * One card store for the whole check, held in memory.
+	 *
+	 * Shared deliberately: these tests cache through one repository and read back through
+	 * another, which is the offline path they exist to prove.
+	 */
+	private val mStore = SqlSetRecordStore(
+		SqlCardStore(DriverFactory().create(null)),
+		Dispatchers.IO,
+	)
 
 	private fun provider() = RiftcodexProvider(HttpClientFactory.create())
 
@@ -158,6 +172,7 @@ class RiftcodexLiveSmokeTest {
 				),
 			)
 			val vRepository = CardRepository(
+				mSetStore = mStore,
 				mRegistry = vRegistry,
 				mCache = vCache,
 				mClock = { Clock.System.now().toEpochMilliseconds() },
@@ -197,6 +212,7 @@ class RiftcodexLiveSmokeTest {
 			// 4. A restart with no network at all: a fresh repository over the same disk, and a
 			//    provider pointed at an address that cannot answer.
 			val vOfflineRepository = CardRepository(
+				mSetStore = mStore,
 				mRegistry = ProviderRegistry(
 					providers = listOf(
 						RiftcodexProvider(HttpClientFactory.create(), "http://127.0.0.1:1"),
@@ -249,6 +265,7 @@ class RiftcodexLiveSmokeTest {
 
 		try {
 			val vRepository = CardRepository(
+				mSetStore = mStore,
 				mRegistry = ProviderRegistry(
 					providers = listOf(provider()),
 					routes = listOf(ProviderRoute(RiftboundGame.id, RiftcodexProvider.PROVIDER_ID)),

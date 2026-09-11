@@ -30,6 +30,21 @@ class AppStorage(
 	/** Image cache: the bytes Coil stores. Bounded and evicted separately from metadata. */
 	val imageCacheDir: Path get() = cacheRoot / IMAGE_DIR
 
+	/**
+	 * The card store's database file.
+	 *
+	 * Under [preferencesRoot], not [cacheRoot], and that is the whole reason this property exists
+	 * rather than a path built at the call site. The store holds downloaded sets -- the things a
+	 * user explicitly asked to keep, and on a phone the things that took twenty minutes to import --
+	 * so it must not sit in a directory Android and iOS are free to purge whenever they want the
+	 * space back. Browsing records in it are evictable by our own budget, which is a decision this
+	 * app makes rather than one the OS makes for it.
+	 *
+	 * Android and iOS ignore the path and use their own per-app database location, which has the
+	 * same property. Desktop honours it.
+	 */
+	val databaseFile: Path get() = preferencesRoot / DATABASE_FILE
+
 	/** Creates every directory the app writes to. Safe to call repeatedly. */
 	fun prepare() {
 		fileSystem.createDirectories(metadataCacheDir)
@@ -41,5 +56,6 @@ class AppStorage(
 
 		const val METADATA_DIR: String = "metadata"
 		const val IMAGE_DIR: String = "images"
+		const val DATABASE_FILE: String = "cards.db"
 	}
 }

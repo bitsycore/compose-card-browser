@@ -46,6 +46,24 @@ class CardStoreRecoveryTest {
 	}
 
 	@Test
+	fun `a store reopens on the next launch instead of failing`() {
+		// The ordinary path, and the one an in-memory test cannot see. The desktop driver used to
+		// call `Schema.create` unconditionally, which throws against a file whose tables already
+		// exist -- so the app worked on a fresh install and threw on every launch after it.
+		DriverFactory().delete(mFile.absolutePath)
+		factory().open(mFile.absolutePath).store.writeSet(
+			provider = "p", setId = "s", language = CardLanguage.ENGLISH, game = "test",
+			label = "A set", isPinned = true, fetchedAt = 1L, printings = emptyList(),
+			isComplete = true,
+		)
+
+		val vReopened = factory().open(mFile.absolutePath)
+
+		assertFalse(vReopened.wasRecovered, "a sound database must not be discarded on reopen")
+		assertEquals(1, vReopened.store.storageSnapshot().sets, "and it must still hold its sets")
+	}
+
+	@Test
 	fun `a garbage file is discarded and the store comes back usable`() {
 		DriverFactory().delete(mFile.absolutePath)
 		// Not a database at all. This is what a truncated write or a bad sector looks like from
@@ -59,8 +77,9 @@ class CardStoreRecoveryTest {
 		assertEquals(1, vReasons.size, "the caller must be told once, with a reason")
 		// And the replacement actually works, which is the half that matters.
 		vOpened.store.writeSet(
-			provider = "p", setId = "s", language = CardLanguage.ENGLISH,
+			provider = "p", setId = "s", language = CardLanguage.ENGLISH, game = "test",
 			label = "A set", isPinned = false, fetchedAt = 1L, printings = emptyList(),
+			isComplete = true,
 		)
 		assertEquals(1, vOpened.store.storageSnapshot().sets)
 	}
@@ -71,8 +90,9 @@ class CardStoreRecoveryTest {
 		// A real database, then cut in half. Salvaging part of it would leave a store whose
 		// contents nobody can characterise, which is the one thing this app must never serve.
 		factory().open(mFile.absolutePath).store.writeSet(
-			provider = "p", setId = "s", language = CardLanguage.ENGLISH,
+			provider = "p", setId = "s", language = CardLanguage.ENGLISH, game = "test",
 			label = "A set", isPinned = true, fetchedAt = 1L, printings = emptyList(),
+			isComplete = true,
 		)
 		val vBytes = mFile.readBytes()
 		assertTrue(vBytes.size > 2048, "expected a real database to truncate")

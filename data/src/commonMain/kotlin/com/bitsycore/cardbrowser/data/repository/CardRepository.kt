@@ -30,7 +30,7 @@ import com.bitsycore.cardbrowser.data.cache.CacheKey
 import com.bitsycore.cardbrowser.data.cache.CacheScope
 import com.bitsycore.cardbrowser.data.cache.Completeness
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
-import com.bitsycore.cardbrowser.data.cache.PinnedEntry
+import com.bitsycore.cardbrowser.data.cache.SetRecordStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -65,6 +65,15 @@ import kotlinx.serialization.serializer
 class CardRepository(
 	private val mRegistry: ProviderRegistry,
 	private val mCache: MetadataCache,
+	/**
+	 * Where complete sets live.
+	 *
+	 * This class still owns *what* is cached and when; the store owns how it is held. The split is
+	 * deliberate and is written down only here: set lists, card detail, search pages and per-set
+	 * languages stay in [mCache], because they are few and tiny and were never what any of this
+	 * cost.
+	 */
+	private val mSetStore: SetRecordStore,
 	private val mClock: () -> Long,
 	/**
 	 * Where a bulk import writes its scratch buckets, or `null` for a caller that has no storage.
@@ -195,10 +204,11 @@ class CardRepository(
 			}
 
 		val vLanguage = effectiveLanguage(vProvider, language)
-		val vCompleteKey = completeSetKey(vProvider, setId, vLanguage)
-		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>()))
-		val vCachedComplete = mCache.read(vCompleteKey, vSerializer)
 		val vNow = mClock()
+		// Reading marks the set used, which is what eviction orders by. The file cache could not
+		// do that across launches -- it held access times in memory -- so a set you keep coming
+		// back to sorted as old as one you opened once.
+		val vCachedComplete = mSetStore.read(vProvider.id, setId, vLanguage, vNow)
 		// Hoisted out of the block below, because the refresh decision needs it too: a stale set is
 		// refreshed as a whole set, not as a single page.
 		val vIsStale = vCachedComplete?.isStale(vNow, mCardsTtlMillis) ?: true
@@ -210,18 +220,18 @@ class CardRepository(
 			emit(
 				DataSnapshot.cached(
 					value = cachedSetCards(
-						payload = vCachedComplete.payload,
+						payload = vCachedComplete.cards,
 						query = query,
 						knownSetSize = knownSetSize,
-						completeness = vCachedComplete.completeness,
+						completeness = vCachedComplete.completenessValue,
 						rarityLadder = vProvider.game.rarityLadder,
 					),
 					fetchedAt = vCachedComplete.fetchedAtEpochMillis,
-					completeness = vCachedComplete.completeness,
+					completeness = vCachedComplete.completenessValue,
 					isStale = vIsStale,
 				),
 			)
-			if (!vIsStale && vCachedComplete.completeness == Completeness.COMPLETE) return@flow
+			if (!vIsStale && vCachedComplete.isComplete) return@flow
 		}
 
 		// Anything that is not "a fresh complete set, already answered above" is refreshed by
@@ -244,11 +254,11 @@ class CardRepository(
 			vCachedComplete == null ||
 			// Stale, or never finished. Either way the answer is the whole set, not a page of it.
 			vIsStale ||
-			vCachedComplete.completeness != Completeness.COMPLETE
+			!vCachedComplete.isComplete
 
 		try {
 			if (vNeedsCompleteSet) {
-				emitCompleteSet(vProvider, setId, vLanguage, query, knownSetSize, vCachedComplete?.payload)
+				emitCompleteSet(vProvider, setId, vLanguage, query, knownSetSize, vCachedComplete?.cards)
 			} else {
 				emitSinglePage(vProvider, setId, vLanguage, query, knownSetSize)
 			}
@@ -257,14 +267,14 @@ class CardRepository(
 				emit(
 					DataSnapshot(
 						value = cachedSetCards(
-						payload = vCachedComplete.payload,
+						payload = vCachedComplete.cards,
 						query = query,
 						knownSetSize = knownSetSize,
-						completeness = vCachedComplete.completeness,
+						completeness = vCachedComplete.completenessValue,
 						rarityLadder = vProvider.game.rarityLadder,
 					),
 						origin = DataOrigin.CACHE,
-						completeness = vCachedComplete.completeness,
+						completeness = vCachedComplete.completenessValue,
 						fetchedAtEpochMillis = vCachedComplete.fetchedAtEpochMillis,
 						isStale = true,
 						error = vError,
@@ -510,30 +520,26 @@ class CardRepository(
 		} else {
 			Completeness.PARTIAL
 		}
-		mCache.write(
-			key = completeSetKey(provider, setId, language),
-			envelope = CacheEnvelope(
-				schemaVersion = CacheEnvelope.CURRENT_SCHEMA_VERSION,
-				provider = provider.id,
-				language = language,
-				scope = CacheScope.CompleteSet(setId.qualified),
-				fetchedAtEpochMillis = vFetchedAt,
-				completeness = vCompleteness,
-				// The de-duplicated list, not the raw one.
-				//
-				// Writing `vBest` here meant the cache held records that had been collapsed before
-				// being shown, so the next launch read them back and drew them -- undoing the
-				// de-duplication for every session after the first, which is the session that
-				// matters least. `vDeduped` is what was displayed and it is what is stored.
-				payload = vDeduped,
-			),
-			serializer = CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>())),
+		// The de-duplicated list, not the raw one.
+		//
+		// Writing `vBest` here meant the cache held records that had been collapsed before being
+		// shown, so the next launch read them back and drew them -- undoing the de-duplication for
+		// every session after the first, which is the session that matters least. `vDeduped` is
+		// what was displayed and it is what is stored.
+		//
+		// The card count is a column now rather than a second write to a sidecar file, so there is
+		// no "only when complete" guard left to get wrong: completeness is stored beside the
+		// count, and a caller wanting a set's real size asks for a complete one.
+		mSetStore.write(
+			provider = provider.id,
+			setId = setId,
+			language = language,
+			game = provider.game.id,
+			label = setLabel(provider, setId),
+			cards = vDeduped,
+			isComplete = vCompleteness == Completeness.COMPLETE,
+			fetchedAtEpochMillis = vFetchedAt,
 		)
-		// Only when the fetch proved complete: a partial set's size is not the set's size, and the
-		// set list would then under-count instead of over-counting.
-		if (vCompleteness == Completeness.COMPLETE) {
-			mCache.recordCardCount(completeSetKey(provider, setId, language), vDeduped.size)
-		}
 
 		emit(
 			DataSnapshot(
@@ -757,9 +763,9 @@ class CardRepository(
 
 		for (vSet in knownSets) {
 			currentCoroutineContext().ensureActive()
-			val vCached = mCache.read(completeSetKey(provider, vSet.id, language), vSerializer) ?: continue
-			if (vCached.completeness == Completeness.COMPLETE) vComplete++
-			vHits += CardFilterEngine.apply(vCached.payload, vQuery, provider.game.rarityLadder)
+			val vCached = mSetStore.read(provider.id, vSet.id, language, mClock()) ?: continue
+			if (vCached.isComplete) vComplete++
+			vHits += CardFilterEngine.apply(vCached.cards, vQuery, provider.game.rarityLadder)
 		}
 
 		return CardSearchResults(
@@ -792,11 +798,8 @@ class CardRepository(
 		val vLanguage = effectiveLanguage(vProvider, language)
 
 		if (setId != null) {
-			val vCached = mCache.read(
-				completeSetKey(vProvider, setId, vLanguage),
-				CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>())),
-			)
-			val vHit = vCached?.payload?.firstOrNull { it.id == id }
+			val vCached = mSetStore.read(vProvider.id, setId, vLanguage, mClock())
+			val vHit = vCached?.cards?.firstOrNull { it.id == id }
 			if (vHit != null) {
 				return DataSnapshot.cached(
 					value = vHit,
@@ -890,8 +893,7 @@ class CardRepository(
 		provider: CardProvider<GameProfile>,
 		set: CardSet,
 		preferred: CardLanguage?,
-	): Boolean = languageCandidatesFor(provider, set, preferred)
-		.any { mCache.exists(completeSetKey(provider, set.id, it)) }
+	): Boolean = mSetStore.languagesHeld(provider.id, set.id).isNotEmpty()
 
 	/**
 	 * Every language a copy of [set] could plausibly be filed under, best guess first.
@@ -949,11 +951,9 @@ class CardRepository(
 			// languages of its own may still hold a copy in one the user does not browse in --
 			// which is exactly what a bulk import leaves behind. Every candidate is checked here
 			// rather than short-circuited, because the question is *which* editions are held.
-			val vHeld = languageCandidatesFor(vProvider, vSet, language)
-				.filterNotNull()
-				.filterTo(mutableSetOf()) {
-					mCache.exists(completeSetKey(vProvider, vSet.id, it))
-				}
+			// One query, where this was a file-existence check per candidate language -- up to
+			// eleven per set, per row of the set list.
+			val vHeld = mSetStore.languagesHeld(vProvider.id, vSet.id)
 			if (vHeld.isNotEmpty()) vResult[vSet.id.qualified] = vHeld
 		}
 		return vResult
@@ -988,7 +988,7 @@ class CardRepository(
 			// The language the row would actually open in, which is not always the one asked for:
 			// a set published only in Japanese opens in Japanese whatever the preference says.
 			val vLanguage = effectiveLanguage(vProvider, vSet.languageFor(language))
-			val vCount = mCache.cardCount(completeSetKey(vProvider, vSet.id, vLanguage)) ?: continue
+			val vCount = mSetStore.cardCount(vProvider.id, vSet.id, vLanguage) ?: continue
 			vResult[vSet.id.qualified] = vCount
 		}
 		return vResult
@@ -1032,9 +1032,7 @@ class CardRepository(
 			val vStated = vConfirmed?.takeIf { it.isNotEmpty() } ?: vSet.languages
 			// Plus every language this device actually holds cards in. The same candidate sweep
 			// `savedLanguages` runs -- one file-existence check per candidate, no requests.
-			val vHeld = languageCandidatesFor(vProvider, vSet, language)
-				.filterNotNull()
-				.filterTo(mutableSetOf()) { mCache.exists(completeSetKey(vProvider, vSet.id, it)) }
+			val vHeld = mSetStore.languagesHeld(vProvider.id, vSet.id)
 			val vKnown = vStated + vHeld
 			if (vKnown.isNotEmpty()) vResult[vSet.id.qualified] = vKnown
 		}
@@ -1116,12 +1114,7 @@ class CardRepository(
 			.orEmpty()
 		val vSet = setRecord(setId, game)
 		// The same candidate sweep the set list runs: file-existence checks, no requests.
-		val vHeld = (vSet?.let { languageCandidatesFor(vProvider, it, null) }
-			?: vProvider.capabilities.data.languages.asSequence()
-				.map { effectiveLanguage(vProvider, it) })
-			.filterNotNull()
-			.filterTo(mutableSetOf()) { mCache.exists(completeSetKey(vProvider, setId, it)) }
-		return vConfirmed + vHeld
+		return vConfirmed + mSetStore.languagesHeld(vProvider.id, setId)
 	}
 
 	suspend fun knownLanguagesFor(setId: SourceId, game: GameId): Set<CardLanguage> {
@@ -1183,7 +1176,7 @@ class CardRepository(
 			?: return OpeningLanguage(null)
 
 		// 1. Held on disk, so the source has already served it. No request.
-		if (mCache.exists(completeSetKey(vProvider, setId, vWanted))) return OpeningLanguage(vWanted)
+		if (mSetStore.exists(vProvider.id, setId, vWanted)) return OpeningLanguage(vWanted)
 
 		// 2. Not held in the wanted language, but downloaded in another.
 		downloadedLanguageFor(vProvider, setId, vSet, preferred, except = vWanted)
@@ -1270,7 +1263,7 @@ class CardRepository(
 		// app does not rank is still usable rather than invisible.
 		val vOrdered = CardLanguage.PREFERENCE_ORDER.filter { it in vUsable } +
 			vUsable.filterNot { it in CardLanguage.PREFERENCE_ORDER }
-		return vOrdered.firstOrNull { mCache.isPinned(completeSetKey(provider, setId, it)) }
+		return vOrdered.firstOrNull { mSetStore.isPinned(provider.id, setId, it) }
 	}
 
 	/**
@@ -1346,12 +1339,9 @@ class CardRepository(
 	suspend fun facetsFor(setId: SourceId, game: GameId, language: CardLanguage? = null): CardFacets {
 		val vProvider = mRegistry.resolve(game, language) ?: return CardFacets()
 		val vLanguage = effectiveLanguage(vProvider, language)
-		val vCached = mCache.read(
-			completeSetKey(vProvider, setId, vLanguage),
-			CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>())),
-		) ?: return CardFacets()
-		if (vCached.completeness != Completeness.COMPLETE) return CardFacets()
-		return CardFilterEngine.facetsOf(vCached.payload, vProvider.game.rarityLadder)
+		val vCached = mSetStore.read(vProvider.id, setId, vLanguage, mClock()) ?: return CardFacets()
+		if (!vCached.isComplete) return CardFacets()
+		return CardFilterEngine.facetsOf(vCached.cards, vProvider.game.rarityLadder)
 	}
 
 	/**
@@ -1642,28 +1632,31 @@ class CardRepository(
 					val vSetId = vPrintings.first().setId
 					val vLanguage = vPrintings.first().text.language
 
-					// Pinned before the write, for the same reason a download is: writing runs a
-					// trim, and a set large enough to breach the ceiling would otherwise be
-					// evicted by the very write that stored it.
-					val vKey = completeSetKey(vProvider, vSetId, vLanguage)
+					// Pinned before the write, for the same reason a download is: a set large
+					// enough to breach the ceiling would otherwise be a candidate for the very
+					// eviction its own write triggers. `write` preserves an existing pin rather
+					// than resetting it, which is what makes this order safe.
 					val vDedupedBucket = dedupePrintings(vPrintings)
-					mCache.pin(vKey, pinLabel(game, vSetId, vLanguage))
-					mCache.write(
-						key = vKey,
-						envelope = CacheEnvelope(
-							schemaVersion = CacheEnvelope.CURRENT_SCHEMA_VERSION,
-							provider = vProvider.id,
-							language = vLanguage,
-							scope = CacheScope.CompleteSet(vSetId.qualified),
-							fetchedAtEpochMillis = mClock(),
-							// The bulk file is the whole catalogue by definition, so a set drawn
-							// from it is complete in a way a paged fetch has to prove.
-							completeness = Completeness.COMPLETE,
-							payload = vDedupedBucket,
-						),
-						serializer = CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>())),
+					mSetStore.setPinned(
+						provider = vProvider.id,
+						setId = vSetId,
+						language = vLanguage,
+						game = game,
+						label = setLabel(vProvider, vSetId),
+						isPinned = true,
 					)
-					mCache.recordCardCount(vKey, vDedupedBucket.size)
+					mSetStore.write(
+						provider = vProvider.id,
+						setId = vSetId,
+						language = vLanguage,
+						game = game,
+						label = setLabel(vProvider, vSetId),
+						cards = vDedupedBucket,
+						// The bulk file is the whole catalogue by definition, so a set drawn from
+						// it is complete in a way a paged fetch has to prove.
+						isComplete = true,
+						fetchedAtEpochMillis = mClock(),
+					)
 					vSetsWritten++
 					onProgress(BulkImportProgress.Writing(vSetsWritten, vBucketTotal))
 				}
@@ -1760,63 +1753,40 @@ class CardRepository(
 	 * one set and a screen that counted only the browsing language would under-report by a factor
 	 * of ten.
 	 */
-	suspend fun keptByGame(pinned: List<PinnedEntry>? = null): List<GameStorage> {
+	suspend fun keptByGame(): List<GameStorage> {
 		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardSet>()))
-		// From the pin markers, not from each game's set list.
-		//
-		// The set list is ordinary browsing data, so clearing the cache deleted it -- and with it
-		// the only route from a hashed filename back to a set. Kept records then disappeared from
-		// this screen while still being on disk and still being reported as downloaded by the
-		// download dialog, which is exactly the contradiction a storage screen must not produce.
-		// Kept as parsed labels rather than raw entries, because both counts below are about the
-		// *parts* -- which set, and which language -- and re-splitting per count is how the two
-		// would drift apart.
-		val vByGame = (pinned ?: mCache.pinnedEntries())
-			.mapNotNull { vEntry ->
-				val vParts = vEntry.label.split(TAB)
-				if (vParts.size < 2 || vParts[0].isEmpty()) null else vParts[0] to (vParts to vEntry)
-			}
-			.groupBy({ it.first }, { it.second })
-
-		return vByGame.mapNotNull { (vGameId, vEntries) ->
+		val vPinned = mSetStore.pinnedSets()
+		return mSetStore.downloadedByGame().mapNotNull { vRow ->
 			currentCoroutineContext().ensureActive()
-			val vGame = GameId(vGameId)
+			val vGame = GameId(vRow.game)
+			val vProvider = mRegistry.resolve(vGame) ?: return@mapNotNull null
 			// How many sets the game has, when its catalogue is still cached. Absent is a real
-			// answer -- the screen says "3 sets" rather than inventing a denominator.
-			val vCatalogue = mRegistry.resolve(vGame)
-				?.let { setListOnDisk(it, vGame, vSerializer) }
-			val vCatalogueIds = vCatalogue?.mapTo(mutableSetOf()) { it.id.qualified }
-			val vHeldIds = vEntries.mapNotNullTo(mutableSetOf()) { (vParts, _) -> vParts.getOrNull(1) }
+			// answer, and the screen renders it as no denominator rather than inventing one.
+			val vCatalogueIds = setListOnDisk(vProvider, vGame, vSerializer)
+				?.mapTo(mutableSetOf()) { it.id.qualified }
+			val vMine = vPinned.filter { it.game == vRow.game }
+			val vHeldIds = vMine.mapTo(mutableSetOf()) { it.setId }
 			GameStorage(
 				game = vGame,
 				// Only the sets the catalogue lists, so the numerator and `knownSets` count the
 				// same population. A bulk file does not: Scryfall's dump carries cards for sets
 				// `listSets` filters out -- digital-only Alchemy and MTGO products, and anything
 				// the source states holds no cards -- so an import of Magic pins 1044 set ids
-				// against a catalogue of 988 and the row read "Card info 1044/988". The extras
-				// are real and their bytes are counted; they are simply not part of "how much of
-				// this game do I have", because they are not offered to browse.
-				sets = if (vCatalogueIds == null) {
-					vHeldIds.size
-				} else {
-					vHeldIds.count { it in vCatalogueIds }
-				},
+				// against a catalogue of 988 and the row read "Card info 1044/988". The extras are
+				// real and their bytes are counted; they are simply not part of "how much of this
+				// game do I have", because they are not offered to browse.
+				sets = if (vCatalogueIds == null) vRow.sets else vHeldIds.count { it in vCatalogueIds },
 				extraSets = if (vCatalogueIds == null) 0 else vHeldIds.count { it !in vCatalogueIds },
 				// How many *sets* each language covers, not merely which languages appear. One
-				// Spanish set among a thousand English ones is a fact about the file, not a
-				// second edition of the game, and a bare "11 languages" said the opposite: an
-				// English-only import of Magic reads 11, because Scryfall's cheap dump carries
-				// the handful of cards that have no English printing at all.
-				languages = vEntries
-					.mapNotNull { (vParts, _) ->
-						val vLanguage = vParts.getOrNull(2)?.ifEmpty { null }
-							?.let(CardLanguage::fromCode)
-						val vSet = vParts.getOrNull(1)
-						if (vLanguage == null || vSet == null) null else vLanguage to vSet
-					}
+				// Spanish set among a thousand English ones is a fact about the file, not a second
+				// edition of the game, and a bare "11 languages" said the opposite: an
+				// English-only import of Magic reads 11, because Scryfall's cheap dump carries the
+				// handful of cards that have no English printing at all.
+				languages = vMine
+					.mapNotNull { vSet -> CardLanguage.fromCode(vSet.language)?.to(vSet.setId) }
 					.groupBy({ it.first }, { it.second })
 					.mapValues { (_, vSets) -> vSets.distinct().size },
-				bytes = vEntries.sumOf { (_, vEntry) -> vEntry.bytes },
+				bytes = vRow.bytes,
 				knownSets = vCatalogueIds?.size,
 			)
 		}
@@ -1829,24 +1799,7 @@ class CardRepository(
 	 * user is currently reading, say -- goes back to being ordinary browsing data rather than
 	 * staying exempt from the ceiling forever.
 	 */
-	suspend fun deleteKept(game: GameId): Int {
-		// Rebuilt from the labels rather than from the set list, so this deletes what the screen
-		// showed even when the catalogue that named it has been cleared.
-		val vProvider = mRegistry.resolve(game) ?: return 0
-		var vRemoved = 0
-		for (vEntry in mCache.pinnedEntries()) {
-			currentCoroutineContext().ensureActive()
-			val vParts = vEntry.label.split(TAB)
-			if (vParts.size < 3 || vParts[0] != game.value) continue
-			val vSetId = SourceId.parse(vParts[1]) ?: continue
-			val vLanguage = vParts[2].ifEmpty { null }?.let(CardLanguage::fromCode)
-			val vKey = completeSetKey(vProvider, vSetId, vLanguage)
-			mCache.unpin(vKey)
-			mCache.remove(vKey)
-			vRemoved++
-		}
-		return vRemoved
-	}
+	suspend fun deleteKept(game: GameId): Int = mSetStore.deleteDownloaded(game)
 
 	/** A game's set list if one is cached in any language, without fetching. */
 	private suspend fun setListOnDisk(
@@ -1875,34 +1828,34 @@ class CardRepository(
 	 */
 	suspend fun setPinned(game: GameId, setId: SourceId, language: CardLanguage?, isPinned: Boolean) {
 		val vProvider = mRegistry.resolve(game, language) ?: return
-		val vKey = completeSetKey(vProvider, setId, effectiveLanguage(vProvider, language))
-		if (isPinned) mCache.pin(vKey, pinLabel(game, setId, effectiveLanguage(vProvider, language))) else mCache.unpin(vKey)
+		mSetStore.setPinned(
+			provider = vProvider.id,
+			setId = setId,
+			language = effectiveLanguage(vProvider, language),
+			game = game,
+			label = setLabel(vProvider, setId),
+			isPinned = isPinned,
+		)
 	}
 
 	/**
-	 * What a pinned record is, written into its marker.
+	 * What to call a cached set on a storage screen.
 	 *
-	 * Three fields and a separator rather than JSON: it is read once per record by the storage
-	 * screen and written once per download, and a tab-separated line is cheaper than a parser at
-	 * both ends. The language may be absent, which is a real state -- a source that states none.
+	 * A *name* now, not an encoded tuple. This used to be `game	setId	language` smuggled through
+	 * a pin marker's contents, because a hashed filename says nothing about what it holds and the
+	 * storage screen had to split it back apart -- two places parsing one string, one edit from
+	 * disagreeing. Those three fields are columns; this is only the label.
+	 *
+	 * Falls back to the set's own id when its catalogue is not cached, which is the honest answer:
+	 * the set list is ordinary browsing data, and clearing it must not leave a downloaded set
+	 * anonymous.
 	 */
-	private fun pinLabel(game: GameId, setId: SourceId, language: CardLanguage?): String =
-		listOf(game.value, setId.qualified, language?.code.orEmpty()).joinToString(TAB.toString())
-
-	private fun completeSetKey(provider: CardProvider<GameProfile>, setId: SourceId, language: CardLanguage?) =
-		CacheKey.of("v${CacheEnvelope.CURRENT_SCHEMA_VERSION}", provider.id.value, "set", setId.qualified, language?.code ?: "-")
+	private suspend fun setLabel(provider: CardProvider<GameProfile>, setId: SourceId): String =
+		setRecord(setId, provider.game.id)?.name ?: setId.local
 
 	companion object {
 
 		/** Scratch directory for a bulk import's shards. Deleted when the import ends. */
-		/**
-		 * Separates the fields of a pin marker's label. See `pinLabel`.
-		 *
-		 * A tab because none of the three fields can contain one: a game id and a language code are
-		 * both slugs, and a qualified set id is a provider and a local id joined by a colon.
-		 */
-		private const val TAB: Char = '\t'
-
 		private const val BULK_SCRATCH_DIR = "bulk-scratch"
 
 		/**

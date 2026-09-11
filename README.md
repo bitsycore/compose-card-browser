@@ -611,11 +611,11 @@ every part of that has been wrong at least once:
   as ten extra editions; ten of them are one or two sets apiece. The delete dialog has room for the
   full breakdown with a set count per language.
 
-Opening the screen takes one pass over each cache directory. It took five over the metadata one —
-`sizeInBytes`, `entryCount`, `pinnedBytes`, `pinnedEntries`, then the kept records — over a
-directory holding three files per cached set, and only then walked the image cache. Measured with
-`StorageScreenCostBench` on 2026-09-11, 1000 pinned records, desktop SSD, warm: **261.7 ms → 93.5
-ms**, with the image walk now concurrent rather than sequential.
+Opening the screen is a handful of counts plus one walk of the image directory, and the two run
+concurrently. It used to be five walks of a directory holding three files per cached set, and only
+then the images. Measured on 2026-09-11 over 1000 downloaded sets, desktop SSD, warm: the counts
+alone went from **2456 ms to 14.4 ms** when sets moved into the card store. Not yet read on a
+phone.
 
 ---
 
@@ -625,7 +625,7 @@ Where the brief left a choice, these were taken. All are one edit to change.
 
 | Choice | Value | Why |
 |---|---|---|
-| Metadata cache ceiling | 512 MB, adjustable | Bounds what *browsing* accumulates, and nothing else: an imported or downloaded record is pinned, and pinned bytes are outside the budget. It went to 1 GB when that was not yet true and a bulk import of Magic was evicted by its own ceiling. Every set of a game is a few megabytes of JSON, so this is far above what browsing needs. Both are adjustable in Settings → Cache, including a typed-in value. |
+| Card data ceiling | 512 MB, adjustable | Bounds what *browsing* accumulates, and nothing else: a downloaded or imported set is pinned, and pinned bytes are outside the budget. It went to 1 GB when that was not yet true and a bulk import of Magic was evicted by its own ceiling. Adjustable in Settings → Cache, including a typed-in value. The small scopes — set lists, card detail, search pages — have their own fixed 64 MB, so one user-facing limit means one thing. |
 | Image cache ceiling | 1 GB, adjustable | A ceiling, not an allocation — a full browse of all 352 Origins cards came to under 4 MB. At ~22 KB a thumbnail this is room for tens of thousands of cards, so the limit stops being what evicts. Downloaded art is pinned and does not count against it. On Android and iOS it sits in the OS cache directory, which the system may purge regardless. |
 | Thumbnail format | WebP at `w=320` | Pinned, not negotiated — see [Known limitations](#known-limitations). ~22 KB against ~260 KB for the same image as PNG. |
 | Detail image | WebP at the asset's native width, `q=90` | ~180 KB against ~1.17 MB for the lossless PNG, and no visible difference. Decoded at source resolution rather than layout size so zoom has real pixels. |
@@ -761,13 +761,15 @@ the inline image and the fullscreen viewer now decode at source resolution.
 - **Non-Latin text rendering is untested in practice.** French accents render correctly on desktop
   and are covered by tests (accent folding in search and sorting). Japanese and Korean cannot be
   tested because no integrated provider supplies any — there is no such text to render.
-- **The storage screen's figures have not been read on a device since the counting was fixed.**
-  They are covered by unit tests and rendered headless, and the pre-existing pin markers a running
-  install carries are the case those tests cannot reproduce: markers written before labels existed
-  come back unattributed and appear under "Other".
-- **The storage screen's speed was measured on desktop, not on a phone.** 261.7 ms → 93.5 ms for
-  1000 pinned records on an SSD; a phone's filesystem is slower, so the saving should be larger,
-  but that is inference rather than measurement.
+- **The storage screen's figures have not been read on a device since sets moved into the card
+  store.** They are covered by unit tests and rendered headless.
+- **The card store has never been opened on Android or iOS.** It compiles for both, and the
+  desktop driver is covered by tests that open, reopen, damage and recover a real file — but
+  `AndroidSqliteDriver` and `NativeSqliteDriver` have run nowhere. The first launch on a phone is
+  also the first time the one-off cleanup of a pre-store install runs.
+- **The store's speed was measured on desktop, not on a phone.** 2456 ms → 14.4 ms for the storage
+  counts over 1000 downloaded sets on an SSD; a phone's filesystem is slower, so the saving should
+  be larger, but that is inference rather than measurement.
 - **Scryfall's live suite has not had a clean run since its rate limit was tripped.** See
   [Status](#status). The per-set language check added for it is therefore unconfirmed against the
   live API.
@@ -881,10 +883,11 @@ the inline image and the fullscreen viewer now decode at source resolution.
 - **Cardmarket links stop at a scoped search, never an exact product page.** Every game that has a
   section gets one, but a card-level slug cannot be synthesised — see [Cardmarket](#cardmarket) for
   why, and for what each game's URL actually looks like.
-- The LRU ordering of the metadata cache restarts with the process. The size ceiling always holds;
-  what resets is which entry is considered least recently used. Tracking access times in memory is
-  deliberate — several platforms do not update file access time on read, which would silently turn
-  "least recently used" into "least recently written".
+- The LRU ordering of the *small* metadata cache restarts with the process. The size ceiling always
+  holds; what resets is which entry is considered least recently used. Tracking access times in
+  memory is deliberate — several platforms do not update file access time on read, which would
+  silently turn "least recently used" into "least recently written". Downloaded and browsed **sets**
+  do not have this limitation: their access time is a column and survives a relaunch.
 
 ---
 

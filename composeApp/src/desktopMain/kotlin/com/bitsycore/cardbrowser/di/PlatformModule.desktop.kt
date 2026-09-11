@@ -2,6 +2,7 @@ package com.bitsycore.cardbrowser.di
 
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.platform.LinkOpener
+import com.bitsycore.cardbrowser.sqlstore.DriverFactory
 import java.awt.Desktop
 import java.net.URI
 import okio.FileSystem
@@ -28,6 +29,8 @@ actual fun platformModule(): Module = module {
 			preferencesRoot = vRoot / "preferences",
 		).also { it.prepare() }
 	}
+
+	single { DriverFactory() }
 
 	single<LinkOpener> { DesktopLinkOpener() }
 }

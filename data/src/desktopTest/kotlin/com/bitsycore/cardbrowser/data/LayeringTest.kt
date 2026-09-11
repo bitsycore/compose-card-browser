@@ -29,7 +29,7 @@ import kotlin.test.assertTrue
 class LayeringTest {
 
 	@Test
-	fun `neither core nor data names a game or a provider in code`() {
+	fun `no game-agnostic layer names a game or a provider in code`() {
 		val vOffences = mutableListOf<String>()
 
 		for ((vLabel, vRoot) in MODULES) {
@@ -68,14 +68,17 @@ class LayeringTest {
 	private companion object {
 
 		/**
-		 * Both layers, by path relative to this module.
+		 * The three game-agnostic layers, by path relative to this module.
 		 *
-		 * `:data` is where the breach happened and `:core` is the one with the stricter rule, so
-		 * both are worth holding rather than only the one that failed.
+		 * `:data` is where the breach happened and `:core` is the one with the stricter rule.
+		 * `:database` joined them when it stopped being a spike: it stores a game id as a column,
+		 * which is the correct way to know about games, and a `when (game)` in there would be the
+		 * same mistake in a new place.
 		 */
 		val MODULES = listOf(
 			"core" to "../core/src/commonMain",
 			"data" to "src/commonMain",
+			"database" to "../database/src/commonMain",
 		)
 
 		/**

@@ -20,6 +20,14 @@ import okio.Path
 class CacheManager(
 	private val mStorage: AppStorage,
 	private val mMetadataCache: MetadataCache,
+	/**
+	 * Where the bytes actually are.
+	 *
+	 * The two halves are reported as one "card data" figure because that is what a user has: they
+	 * did not choose to put set lists in one place and sets in another. The split is this app's,
+	 * and the storage screen should not make it the user's problem.
+	 */
+	private val mSetStore: SetRecordStore,
 	private val mIoDispatcher: CoroutineDispatcher,
 	private val mMetadataLimitBytes: () -> Long = { MetadataCache.DEFAULT_MAX_BYTES },
 	private val mImageCacheMaxBytes: () -> Long = { DEFAULT_IMAGE_CACHE_MAX_BYTES },
@@ -35,22 +43,26 @@ class CacheManager(
 	 */
 	suspend fun report(): StorageReport = withContext(mIoDispatcher) {
 		coroutineScope {
+			// The image directory is the only walk left, and it is the expensive one -- thousands
+			// of files after a full browse of Magic. Started first so the two counts overlap.
 			val vImages = async { directorySize(mStorage.imageCacheDir) }
 			val vMetadata = mMetadataCache.snapshot()
+			// Counts, not a directory walk. This is what the migration bought the storage screen:
+			// measured on 2026-09-11, the same figures took 2456 ms out of the file cache and
+			// 14.4 ms out of the store.
+			val vSets = mSetStore.snapshot()
 			StorageReport(
 				usage = CacheUsage(
-					metadataBytes = vMetadata.totalBytes,
-					metadataEntries = vMetadata.entryCount,
+					metadataBytes = vMetadata.totalBytes + vSets.unpinnedBytes + vSets.pinnedBytes,
+					metadataEntries = vMetadata.entryCount + vSets.sets,
 					metadataLimitBytes = mMetadataLimitBytes(),
-					// Split, because the limit governs only one of the two. Kept records --
-					// downloads and bulk imports -- sit outside it: the ceiling cannot reclaim
-					// them, so counting them against it was a number that could only ever be
-					// exceeded. See `MetadataCache.trim`.
-					metadataKeptBytes = vMetadata.pinnedBytes,
+					// Split, because the limit governs only one of the two. Downloaded sets sit
+					// outside it: the ceiling cannot reclaim them, so counting them against it was
+					// a number that could only ever be exceeded. See `SqlCardStore.trim`.
+					metadataKeptBytes = vSets.pinnedBytes,
 					imageBytes = vImages.await(),
 					imageLimitBytes = mImageCacheMaxBytes(),
 				),
-				pinned = vMetadata.pinned,
 			)
 		}
 	}
@@ -58,9 +70,10 @@ class CacheManager(
 	/** Current usage of both caches, and their ceilings. */
 	suspend fun usage(): CacheUsage = report().usage
 
-	/** Empties the metadata cache, downloads included. Preferences are untouched. */
+	/** Empties every card record, downloads included. Preferences are untouched. */
 	suspend fun clearMetadata() {
 		mMetadataCache.clear()
+		mSetStore.clear()
 	}
 
 	/**
@@ -71,7 +84,14 @@ class CacheManager(
 	 * them away under a button labelled "clear cached data" would throw away a twenty-minute
 	 * import on a tap meant to reclaim a few megabytes.
 	 */
-	suspend fun clearBrowsingMetadata(): Int = mMetadataCache.clearUnpinned()
+	suspend fun clearBrowsingMetadata(): Int {
+		// Everything in the metadata cache is browsing data now -- nothing in it is ever kept on
+		// purpose -- and the sets that *are* kept are rows with a `pinned` flag rather than files
+		// that had to be told apart from their neighbours.
+		val vSnapshot = mMetadataCache.snapshot()
+		mMetadataCache.clear()
+		return vSnapshot.entryCount + mSetStore.trim(ceilingBytes = 0L)
+	}
 
 	/**
 	 * Empties the image cache directory.
@@ -109,6 +129,7 @@ class CacheManager(
 	 */
 	suspend fun trimMetadata() {
 		mMetadataCache.trim()
+		mSetStore.trim(mMetadataLimitBytes())
 	}
 
 	private fun directorySize(directory: Path): Long = try {
@@ -148,22 +169,19 @@ class CacheManager(
 }
 
 /**
- * One reading of everything on disk: what is used, what is kept, and what the kept records are.
+ * One reading of everything on disk: what is used and what of it is kept.
  *
  * Taken together because the storage screen needs it together and the alternative was five
- * directory walks for one screen -- see [MetadataCache.snapshot].
+ * directory walks for one screen.
  */
-data class StorageReport(
-	val usage: CacheUsage,
-	val pinned: List<PinnedEntry>,
-)
+data class StorageReport(val usage: CacheUsage)
 
 /** A reading of both caches, for display. */
 data class CacheUsage(
 	val metadataBytes: Long,
 	val metadataEntries: Int,
 	val metadataLimitBytes: Long,
-	/** Of [metadataBytes], the part that is kept rather than cached -- see `MetadataCache.pin`. */
+	/** Of [metadataBytes], the part that is kept rather than cached -- see `SqlCardStore.trim`. */
 	val metadataKeptBytes: Long = 0L,
 	val imageBytes: Long,
 	val imageLimitBytes: Long,

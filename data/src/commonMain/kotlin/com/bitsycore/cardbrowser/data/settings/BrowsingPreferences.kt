@@ -205,6 +205,16 @@ data class BrowsingPreferences(
 	 * offering again. Scryfall rebuilds daily.
 	 */
 	val bulkImports: Map<String, BulkImportRecord> = emptyMap(),
+	/**
+	 * Which generation of the card store these records describe.
+	 *
+	 * Below [CURRENT_STORE_GENERATION] means the install predates the store as it is now -- either
+	 * it was a file-per-record cache, or the store was discarded as corrupt. Either way every claim
+	 * in [bulkImports] and [imageDownloads] is about a catalogue that no longer exists, and leaving
+	 * them would have the download dialog report an import as done and the storage screen name sets
+	 * it cannot open. `CacheReconciler` clears them and bumps this, once, at startup.
+	 */
+	val storeGeneration: Int = 0,
 ) {
 
 	/** What [imageDownloads] recorded for one rendition, or `null` if it was never downloaded. */
@@ -220,8 +230,17 @@ data class BrowsingPreferences(
 		/** Matches `CacheManager.DEFAULT_IMAGE_CACHE_MAX_BYTES`, restated to avoid a cycle. */
 		const val DEFAULT_IMAGE_CACHE_LIMIT_BYTES: Long = 1024L * 1024 * 1024
 
-		/** Matches `MetadataCache.DEFAULT_MAX_BYTES`, restated to avoid a cycle. */
+		/** How much *browsing* card data may accumulate. Downloads sit outside it. */
 		const val DEFAULT_METADATA_CACHE_LIMIT_BYTES: Long = 512L * 1024 * 1024
+
+		/**
+		 * Bumped whenever what is on disk stops meaning what an older install thought it meant.
+		 *
+		 * 1 is the move from a file-per-set cache to the SQLite store. Every complete-set record
+		 * the old cache held is unreadable by anything now, so the first launch after this sweeps
+		 * the metadata directory and forgets which imports had run.
+		 */
+		const val CURRENT_STORE_GENERATION: Int = 1
 
 		const val DEFAULT_PREFETCH_RADIUS: Int = 3
 

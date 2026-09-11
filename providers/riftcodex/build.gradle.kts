@@ -43,6 +43,10 @@ kotlin {
 		getByName("desktopTest").dependencies {
 			// A real engine, for the live smoke check only.
 			implementation(libs.ktor.client.java)
+			// A real card store for the repository these live checks drive. In-memory, so the
+			// check is about the provider and leaves nothing behind.
+			implementation(project(":database"))
+			implementation(libs.sqldelight.driver.jvm)
 		}
 	}
 }

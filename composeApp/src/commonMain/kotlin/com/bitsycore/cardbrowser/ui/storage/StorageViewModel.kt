@@ -94,7 +94,7 @@ class StorageViewModel(
 				}
 				.groupBy { it.first }
 
-			val vKept = mRepository.keptByGame(vReport.pinned).map { vStorage ->
+			val vKept = mRepository.keptByGame().map { vStorage ->
 				val vImages = vImageSets[vStorage.game].orEmpty()
 				StorageContract.KeptGame(
 					game = vStorage.game,

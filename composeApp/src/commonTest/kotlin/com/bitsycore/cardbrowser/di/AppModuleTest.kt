@@ -46,7 +46,7 @@ class AppModuleTest {
 		stopKoin()
 	}
 
-	/** The graph, with the two platform bindings replaced by in-memory ones. */
+	/** The graph, with the platform bindings replaced by in-memory ones. */
 	private fun graph() = startKoin {
 		modules(
 			appModule,
@@ -58,6 +58,14 @@ class AppModuleTest {
 						cacheRoot = "/cache".toPath(),
 						preferencesRoot = "/preferences".toPath(),
 					).also { it.prepare() }
+				}
+				// The card store, in memory. The real one is opened by a per-platform
+				// `DriverFactory` -- Android's needs a `Context` -- and this test is about whether
+				// the graph is wired, not about SQLite. Overriding the store rather than the
+				// driver keeps `CardStoreFactory` and `OpenedStore` unresolved, which is correct:
+				// nothing asks for them once something else answers for `SetRecordStore`.
+				single<com.bitsycore.cardbrowser.data.cache.SetRecordStore> {
+					com.bitsycore.cardbrowser.data.cache.InMemorySetRecordStore()
 				}
 				single<com.bitsycore.cardbrowser.platform.LinkOpener> {
 					object : com.bitsycore.cardbrowser.platform.LinkOpener {

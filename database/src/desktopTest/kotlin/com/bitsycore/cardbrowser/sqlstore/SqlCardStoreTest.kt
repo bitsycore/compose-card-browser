@@ -44,8 +44,8 @@ class SqlCardStoreTest {
 		// `(provider, set, language)` is the key everywhere in this app: cache, downloads, pins,
 		// image records. A schema that treated language as an attribute of one cached set would
 		// make an English import overwrite a French one.
-		mStore.writeSet("p", "s", CardLanguage.ENGLISH, "Set", false, 1L, listOf(card(1, CardLanguage.ENGLISH)))
-		mStore.writeSet("p", "s", CardLanguage.FRENCH, "Set", false, 1L, listOf(card(2, CardLanguage.FRENCH)))
+		write("s", CardLanguage.ENGLISH, "Set", false, 1L, listOf(card(1, CardLanguage.ENGLISH)))
+		write("s", CardLanguage.FRENCH, "Set", false, 1L, listOf(card(2, CardLanguage.FRENCH)))
 
 		assertEquals(2, mStore.storageSnapshot().sets)
 		assertEquals(1, mStore.readSet("p", "s", CardLanguage.ENGLISH).size)
@@ -58,8 +58,8 @@ class SqlCardStoreTest {
 		// A refetch that returns fewer cards must not leave the dropped ones behind. That is how
 		// a set ends up holding printings the source no longer serves, with nothing on screen to
 		// say where they came from.
-		mStore.writeSet("p", "s", null, "Set", false, 1L, (1..5).map { card(it) })
-		mStore.writeSet("p", "s", null, "Set", false, 2L, (1..2).map { card(it) })
+		write("s", null, "Set", false, 1L, (1..5).map { card(it) })
+		write("s", null, "Set", false, 2L, (1..2).map { card(it) })
 
 		assertEquals(2, mStore.readSet("p", "s", null).size)
 		assertEquals(2, mStore.cardCount("p", "s", null))
@@ -67,7 +67,7 @@ class SqlCardStoreTest {
 
 	@Test
 	fun `a card count is known without reading the cards`() {
-		mStore.writeSet("p", "s", null, "Set", false, 1L, (1..7).map { card(it) })
+		write("s", null, "Set", false, 1L, (1..7).map { card(it) })
 
 		assertEquals(7, mStore.cardCount("p", "s", null))
 		assertNull(mStore.cardCount("p", "absent", null), "unknown is not zero")
@@ -82,8 +82,8 @@ class SqlCardStoreTest {
 		// The property the file cache could not keep: it held access times in memory, so after a
 		// relaunch every record sorted equally old and the order collapsed to whatever the
 		// filesystem listed. A column survives the process.
-		mStore.writeSet("p", "old", null, "Old", false, 1L, (1..20).map { card(it) })
-		mStore.writeSet("p", "new", null, "New", false, 2L, (1..20).map { card(it) })
+		write("old", null, "Old", false, 1L, (1..20).map { card(it) })
+		write("new", null, "New", false, 2L, (1..20).map { card(it) })
 		// "old" is written first but used last, so "new" is the one that should go.
 		mStore.touch("p", "old", null, at = 99L)
 
@@ -98,7 +98,7 @@ class SqlCardStoreTest {
 		// The distinction that mattered: counting pinned bytes made one import exceed any sane
 		// ceiling, after which every write evicted browsing records that together came nowhere
 		// near it. The cache thrashed and re-fetched sets it had just cached.
-		mStore.writeSet("p", "downloaded", null, "Downloaded", true, 1L, (1..50).map { card(it) })
+		write("downloaded", null, "Downloaded", true, 1L, (1..50).map { card(it) })
 
 		assertEquals(0L, mStore.unpinnedBytes(), "a pinned set contributes nothing to the budget")
 		assertTrue(mStore.pinnedBytes() > 0L, "and is reported separately")
@@ -108,8 +108,8 @@ class SqlCardStoreTest {
 
 	@Test
 	fun `the ceiling gives way rather than the pinned data`() {
-		mStore.writeSet("p", "kept", null, "Kept", true, 1L, (1..50).map { card(it) })
-		mStore.writeSet("p", "browsed", null, "Browsed", false, 2L, (1..50).map { card(it) })
+		write("kept", null, "Kept", true, 1L, (1..50).map { card(it) })
+		write("browsed", null, "Browsed", false, 2L, (1..50).map { card(it) })
 
 		mStore.trim(ceilingBytes = 1L)
 
@@ -119,10 +119,10 @@ class SqlCardStoreTest {
 
 	@Test
 	fun `unpinning returns a set to ordinary eviction`() {
-		mStore.writeSet("p", "s", null, "Set", true, 1L, (1..50).map { card(it) })
+		write("s", null, "Set", true, 1L, (1..50).map { card(it) })
 		assertEquals(0L, mStore.unpinnedBytes())
 
-		mStore.setPinned("p", "s", null, isPinned = false)
+		mStore.setPinned("p", "s", null, "test", "Set", isPinned = false)
 
 		assertTrue(mStore.unpinnedBytes() > 0L, "the bytes rejoin the budget")
 		mStore.trim(ceilingBytes = 1L)
@@ -133,7 +133,7 @@ class SqlCardStoreTest {
 	fun `evicting a set takes its cards with it`() {
 		// Otherwise the rows outlive the set that owned them and every cross-set search answers
 		// from cards the app would say it does not have.
-		mStore.writeSet("p", "s", null, "Set", false, 1L, (1..30).map { card(it) })
+		write("s", null, "Set", false, 1L, (1..30).map { card(it) })
 
 		mStore.trim(ceilingBytes = 0L)
 
@@ -146,7 +146,7 @@ class SqlCardStoreTest {
 		// hard way: its pin markers were zero bytes, so clearing the cache deleted the only index
 		// from a hashed filename back to a set, and downloaded sets vanished from the screen
 		// while the download dialog went on correctly reporting them as held.
-		mStore.writeSet("p", "s", CardLanguage.JAPANESE, "Base Set", true, 1L, (1..3).map { card(it) })
+		write("s", CardLanguage.JAPANESE, "Base Set", true, 1L, (1..3).map { card(it) })
 		mStore.trim(ceilingBytes = 0L)
 
 		val vPinned = mStore.pinnedSets().single()
@@ -155,13 +155,29 @@ class SqlCardStoreTest {
 		assertEquals("ja", vPinned.language)
 	}
 
+	@Test
+	fun `a pin lands before the set does and survives the write`() {
+		// The order a download uses, and it is deliberate: a set large enough to breach the ceiling
+		// would otherwise be a candidate for the eviction its own write triggers. `setPinned` was an
+		// UPDATE, so pinning a set that was not yet cached did nothing at all -- every download came
+		// out unpinned and evictable, and the flag only ever appeared to work because the tests
+		// wrote the set first.
+		mStore.setPinned("p", "s", CardLanguage.ENGLISH, "test", "Base Set", isPinned = true)
+		assertTrue(mStore.isPinned("p", "s", CardLanguage.ENGLISH), "the pin must exist on its own")
+
+		write("s", CardLanguage.ENGLISH, "Base Set", false, 1L, (1..40).map { card(it) })
+
+		assertTrue(mStore.isPinned("p", "s", CardLanguage.ENGLISH), "and the write must not clear it")
+		assertEquals(0L, mStore.unpinnedBytes(), "so the download is outside the budget")
+	}
+
 	// ==================
 	// MARK: Search
 	// ==================
 
 	@Test
 	fun `search narrows on every axis and excludes as well as includes`() {
-		mStore.writeSet("p", "s", null, "Set", false, 1L, (1..40).map { card(it) })
+		write("s", null, "Set", false, 1L, (1..40).map { card(it) })
 
 		// The capability the file cache does not have at all: "does not contain" has no
 		// equivalent in a name match over whatever happens to be loaded.
@@ -180,13 +196,34 @@ class SqlCardStoreTest {
 		// `Availability`'s third state, in schema form. A source that publishes no cost is not a
 		// source publishing zero, and "cost under 4" must not quietly include everything it could
 		// not measure.
-		mStore.writeSet("p", "s", null, "Set", false, 1L, listOf(card(1, cost = null), card(2, cost = 1)))
+		write("s", null, "Set", false, 1L, listOf(card(1, cost = null), card(2, cost = 1)))
 
 		val vHits = mStore.search(game = "test", maxCost = 4)
 
 		assertEquals(1, vHits.size, "the unknown-cost card must not be counted as cheap")
 		assertEquals(1, vHits.single().attributes.cost)
 	}
+
+	/**
+	 * A set written for one game, since every test here is about one.
+	 *
+	 * Positional on purpose: the point of each test is the argument it varies, and named arguments
+	 * for the five it does not would bury that.
+	 */
+	private fun write(
+		setId: String,
+		language: CardLanguage?,
+		label: String,
+		pinned: Boolean,
+		at: Long,
+		cards: List<CardPrinting>,
+	) = mStore.writeSet(
+		"p", setId, language, "test", label,
+		// Read rather than passed, exactly as `SqlSetRecordStore.write` does: a write must not
+		// clear a pin that arrived before it.
+		pinned || mStore.isPinned("p", setId, language),
+		at, cards, isComplete = true,
+	)
 
 	private fun card(
 		number: Int,

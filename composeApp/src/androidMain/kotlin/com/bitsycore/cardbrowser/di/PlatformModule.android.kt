@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.platform.LinkOpener
+import com.bitsycore.cardbrowser.sqlstore.DriverFactory
 import okio.FileSystem
 import okio.Path.Companion.toOkioPath
 import org.koin.android.ext.koin.androidContext
@@ -27,6 +28,9 @@ actual fun platformModule(): Module = module {
 			preferencesRoot = vContext.filesDir.toOkioPath() / "preferences",
 		).also { it.prepare() }
 	}
+
+	// The one platform whose SQLite driver needs a context. Handed over rather than looked up.
+	single { DriverFactory(androidContext()) }
 
 	single<LinkOpener> { AndroidLinkOpener(androidContext()) }
 }

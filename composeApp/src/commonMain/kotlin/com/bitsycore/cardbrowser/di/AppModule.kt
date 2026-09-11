@@ -4,8 +4,14 @@ import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.provider.CardProvider
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.ProviderRoute
+import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.cache.CacheManager
+import com.bitsycore.cardbrowser.data.cache.CacheReconciler
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.SetRecordStore
+import com.bitsycore.cardbrowser.data.cache.SqlSetRecordStore
+import com.bitsycore.cardbrowser.sqlstore.CardStoreFactory
+import com.bitsycore.cardbrowser.sqlstore.OpenedStore
 import com.bitsycore.cardbrowser.data.net.ApiCallStats
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
 import com.bitsycore.cardbrowser.data.net.OkioHttpCacheStorage
@@ -99,23 +105,41 @@ val appModule = module {
 	single { PreferencesStore(get(), get(), Dispatchers.Default) }
 
 	single {
-		val vPreferences: PreferencesStore = get()
 		MetadataCache(
 			mStorage = get(),
 			mJson = get(),
 			mIoDispatcher = Dispatchers.Default,
-			// Read through a function rather than captured, so changing the limit in settings takes
-			// effect on the next write instead of the next launch.
-			mMaxBytes = { vPreferences.preferences.value.metadataCacheLimitBytes },
+			// Not the user's limit. This cache holds only small, always-evictable records now --
+			// set lists, card detail, search pages, language probes -- and the ceiling the settings
+			// screen shows governs the card store, which is where the bytes are. Two ceilings
+			// dividing one number between them is a limit that means neither thing.
+			mMaxBytes = { MetadataCache.DEFAULT_MAX_BYTES },
 			mClock = { nowEpochMillis() },
 		)
 	}
+
+	// The card store, in three bindings because the middle one can fail and has to say so.
+	//
+	// `open` verifies the database and recreates it if it is damaged, so this is where a corrupt
+	// store turns into a fact -- `wasRecovered` -- rather than into a crash on the first query.
+	// `CacheReconciler` is what acts on that fact; see `App()`.
+	single { CardStoreFactory(get()) }
+	single {
+		val vStorage: AppStorage = get()
+		get<CardStoreFactory>().open(vStorage.databaseFile.toString())
+	}
+	single<SetRecordStore> {
+		val vOpened: OpenedStore = get()
+		SqlSetRecordStore(vOpened.store, Dispatchers.Default, wasRecovered = vOpened.wasRecovered)
+	}
+	single { CacheReconciler(mMetadataCache = get(), mPreferences = get()) }
 
 	single {
 		val vPreferences: PreferencesStore = get()
 		CacheManager(
 			mStorage = get(),
 			mMetadataCache = get(),
+			mSetStore = get(),
 			mIoDispatcher = Dispatchers.Default,
 			mMetadataLimitBytes = { vPreferences.preferences.value.metadataCacheLimitBytes },
 			mImageCacheMaxBytes = { vPreferences.preferences.value.imageCacheLimitBytes },
@@ -205,6 +229,7 @@ val appModule = module {
 		CardRepository(
 			mRegistry = get(),
 			mCache = get(),
+			mSetStore = get(),
 			mClock = { nowEpochMillis() },
 			// Only the bulk import uses these; every other path is unaffected by their absence,
 			// which is why they are optional on the constructor.

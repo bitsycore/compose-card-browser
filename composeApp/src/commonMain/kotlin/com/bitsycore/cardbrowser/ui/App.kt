@@ -12,6 +12,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.LaunchedEffect
+import com.bitsycore.cardbrowser.data.cache.CacheReconciler
+import com.bitsycore.cardbrowser.data.cache.SetRecordStore
 import com.bitsycore.cardbrowser.data.repository.SetCatalogueWarmer
 import org.koin.compose.koinInject
 import androidx.compose.runtime.Composable
@@ -142,7 +144,17 @@ fun App() {
 		// from a view model because it outlives any one screen and must not restart when the user
 		// navigates. It is cache-first and its failures are silent -- see `SetCatalogueWarmer`.
 		val vWarmer = koinInject<SetCatalogueWarmer>()
-		LaunchedEffect(Unit) { vWarmer.start() }
+		val vReconciler = koinInject<CacheReconciler>()
+		val vSetStore = koinInject<SetRecordStore>()
+		LaunchedEffect(Unit) {
+			// Before the warmer, and before any screen reads a record about storage. Two things
+			// make the app's claims about what is on disk stale -- a database that had to be
+			// recreated, and an install that predates the store entirely -- and both are cleared
+			// here rather than discovered by a user tapping an import that is already recorded as
+			// done. See `CacheReconciler`.
+			vReconciler.reconcile(wasStoreRecovered = vSetStore.wasRecovered)
+			vWarmer.start()
+		}
 
 		// Setup first, and only on a fresh install. Read from the same `StateFlow` the theme
 		// uses, so re-running it from Settings puts the flow back on screen without a relaunch.

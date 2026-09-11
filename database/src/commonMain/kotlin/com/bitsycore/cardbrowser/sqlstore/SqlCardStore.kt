@@ -42,6 +42,7 @@ class SqlCardStore(driver: SqlDriver) {
 		provider: String,
 		setId: String,
 		language: CardLanguage?,
+		game: String,
 		label: String,
 		isPinned: Boolean,
 		fetchedAt: Long,
@@ -86,6 +87,7 @@ class SqlCardStore(driver: SqlDriver) {
 				provider = provider,
 				set_id = setId,
 				language = vLanguage,
+				game = game,
 				label = label,
 				pinned = if (isPinned) 1L else 0L,
 				fetched_at = fetchedAt,
@@ -112,13 +114,27 @@ class SqlCardStore(driver: SqlDriver) {
 	 * Idempotent, and safe to call before the set exists: the download queue pins first so that a
 	 * set large enough to breach the ceiling cannot be evicted by the write that stores it.
 	 */
-	fun setPinned(provider: String, setId: String, language: CardLanguage?, isPinned: Boolean) {
-		mQueries.setPinned(
-			pinned = if (isPinned) 1L else 0L,
-			provider = provider,
-			set_id = setId,
-			language = language?.code ?: "-",
-		)
+	fun setPinned(
+		provider: String,
+		setId: String,
+		language: CardLanguage?,
+		game: String,
+		label: String,
+		isPinned: Boolean,
+	) {
+		val vLanguage = language?.code ?: "-"
+		mQueries.transaction {
+			// Only when there is nothing there. See `insertPinPlaceholder`: a pin arrives before
+			// the set it protects, and an UPDATE against an absent row is a silent no-op that
+			// leaves the download evictable.
+			mQueries.insertPinPlaceholder(provider, setId, vLanguage, game, label)
+			mQueries.setPinned(
+				pinned = if (isPinned) 1L else 0L,
+				provider = provider,
+				set_id = setId,
+				language = vLanguage,
+			)
+		}
 	}
 
 	/** What browsing occupies. Pinned sets excluded -- see [setPinned]. */
@@ -133,6 +149,7 @@ class SqlCardStore(driver: SqlDriver) {
 			provider = it.provider,
 			setId = it.set_id,
 			language = it.language,
+			game = it.game,
 			label = it.label,
 			cardCount = it.card_count.toInt(),
 			bytes = it.bytes,
@@ -209,6 +226,41 @@ class SqlCardStore(driver: SqlDriver) {
 		mQueries.isSetPinned(provider, setId, language?.code ?: "-")
 			.executeAsOneOrNull()
 			?.let { it > 0 } == true
+
+	/**
+	 * What each game has downloaded, as one query.
+	 *
+	 * Distinct *sets*, not rows. A set held in two languages is two records and one set, and this
+	 * project has printed the wrong side of that slash three times -- records against sets, sets
+	 * against a catalogue, a dump's sets against `listSets`. Counting both here, separately and
+	 * named, is how a caller stops having to choose the right one by accident.
+	 */
+	fun pinnedByGame(): List<GameStorageRow> = mQueries.pinnedByGame().executeAsList().map {
+		GameStorageRow(
+			game = it.game,
+			sets = it.sets.toInt(),
+			records = it.records.toInt(),
+			cards = (it.cards ?: 0L).toInt(),
+			bytes = it.bytes ?: 0L,
+		)
+	}
+
+	/** What one game's download weighs per language, for a screen that breaks it down. */
+	fun pinnedLanguagesForGame(game: String): Map<String, Long> =
+		mQueries.pinnedLanguagesForGame(game).executeAsList()
+			.associate { it.language to (it.bytes ?: 0L) }
+
+	/** Deletes one game's downloads. Rows and records together, in one transaction. */
+	fun deleteDownloadedGame(game: String): Int {
+		var vRemoved = 0
+		mDatabase.transaction {
+			vRemoved = mQueries.pinnedByGame().executeAsList()
+				.firstOrNull { it.game == game }?.records?.toInt() ?: 0
+			mQueries.deletePrintingsForGame(game)
+			mQueries.deletePinnedForGame(game)
+		}
+		return vRemoved
+	}
 
 	/** Empties the store. What "clear cached data" means when the cache is a database. */
 	fun clear() {
@@ -297,6 +349,20 @@ class SqlCardStore(driver: SqlDriver) {
 	}
 }
 
+/**
+ * One game's downloaded weight.
+ *
+ * [sets] and [records] are both here and both named, because they count different populations: a
+ * set held in two languages is two records and one set.
+ */
+data class GameStorageRow(
+	val game: String,
+	val sets: Int,
+	val records: Int,
+	val cards: Int,
+	val bytes: Long,
+)
+
 /** A cached set's own record, without its cards. */
 data class StoredSetMetadata(
 	val label: String,
@@ -311,6 +377,7 @@ data class PinnedSet(
 	val provider: String,
 	val setId: String,
 	val language: String,
+	val game: String,
 	val label: String,
 	val cardCount: Int,
 	val bytes: Long,

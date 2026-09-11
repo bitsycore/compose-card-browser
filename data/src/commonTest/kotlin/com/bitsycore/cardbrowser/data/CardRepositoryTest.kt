@@ -30,6 +30,8 @@ import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.Completeness
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.InMemorySetRecordStore
+import com.bitsycore.cardbrowser.data.cache.SetRecordStore
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import kotlinx.coroutines.Dispatchers
@@ -169,6 +171,15 @@ class CardRepositoryTest {
 		finishes = FinishCoverage(),
 	)
 
+	/**
+	 * One store per file system, so "the same disk" keeps meaning what it meant.
+	 *
+	 * These tests simulate a restart by building a second repository over the first one's
+	 * `FakeFileSystem`. Complete sets are not files any more, so the store has to be shared on the
+	 * same terms or every such test reads an empty disk and looks like a cache that forgot.
+	 */
+	private val mStores = mutableMapOf<okio.FileSystem, SetRecordStore>()
+
 	private fun repositoryFor(
 		provider: CardProvider<GameProfile>,
 		fileSystem: FakeFileSystem = FakeFileSystem(),
@@ -186,6 +197,7 @@ class CardRepositoryTest {
 				routes = listOf(ProviderRoute(TestGame.id, provider.id)),
 			),
 			mCache = vCache,
+			mSetStore = mStores.getOrPut(fileSystem) { InMemorySetRecordStore() },
 			mClock = { mNow },
 		)
 	}
@@ -271,6 +283,7 @@ class CardRepositoryTest {
 		val vRepository = CardRepository(
 			mRegistry = vRegistry,
 			mCache = MetadataCache(vStorage, Json, Dispatchers.Unconfined, mClock = { mNow }),
+			mSetStore = InMemorySetRecordStore(),
 			mClock = { mNow },
 		)
 

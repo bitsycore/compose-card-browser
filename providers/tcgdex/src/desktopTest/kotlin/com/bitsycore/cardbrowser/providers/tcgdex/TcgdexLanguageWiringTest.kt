@@ -6,6 +6,9 @@ import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.SqlSetRecordStore
+import com.bitsycore.cardbrowser.sqlstore.DriverFactory
+import com.bitsycore.cardbrowser.sqlstore.SqlCardStore
 import com.bitsycore.cardbrowser.data.net.ApiCallStats
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
 import com.bitsycore.cardbrowser.data.repository.CardRepository
@@ -38,6 +41,17 @@ import kotlin.test.assertTrue
  */
 class TcgdexLanguageWiringTest {
 
+	/**
+	 * One card store for the whole check, held in memory.
+	 *
+	 * Shared deliberately: these tests cache through one repository and read back through
+	 * another, which is the offline path they exist to prove.
+	 */
+	private val mStore = SqlSetRecordStore(
+		SqlCardStore(DriverFactory().create(null)),
+		Dispatchers.IO,
+	)
+
 	private fun repository(root: String): CardRepository {
 		val vStorage = AppStorage(
 			fileSystem = FileSystem.SYSTEM,
@@ -47,6 +61,7 @@ class TcgdexLanguageWiringTest {
 		vStorage.prepare()
 		val vProvider = TcgdexProvider(HttpClientFactory.create())
 		return CardRepository(
+			mSetStore = mStore,
 			mRegistry = ProviderRegistry(
 				providers = listOf(vProvider),
 				routes = listOf(ProviderRoute(PokemonGame.id, TcgdexProvider.PROVIDER_ID)),

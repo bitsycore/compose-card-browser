@@ -81,7 +81,26 @@ class CardStoreFactory(private val mDriverFactory: DriverFactory) {
 	 * above treats identically.
 	 */
 	private fun verify(driver: SqlDriver) {
+		// Prevention, in the order it matters. Recovery below is the net; these are the reasons it
+		// should rarely be needed.
+		//
+		// WAL: a process killed mid-transaction leaves that transaction unapplied and everything
+		// before it intact. This is the property per-file atomic replacement gave for free, and
+		// losing it was the strongest argument against migrating at all.
 		driver.execute(null, "PRAGMA journal_mode=WAL", 0)
+		// FULL, not NORMAL. Under WAL, `synchronous=NORMAL` does not fsync on commit -- it is
+		// durable against a process crash but *not* against the device losing power, which on a
+		// phone is an ordinary Tuesday rather than an edge case. The cost is paid per transaction,
+		// and a transaction here is a whole set, not a card.
+		driver.execute(null, "PRAGMA synchronous=FULL", 0)
+		// A second writer waits instead of failing. The download queue runs one job at a time, but
+		// the storage screen reads while it does, and "database is locked" surfacing as a failed
+		// download would be a bug with no cause a user could see.
+		driver.execute(null, "PRAGMA busy_timeout=5000", 0)
+		// Rows cannot outlive the set that owns them. Eviction deletes both in one transaction, so
+		// this is a belt on a brace -- but an orphaned printing is invisible: it would answer a
+		// cross-set search from a set the app would say it does not have.
+		driver.execute(null, "PRAGMA foreign_keys=ON", 0)
 		val vResult = driver.executeQuery(
 			identifier = null,
 			sql = "PRAGMA integrity_check",

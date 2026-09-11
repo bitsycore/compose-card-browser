@@ -50,6 +50,10 @@ kotlin {
 		commonMain.dependencies {
 			api(project(":core"))
 			implementation(project(":data"))
+			// Only for the composition root: `DriverFactory` differs per platform and the card
+			// store has to be opened somewhere that knows which platform it is. Nothing else in
+			// the UI touches `:database` -- everything goes through `:data`'s `SetRecordStore`.
+			implementation(project(":database"))
 			// The only place provider adapters are named. This list and the routing table in
 			// AppModule.kt are the whole of what registering one costs; see docs/ARCHITECTURE.md.
 			implementation(project(":providers:riftcodex"))

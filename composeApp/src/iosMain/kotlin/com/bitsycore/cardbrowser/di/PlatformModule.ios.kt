@@ -2,6 +2,7 @@ package com.bitsycore.cardbrowser.di
 
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.platform.LinkOpener
+import com.bitsycore.cardbrowser.sqlstore.DriverFactory
 import kotlinx.cinterop.ExperimentalForeignApi
 import okio.FileSystem
 import okio.Path.Companion.toPath
@@ -30,6 +31,8 @@ actual fun platformModule(): Module = module {
 			preferencesRoot = (iosDirectory(NSDocumentDirectory) + "/preferences").toPath(),
 		).also { it.prepare() }
 	}
+
+	single { DriverFactory() }
 
 	single<LinkOpener> { IosLinkOpener() }
 }

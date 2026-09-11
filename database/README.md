@@ -5,16 +5,17 @@ live here in one SQLite database. The small metadata scopes (set lists, card det
 per-set languages) stay in `MetadataCache`'s file cache, because they are few and tiny and the
 whole cost was never there.
 
-It began as a spike to decide whether to migrate at all. The numbers below are what that spike
-measured, and they are the reason this module exists rather than being deleted.
+It began as a spike to decide whether to migrate at all, and the app switched over to it on
+2026-09-11. The numbers below are what that spike measured, and they are why.
 
 ## What was measured
 
 SQLDelight 2.3.2, one global database, against `MetadataCache` — same process, same machine, same
 session, same 1000 sets × 150 printings (roughly Magic's shape, 150,000 rows). Measured
-2026-09-11 by `SqlStoreBench`, which runs both stores back to back.
+2026-09-11 by `SqlStoreBench`, which ran both stores back to back. The comparison half of that
+bench went with the file cache's set records; what it produced is here.
 
-| | file cache | SQLite | |
+| | the old file cache | this store | |
 | --- | --- | --- | --- |
 | Write the catalogue | **1.5 s** | 12.6 s | 8.4× slower |
 | On disk | **99.1 MB** | 139.8 MB | 1.4× bigger |
@@ -54,9 +55,9 @@ migration surface by ten.
 
 ## The three things that blocked it, and what each answer is
 
-The brief in [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) § "If this becomes a database" lists
-what must not change. Three of them were unmodelled when this was a spike; each now has code and a
-test that fails without it.
+[`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) § "The card store" lists what must not change.
+Three of them were unmodelled when this was a spike; each now has code and a test that fails
+without it.
 
 **Corrupt database.** The real blocker, because it is the one place a database is strictly worse
 than a file per record: there, a record that will not parse is one set, deleted and re-fetched.
@@ -83,8 +84,14 @@ ceiling, after which every write evicted browsing records that together came now
 everything else is gone; the file cache learned that the hard way when its zero-byte pin markers
 made kept records anonymous.
 
-## Still not modelled
+## Still not modelled, and still unverified
 
-- **Migrations.** The schema has no version beyond SQLDelight's own. Existing data does not need
-  migrating — a wipe is acceptable at this stage — but the *next* schema change will need one.
-- **Android's driver** needs a `Context` and throws. Desktop and iOS are wired.
+- **Migrations.** The schema has no version beyond SQLDelight's own. The switchover did not need
+  one — a pre-store install is wiped once, by `CacheReconciler` — but the *next* schema change
+  will.
+- **Neither phone driver has ever run.** `AndroidSqliteDriver` takes its `Context` from
+  `platformModule()` and `NativeSqliteDriver` compiles for both iOS targets, but the only driver
+  that has opened a real file is the desktop one. That one is covered: `CardStoreRecoveryTest`
+  opens, reopens, corrupts, truncates and recovers an actual database on disk — and the reopen
+  case exists because the first version of the desktop driver called `Schema.create`
+  unconditionally, which works on a fresh install and throws on every launch after it.

@@ -5,15 +5,14 @@ plugins {
 	alias(libs.plugins.sqldelight)
 }
 
-// A spike, and nothing in the app depends on it.
+// Where complete sets are held: the schema, the driver per platform, and the store itself.
 //
-// It exists to answer two questions with numbers rather than opinion, before anything commits to a
-// database: whether a SQLite store beats the file-per-record cache on the operations that are
-// actually slow, and what a native driver does to the iOS targets -- which have never been linked,
-// and which are therefore where a new native dependency carries all its risk.
+// `:data` owns *what* is cached and when; this module owns how it is held. It knows no provider and
+// no game -- the same rule `:core` and `:data` follow, and for the same reason.
 //
-// It builds for every target the app does, on purpose. Compiling for iosArm64 is most of what is
-// being tested here.
+// It builds for every target the app does. `NativeSqliteDriver` links SQLite into the iOS
+// framework, and those targets have never been linked or run, so compiling for iosArm64 is the only
+// check this project can currently make on that.
 kotlin {
 	jvmToolchain(21)
 
@@ -43,13 +42,10 @@ kotlin {
 			implementation(libs.kotlin.test)
 			implementation(libs.kotlinx.coroutines.test)
 		}
-		// The bench needs a real database file, so it needs the JVM driver on the test path too --
-		// and `:data`, so the comparison runs both stores over identical data in one process on
-		// one machine. Test-only on purpose: the spike itself must not depend on `:data`, because
-		// a real migration would have the dependency the other way round.
+		// A real database file, so the store's tests and its bench exercise the driver rather than
+		// an in-memory approximation of it.
 		getByName("desktopTest").dependencies {
 			implementation(libs.sqldelight.driver.jvm)
-			implementation(project(":data"))
 			implementation(libs.okio)
 		}
 		getByName("desktopMain").dependencies {

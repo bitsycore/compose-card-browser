@@ -427,11 +427,20 @@ collected cards fall short of it, the result is marked partial no matter how cle
 ended. A wrong `set_id` once produced `200 OK` with zero cards and `hasMore = false`, which paged
 "successfully" to nothing and was cached as a complete empty set.
 
-### The cache
+### Storage: two caches and a store
 
-Two caches, separate on purpose. Metadata is small, cheap to refetch, and what makes offline
-browsing work; images are most of the bytes and the first thing worth dropping. Preferences live
-under a **different root entirely**, so "clear cache" cannot take the user's choices with it.
+Three places, separate on purpose.
+
+- **The card store** (`:database`, reached through `SetRecordStore`) holds complete sets. They are
+  the only records that are large, the only ones a user downloads deliberately, and the only ones
+  anything wants to search across.
+- **`MetadataCache`** holds everything else a provider says: set lists, card detail, search pages,
+  per-set language probes. Kilobytes apiece, always evictable, never kept on purpose.
+- **The image cache** is Coil's directory, bounded separately.
+
+Preferences live under a **different root entirely**, so "clear cache" cannot take the user's
+choices with it. So does the database file -- Android and iOS may purge a cache directory whenever
+they want the space back, and a downloaded catalogue is not theirs to discard.
 
 `MetadataCache` guarantees:
 
@@ -439,99 +448,20 @@ under a **different root entirely**, so "clear cache" cannot take the user's cho
   process killed mid-write leaves a stray temp file, which the next `trim()` removes; the previous
   record is untouched.
 - **A corrupt or incompatible record reads as a miss, never a crash.** Truncated, unparseable, or
-  written by an older `schemaVersion` — all three delete the file and report absent, so the app
+  written by an older `schemaVersion` -- all three delete the file and report absent, so the app
   refetches. Bumping `CURRENT_SCHEMA_VERSION` *is* the migration.
-- **Disk use is bounded**, evicting least-recently-*used*. Access times are tracked in memory rather
-  than read from the filesystem, because several platforms do not update access time on read and
-  that would silently turn LRU into "least recently written".
+- **Disk use is bounded**, evicting least-recently-*used*.
 
 Every record carries source, language, query/pagination scope, fetch time, schema version and
-completeness — see `CacheEnvelope`. A cache that stores only the data cannot answer "is this stale",
+completeness -- see `CacheEnvelope`. A cache that stores only the data cannot answer "is this stale",
 "did this come from the provider I am now asking", or "was this the whole set".
 
-### Pinned records: what the ceiling may not touch
+### The card store
 
-A record written by a download or a bulk import is **pinned** — a zero-byte sibling file, plus a
-label — and pinned bytes are left out of the budget entirely rather than merely evicted last.
+One SQLite database, through SQLDelight, for complete sets. It replaced a file-per-set cache on
+2026-09-11. Measured head to head in one process over 1000 sets x 150 printings:
 
-That is not a tuning choice. A bulk import of Magic is larger than any sane browsing ceiling, so
-counting it against one meant the ceiling was breached the moment the import finished and the trim
-evicted what had just been written. Raising the ceiling to 1 GB papered over it; taking pinned bytes
-out of the budget is the actual fix, and it is what let the ceilings come back down.
-
-The label is the game id, the set id and the language joined by tabs, and it is there because the
-alternative failed. The
-route from a hashed cache filename back to a set used to be the game's cached *set list*, which is
-ordinary browsing data — so clearing the cache deleted the only thing that could name a downloaded
-set, and the storage screen went blank while the download dialog still reported the same sets as
-held. Two screens contradicting each other about the same disk.
-
-Consequences worth knowing before touching any of it:
-
-- **`clearUnpinned()` is what "clear cached data" runs.** `clear()` takes the downloads too.
-- **Counting is per set, per language.** A set held in two languages is two records and one set.
-  Every count on the storage screen has had that wrong at least once; see the trap in
-  [`CLAUDE.md`](../CLAUDE.md).
-- **One walk, not five.** `MetadataCache.snapshot()` produces total bytes, entry count, pinned bytes
-  and the pinned entries from a single listing, because the storage screen needs all four and the
-  directory holds three files per cached set. `StorageScreenCostBench` measures it.
-
-### If this becomes a database
-
-A SQLite migration has been raised as a possibility -- for speed, and to make cross-set search do
-more than match a name. Nothing has been started. This is the brief for whoever does it, written
-while the reasons were still in one head.
-
-**What it would genuinely buy.** Most of what is slow here is slow because a record is a *file*:
-
-- The storage screen's counts are a directory walk today and would be
-  `SELECT COUNT(DISTINCT set_id)`. The same goes for pinned bytes, the language breakdown, and the
-  per-set existence checks that `savedLanguages` and `availableLanguages` run per row.
-- Filtering across sets is the real prize. `CardFilterEngine` filters in memory over whatever is
-  loaded; a table of printings with indexed columns makes "every Fury card under 4 cost across
-  every downloaded set" a query rather than a fan-out over hundreds of parsed JSON documents.
-- A bulk import becomes one transaction over a stream instead of 64 shard files and a write per
-  set. The sharding exists *only* because the cache is a filesystem -- see below.
-
-**What it must not change.**
-
-1. **A local search is still local.** SQLite makes that search fast; it does not put a single extra
-   card on the device. `SearchScope.LOCAL_CACHED_SETS`, its set count and `isLimitedByCache` must
-   survive intact, and an empty result must keep meaning "not in what you have downloaded" rather
-   than "does not exist". This is the single most likely thing to be lost in a rewrite, because a
-   fast complete-feeling search *feels* authoritative.
-2. **Unknown stays distinct from absent.** Columns are nullable for a reason; a schema that defaults
-   a missing language or rarity to a value has thrown away `Availability`'s third state.
-3. **Pinned records stay outside the eviction budget**, and a pin still has to name its set well
-   enough to be listed after everything else is cleared. Today that is the label on the marker file;
-   in a schema it is a row that eviction skips and a join that does not depend on the set list.
-4. **Interrupted writes cannot corrupt a good record, and a corrupt one reads as a miss.** Per-file
-   atomic replacement gives both for free today. SQLite gives the first with WAL and a transaction;
-   the second needs a deliberate answer for a corrupt *database*, which is a single point of failure
-   where today the blast radius is one set.
-5. **Language is part of a record's identity**, not a column to be collapsed. `(provider, set,
-   language)` is the key everywhere -- cache, downloads, pins, image records.
-
-**Costs to weigh before starting.**
-
-- A multiplatform driver is a dependency decision in a project that pins and records every version
-  it uses. It also adds native linkage to the **iOS targets, which have never been linked** -- so
-  the one target that cannot be tested here gains the most new risk.
-- Okio is the storage abstraction throughout, including `AppStorage`'s roots and the image cache.
-  A database replaces the metadata half only; the image cache stays a directory.
-- Existing data does not need migrating -- the owner has said a wipe is acceptable at this stage --
-  but `bulkImports` and the download records in `BrowsingPreferences` describe what is on disk, so
-  they have to be cleared with it or they will claim a catalogue that is gone.
-
-**Measure it.** `CacheWriteCostBench` and `StorageScreenCostBench` exist and both print figures; a
-migration that cannot beat them on the same machine has not earned itself.
-
-**It has now been measured.** `:experiments:sqlstore` is a working SQLDelight spike that nothing
-depends on — one global database, the same `(provider, set, language)` identity, run head to head
-against `MetadataCache` in the same process over the same 1000 sets × 150 printings on
-2026-09-11:
-
-| | file cache | SQLite |
+| | file cache | the store |
 | --- | --- | --- |
 | Write the catalogue | **1.5 s** | 12.6 s |
 | On disk | **99.1 MB** | 139.8 MB |
@@ -539,11 +469,55 @@ against `MetadataCache` in the same process over the same 1000 sets × 150 print
 | Storage screen counts | 2456 ms | **14.4 ms** |
 | Filtered cross-set search | *not possible* | **15.0 ms** |
 
-Writes get 8.4× worse and everything else gets better, one of them by 170× and one of them from
-impossible. `iosArm64` compiles with the native driver referenced rather than merely declared.
-Read [`experiments/sqlstore/README.md`](../experiments/sqlstore/README.md) before deciding; the
-unanswered question is not performance, it is what a corrupt *database* costs when today a corrupt
-record costs one set.
+Writing got 8.4x worse and that is the price of everything else: a set is one file write there and
+150 `INSERT`s inside a transaction here. It sits inside a bulk import whose *download* is minutes,
+so it is not what a user waits on -- but it is a real cost and is recorded rather than glossed.
+
+What was bought is the storage screen, which was a directory walk over three files per cached set
+and is now a handful of counts, and the cross-set search: the file cache could only match a name
+over whatever happened to be loaded, and `searchPrintings` narrows on type, rarity, cost range,
+domain and a "does not contain" exclusion in one statement.
+
+**A local search is still local.** SQLite made it fast; it did not put one extra card on the device.
+`SearchScope.LOCAL_CACHED_SETS`, its set count and `isLimitedByCache` are unchanged, and an empty
+result still means "not in what you have downloaded" rather than "does not exist". This was the
+single most likely thing to lose in the migration, because a fast complete-feeling search *feels*
+authoritative.
+
+Five rules the schema holds, each of which cost a bug somewhere first:
+
+1. **Language is part of a set's identity.** `(provider, set, language)` is the primary key, as it
+   is everywhere else in this app. Collapsing it into a column would make an English import
+   overwrite a French one.
+2. **Unknown stays distinct from absent.** `cost` is NULL both for a card with no cost and for a
+   source that publishes none, so `maxCost` tests `IS NOT NULL` explicitly -- a filter must not
+   sweep up what it could not measure. That is `Availability`'s third state, in schema form.
+3. **Pinned sets are outside the eviction budget**, not merely evicted last, and `unpinnedBytes` is
+   what the ceiling is measured against. Counting a bulk import against a browsing ceiling meant
+   every write afterwards evicted records that together came nowhere near it.
+4. **A pin can land before the set does, and survives the write.** The download queue pins first so
+   that a set large enough to breach the ceiling is not evicted by its own write. `setPinned` was an
+   `UPDATE`, which silently did nothing for a set not yet cached; it inserts a placeholder row now,
+   and `SqlCardStoreTest` pins that.
+5. **A downloaded set stays nameable after everything else is cleared.** `label` and `game` are
+   columns. They used to be a tab-joined string smuggled through a marker file's contents, parsed
+   back apart in two places.
+
+**Corruption is answered, not hoped away.** A file cache's blast radius is one record; a database's
+is all of them, and that was the argument against migrating at all. So:
+
+- `journal_mode=WAL`, so a process killed mid-transaction leaves that transaction unapplied and
+  everything before it intact -- the property atomic file replacement gave for free.
+- `synchronous=FULL`, not `NORMAL`. Under WAL, `NORMAL` is durable against a process crash but not
+  against the device losing power, which on a phone is an ordinary Tuesday.
+- `PRAGMA integrity_check` once at startup. It reads every page, which is why it runs once.
+- A store that will not open or will not verify is **deleted and recreated**, not repaired. Every
+  row in it is re-fetchable; a half-salvaged database is a store nobody can characterise.
+- The caller is told. `OpenedStore.wasRecovered` reaches `CacheReconciler`, which clears
+  `bulkImports` and `imageDownloads` -- records that describe a catalogue that no longer exists.
+  The same path runs once for an install that predates the store.
+
+`SqlStoreBench` re-measures; `SqlCardStoreTest` and `CardStoreRecoveryTest` hold the rules.
 
 ### A bulk import is not a catalogue
 
