@@ -16,13 +16,9 @@ one.
 
 ## Where it has got to
 
-**Every module below the UI compiles natively.** All 22 of them — `:core`, `:data`, `:database`,
-the ten `:games:*` and the eight `:providers:*` — build for `linuxX64` and `macosArm64` today,
-verified rather than assumed:
-
-```bash
-./gradlew -PnativeDesktop=true :core:compileKotlinLinuxX64 :data:compileKotlinLinuxX64 ...
-```
+**Every module below the UI compiles natively, on all three platform families.** All 22 of them —
+`:core`, `:data`, `:database`, the ten `:games:*` and the eight `:providers:*` — build for
+`mingwX64`, `linuxX64` and `macosArm64`, verified rather than assumed.
 
 That is the part worth knowing, because it says the porting problem is not in this codebase's own
 layers. The data stack in particular came through untouched: coroutines, serialization, datetime,
@@ -33,11 +29,18 @@ Apple-only.
 `:composeApp` is the one module that does not build, and the reasons are all other people's
 artifacts.
 
-## What the bridge plugin does, and where it has to be applied
+## What the bridge plugin substitutes
 
-The plugin substitutes `org.jetbrains.compose.*` klibs for mirrored `com.bitsycore.compose.*` ones
-on native targets. That works: `ui`, `foundation`, `material3` and `components-resources` all
-resolved at `0.4.2`. `runtime` needs no mirror because JetBrains already publishes it natively.
+Read out of `compose-desktop-native-bridge-0.4.2.jar` rather than guessed, because guessing the
+group name got this wrong once:
+
+- `org.jetbrains.compose.*` → `com.bitsycore.compose.*` for `animation`, `animation-core`,
+  `animation-graphics`, `components-resources`, `foundation`, `foundation-layout`, `material3`,
+  `material-ripple`, `ui`, `ui-backhandler`, `ui-geometry`, `ui-graphics`, `ui-text`,
+  `ui-tooling-preview`, `ui-unit`, `ui-util`.
+- `org.jetbrains.androidx.navigation3:navigation3-ui` → **`com.bitsycore.navigation3:navigation3-ui`**.
+
+`org.jetbrains.compose.runtime:runtime` needs no mirror — JetBrains already publishes it natively.
 
 The one non-obvious part of the setup: **the plugin has to be applied to every module that
 *resolves* Compose klibs, not only to those that declare them.** The `:providers:*` modules depend
@@ -45,40 +48,54 @@ on a `:games:*` module, which depends on `:games:api`, which is where the Compos
 so each provider resolves Compose transitively and fails without the bridge, despite never
 mentioning Compose itself.
 
-## What is missing
+## The Skia fork, and the version that is not there
 
-Measured on 2026-09-11 against the versions this project pins. "macOS only" means the artifact
-publishes `macosArm64` but not the Windows or Linux targets.
+`mingwX64` needs the fork because upstream Skiko supports macOS and Linux but not MinGW. This is
+**not** an authentication problem, which is what it first looked like:
 
-| Dependency | Status | Whose |
+- bridge `0.4.2` asks for `com.bitsycore.skiko:skiko:0.150.1-mingw.1`
+- `maven.bitsycore.com` publishes `0.150.1-mingw.2`, and nothing else
+
+So resolution fails on a version that was never published. Forcing the published one compiles, and
+the root build does exactly that under the flag — see `SKIKO_MINGW_FORK` in `build.gradle.kts`.
+**Delete that block when a bridge release points at a version that exists.**
+
+## What is still missing
+
+Measured on 2026-09-11 against the versions this project pins, by resolving `:composeApp` for
+`mingwX64` — the hardest target — after the skiko pin above.
+
+| Dependency | What it needs | Whose |
 | --- | --- | --- |
-| `com.bitsycore.lib:pulse`, `-viewmodel`, `-compose` | **No native targets at all** | ours |
-| `com.bitsycore.skiko:skiko` | `mingwX64` only, and on an **authenticated** GitHub Packages repo | ours |
-| `io.coil-kt.coil3:coil-compose` | macOS only | upstream |
-| `io.insert-koin:koin-compose`, `-viewmodel` | macOS only | upstream |
-| `org.jetbrains.androidx.navigation3:navigation3-ui` | macOS only | upstream |
-| `org.jetbrains.androidx.navigationevent:navigationevent-compose` | macOS only | upstream |
-| `org.jetbrains.compose.material:material-icons-core` | macOS only | upstream |
-| `net.java.dev.jna:jna` | JVM only, by nature | n/a |
+| `com.bitsycore.lib:pulse`, `-viewmodel`, `-compose` | native targets published at all | ours |
+| `io.coil-kt.coil3:coil-compose`, `-network-ktor3`, `-svg` | a mirror + an entry in the bridge's table | upstream, via a mirror |
+| `io.insert-koin:koin-compose`, `-viewmodel` | same | upstream, via a mirror |
+| `org.jetbrains.androidx.navigationevent:navigationevent-compose` | same | upstream, via a mirror |
+| `org.jetbrains.compose.material:material-icons-core` | nothing — see below | ours to delete |
 
-Notes on three of them:
+Notes:
 
-- **Pulse is the one to fix first.** It is this project's own MVI library and it publishes no native
-  targets whatsoever — not even the `macosArm64` that everything else manages. Until it does, no
-  native target can link, so it gates the other seven regardless of what upstream does.
-- **Skiko is only a Windows problem**, and only a credentials problem. `linuxX64` and `macosArm64`
-  resolve Skia through the ordinary repositories; `mingwX64` wants `com.bitsycore.skiko:skiko` at a
-  `-mingw.N` version that is not on `maven.bitsycore.com`. Adding the GitHub Packages repository and
-  a token to `settings.gradle.kts` is the whole of it.
-- **JNA is only used by the dark title bar**, in `desktopMain`, so it does not block anything. But
-  the feature would need a native equivalent — on Kotlin/Native the same `DwmSetWindowAttribute`
-  call is cinterop rather than JNA, and rather less work than the JVM version was.
+- **Pulse gates everything.** It publishes no native targets whatsoever, not even the `macosArm64`
+  that every upstream dependency here manages, so no target can link until it does.
+- **Coil's Linux story is partial and its Windows story is not.** `coil-network-ktor3` and
+  `coil-svg` do publish `linuxX64`/`linuxArm64`; `coil-compose` is macOS-only, and none of the three
+  publishes `mingwX64`.
+- **`navigationevent-compose` is predictive back.** NavigationEvent is the multiplatform successor
+  to Android's `OnBackPressedDispatcher`, and the `-compose` artifact is the binding `NavDisplay`
+  uses to drive a back *gesture* — which is what `predictivePopTransitionSpec` in `App.kt` renders.
+  No code here names it: it is declared because Navigation 3 needs it, and it also arrives
+  transitively through `navigation3-ui`. On a desktop with no back gesture it does nothing at
+  runtime, but `NavDisplay` still has to link against it.
+- **`material-icons-core` can simply go.** `dependencyInsight` shows it as a direct dependency with
+  no transitive parent, and this app draws **12** icons from it. `composeApp/tools/genicons.py`
+  already embeds 24 icons from `material-icons-extended` this way, so extending it is a list of 12
+  names plus support for the `filled` variant, which it does not handle yet. That removes the
+  dependency from the native build *and* from the JVM and Android ones.
 
-**macOS is the closest.** Everything upstream that this app uses already publishes `macosArm64`, so
-`macosArm64` is blocked on Pulse alone. Windows and Linux additionally need Coil, Koin's Compose
-bindings, Navigation 3, NavigationEvent and the Material icons.
+**macOS is the closest**: every upstream dependency already publishes `macosArm64`, so it is blocked
+on Pulse and on `material-icons-core` alone.
 
-## What is still to write when the dependencies land
+## What is still to write on this side
 
 Two pieces of this project's own code, both small and both flagged in `Main.native.kt`:
 
@@ -86,6 +103,10 @@ Two pieces of this project's own code, both small and both flagged in `Main.nati
   preferences roots and a `LinkOpener`. Both are per-platform by nature.
 - **`DriverFactory` has no native-desktop implementation.** SQLDelight publishes the driver for
   these targets, so this is a class, not a research problem.
+
+The dark title bar is a third, smaller one: it uses JNA, which is JVM-only. The same
+`DwmSetWindowAttribute` call is cinterop on Kotlin/Native, and rather less work than the JVM version
+was.
 
 ## Why the targets are opt-in rather than always on
 
