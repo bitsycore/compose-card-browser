@@ -2,18 +2,11 @@ package com.bitsycore.cardbrowser.ui.games
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.shrinkHorizontally
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
@@ -68,8 +61,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.compose.runtime.collectAsState
@@ -410,51 +401,36 @@ private fun GameRow(
 			},
 		)
 
-	// Only the *start* padding gives way, and only because the handle needs the room. The end stays
-	// put: animating both is what made the eye land 8dp off where the chevron had been, so the one
-	// control that should have held still was the one that moved furthest.
-	val vStartPadding by animateDpAsState(
-		targetValue = if (isEditing) 8.dp else 16.dp,
-		// This is the bump, and it was mine. `MotionScheme.expressive().defaultSpatialSpec()` is
-		// `spring(dampingRatio = 0.8f, stiffness = 380f)` -- checked in material3 1.12.0-alpha03's
-		// `ExpressiveMotionTokens`, not assumed -- and 0.8 is underdamped, so it overshoots. That
-		// is right for something crossing the screen and wrong for an 8dp inset: the mark and the
-		// name shot past their resting place and came back, which is what the bump was.
-		//
-		// Critically damped instead. A `DampingRatioNoBouncy` spring cannot exceed its target, so
-		// this is a property of the spec rather than a number that happened to look settled.
-		animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = HANDLE_STIFFNESS),
-		label = "row start padding",
-	)
-
 	val vContent: @Composable () -> Unit = {
 		Row(
+			// Constant, in both modes.
+			//
+			// It used to ease from 16dp to 8dp to claw back room for the handle, and that was a
+			// second spring running beside the handle's own. Two springs of the same stiffness are
+			// still two animations over two different distances -- 8dp of inset against 24dp of
+			// handle -- so they do not stay in proportion, and the row's contents shifted on a
+			// curve the handle was not following. That mismatch is what looked like a vibration.
+			//
+			// One animation drives this corner now: the handle's. The room it needs is the room it
+			// makes.
 			modifier = Modifier
-				.padding(start = vStartPadding, end = ROW_END_PADDING, top = 12.dp, bottom = 12.dp)
+				.padding(horizontal = ROW_PADDING, vertical = 12.dp)
 				.fillMaxWidth(),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
-			// Arrives from off the left edge and leaves the same way, so it reads as something
-			// sliding in from outside the row rather than growing out of the game's mark.
+			// The defaults, and that is the point.
 			//
-			// `expandHorizontally` is what opens the space; the slide is what fills it. Expanding
-			// alone was a wipe -- the handle appeared a sliver at a time, pinned where it would end
-			// up -- which is why that did not look like an entrance.
+			// `RowScope.AnimatedVisibility` is `fadeIn() + expandHorizontally()` in and the
+			// mirror of it out, on one critically damped spring. `expandHorizontally` defaults to
+			// `expandFrom = Alignment.End`, which anchors the content to the end of the space --
+			// so as that space opens the handle's own left edge travels, and it slides in from
+			// outside the row. It was already the entrance; it did not need help.
 			//
-			// Both specs stated, though neither was the bug: Compose's own defaults here are
-			// already critically damped, and the bump came from the row's start padding above.
-			// They are pinned anyway because these two drive one object between them -- the space
-			// and the thing filling it -- and a default that diverged later would be a wobble
-			// nobody could account for.
-			AnimatedVisibility(
-				visible = isEditing,
-				enter = expandHorizontally(animationSpec = HANDLE_SIZE_SPEC) +
-					slideInHorizontally(animationSpec = HANDLE_OFFSET_SPEC) { -it } +
-					fadeIn(),
-				exit = shrinkHorizontally(animationSpec = HANDLE_SIZE_SPEC) +
-					slideOutHorizontally(animationSpec = HANDLE_OFFSET_SPEC) { -it } +
-					fadeOut(),
-			) {
+			// The help is what broke it. A `slideInHorizontally` on top was a second animation
+			// moving the same object, over a different distance, on its own spring -- so the
+			// handle and the window it sits in were never quite in step, and the leading edge
+			// jittered against the clip. One spring cannot disagree with itself.
+			AnimatedVisibility(visible = isEditing) {
 				ReorderHandle(handleModifier ?: Modifier)
 			}
 			GameMark(art)
@@ -600,34 +576,17 @@ private const val HIDDEN_ROW_ALPHA = 0.45f
 private val CHEVRON_SLOT = 48.dp
 
 /**
- * How hard the handle's entrance is driven.
+ * The row's inset, both edges, both modes, and none of it animates.
  *
- * `MediumLow` rather than the default: the handle is 24dp of travel, and a stiffer spring covers
- * that so fast there is nothing to see, which is the other way to get an entrance wrong.
- */
-private const val HANDLE_STIFFNESS = Spring.StiffnessMediumLow
-
-/** The row's width as the handle makes room. Settled -- see the comment at the call site. */
-private val HANDLE_SIZE_SPEC = spring<IntSize>(
-	dampingRatio = Spring.DampingRatioNoBouncy,
-	stiffness = HANDLE_STIFFNESS,
-)
-
-/** The handle's own travel. The same spring, so the two cannot pull against each other. */
-private val HANDLE_OFFSET_SPEC = spring<IntOffset>(
-	dampingRatio = Spring.DampingRatioNoBouncy,
-	stiffness = HANDLE_STIFFNESS,
-)
-
-/**
- * The row's trailing inset, and it does not animate.
+ * Two things were learned the hard way here and this one constant is what is left of them. Easing
+ * the *trailing* inset dragged the eye 8dp from where the chevron had been, so the one control that
+ * should have held still moved furthest. Easing the *leading* one put a second spring beside the
+ * handle's, over a different distance, which is what made the entrance look like it vibrated.
  *
- * Fixed on purpose. The start padding gives way to make room for the drag handle, and applying the
- * same change to both edges dragged the trailing icon 8dp sideways -- so the chevron and the eye
- * were morphing between two different points and the effect read as a slide rather than a
- * transform. This is what pins the centre they share.
+ * So the row does not move. The handle makes its own room, on one spring, and everything else stays
+ * where it was.
  */
-private val ROW_END_PADDING = 16.dp
+private val ROW_PADDING = 16.dp
 
 /** Separates the hidden games from the listed ones, and says how many there are. */
 @Composable

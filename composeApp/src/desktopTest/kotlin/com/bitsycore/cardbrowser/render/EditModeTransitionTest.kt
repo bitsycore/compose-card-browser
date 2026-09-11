@@ -39,11 +39,13 @@ import org.jetbrains.skia.Image
  * after the toggle:
  *
  * ```
- * two Cards   256, 256, 256, 254, 251, 247, 244, 243   lands past its resting place, drifts back
- * one Card    196, 196, 199, 203, 214, 228, 241, 243   slides
+ * two Cards   256, 256, 256, 256, 256, 256, 256, 256   finished before the first frame
+ * one Card    196, 196, 199, 205, 219, 237, 253, 256   slides
  * ```
  *
- * Both halves of that second row matter, and they are the two assertions below.
+ * Both halves of that second row matter, and they are the two assertions below. The broken version
+ * is a flat line because the rebuilt subtree starts at its target: there is no motion to measure,
+ * which is why nothing that renders one frame at each end could ever have caught it.
  */
 class EditModeTransitionTest {
 
