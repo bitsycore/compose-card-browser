@@ -33,6 +33,7 @@ import com.bitsycore.cardbrowser.ui.games.GameListScreen
 import com.bitsycore.cardbrowser.ui.search.SearchScreen
 import com.bitsycore.cardbrowser.ui.sets.SetListScreen
 import com.bitsycore.cardbrowser.ui.settings.SettingsScreen
+import com.bitsycore.cardbrowser.ui.setup.SetupScreen
 import com.bitsycore.cardbrowser.ui.storage.StorageScreen
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
@@ -74,6 +75,15 @@ sealed interface Route : NavKey {
 
 	@Serializable
 	data class Detail(val cardId: String, val setId: String?) : Route
+
+	/**
+	 * The first-launch setup.
+	 *
+	 * Replaces the stack rather than sitting on it: once it is done there is nothing to go back
+	 * to, and Back from the game list must not walk into setup again.
+	 */
+	@Serializable
+	data object Setup : Route
 
 	@Serializable
 	data object Settings : Route
@@ -134,7 +144,14 @@ fun App() {
 		val vWarmer = koinInject<SetCatalogueWarmer>()
 		LaunchedEffect(Unit) { vWarmer.start() }
 
+		// Setup first, and only on a fresh install. Read from the same `StateFlow` the theme
+		// uses, so re-running it from Settings puts the flow back on screen without a relaunch.
 		val vBackStack = remember { mutableStateListOf<Route>(Route.Games) }
+		LaunchedEffect(vPrefs.hasCompletedSetup) {
+			if (!vPrefs.hasCompletedSetup && vBackStack.lastOrNull() != Route.Setup) {
+				vBackStack.add(Route.Setup)
+			}
+		}
 
 		// Everything navigable is drawn inside one shared-transition scope, so a card's artwork can
 		// be the same element in the grid and in detail rather than two images that cross-fade.
@@ -158,6 +175,15 @@ fun App() {
 			predictivePopTransitionSpec = { fadeThrough<Route>(zIndex = 0f).invoke(this) },
 			entryProvider = { vRoute ->
 				when (vRoute) {
+
+					is Route.Setup -> NavEntry(vRoute) {
+						SetupScreen(
+							// Replaced, not popped: the flow writes `hasCompletedSetup`, and
+							// removing it from the stack is what stops the effect above putting
+							// it straight back.
+							onDone = { vBackStack.remove(Route.Setup) },
+						)
+					}
 
 					is Route.Games -> NavEntry(vRoute) {
 						GameListScreen(

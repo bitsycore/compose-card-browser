@@ -88,6 +88,14 @@ object SettingsContract :
 		data class PromoteLanguage(val language: CardLanguage) : Intent
 
 		/** The back arrow. An intent like any other, so the screen body only ever dispatches. */
+		/**
+		 * Show the first-launch setup again.
+		 *
+		 * Clears the completion flag, which is what `App` watches -- so the flow appears without
+		 * this screen having to know a back stack exists.
+		 */
+		data object RerunSetup : Intent
+
 		data object BackPressed : Intent
 
 	}
@@ -108,7 +116,10 @@ object SettingsContract :
 
 		Intent.Refresh -> state
 
-		// Navigation changes no state. The view model turns it into an effect.
+		// Neither changes state here. The view model turns one into an effect and the other into
+		// a preferences write that `App` is already watching.
+		Intent.RerunSetup -> state
+
 		Intent.BackPressed -> state
 
 		is Intent.ApiCallsRead -> state.copy(

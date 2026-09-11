@@ -24,6 +24,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -133,6 +134,18 @@ fun SettingsContent(
 			Spacer(Modifier.height(4.dp))
 			Text(
 				text = "Tap to move to the front.",
+				style = MaterialTheme.typography.labelSmall,
+				color = MaterialTheme.colorScheme.onSurfaceVariant,
+			)
+
+			Spacer(Modifier.height(16.dp))
+			OutlinedButton(onClick = { dispatch(SettingsContract.Intent.RerunSetup) }) {
+				Text("Run first-time setup again")
+			}
+			Text(
+				// What it does and, as importantly, what it does not: nothing is cleared until
+				// the flow itself finishes, so opening it to look is free.
+				text = "Pick games and a card language again. Nothing downloaded is removed.",
 				style = MaterialTheme.typography.labelSmall,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
 			)

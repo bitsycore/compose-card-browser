@@ -147,6 +147,14 @@ data class BrowsingPreferences(
 	 * later installing a build without it does not corrupt the setting.
 	 */
 	val hiddenGames: Set<String> = emptySet(),
+	/**
+	 * Whether the first-launch setup has been completed or skipped.
+	 *
+	 * False on a fresh install and on nothing else. Skipping sets it too: a user who declined to
+	 * choose has chosen the defaults, and asking again on the next launch would be nagging rather
+	 * than helping. Settings can set it back, which is how the flow is re-run.
+	 */
+	val hasCompletedSetup: Boolean = false,
 	/** Ceiling for downloaded card art. Applied when the image loader is built, so on next launch. */
 	val imageCacheLimitBytes: Long = DEFAULT_IMAGE_CACHE_LIMIT_BYTES,
 	/** Ceiling for cached card and set records. Applied on the next write. */

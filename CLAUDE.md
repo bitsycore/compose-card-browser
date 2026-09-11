@@ -109,7 +109,7 @@ Follow the user's global conventions (Spirtech prefixes, tabs, KDoc). Specifical
 
 ```bash
 ./gradlew build -x lint          # everything, all four targets, including both iOS ones
-./gradlew desktopTest            # the deterministic suite (474 tests on 2026-09-11, 7 skipped)
+./gradlew desktopTest            # the deterministic suite (481 tests on 2026-09-11, 7 skipped)
 ./gradlew :androidApp:assembleDebug
 ./gradlew :composeApp:run        # desktop
 ```

@@ -57,6 +57,13 @@ class SettingsViewModel(
 
 			SettingsContract.Intent.Refresh -> Unit
 
+			SettingsContract.Intent.RerunSetup -> {
+				// Only the flag. The choices themselves stay in force until the flow writes new
+				// ones, so backing out of a re-run leaves everything as it was.
+				mPreferences.update { it.copy(hasCompletedSetup = false) }
+				emitEffect(SettingsContract.Effect.NavigateBack)
+			}
+
 			is SettingsContract.Intent.ImageCacheLimitChosen -> {
 				mPreferences.update { it.copy(imageCacheLimitBytes = intent.bytes) }
 			}

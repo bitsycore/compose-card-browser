@@ -50,6 +50,7 @@ import com.bitsycore.cardbrowser.ui.detail.CardDetailViewModel
 import com.bitsycore.cardbrowser.ui.games.GameListViewModel
 import com.bitsycore.cardbrowser.ui.search.SearchArgs
 import com.bitsycore.cardbrowser.ui.search.SearchViewModel
+import com.bitsycore.cardbrowser.ui.setup.SetupViewModel
 import com.bitsycore.cardbrowser.ui.sets.SetListArgs
 import com.bitsycore.cardbrowser.ui.sets.SetListViewModel
 import com.bitsycore.cardbrowser.ui.settings.SettingsViewModel
@@ -253,6 +254,7 @@ val appModule = module {
 		)
 	}
 
+	viewModel { SetupViewModel(get(), get()) }
 	viewModel { (vArgs: SetListArgs) -> SetListViewModel(get(), get(), get(), get(), vArgs) }
 	viewModel { GameListViewModel(get(), get()) }
 	viewModel { CardGridViewModel(get(), get(), get(), get()) }
