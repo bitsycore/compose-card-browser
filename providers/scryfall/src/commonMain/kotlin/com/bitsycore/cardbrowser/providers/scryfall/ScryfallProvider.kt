@@ -149,6 +149,7 @@ class ScryfallProvider(
 			// that does not resolve.
 			cardmarketProductMapping = true,
 			crossSetSearch = true,
+			thumbnailImages = true,
 		),
 		attribution = Attribution(
 			text = "Magic card data and images from Scryfall. Not affiliated with or endorsed by " +

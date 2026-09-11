@@ -51,6 +51,11 @@ private fun tcgCsvCapabilities(
 		// No query endpoint of any kind exists. A cross-set search therefore covers only the sets
 		// already downloaded, and the app labels it as such with a count.
 		crossSetSearch = false,
+		// Per card rather than for the whole catalogue: a `_200w` rendition exists only where the
+		// product advertises larger art, which `TcgCsvMapper` reads off the record. Capability is
+		// the ceiling and coverage is the fact, so the ceiling is true here and each printing
+		// still states its own.
+		thumbnailImages = true,
 	),
 	attribution = Attribution(text = attribution, url = "https://tcgcsv.com/"),
 	maxPageSize = TcgCsvProvider.MAX_PAGE_SIZE,

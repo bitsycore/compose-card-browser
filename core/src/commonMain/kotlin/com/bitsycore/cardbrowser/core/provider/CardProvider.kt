@@ -202,6 +202,34 @@ data class DataCapabilities(
 	 * that. The two produce very different result sets and the user is told which one they got.
 	 */
 	val crossSetSearch: Boolean = false,
+	/**
+	 * True when the card records ship inside the app rather than being fetched.
+	 *
+	 * A source whose catalogue is a bundled file has nothing to download, nothing to keep and
+	 * nothing to clear: the records are in the installed app and are as available offline on the
+	 * first launch as they will ever be. Offering to download them is offering work that cannot be
+	 * done, and offering to delete them is worse -- there is no state to remove, so the button
+	 * either lies or breaks the game.
+	 *
+	 * Only the *records*. Artwork is a separate question and is normally still fetched: a bundled
+	 * catalogue that also bundled its pictures would be a very large app.
+	 *
+	 * False for every source that answers over the network, which is almost all of them.
+	 */
+	val bundledCardData: Boolean = false,
+	/**
+	 * True when the source publishes a small rendition of its art, distinct from the full image.
+	 *
+	 * The difference decides both what a bulk image download *is* and what it costs. Measured
+	 * across sources on 2026-09-09: TCGdex 19.5 KB against 63 KB full, Scryfall 47 against 67,
+	 * YGOPRODeck 28 against 153. Where there is no small rendition the app falls back to the full
+	 * image -- Wuthering Waves' single rendition is 196 KB, measured 2026-09-11 -- so calling that
+	 * a thumbnail download understates it by roughly ten times and names the wrong thing.
+	 *
+	 * False is the safe default: a source that has not said gets offered the honest label and the
+	 * honest size, rather than a promise of a cheap fetch it cannot keep.
+	 */
+	val thumbnailImages: Boolean = false,
 )
 
 // ==================

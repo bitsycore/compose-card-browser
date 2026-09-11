@@ -116,6 +116,7 @@ class YgoprodeckProvider(
 			finishes = false,
 			cardmarketProductMapping = false,
 			crossSetSearch = true,
+			thumbnailImages = true,
 		),
 		attribution = Attribution(
 			text = "Yu-Gi-Oh! card data and images from YGOPRODeck. Not affiliated with Konami.",

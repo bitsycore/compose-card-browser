@@ -124,6 +124,7 @@ class TcgdexProvider(
 			finishes = true,
 			cardmarketProductMapping = true,
 			crossSetSearch = true,
+			thumbnailImages = true,
 		),
 		attribution = Attribution(
 			text = "Pokémon card data from TCGdex, a community project not affiliated with " +

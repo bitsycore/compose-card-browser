@@ -117,6 +117,7 @@ class RiftcodexProvider(
 			finishes = false,
 			cardmarketProductMapping = false,
 			crossSetSearch = false,
+			thumbnailImages = true,
 		),
 		attribution = Attribution(
 			text = "Card data from Riftcodex, an unofficial fan project not affiliated with Riot Games.",

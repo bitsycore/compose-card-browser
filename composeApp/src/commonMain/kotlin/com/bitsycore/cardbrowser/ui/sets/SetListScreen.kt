@@ -97,6 +97,7 @@ import com.bitsycore.cardbrowser.ui.common.FastScroller
 import com.bitsycore.cardbrowser.ui.common.ErrorState
 import com.bitsycore.cardbrowser.ui.common.LoadingState
 import com.bitsycore.cardbrowser.ui.common.NoticeBanner
+import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.ui.common.sharedSetContainer
 import com.bitsycore.cardbrowser.ui.preview.PreviewData
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
@@ -132,6 +133,18 @@ fun SetListScreen(
 	val vArtRegistry = koinInject<GameArtRegistry>()
 	val vArt = vState.game?.let(vArtRegistry::forGame)
 
+	// What the routed source will *actually* answer in, not what the user would prefer.
+	//
+	// The two differ more often than they look like they should. Riftcodex serves English only, so
+	// a French-preferring user downloading Riftbound queued a job labelled "French" for records
+	// that come back English -- the repository normalises the language before it builds a cache
+	// key, so the file was right and only the screen was lying. `resolveLanguage` is the same
+	// function the repository uses, asked one layer earlier so the queue can say the truth.
+	val vRegistry = koinInject<ProviderRegistry>()
+	val vProvider = vState.game?.let(vRegistry::resolve)
+	val vPreferred = vPreferences.preferences.value.primaryLanguage
+	val vDownloadLanguage = vProvider?.resolveLanguage(vPreferred) ?: vPreferred
+
 	SetListContent(
 		state = vState,
 		dispatch = viewModel::dispatch,
@@ -151,9 +164,11 @@ fun SetListScreen(
 			// whole point of having them is being able to switch language on a card you already
 			// hold, so those are fetched in every language the set states. Thumbnails are a
 			// request per card per language, so they go only where they were asked for.
-			val vPrimary = vPreferences.preferences.value.primaryLanguage
-			// A set that states no languages gets one job in the user's own, which is exactly what
-			// happened before this existed -- see the note below on why `null` is not passed.
+			// The source's answer for the user's preference, not the preference itself. See
+			// `vDownloadLanguage` above: a set that states no languages used to be queued under
+			// whatever the user preferred, which for an English-only source was a job labelled
+			// with a language it would never return.
+			val vPrimary = vDownloadLanguage
 			val vStated = vSet.languages.toList().ifEmpty { listOf(vPrimary) }
 			val vForArt = vLanguages.ifEmpty { setOf(vPrimary) }.filter { it in vStated || vSet.languages.isEmpty() }
 
@@ -201,7 +216,9 @@ fun SetListScreen(
 		onCancelAllDownloads = vDownloads::cancelAll,
 		onClearFinishedDownloads = vDownloads::clearFinished,
 		gameArt = vArt,
-		preferredLanguage = vPreferences.preferences.value.primaryLanguage,
+		preferredLanguage = vDownloadLanguage,
+		isCardDataBundled = vProvider?.capabilities?.data?.bundledCardData == true,
+		hasThumbnails = vProvider?.capabilities?.data?.thumbnailImages != false,
 	)
 }
 
@@ -233,6 +250,10 @@ fun SetListContent(
 	 * previewed. `null` leaves the set's own first stated language ticked instead.
 	 */
 	preferredLanguage: CardLanguage? = null,
+	/** True when this game's records ship with the app -- `DataCapabilities.bundledCardData`. */
+	isCardDataBundled: Boolean = false,
+	/** True when the source publishes a small rendition -- `DataCapabilities.thumbnailImages`. */
+	hasThumbnails: Boolean = true,
 	onCancelDownload: (String) -> Unit = {},
 	onCancelAllDownloads: () -> Unit = {},
 	onClearFinishedDownloads: () -> Unit = {},
@@ -488,6 +509,8 @@ fun SetListContent(
 			isImportingGame = vIsImportingGame,
 			languages = vSet.languages.toList(),
 			defaultLanguage = preferredLanguage,
+			isCardDataBundled = isCardDataBundled,
+			hasThumbnails = hasThumbnails,
 			infoLanguages = vState.savedLanguages[vSet.id.qualified].orEmpty(),
 			// One set, so no dump is involved and there is nothing to choose: a 78 MB file to
 			// fill one set is far worse than the request it would replace. See `BulkCatalogue`.
@@ -527,6 +550,8 @@ fun SetListContent(
 			// worth offering -- the enqueue skips it for the sets that were never printed in it.
 			languages = vSets.flatMap { it.languages }.distinct(),
 			defaultLanguage = preferredLanguage,
+			isCardDataBundled = isCardDataBundled,
+			hasThumbnails = hasThumbnails,
 			// Only what *every* shown set already holds, for the same reason `alreadyHave` is an
 			// intersection: a language half the list is missing must stay fetchable.
 			infoLanguages = vSets

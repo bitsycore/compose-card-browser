@@ -105,6 +105,10 @@ class WuwaProvider : CardProvider<WutheringWavesGame> {
 			finishes = false,
 			cardmarketProductMapping = false,
 			crossSetSearch = true,
+			// The catalogue is a file in the app -- see `WuwaCatalogue`. UCP publishes no API this
+			// app can call for records, which is why the snapshot exists, so there is never
+			// anything to fetch, keep or delete for them.
+			bundledCardData = true,
 		),
 		attribution = Attribution(
 			text = "Wuthering Waves TCG card data and images from UCP's official card list. " +

@@ -78,6 +78,35 @@ class DownloadRenderer {
 		}
 
 		// The worst realistic case: a source that serves eleven languages, on a phone.
+		// The reported alignment: a done row and a checkbox row side by side.
+		renderPhone(vOut, "downloads-kind-alignment") {
+			DownloadKindDialog(
+				setName = "Origins",
+				cardCount = 298,
+				onDismiss = {},
+				onConfirm = { _, _, _ -> },
+				alreadyHave = setOf(DownloadKind.CARD_INFO),
+				infoLanguages = setOf(CardLanguage.ENGLISH),
+				languages = listOf(CardLanguage.ENGLISH),
+			)
+		}
+		// A source whose records ship with the app and which publishes one image size.
+		renderPhone(vOut, "downloads-kind-bundled") {
+			DownloadKindDialog(
+				setName = "Beginning of Ripples",
+				cardCount = 123,
+				onDismiss = {},
+				onConfirm = { _, _, _ -> },
+				isCardDataBundled = true,
+				hasThumbnails = false,
+				languages = listOf(
+					CardLanguage.JAPANESE,
+					CardLanguage.KOREAN,
+					CardLanguage.SIMPLIFIED_CHINESE,
+				),
+				defaultLanguage = CardLanguage.JAPANESE,
+			)
+		}
 		renderPhone(vOut, "downloads-kind-eleven-languages") {
 			DownloadKindDialog(
 				setName = "Base Set",

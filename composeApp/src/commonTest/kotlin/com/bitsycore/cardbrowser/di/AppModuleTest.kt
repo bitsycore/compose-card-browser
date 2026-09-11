@@ -181,6 +181,44 @@ class AppModuleTest {
 	}
 
 	@Test
+	fun `a source states whether it publishes thumbnails -- and only three do not`() {
+		// The capability exists because the app falls back to the full image where there is no
+		// small one, and a download offering "Thumbnails -- about 3 MB" then fetches six times
+		// that. Measured 2026-09-11: Wuthering Waves' single rendition is 196 KB a card.
+		//
+		// Pinned as a table rather than asserted loosely, so a provider that gains or loses a
+		// rendition has to come here and say so.
+		val vRegistry = graph().get<ProviderRegistry>()
+		val vWithout = vRegistry.games
+			.mapNotNull { vRegistry.resolve(it) }
+			.distinctBy { it.id }
+			.filterNot { it.capabilities.data.thumbnailImages }
+			.map { it.id.value }
+			.toSet()
+
+		assertEquals(
+			setOf("ucp-wuwa", "optcg", "altered-db"),
+			vWithout,
+			"a source changed what renditions it publishes",
+		)
+	}
+
+	@Test
+	fun `a source states whether its records ship with the app`() {
+		// Only Wuthering Waves, and only because UCP publishes no API for records -- the catalogue
+		// is a bundled file. Nothing to download, nothing to keep, nothing to clear.
+		val vRegistry = graph().get<ProviderRegistry>()
+		val vBundled = vRegistry.games
+			.mapNotNull { vRegistry.resolve(it) }
+			.distinctBy { it.id }
+			.filter { it.capabilities.data.bundledCardData }
+			.map { it.id.value }
+			.toSet()
+
+		assertEquals(setOf("ucp-wuwa"), vBundled)
+	}
+
+	@Test
 	fun `every offered game ships a mark`() {
 		// This is the check that replaced compile-time exhaustiveness. `GameVisual.of` was a total
 		// `when` over a closed enum, so a new game could not skip it; art now lives in the game

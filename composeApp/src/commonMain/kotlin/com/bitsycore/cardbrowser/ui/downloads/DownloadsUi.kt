@@ -5,6 +5,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import com.bitsycore.cardbrowser.core.provider.BulkSummary
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -82,6 +83,9 @@ private val STABLE_DIALOG = DialogProperties(usePlatformDefaultWidth = false)
 /** Wide enough for the longest of the three download descriptions, narrow enough to read. */
 private val MAX_DIALOG_WIDTH = 420.dp
 
+/** Material's touch target, which is what a `Checkbox` occupies. See `KindRow`. */
+private val CONTROL_SLOT = 48.dp
+
 /**
  * Asks which parts of a set to put on disk.
  *
@@ -154,6 +158,23 @@ fun DownloadKindDialog(
 	 * getting, and the first one silently was.
 	 */
 	bulkVariants: List<BulkSummary> = emptyList(),
+	/**
+	 * True when this game's card records ship inside the app -- `DataCapabilities.bundledCardData`.
+	 *
+	 * The row is replaced by a line saying so rather than shown disabled. A greyed checkbox reads
+	 * as "not yet" and invites a second attempt; "Built in" is the actual state and closes the
+	 * question. Nothing is fetched, nothing is kept, and nothing appears in storage to delete.
+	 */
+	isCardDataBundled: Boolean = false,
+	/**
+	 * True when the source publishes a small rendition -- `DataCapabilities.thumbnailImages`.
+	 *
+	 * Changes both the label and the figure, because where there is none the app falls back to the
+	 * full image and the row was describing something the download would not do. Wuthering Waves
+	 * has one rendition at 196 KB a card, against the ~32 KB a thumbnail averages: a 123-card set
+	 * is 24 MB, not the 3.9 MB the thumbnail estimate promised.
+	 */
+	hasThumbnails: Boolean = true,
 	/**
 	 * True while a whole-game import is running for this game.
 	 *
@@ -234,6 +255,18 @@ fun DownloadKindDialog(
 			// button stayed enabled: images would be fetched in the default language with no way
 			// to reach the control that changes it.
 			Column(Modifier.verticalScroll(rememberScrollState())) {
+				if (isCardDataBundled) {
+					Text(
+						text = "Card info · Built in",
+						style = MaterialTheme.typography.bodyMedium,
+					)
+					Text(
+						text = "Ships with the app. Always available offline.",
+						style = MaterialTheme.typography.bodySmall,
+						color = MaterialTheme.colorScheme.onSurfaceVariant,
+					)
+					Spacer(Modifier.height(14.dp))
+				} else {
 				KindRow(
 					checked = vInfo && !vLocked(DownloadKind.CARD_INFO),
 					onCheckedChange = { vInfo = it },
@@ -325,6 +358,7 @@ fun DownloadKindDialog(
 						)
 					}
 				}
+				}
 
 				Spacer(Modifier.height(8.dp))
 				KindRow(
@@ -332,12 +366,20 @@ fun DownloadKindDialog(
 					onCheckedChange = { vThumbnails = it },
 					enabled = !vLocked(DownloadKind.GRID_THUMBNAILS),
 					done = DownloadKind.GRID_THUMBNAILS in alreadyHave,
-					title = "Thumbnails",
+					// Named for what is actually fetched. A source with no small rendition serves
+					// its full image to the grid, and calling that a thumbnail understates it by
+					// about six times.
+					title = if (hasThumbnails) "Thumbnails" else "Card images",
 					detail = buildString {
+						val vPerCard = if (hasThumbnails) THUMBNAIL_BYTES else FULL_IMAGE_BYTES
 						append(
 							cardCount
-								?.let { "About ${megabytes(it, THUMBNAIL_BYTES)} MB. Enough to browse offline." }
-								?: "The small rendition the grid draws.",
+								?.let { "About ${megabytes(it, vPerCard)} MB. Enough to browse offline." }
+								?: if (hasThumbnails) {
+									"The small rendition the grid draws."
+								} else {
+									"This source publishes one size only."
+								},
 						)
 						// The pacing warning lives here rather than under the whole dialog,
 						// because it is only true of this row: images are a request per card and
@@ -357,10 +399,19 @@ fun DownloadKindDialog(
 						style = MaterialTheme.typography.labelLarge,
 					)
 					Text(
-						// The asymmetry, in one line. Card info is cheap and switching language on
-						// a card you already have is the point of downloading it; pictures are a
-						// request per card per language.
-						text = "Info comes in all ${languages.size}. Pick the thumbnail languages.",
+						// The asymmetry, in one line. Card info is cheap -- or already here -- and
+						// switching language on a card you have is the point of downloading it;
+						// pictures are a request per card per language.
+						text = buildString {
+							append(
+								if (isCardDataBundled) {
+									"Info is built in for all ${languages.size}."
+								} else {
+									"Info comes in all ${languages.size}."
+								},
+							)
+							append(if (hasThumbnails) " Pick the thumbnail languages." else " Pick the image languages.")
+						},
 						style = MaterialTheme.typography.bodySmall,
 						color = MaterialTheme.colorScheme.onSurfaceVariant,
 					)
@@ -439,21 +490,29 @@ private fun KindRow(
 	done: Boolean = false,
 ) {
 	Row(verticalAlignment = Alignment.CenterVertically) {
-		if (done && !enabled) {
-			// A tick rather than a ticked checkbox: this is a statement about what is already
-			// there, not a control that happens to be on.
-			Icon(
-				imageVector = Icons.Outlined.CheckCircle,
-				contentDescription = null,
-				tint = MaterialTheme.colorScheme.primary,
-				modifier = Modifier.size(24.dp).padding(2.dp),
-			)
-			Spacer(Modifier.width(18.dp))
-		} else {
-			Checkbox(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
-			Spacer(Modifier.width(4.dp))
+		// One fixed slot for both, so the titles line up whichever a row happens to show.
+		//
+		// They did not. A `Checkbox` carries Material's 48 dp touch target, while the tick was a
+		// 24 dp icon plus an 18 dp spacer -- about 42 dp -- so a row that was already downloaded
+		// sat ten points left of the one below it. Centring both in a box the size of the larger
+		// makes the alignment a property of the layout rather than of two hand-tuned spacers.
+		Box(Modifier.size(CONTROL_SLOT), contentAlignment = Alignment.Center) {
+			if (done && !enabled) {
+				// A tick rather than a ticked checkbox: this is a statement about what is already
+				// there, not a control that happens to be on.
+				Icon(
+					imageVector = Icons.Outlined.CheckCircle,
+					contentDescription = null,
+					tint = MaterialTheme.colorScheme.primary,
+					modifier = Modifier.size(24.dp),
+				)
+			} else {
+				Checkbox(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+			}
 		}
-		Column {
+		Spacer(Modifier.width(4.dp))
+		// Weighted, so a long detail wraps inside the row instead of pushing past its edge.
+		Column(Modifier.weight(1f)) {
 			Text(
 				text = title,
 				style = MaterialTheme.typography.bodyLarge,
@@ -491,6 +550,18 @@ private fun megabytes(cardCount: Int, bytesPerCard: Int): Int =
  * renditions barely differ, and a provider with no small rendition at all fetches nothing.
  */
 private const val THUMBNAIL_BYTES = 32_000
+
+/**
+ * The per-card cost where a source publishes no small rendition, measured rather than guessed.
+ *
+ * Three of the sources here -- Wuthering Waves, One Piece and Altered -- map `thumbnailUrl` to
+ * null, so the grid draws the full image and a bulk fetch downloads that. Sampled 2026-09-11, a
+ * Wuthering Waves card is 196 KB of WebP and it is the only rendition offered; the full images
+ * behind the three sources that do publish thumbnails run 63 to 153 KB. 150 KB is the middle of
+ * that and deliberately not the largest: an estimate that overstates is as unhelpful as one that
+ * understates, and this row is a caution rather than a quote.
+ */
+private const val FULL_IMAGE_BYTES = 150_000
 
 // ==================
 // MARK: The queue
