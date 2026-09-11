@@ -87,6 +87,11 @@ include(":providers:tcgcsv")
 
 // Compose UI and Pulse presentation logic, plus the Android/iOS/desktop targets it compiles to.
 // The desktop entry point lives in its `desktopMain`; iOS is the framework `iosApp/` links against.
+// A spike. Nothing depends on it; it exists to measure whether a SQLite store would beat the
+// file-per-record cache, and to find out what a native driver does to the iOS targets before
+// anything commits to one. See experiments/sqlstore/README.md.
+include(":experiments:sqlstore")
+
 include(":composeApp")
 
 // The Android application. Separate because AGP 9 forbids `com.android.application` in the same

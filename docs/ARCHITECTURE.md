@@ -524,8 +524,26 @@ while the reasons were still in one head.
   they have to be cleared with it or they will claim a catalogue that is gone.
 
 **Measure it.** `CacheWriteCostBench` and `StorageScreenCostBench` exist and both print figures; a
-migration that cannot beat them on the same machine has not earned itself. The current numbers to
-beat are in each file's KDoc.
+migration that cannot beat them on the same machine has not earned itself.
+
+**It has now been measured.** `:experiments:sqlstore` is a working SQLDelight spike that nothing
+depends on — one global database, the same `(provider, set, language)` identity, run head to head
+against `MetadataCache` in the same process over the same 1000 sets × 150 printings on
+2026-09-11:
+
+| | file cache | SQLite |
+| --- | --- | --- |
+| Write the catalogue | **1.5 s** | 12.6 s |
+| On disk | **99.1 MB** | 139.8 MB |
+| Open one set | **10.7 ms** | 16.7 ms |
+| Storage screen counts | 2456 ms | **14.4 ms** |
+| Filtered cross-set search | *not possible* | **15.0 ms** |
+
+Writes get 8.4× worse and everything else gets better, one of them by 170× and one of them from
+impossible. `iosArm64` compiles with the native driver referenced rather than merely declared.
+Read [`experiments/sqlstore/README.md`](../experiments/sqlstore/README.md) before deciding; the
+unanswered question is not performance, it is what a corrupt *database* costs when today a corrupt
+record costs one set.
 
 ### A bulk import is not a catalogue
 

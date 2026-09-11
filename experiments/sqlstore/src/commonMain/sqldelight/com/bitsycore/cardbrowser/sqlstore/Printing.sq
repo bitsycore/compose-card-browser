@@ -1,0 +1,98 @@
+-- One row per printing, per language.
+--
+-- The shape is deliberately the same identity the file cache uses: (provider, set, language) keys
+-- a *set*, and (provider, card id, language) keys a printing. A schema that collapsed language
+-- into a column would throw away the thing every layer of this app keys on.
+--
+-- `payload` is the serialised `CardPrinting`, exactly as the file cache stores it. The indexed
+-- columns beside it are a projection for querying, not a second source of truth -- so a field this
+-- spike does not model cannot be silently lost, and adding a filter later is a column and a
+-- backfill rather than a migration of the record itself.
+--
+-- Nullable where the source said nothing. `cost` is NULL for a card with no cost *and* for a
+-- source that does not publish one, and those are different facts -- the app's `Availability` has
+-- three states for exactly this reason. A query that wants "cost under 4" must not sweep up
+-- unknowns, so the predicates below test `IS NOT NULL` explicitly.
+CREATE TABLE printing (
+    provider      TEXT    NOT NULL,
+    card_id       TEXT    NOT NULL,
+    game          TEXT    NOT NULL,
+    set_id        TEXT    NOT NULL,
+    set_code      TEXT    NOT NULL,
+    language      TEXT    NOT NULL,
+    name          TEXT    NOT NULL,
+    name_folded   TEXT    NOT NULL,
+    card_type     TEXT,
+    rarity        TEXT,
+    cost          INTEGER,
+    domains       TEXT,
+    payload       TEXT    NOT NULL,
+    PRIMARY KEY (provider, card_id, language)
+);
+
+-- Set membership is the commonest lookup by far: open a set, read its cards.
+CREATE INDEX printing_set ON printing (provider, set_id, language);
+
+-- Cross-set search, which is the query the file cache genuinely cannot do.
+CREATE INDEX printing_name ON printing (game, name_folded);
+
+-- What a download put on disk, so eviction and the storage screen can work in SQL rather than by
+-- walking a directory. `pinned` is a flag rather than a separate table because it is one bit and
+-- every query that cares about it also wants the row.
+CREATE TABLE cached_set (
+    provider   TEXT    NOT NULL,
+    set_id     TEXT    NOT NULL,
+    language   TEXT    NOT NULL,
+    label      TEXT    NOT NULL,
+    pinned     INTEGER NOT NULL DEFAULT 0,
+    fetched_at INTEGER NOT NULL,
+    card_count INTEGER NOT NULL,
+    PRIMARY KEY (provider, set_id, language)
+);
+
+upsertPrinting:
+INSERT OR REPLACE INTO printing (
+    provider, card_id, game, set_id, set_code, language,
+    name, name_folded, card_type, rarity, cost, domains, payload
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+upsertCachedSet:
+INSERT OR REPLACE INTO cached_set (provider, set_id, language, label, pinned, fetched_at, card_count)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+-- The set-open path.
+printingsInSet:
+SELECT payload FROM printing
+WHERE provider = ? AND set_id = ? AND language = ?;
+
+-- The storage screen, which is four directory walks today.
+cachedSetCount:
+SELECT COUNT(*) FROM cached_set;
+
+pinnedSetCount:
+SELECT COUNT(*) FROM cached_set WHERE pinned = 1;
+
+printingCount:
+SELECT COUNT(*) FROM printing;
+
+languageBreakdown:
+SELECT language, COUNT(*) AS total FROM cached_set GROUP BY language ORDER BY total DESC;
+
+-- The prize: a filtered search across every downloaded set of a game, in one query.
+--
+-- Every predicate is opt-in via a NULL guard, which is how one statement serves a filter sheet
+-- with any combination of chips set. `:excludeText` is the "does not contain" half the file cache
+-- has no way to offer at all.
+searchPrintings:
+SELECT payload FROM printing
+WHERE game = :game
+  AND (:language IS NULL OR language = :language)
+  AND (:text IS NULL OR name_folded LIKE '%' || :text || '%')
+  AND (:excludeText IS NULL OR name_folded NOT LIKE '%' || :excludeText || '%')
+  AND (:cardType IS NULL OR card_type = :cardType)
+  AND (:rarity IS NULL OR rarity = :rarity)
+  AND (:maxCost IS NULL OR (cost IS NOT NULL AND cost <= :maxCost))
+  AND (:minCost IS NULL OR (cost IS NOT NULL AND cost >= :minCost))
+  AND (:domain IS NULL OR (domains IS NOT NULL AND domains LIKE '%' || :domain || '%'))
+ORDER BY name_folded
+LIMIT :limit;
