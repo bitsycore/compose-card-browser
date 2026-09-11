@@ -25,19 +25,35 @@ class CacheManager(
 
 	/** Current usage of both caches, and their ceilings. */
 	suspend fun usage(): CacheUsage = withContext(mIoDispatcher) {
+		val vTotal = mMetadataCache.sizeInBytes()
+		val vKept = mMetadataCache.pinnedBytes()
 		CacheUsage(
-			metadataBytes = mMetadataCache.sizeInBytes(),
+			metadataBytes = vTotal,
 			metadataEntries = mMetadataCache.entryCount(),
 			metadataLimitBytes = mMetadataLimitBytes(),
+			// Split, because the limit governs only one of the two. Kept records -- downloads and
+			// bulk imports -- sit outside it: the ceiling cannot reclaim them, so counting them
+			// against it was a number that could only ever be exceeded. See `MetadataCache.trim`.
+			metadataKeptBytes = vKept,
 			imageBytes = directorySize(mStorage.imageCacheDir),
 			imageLimitBytes = mImageCacheMaxBytes(),
 		)
 	}
 
-	/** Empties the metadata cache. Cards must be refetched; preferences are untouched. */
+	/** Empties the metadata cache, downloads included. Preferences are untouched. */
 	suspend fun clearMetadata() {
 		mMetadataCache.clear()
 	}
+
+	/**
+	 * Empties only the part of the metadata cache that browsing filled.
+	 *
+	 * Downloaded sets and imported catalogues stay. They are not cache in the sense the word is
+	 * usually meant -- nothing evicts them and nothing re-fetches them by itself -- so sweeping
+	 * them away under a button labelled "clear cached data" would throw away a twenty-minute
+	 * import on a tap meant to reclaim a few megabytes.
+	 */
+	suspend fun clearBrowsingMetadata(): Int = mMetadataCache.clearUnpinned()
 
 	/**
 	 * Empties the image cache directory.
@@ -114,6 +130,12 @@ data class CacheUsage(
 	val metadataBytes: Long,
 	val metadataEntries: Int,
 	val metadataLimitBytes: Long,
+	/** Of [metadataBytes], the part that is kept rather than cached -- see `MetadataCache.pin`. */
+	val metadataKeptBytes: Long = 0L,
 	val imageBytes: Long,
 	val imageLimitBytes: Long,
-)
+) {
+
+	/** What browsing occupies: the part the limit actually governs. */
+	val metadataBrowsingBytes: Long get() = (metadataBytes - metadataKeptBytes).coerceAtLeast(0L)
+}

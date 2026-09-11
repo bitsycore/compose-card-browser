@@ -129,3 +129,16 @@ data class CardSearchResults(
 	val isLimitedByCache: Boolean
 		get() = scope == SearchScope.LOCAL_CACHED_SETS && searchedSetCount < knownSetCount
 }
+
+/**
+ * What one game is keeping on disk that the cache ceiling will not reclaim.
+ *
+ * @property sets how many set records are pinned. Not how many sets the game has, and not how many
+ *   are cached -- browsing leaves records too, and those the ceiling can take back
+ * @property bytes what those records occupy
+ */
+data class GameStorage(
+	val game: com.bitsycore.cardbrowser.core.model.GameId,
+	val sets: Int,
+	val bytes: Long,
+)

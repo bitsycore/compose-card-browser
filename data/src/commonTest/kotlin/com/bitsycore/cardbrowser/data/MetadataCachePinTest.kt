@@ -35,7 +35,13 @@ class MetadataCachePinTest {
 
 	private var mNow = 1_000L
 
-	/** A cache with a ceiling small enough that two records cannot both fit. */
+	/**
+	 * A cache with a ceiling small enough that two records cannot both fit.
+	 *
+	 * Sizes here are chosen against a measured envelope overhead of about **218 bytes** per record,
+	 * so a 300-character payload lands at roughly 518 bytes on disk. That matters: a ceiling below
+	 * one whole record evicts everything and proves nothing about the order.
+	 */
 	private fun cache(maxBytes: Long) = MetadataCache(
 		mStorage = AppStorage(FakeFileSystem(), "/cache".toPath(), "/prefs".toPath()).also { it.prepare() },
 		mJson = mJson,
@@ -62,19 +68,57 @@ class MetadataCachePinTest {
 
 	@Test
 	fun `a pinned record survives an eviction that removes an unpinned one`() = runTest {
-		val vCache = cache(maxBytes = 600)
+		// Two unpinned records are enough to breach a 600-byte ceiling on their own, which is what
+		// makes this an eviction at all: the pinned record is outside the budget, so it can neither
+		// cause the sweep nor be taken by it.
+		// ~518 bytes each: two browses breach a 900-byte ceiling, one fits inside it.
+		val vCache = cache(maxBytes = 900)
 		val vDownloaded = CacheKey.of("downloaded")
-		val vBrowsed = CacheKey.of("browsed")
+		val vOldBrowse = CacheKey.of("browsed-old")
+		val vNewBrowse = CacheKey.of("browsed-new")
 
 		vCache.pin(vDownloaded)
 		vCache.put(vDownloaded, "x".repeat(300))
 		mNow += 1_000
-		// Written later, so it is the *more* recently used of the two -- and still the one that
-		// goes, because the other was asked for.
-		vCache.put(vBrowsed, "y".repeat(300))
+		vCache.put(vOldBrowse, "y".repeat(300))
+		mNow += 1_000
+		vCache.put(vNewBrowse, "z".repeat(300))
 
 		assertNotNull(vCache.get(vDownloaded), "The downloaded set must survive")
-		assertNull(vCache.get(vBrowsed), "The browsed set is the evictable one")
+		assertNull(vCache.get(vOldBrowse), "The least recently used browse is the evictable one")
+		assertNotNull(vCache.get(vNewBrowse), "The newest browse should still fit")
+	}
+
+	@Test
+	fun `pinned records do not spend the browsing budget`() = runTest {
+		// The rule this file is really about, and it used to be the other way round. Pinned bytes
+		// counted toward the ceiling while being exempt from eviction, so one bulk import -- which
+		// pins everything it writes -- could exceed the limit on its own. From then on every write
+		// swept, and every browsed record was evicted immediately however small it was: the cache
+		// thrashed and re-fetched sets it had just stored.
+		//
+		// A ceiling the user sets is a statement about how much space *browsing* may take. What a
+		// download occupies is theirs to delete, not the cache's to reclaim.
+		val vCache = cache(maxBytes = 900)
+
+		for (vIndex in 0 until 8) {
+			val vKey = CacheKey.of("imported-$vIndex")
+			vCache.pin(vKey)
+			vCache.put(vKey, "x".repeat(400))
+		}
+		assertTrue(vCache.sizeInBytes() > 900, "the import should be well past the ceiling")
+
+		mNow += 1_000
+		// ~418 bytes, comfortably inside the ceiling on its own.
+		vCache.put(CacheKey.of("browsed"), "y".repeat(200))
+
+		assertNotNull(
+			vCache.get(CacheKey.of("browsed")),
+			"a small browse was evicted by an import that the ceiling cannot reclaim anyway",
+		)
+		for (vIndex in 0 until 8) {
+			assertNotNull(vCache.get(CacheKey.of("imported-$vIndex")), "imported-$vIndex must survive")
+		}
 	}
 
 	@Test
@@ -135,24 +179,64 @@ class MetadataCachePinTest {
 	}
 
 	@Test
-	fun `a cache that cannot be reclaimed still evicts once something unpinned arrives`() = runTest {
-		// The case the sweep hysteresis is about, and the one it must not break. Writing pinned
-		// records past the ceiling leaves the cache unreclaimable, so sweeps are deferred -- that
-		// is the whole point, since re-walking the directory per write is what made a bulk import
-		// quadratic. But the moment something evictable is written, the ceiling has to bite again.
-		val vCache = cache(maxBytes = 600)
+	fun `clearing browsing data keeps what was downloaded`() = runTest {
+		// "Clear cached data" must not mean "throw away the catalogue you spent twenty minutes
+		// importing". The two live in the same directory and only the pin tells them apart.
+		val vCache = cache(maxBytes = Long.MAX_VALUE)
+		val vKept = CacheKey.of("downloaded")
+		vCache.pin(vKept)
+		vCache.put(vKept, "x".repeat(300))
+		vCache.put(CacheKey.of("browsed-a"), "y".repeat(300))
+		vCache.put(CacheKey.of("browsed-b"), "z".repeat(300))
+
+		val vRemoved = vCache.clearUnpinned()
+
+		assertEquals(2, vRemoved)
+		assertNotNull(vCache.get(vKept), "a downloaded set must survive clearing browsing data")
+		assertNull(vCache.get(CacheKey.of("browsed-a")))
+		assertNull(vCache.get(CacheKey.of("browsed-b")))
+	}
+
+	@Test
+	fun `pinned bytes are reported apart from the rest`() = runTest {
+		// What the storage screen shows, and what the limit in settings does not govern.
+		val vCache = cache(maxBytes = Long.MAX_VALUE)
+		val vKept = CacheKey.of("downloaded")
+		vCache.pin(vKept)
+		vCache.put(vKept, "x".repeat(300))
+		vCache.put(CacheKey.of("browsed"), "y".repeat(300))
+
+		val vTotal = vCache.sizeInBytes()
+		val vPinned = vCache.pinnedBytes()
+
+		assertTrue(vPinned > 0, "the downloaded record should be counted as kept")
+		assertTrue(vPinned < vTotal, "kept is a part of the total, not all of it")
+		// And the part the ceiling governs is the remainder, which is what the screen calls
+		// browsing data.
+		assertTrue(vTotal - vPinned > 0)
+	}
+
+	@Test
+	fun `the ceiling still bites once browsing alone exceeds it`() = runTest {
+		// The other side of the rule above: taking pinned bytes out of the budget must not take
+		// the budget away. A pile of imported records sits outside it; browsing that breaches it
+		// on its own is still swept, least recently used first.
+		val vCache = cache(maxBytes = 900)
 
 		for (vIndex in 0 until 4) {
 			val vKey = CacheKey.of("pinned-$vIndex")
 			vCache.pin(vKey)
 			vCache.put(vKey, "x".repeat(300))
 		}
-		assertTrue(vCache.sizeInBytes() > 600, "the pinned records should have breached the ceiling")
+		assertTrue(vCache.sizeInBytes() > 900, "the pinned records should be past the ceiling")
 
 		mNow += 1_000
-		vCache.put(CacheKey.of("browsed"), "y".repeat(300))
+		vCache.put(CacheKey.of("browsed-old"), "y".repeat(300))
+		mNow += 1_000
+		vCache.put(CacheKey.of("browsed-new"), "z".repeat(300))
 
-		assertNull(vCache.get(CacheKey.of("browsed")), "the unpinned record is the one that goes")
+		assertNull(vCache.get(CacheKey.of("browsed-old")), "the oldest browse is the one that goes")
+		assertNotNull(vCache.get(CacheKey.of("browsed-new")))
 		for (vIndex in 0 until 4) {
 			assertNotNull(vCache.get(CacheKey.of("pinned-$vIndex")), "pinned-$vIndex must survive")
 		}

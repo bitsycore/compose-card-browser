@@ -33,6 +33,7 @@ import com.bitsycore.cardbrowser.ui.games.GameListScreen
 import com.bitsycore.cardbrowser.ui.search.SearchScreen
 import com.bitsycore.cardbrowser.ui.sets.SetListScreen
 import com.bitsycore.cardbrowser.ui.settings.SettingsScreen
+import com.bitsycore.cardbrowser.ui.storage.StorageScreen
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -76,6 +77,10 @@ sealed interface Route : NavKey {
 
 	@Serializable
 	data object Settings : Route
+
+	/** What is on the device, and what can be deleted. Reached from settings. */
+	@Serializable
+	data object Storage : Route
 
 	/**
 	 * The download queue.
@@ -250,7 +255,14 @@ fun App() {
 					}
 
 					is Route.Settings -> NavEntry(vRoute) {
-						SettingsScreen(onBack = { vBackStack.removeLastOrNull() })
+						SettingsScreen(
+							onBack = { vBackStack.removeLastOrNull() },
+							onOpenStorage = { vBackStack.add(Route.Storage) },
+						)
+					}
+
+					is Route.Storage -> NavEntry(vRoute) {
+						StorageScreen(onBack = { vBackStack.removeLastOrNull() })
 					}
 
 					is Route.Downloads -> NavEntry(vRoute) {

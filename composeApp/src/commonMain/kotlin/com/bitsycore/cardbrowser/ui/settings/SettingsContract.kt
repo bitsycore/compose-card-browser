@@ -85,9 +85,6 @@ object SettingsContract :
 		/** Moves a language to the front of the preference order. */
 		data class PromoteLanguage(val language: CardLanguage) : Intent
 
-		data object ClearMetadata : Intent
-
-		data object ClearImages : Intent
 	}
 
 	sealed interface Effect
@@ -141,6 +138,5 @@ object SettingsContract :
 				state.preferredLanguages.filter { it != intent.language },
 		)
 
-		Intent.ClearMetadata, Intent.ClearImages -> state
 	}
 }

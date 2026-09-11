@@ -54,16 +54,6 @@ class SettingsViewModel(
 
 			SettingsContract.Intent.Refresh -> readUsage()
 
-			SettingsContract.Intent.ClearMetadata -> {
-				mCacheManager.clearMetadata()
-				readUsage()
-			}
-
-			SettingsContract.Intent.ClearImages -> {
-				mCacheManager.clearImages()
-				readUsage()
-			}
-
 			is SettingsContract.Intent.ImageCacheLimitChosen -> {
 				mPreferences.update { it.copy(imageCacheLimitBytes = intent.bytes) }
 				readUsage()

@@ -148,10 +148,18 @@ class MetadataCache(
 					return@withLock
 				}
 				val vWritten = mFileSystem.metadataOrNull(vPath)?.size ?: 0L
+				// A pinned record is outside the budget entirely, so writing one moves the total
+				// not at all -- see [trimLocked]. One `exists` call, which `isWorthSweeping`
+				// below was already making.
+				val vIsPinned = mFileSystem.exists(markerFor(key))
 				// Unknown until something measures it once: a fresh process inherits a directory
 				// it has never looked at, and assuming zero would let the cache grow past its
 				// ceiling until the first eviction.
-				val vTotal = (mTotalBytes ?: measuredBytes()) - vPrevious + vWritten
+				val vTotal = if (vIsPinned) {
+					mTotalBytes ?: measuredBytes()
+				} else {
+					(mTotalBytes ?: measuredBytes()) - vPrevious + vWritten
+				}
 				mTotalBytes = vTotal
 				if (vTotal > mMaxBytes() && isWorthSweeping(key)) trimLocked()
 			}
@@ -246,6 +254,10 @@ class MetadataCache(
 				try {
 					mFileSystem.createDirectories(mDirectory)
 					mFileSystem.sink(markerFor(key)).buffer().use { }
+					// Those bytes just left the budget. The running total is now an overestimate,
+					// and re-measuring is cheaper than being wrong in the direction of evicting
+					// things needlessly.
+					mTotalBytes = null
 				} catch (vIo: IOException) {
 					// A pin that cannot be written is not worth failing a download over. The set is
 					// still cached; it is merely evictable, which is where it started.
@@ -263,6 +275,8 @@ class MetadataCache(
 				// now find this. Without the reset it would stay deferred until an unpinned
 				// record happened to be written.
 				mSweepFoundNothing = false
+				// And those bytes just entered the budget, which the running total does not know.
+				mTotalBytes = null
 			}
 		}
 	}
@@ -278,6 +292,57 @@ class MetadataCache(
 	 * Reported separately because it is the part of the cache the ceiling cannot reclaim, and a
 	 * settings screen that shows a limit should be able to say how much of it is spoken for.
 	 */
+	/**
+	 * How much [keys] occupy on disk, and how many of them are pinned.
+	 *
+	 * One listing for any number of keys, because the alternative -- a `metadataOrNull` per key --
+	 * is a syscall per set, and a storage screen asks about every set of every game at once.
+	 */
+	suspend fun usageOf(keys: Collection<CacheKey>): KeyUsage = withContext(mIoDispatcher) {
+		val vWanted = keys.mapTo(mutableSetOf()) { pathFor(it).name }
+		if (vWanted.isEmpty()) return@withContext KeyUsage(0, 0, 0L)
+		val vAll = entriesOnDisk()
+		val vPinnedNames = pinnedNamesIn(vAll)
+		var vPresent = 0
+		var vPinned = 0
+		var vBytes = 0L
+		for (vEntry in vAll) {
+			if (isMarker(vEntry.path.name) || vEntry.path.name !in vWanted) continue
+			vPresent++
+			vBytes += vEntry.sizeBytes
+			if (vEntry.path.name in vPinnedNames) vPinned++
+		}
+		KeyUsage(present = vPresent, pinned = vPinned, bytes = vBytes)
+	}
+
+	/**
+	 * Deletes every record the ceiling could have reclaimed, and keeps the pinned ones.
+	 *
+	 * What "clear the cache" should mean once some of the cache is there on purpose. [clear] takes
+	 * everything, including a catalogue that took twenty minutes to import -- fine as a reset, and
+	 * not what a user means by freeing up browsing data.
+	 *
+	 * @return how many records went
+	 */
+	suspend fun clearUnpinned(): Int = withContext(mIoDispatcher) {
+		mWriteLock.withLock {
+			val vAll = entriesOnDisk()
+			val vPinned = pinnedNamesIn(vAll)
+			var vRemoved = 0
+			for (vEntry in vAll) {
+				if (isMarker(vEntry.path.name)) continue
+				if (vEntry.path.name in vPinned) continue
+				deleteQuietly(vEntry.path)
+				mAccessTimes.remove(vEntry.path.name)
+				vRemoved++
+			}
+			// Nothing evictable is left, so the budget is empty whatever it was before.
+			mTotalBytes = 0L
+			mSweepFoundNothing = false
+			vRemoved
+		}
+	}
+
 	suspend fun pinnedBytes(): Long = withContext(mIoDispatcher) {
 		val vAll = entriesOnDisk()
 		val vPinned = pinnedNamesIn(vAll)
@@ -377,6 +442,20 @@ class MetadataCache(
 		val vPinnedNames = pinnedNamesIn(vAll)
 		vEntries.removeAll { it.path.name.endsWith(PIN_SUFFIX) || it.path.name.endsWith(COUNT_SUFFIX) }
 
+		// Pinned records are removed from the budget, not merely skipped when evicting.
+		//
+		// They cannot be reclaimed -- a deliberately downloaded set is never deleted to honour a
+		// number the user set to bound *incidental* browsing -- so counting them was a ceiling
+		// measured against bytes it had no power over. One bulk import is enough to exceed the
+		// limit on its own, and from then on every write swept and evicted browsing records that
+		// together came nowhere near it: the cache thrashed, and re-fetched sets that had just
+		// been cached.
+		//
+		// So the ceiling now means what a user would take it to mean: how much space browsing is
+		// allowed to take. What downloads occupy is reported by [pinnedBytes] and managed by
+		// deleting them, which is a decision rather than an eviction.
+		vEntries.removeAll { it.path.name in vPinnedNames }
+
 		val vCeiling = mMaxBytes()
 		var vTotal = vEntries.sumOf { it.sizeBytes }
 		mTotalBytes = vTotal
@@ -390,11 +469,6 @@ class MetadataCache(
 		vEntries.sortBy { mAccessTimes[it.path.name] ?: 0L }
 		for (vEntry in vEntries) {
 			if (vTotal <= vCeiling) break
-			// A deliberately downloaded record is never evicted, even when that leaves the cache
-			// over its ceiling. The alternative is deleting the thing the user explicitly asked to
-			// keep in order to honour a number they set to bound *incidental* browsing -- so the
-			// ceiling gives way, and `pinnedBytes` exists so a screen can say why.
-			if (vEntry.path.name in vPinnedNames) continue
 			deleteQuietly(vEntry.path)
 			mAccessTimes.remove(vEntry.path.name)
 			vTotal -= vEntry.sizeBytes
@@ -429,7 +503,21 @@ class MetadataCache(
 	private var mTotalBytes: Long? = null
 
 	/** The real figure, from disk. One directory walk. */
-	private fun measuredBytes(): Long = recordsOnDisk().sumOf { it.sizeBytes }
+	/**
+	 * What the budget currently holds, measured from disk.
+	 *
+	 * Pinned records are excluded, because they are not in the budget -- see [trimLocked]. Counting
+	 * them here would put them straight back into the running total the moment it had to be
+	 * re-established, which is exactly when the number matters.
+	 */
+	private fun measuredBytes(): Long {
+		val vAll = entriesOnDisk()
+		val vPinned = pinnedNamesIn(vAll)
+		return vAll
+			.filterNot { isMarker(it.path.name) }
+			.filterNot { it.path.name in vPinned }
+			.sumOf { it.sizeBytes }
+	}
 
 	/**
 	 * Whether a sweep could achieve anything, given what is being written.
@@ -569,3 +657,14 @@ data class CacheKey(val value: String) {
 		fun of(vararg parts: String): CacheKey = CacheKey(parts.joinToString("|"))
 	}
 }
+
+/**
+ * What a set of keys occupies on disk.
+ *
+ * @property present how many of the asked-for keys have a record. Fewer than asked for is normal:
+ *   a game's set list names every set, and only the ones downloaded or browsed are here
+ * @property pinned how many of those are protected from eviction, which is what a storage screen
+ *   reports as kept rather than cached
+ * @property bytes what the present records occupy in total
+ */
+data class KeyUsage(val present: Int, val pinned: Int, val bytes: Long)

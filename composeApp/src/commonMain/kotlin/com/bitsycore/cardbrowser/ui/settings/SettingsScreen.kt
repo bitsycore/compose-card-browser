@@ -53,11 +53,17 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun SettingsScreen(
 	onBack: () -> Unit,
+	onOpenStorage: () -> Unit = {},
 	viewModel: SettingsViewModel = koinViewModel(),
 ) {
 	val vState by viewModel.collectAsStateWithLifecycle()
 
-	SettingsContent(state = vState, dispatch = viewModel::dispatch, onBack = onBack)
+	SettingsContent(
+		state = vState,
+		dispatch = viewModel::dispatch,
+		onBack = onBack,
+		onOpenStorage = onOpenStorage,
+	)
 }
 
 /** The settings screen, given a state and somewhere to send intents. */
@@ -67,6 +73,7 @@ fun SettingsContent(
 	state: SettingsContract.UiState,
 	dispatch: (SettingsContract.Intent) -> Unit,
 	onBack: () -> Unit,
+	onOpenStorage: () -> Unit = {},
 ) {
 	val vState = state
 
@@ -197,12 +204,19 @@ fun SettingsContent(
 
 			Spacer(Modifier.height(12.dp))
 			Text(
-				text = "Both caches evict the least recently used items when they reach their " +
-					"limit. Clearing them frees space and costs a re-download; your preferences " +
-					"and the set you were reading are kept separately and are not affected.",
+				// The clearing buttons moved to the storage screen. They belong next to what they
+				// delete, and "clear card data" here would have taken downloaded sets with it --
+				// which the limits below have no power over and never did.
+				text = "These limits bound what *browsing* accumulates. Sets you downloaded and " +
+					"catalogues you imported sit outside them and are never removed " +
+					"automatically.",
 				style = MaterialTheme.typography.bodySmall,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
 			)
+			Spacer(Modifier.height(8.dp))
+			OutlinedButton(onClick = onOpenStorage, modifier = Modifier.fillMaxWidth()) {
+				Text("Manage storage")
+			}
 
 			Spacer(Modifier.height(16.dp))
 			ChoiceRow(
@@ -224,18 +238,6 @@ fun SettingsContent(
 				render = ::formatBytes,
 				onSelect = { dispatch(SettingsContract.Intent.MetadataCacheLimitChosen(it)) },
 			)
-
-			Spacer(Modifier.height(12.dp))
-			Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-				OutlinedButton(
-					onClick = { dispatch(SettingsContract.Intent.ClearMetadata) },
-					modifier = Modifier.weight(1f),
-				) { Text("Clear card data") }
-				OutlinedButton(
-					onClick = { dispatch(SettingsContract.Intent.ClearImages) },
-					modifier = Modifier.weight(1f),
-				) { Text("Clear images") }
-			}
 
 			Spacer(Modifier.height(20.dp))
 			HorizontalDivider()

@@ -89,6 +89,41 @@ class DownloadRenderer {
 			)
 		}
 
+		renderPhone(vOut, "storage-screen") {
+			com.bitsycore.cardbrowser.ui.storage.StorageContent(
+				state = com.bitsycore.cardbrowser.ui.storage.StorageContract.UiState(
+					usage = com.bitsycore.cardbrowser.data.cache.CacheUsage(
+						metadataBytes = 486_000_000,
+						metadataEntries = 1_240,
+						metadataLimitBytes = 1_000_000_000,
+						metadataKeptBytes = 462_000_000,
+						imageBytes = 184_000_000,
+						imageLimitBytes = 1_000_000_000,
+					),
+					kept = listOf(
+						com.bitsycore.cardbrowser.ui.storage.StorageContract.KeptGame(
+							game = GameId("magic"),
+							displayName = "Magic: The Gathering",
+							sets = 988,
+							bytes = 441_000_000,
+							importedVariant = com.bitsycore.cardbrowser.data.settings.BulkImportRecord(
+								"default_cards",
+								"2026-09-10T09:14:00Z",
+							),
+						),
+						com.bitsycore.cardbrowser.ui.storage.StorageContract.KeptGame(
+							game = GameId("riftbound"),
+							displayName = "Riftbound",
+							sets = 2,
+							bytes = 21_000_000,
+						),
+					),
+					isLoading = false,
+				),
+				dispatch = {},
+			)
+		}
+
 		println("Wrote ${vOut.absolutePath}")
 	}
 }

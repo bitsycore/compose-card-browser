@@ -37,6 +37,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.SetSerializer
 import kotlinx.serialization.serializer
@@ -1592,6 +1593,87 @@ class CardRepository(
 	}
 
 	private fun shardName(shard: Int): String = "shard-$shard.jsonl"
+
+	// ============
+	//  Storage, per game
+
+	/**
+	 * What each game is keeping on disk, for the storage screen.
+	 *
+	 * "Kept" means pinned: records the ceiling will not reclaim because the user asked for them,
+	 * by downloading a set or importing a catalogue. They are the reason a storage screen has to
+	 * exist at all -- the limit in settings bounds browsing, and this is the part that only a
+	 * decision can remove.
+	 *
+	 * Measured from each game's *cached* set list, since that is what maps a set to a cache key.
+	 * A game whose set list has never been fetched reports nothing, which is right: nothing of it
+	 * can have been downloaded either.
+	 *
+	 * Every language a set states is checked, because a bulk import can write eleven records for
+	 * one set and a screen that counted only the browsing language would under-report by a factor
+	 * of ten.
+	 */
+	suspend fun keptByGame(): List<GameStorage> {
+		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardSet>()))
+		return mRegistry.games.mapNotNull { vGame ->
+			currentCoroutineContext().ensureActive()
+			val vProvider = mRegistry.resolve(vGame) ?: return@mapNotNull null
+			val vSets = setListOnDisk(vProvider, vGame.id, vSerializer) ?: return@mapNotNull null
+			val vKeys = keysFor(vProvider, vSets)
+			val vUsage = mCache.usageOf(vKeys)
+			if (vUsage.pinned == 0) null else GameStorage(vGame.id, vUsage.pinned, vUsage.bytes)
+		}
+	}
+
+	/**
+	 * Deletes everything [game] is keeping, and stops keeping it.
+	 *
+	 * Unpinned as well as removed, so a record that survives -- because it is also the set the
+	 * user is currently reading, say -- goes back to being ordinary browsing data rather than
+	 * staying exempt from the ceiling forever.
+	 */
+	suspend fun deleteKept(game: GameId): Int {
+		val vProvider = mRegistry.resolve(game) ?: return 0
+		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardSet>()))
+		val vSets = setListOnDisk(vProvider, game, vSerializer) ?: return 0
+		var vRemoved = 0
+		for (vKey in keysFor(vProvider, vSets)) {
+			currentCoroutineContext().ensureActive()
+			if (!mCache.isPinned(vKey)) continue
+			mCache.unpin(vKey)
+			mCache.remove(vKey)
+			vRemoved++
+		}
+		return vRemoved
+	}
+
+	/** Every cache key a game's sets could occupy: one per set per language it states. */
+	private fun keysFor(
+		provider: CardProvider<GameProfile>,
+		sets: List<CardSet>,
+	): List<CacheKey> = sets.flatMap { vSet ->
+		val vLanguages = (vSet.languages + setOfNotNull(vSet.languageFor(null)))
+			.mapNotNull { effectiveLanguage(provider, it) }
+			.distinct()
+			.ifEmpty { listOf(effectiveLanguage(provider, null)) }
+		vLanguages.map { completeSetKey(provider, vSet.id, it) }
+	}
+
+	/** A game's set list if one is cached in any language, without fetching. */
+	private suspend fun setListOnDisk(
+		provider: CardProvider<GameProfile>,
+		game: GameId,
+		serializer: KSerializer<CacheEnvelope<List<CardSet>>>,
+	): List<CardSet>? {
+		val vLanguages = listOf(null) + provider.capabilities.data.languages
+			.map { effectiveLanguage(provider, it) }
+			.distinct()
+		for (vLanguage in vLanguages) {
+			val vCached = mCache.read(setListKey(provider, game, vLanguage), serializer) ?: continue
+			if (vCached.payload.isNotEmpty()) return vCached.payload
+		}
+		return null
+	}
 
 	/**
 	 * Protects a downloaded set's records from cache eviction, or releases them.

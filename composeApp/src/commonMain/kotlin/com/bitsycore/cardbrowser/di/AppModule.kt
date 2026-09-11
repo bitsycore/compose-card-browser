@@ -53,6 +53,7 @@ import com.bitsycore.cardbrowser.ui.search.SearchViewModel
 import com.bitsycore.cardbrowser.ui.sets.SetListArgs
 import com.bitsycore.cardbrowser.ui.sets.SetListViewModel
 import com.bitsycore.cardbrowser.ui.settings.SettingsViewModel
+import com.bitsycore.cardbrowser.ui.storage.StorageViewModel
 import com.bitsycore.cardbrowser.data.download.DownloadManager
 import com.bitsycore.cardbrowser.ui.common.CoilImagePrefetcher
 import kotlinx.coroutines.CoroutineScope
@@ -259,6 +260,7 @@ val appModule = module {
 		CardDetailViewModel(get(), get(), get(), get(), get(), vArgs)
 	}
 	viewModel { SettingsViewModel(get(), get(), get(), get()) }
+	viewModel { StorageViewModel(get(), get(), get(), get()) }
 	viewModel { (vArgs: SearchArgs) -> SearchViewModel(get(), get(), get(), vArgs) }
 }
 
