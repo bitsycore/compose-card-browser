@@ -350,6 +350,20 @@ fun CardGridContent(
 					onClearAll = { dispatch(CardGridContract.Intent.ClearFilters) },
 				)
 
+				// Above the coverage notice, because it explains something about the whole
+				// screen rather than about how much of the set is on it.
+				vState.languageSubstitutedFor?.let { vWanted ->
+					NoticeBanner(
+						text = "Showing ${vState.language?.displayName.orEmpty()} " +
+							"— ${vWanted.displayName} is not downloaded.",
+						actionLabel = "Fetch ${vWanted.displayName}",
+						// The same intent the language menu dispatches, so "fetch it after all"
+						// and "choose it from the menu" are one code path rather than two that
+						// could come to disagree about what switching means.
+						onAction = { dispatch(CardGridContract.Intent.LanguageSelected(vWanted)) },
+					)
+				}
+
 				vState.coverageNotice?.let { vNotice ->
 					NoticeBanner(
 						text = vNotice,

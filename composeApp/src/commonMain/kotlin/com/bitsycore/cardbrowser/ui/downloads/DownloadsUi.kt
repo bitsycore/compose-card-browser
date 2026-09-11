@@ -323,7 +323,14 @@ fun DownloadKindDialog(
 						}
 					},
 				)
-				if (bulkVariants.size > 1 && vInfo && !vLocked(DownloadKind.CARD_INFO)) {
+				// Shown whenever there is a choice, and deliberately *not* gated on the lock.
+				//
+				// It used to be `&& !vLocked(CARD_INFO)`, which hid the chooser precisely when it was
+				// needed: the selection defaults to the cheapest file, taking that file locks card
+				// info, and the lock then hid the only control that could select the other one. So
+				// after importing Scryfall's English dump the 393 MB every-language dump was
+				// unreachable -- the view model was still offering it, and nothing could pick it.
+				if (bulkVariants.size > 1 && vInfo) {
 					Spacer(Modifier.height(6.dp))
 					Column(Modifier.padding(start = 44.dp)) {
 						for (vOption in bulkVariants) {
@@ -353,6 +360,28 @@ fun DownloadKindDialog(
 							style = MaterialTheme.typography.bodySmall,
 							color = MaterialTheme.colorScheme.onSurfaceVariant,
 						)
+						// The consequence in the reader's own language, before the bytes are spent.
+						//
+						// Records are cached per language, so a dump of one language is not a
+						// download of this game for someone browsing in another: every set still
+						// costs a request when it is opened, and the import bought nothing. That is
+						// exactly what happened -- 78 MB imported under a French preference, and the
+						// grid went on fetching French set by set.
+						val vAlternative = bulkVariants.firstOrNull { it.coversAllLanguages }
+						if (vVariant?.coversAllLanguages == false &&
+							vAlternative != null &&
+							defaultLanguage != null
+						) {
+							Spacer(Modifier.height(4.dp))
+							Text(
+								text = "You browse in ${defaultLanguage.displayName}. " +
+									"Records are kept per language, so this file may leave " +
+									"every set still to fetch. " +
+									"${vAlternative.label} is the one that covers it.",
+								style = MaterialTheme.typography.bodySmall,
+								color = MaterialTheme.colorScheme.error,
+							)
+						}
 					}
 				}
 				}

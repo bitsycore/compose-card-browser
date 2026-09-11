@@ -331,6 +331,7 @@ class SetCardCountTest {
 		val vBefore = mProbeCount
 
 		val vLanguage = vRepository.openingLanguageFor(mSetId, CountTestGame.id, CardLanguage.FRENCH)
+			.language
 
 		assertEquals(CardLanguage.FRENCH, vLanguage)
 		assertEquals(vBefore, mProbeCount, "a cached set must cost no language probes")
@@ -342,9 +343,45 @@ class SetCardCountTest {
 		val vBefore = mProbeCount
 
 		val vLanguage = vRepository.openingLanguageFor(mSetId, CountTestGame.id, CardLanguage.FRENCH)
+			.language
 
 		assertEquals(CardLanguage.FRENCH, vLanguage)
 		assertEquals(1, mProbeCount - vBefore, "one probe for the one language being opened")
+	}
+
+	@Test
+	fun `a downloaded English set opens in English when French was never downloaded`() = runTest {
+		// The report: 78 MB of Scryfall's English dump imported while preferring French, and every
+		// Magic set still fetched over the network on open. A cache key embeds a language, so the
+		// French read missed 988 times over records that were sitting on disk.
+		val vRepository = repository(english = 24, french = 4)
+		vRepository.cards(mSetId, CountTestGame.id, CardQuery(), CardLanguage.ENGLISH).toList()
+		vRepository.setPinned(CountTestGame.id, mSetId, CardLanguage.ENGLISH, isPinned = true)
+		val vBefore = mProbeCount
+
+		val vOpening = vRepository.openingLanguageFor(mSetId, CountTestGame.id, CardLanguage.FRENCH)
+
+		assertEquals(CardLanguage.ENGLISH, vOpening.language, "the downloaded copy is used")
+		assertEquals(
+			CardLanguage.FRENCH,
+			vOpening.substitutedFor,
+			"and the screen is told what it was given instead of",
+		)
+		assertEquals(vBefore, mProbeCount, "a downloaded set must cost no probe")
+	}
+
+	@Test
+	fun `an English copy that was only browsed does not override the French preference`() = runTest {
+		// The other half of the rule. Glancing at a set in English last week is not a request to
+		// be shown English today -- only a download is, which is why the check is for a pin and
+		// not for a file.
+		val vRepository = repository(english = 24, french = 4)
+		vRepository.cards(mSetId, CountTestGame.id, CardQuery(), CardLanguage.ENGLISH).toList()
+
+		val vOpening = vRepository.openingLanguageFor(mSetId, CountTestGame.id, CardLanguage.FRENCH)
+
+		assertEquals(CardLanguage.FRENCH, vOpening.language)
+		assertNull(vOpening.substitutedFor, "nothing was substituted")
 	}
 
 	@Test
@@ -354,6 +391,7 @@ class SetCardCountTest {
 		val vRepository = repository(english = 8, french = 0)
 
 		val vLanguage = vRepository.openingLanguageFor(mSetId, CountTestGame.id, CardLanguage.FRENCH)
+			.language
 
 		assertEquals(CardLanguage.ENGLISH, vLanguage, "French has nothing, so English opens")
 	}

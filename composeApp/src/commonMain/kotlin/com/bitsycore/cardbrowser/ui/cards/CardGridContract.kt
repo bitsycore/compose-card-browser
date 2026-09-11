@@ -67,6 +67,15 @@ object CardGridContract :
 		val availableLanguages: Set<CardLanguage> = emptySet(),
 		/** The language to fall back to when a switch turns out to be impossible. */
 		val previousLanguage: CardLanguage? = null,
+		/**
+		 * The language the user would have had, when this set opened in a downloaded one instead.
+		 *
+		 * Set only for the fixable case -- the preferred language is not on disk and another one
+		 * was deliberately downloaded. A set that simply has no edition in the preferred language
+		 * leaves this null, because there is nothing to offer and saying "not downloaded" about a
+		 * printing that does not exist would be a lie. See `CardRepository.OpeningLanguage`.
+		 */
+		val languageSubstitutedFor: CardLanguage? = null,
 		/** True while a chosen language is being fetched, so the control can show it is busy. */
 		val isChangingLanguage: Boolean = false,
 	) {
@@ -205,6 +214,8 @@ object CardGridContract :
 			val game: GameProfile,
 			val languages: Set<CardLanguage>,
 			val language: CardLanguage?,
+			/** What was wanted, when [language] is a downloaded stand-in for it. */
+			val substitutedFor: CardLanguage? = null,
 		) : Intent
 
 		/**
@@ -320,6 +331,9 @@ object CardGridContract :
 			// Only seeded, never overwritten: a resolve that lands after the user has already
 			// chosen must not undo their choice.
 			language = state.language ?: intent.language,
+			// Same rule, and for the same reason: once the user has picked a language, the notice
+			// about the one they were given instead is no longer about what is on screen.
+			languageSubstitutedFor = if (state.language == null) intent.substitutedFor else null,
 		)
 
 		is Intent.LanguageOptionsRequested -> state
@@ -345,6 +359,10 @@ object CardGridContract :
 				isLoading = true,
 				error = null,
 				requestGeneration = state.requestGeneration + 1,
+				// The notice offered this, and it has been taken. Whatever happens next -- the
+				// fetch works, or the set has no such edition and `LanguageUnavailable` puts the
+				// old one back -- "you were given a stand-in" is no longer the state of things.
+				languageSubstitutedFor = null,
 			)
 		}
 

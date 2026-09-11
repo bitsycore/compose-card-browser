@@ -89,6 +89,9 @@ class CardGridViewModel(
 						?.let { mRepository.knownLanguagesFor(it, vGame.id) }
 						?.takeIf { it.isNotEmpty() }
 						?: vProvider.capabilities.data.languages
+					val vOpening = vSetId?.let {
+						mRepository.openingLanguageFor(it, vGame.id, vPreferred)
+					}
 					dispatch(
 						CardGridContract.Intent.CapabilitiesResolved(
 							supportedFilters = vProvider.capabilities.filtering.supported,
@@ -106,9 +109,10 @@ class CardGridViewModel(
 							// where it cannot, and only pays for the full confirmation when the
 							// preferred language really has nothing. The rule it protects is the
 							// same: a set is never opened in a language with no cards.
-							language = vSetId?.let {
-								mRepository.openingLanguageFor(it, vGame.id, vPreferred)
-							} ?: vProvider.resolveLanguage(vPreferred),
+							language = vOpening?.language ?: vProvider.resolveLanguage(vPreferred),
+							// Non-null only when the set opened in a language that was downloaded
+							// because the preferred one was not -- see `OpeningLanguage`.
+							substitutedFor = vOpening?.substitutedFor,
 						),
 					)
 				}

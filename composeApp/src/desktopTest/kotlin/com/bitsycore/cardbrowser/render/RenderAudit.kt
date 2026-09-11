@@ -9,6 +9,7 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Density
 import com.bitsycore.cardbrowser.core.model.CardLanguage
+import com.bitsycore.cardbrowser.core.provider.BulkSummary
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
@@ -74,6 +75,60 @@ class DownloadRenderer {
 				defaultLanguage = CardLanguage.FRENCH,
 				// Half held: the case that used to read as finished.
 				infoLanguages = setOf(CardLanguage.FRENCH),
+			)
+		}
+
+		// The other half of the same report: the set opens in the language that *was* downloaded,
+		// and the banner says so with the way out.
+		renderPhone(vOut, "grid-language-substituted") {
+			com.bitsycore.cardbrowser.ui.cards.CardGridContent(
+				state = com.bitsycore.cardbrowser.ui.cards.CardGridContract.UiState(
+					setId = "scryfall:blb",
+					setName = "Bloomburrow",
+					setCode = "BLB",
+					cards = com.bitsycore.cardbrowser.ui.preview.PreviewData.CARDS,
+					isLoading = false,
+					isCompleteSet = true,
+					cachedCardCount = com.bitsycore.cardbrowser.ui.preview.PreviewData.CARDS.size,
+					knownSetSize = com.bitsycore.cardbrowser.ui.preview.PreviewData.CARDS.size,
+					language = CardLanguage.ENGLISH,
+					languageSubstitutedFor = CardLanguage.FRENCH,
+					availableLanguages = setOf(CardLanguage.ENGLISH, CardLanguage.FRENCH),
+				),
+				dispatch = {},
+			)
+		}
+
+		// The reported case: Scryfall's English dump already imported, browsing in French.
+		// The chooser has to be reachable -- it was not -- and has to say what the cheap file
+		// costs someone who does not read English.
+		renderToPng(vOut, "downloads-kind-imported-english", width = 700, height = 1000, density = 1.65f) {
+			DownloadKindDialog(
+				setName = "",
+				setCount = 988,
+				cardCount = null,
+				onDismiss = {},
+				onConfirm = { _, _, _ -> },
+				languages = listOf(CardLanguage.ENGLISH, CardLanguage.FRENCH, CardLanguage.JAPANESE),
+				defaultLanguage = CardLanguage.FRENCH,
+				bulkVariants = listOf(
+					BulkSummary(
+						id = "default_cards",
+						label = "Default cards",
+						compressedBytes = 78_000_000,
+						updatedAt = null,
+						description = "A card in each language it was printed in.",
+					),
+					BulkSummary(
+						id = "all_cards",
+						label = "All languages",
+						compressedBytes = 393_000_000,
+						updatedAt = null,
+						description = "Every printing in every language.",
+						coversAllLanguages = true,
+					),
+				),
+				importedVariantIds = setOf("default_cards"),
 			)
 		}
 

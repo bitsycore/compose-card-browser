@@ -131,6 +131,24 @@ data class CardSearchResults(
 }
 
 /**
+ * Which language a set opens in, and whether that is the one the user asked for.
+ *
+ * Two different reasons a set can open in a language nobody chose, and a screen has to tell them
+ * apart because it says opposite things about them:
+ *
+ * - **The preferred language has no printing of this set.** Nothing to do about it. There is no
+ *   Korean edition of Pokemon's Base Set and no button will produce one.
+ * - **The preferred language is simply not downloaded, and another one is.** Entirely fixable, and
+ *   the screen offers to fetch it. [substitutedFor] names the language that was wanted, and is
+ *   null in every other case -- including the ordinary one where the wanted language is what
+ *   opened.
+ */
+data class OpeningLanguage(
+	val language: com.bitsycore.cardbrowser.core.model.CardLanguage?,
+	val substitutedFor: com.bitsycore.cardbrowser.core.model.CardLanguage? = null,
+)
+
+/**
  * What one game is keeping on disk that the cache ceiling will not reclaim.
  *
  * @property sets how many distinct *sets* have a pinned record. Not how many records: a record is

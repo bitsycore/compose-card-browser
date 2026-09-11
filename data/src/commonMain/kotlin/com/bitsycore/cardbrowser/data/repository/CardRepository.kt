@@ -1109,53 +1109,116 @@ class CardRepository(
 	 *
 	 * 1. **What is on disk.** A set held in the language it would open in opens in it, with no
 	 *    request at all. This is the case for anything downloaded or previously browsed.
-	 * 2. **One probe.** Otherwise the source is asked about *that one language*, which is one
+	 * 2. **What was downloaded, in another language.** A record the user deliberately asked for --
+	 *    a downloaded set or a bulk import -- is used rather than fetching the preferred language
+	 *    over the network. See below.
+	 * 3. **One probe.** Otherwise the source is asked about *that one language*, which is one
 	 *    request rather than the eleven a full confirmation costs.
-	 * 3. **The full confirmation**, only when the preferred language turns out to have nothing --
+	 * 4. **The full confirmation**, only when the preferred language turns out to have nothing --
 	 *    the case a Japan-only set or an untranslated new set falls into, where a menu has to be
 	 *    built anyway.
 	 *
 	 * The rule this protects is unchanged: a set is never opened in a language with no cards. It
 	 * is the cost of establishing that which changes, from eleven requests per set open to zero
-	 * for the ordinary case. See [languagesFor] for what step 3 does and why it is cached.
+	 * for the ordinary case. See [languagesFor] for what step 4 does and why it is cached.
+	 *
+	 * ## Why step 2 exists, and why only pinned records count
+	 *
+	 * Scryfall's cheap dump is 78 MB of overwhelmingly English cards, and a cache key embeds a
+	 * language -- so a user who imported it while preferring French held every Magic set on disk
+	 * and still paid a request to open each one. The import bought nothing, which is not a
+	 * defensible outcome for 78 MB.
+	 *
+	 * Only *pinned* records qualify. Pinned means downloaded or imported -- something the user
+	 * asked for by name -- and using one is honouring that request. Ordinary browsing cache is not
+	 * the same thing: a set glanced at in English last week is no reason to stop showing a
+	 * French-preferring user French today, and treating it as one would make the app's language
+	 * drift with its history rather than follow its setting.
+	 *
+	 * The substitution is never silent. [OpeningLanguage.substitutedFor] carries what was wanted,
+	 * and the grid says so with a way to fetch it after all.
 	 */
 	suspend fun openingLanguageFor(
 		setId: SourceId,
 		game: GameId,
 		preferred: CardLanguage?,
-	): CardLanguage? {
-		val vProvider = mRegistry.byId(setId.provider) ?: return preferred
+	): OpeningLanguage {
+		val vProvider = mRegistry.byId(setId.provider) ?: return OpeningLanguage(preferred)
 		val vSet = setRecord(setId, game)
 		val vWanted = effectiveLanguage(vProvider, vSet?.languageFor(preferred) ?: preferred)
-			?: return null
+			?: return OpeningLanguage(null)
 
 		// 1. Held on disk, so the source has already served it. No request.
-		if (mCache.exists(completeSetKey(vProvider, setId, vWanted))) return vWanted
+		if (mCache.exists(completeSetKey(vProvider, setId, vWanted))) return OpeningLanguage(vWanted)
 
-		// A confirmation already on disk answers without asking again, and is what step 3 leaves
+		// 2. Not held in the wanted language, but downloaded in another.
+		downloadedLanguageFor(vProvider, setId, vSet, preferred, except = vWanted)
+			?.let { return OpeningLanguage(it, substitutedFor = vWanted) }
+
+		// A confirmation already on disk answers without asking again, and is what step 4 leaves
 		// behind -- so the expensive path is paid at most once per set per TTL.
 		val vSerializer = CacheEnvelope.serializer(SetSerializer(serializer<CardLanguage>()))
 		mCache.read(setLanguagesKey(vProvider, setId), vSerializer)
 			?.takeIf { !it.isStale(mClock(), mSetListTtlMillis) }
 			?.payload
 			?.let { vConfirmed ->
-				return vConfirmed.firstOrNull { it == vWanted }
-					?: vSet?.copy(languages = vConfirmed)?.languageFor(preferred)
-					?: vConfirmed.firstOrNull()
+				return OpeningLanguage(
+					vConfirmed.firstOrNull { it == vWanted }
+						?: vSet?.copy(languages = vConfirmed)?.languageFor(preferred)
+						?: vConfirmed.firstOrNull(),
+				)
 			}
 
-		// 2. One probe, for the one language that matters.
+		// 3. One probe, for the one language that matters.
 		val vHasWanted = runCatching { vProvider.confirmLanguages(setId, setOf(vWanted)) }
 			.getOrNull()
 			// Unconfirmable is not absent -- a timeout says nothing about the printing. Opening
 			// it and letting the grid report an empty set is the honest outcome.
-			?: return vWanted
-		if (vWanted in vHasWanted) return vWanted
+			?: return OpeningLanguage(vWanted)
+		if (vWanted in vHasWanted) return OpeningLanguage(vWanted)
 
-		// 3. It really has nothing. Now the full list is worth its cost, and it is cached.
+		// 4. It really has nothing. Now the full list is worth its cost, and it is cached.
+		//
+		// No `substitutedFor` from here down: the wanted language has been *asked about* and the
+		// source says it has no such edition. That is not a missing download and must not be
+		// offered as one.
 		val vConfirmed = languagesFor(setId, game)
-		return vSet?.copy(languages = vConfirmed)?.languageFor(preferred)
-			?: vConfirmed.firstOrNull()
+		return OpeningLanguage(
+			vSet?.copy(languages = vConfirmed)?.languageFor(preferred) ?: vConfirmed.firstOrNull(),
+		)
+	}
+
+	/**
+	 * A language this set was deliberately downloaded in, best first, or `null` if none was.
+	 *
+	 * Pinned only -- see [openingLanguageFor]'s note on why browsing cache does not count -- and
+	 * in the user's own preference order, so someone who reads French then English gets the
+	 * English copy rather than whichever language happens to hash first.
+	 */
+	private suspend fun downloadedLanguageFor(
+		provider: CardProvider<GameProfile>,
+		setId: SourceId,
+		set: CardSet?,
+		preferred: CardLanguage?,
+		except: CardLanguage,
+	): CardLanguage? {
+		// Without a cached set record there is nothing set-specific to go on, so the source's own
+		// list is the candidate list. It over-offers, which costs only a few `exists` checks: a
+		// language nothing was downloaded in simply never matches.
+		val vCandidates = set
+			?.let { languageCandidatesFor(provider, it, preferred) }
+			?: provider.capabilities.data.languages.asSequence()
+				.map { effectiveLanguage(provider, it) }
+		val vUsable = vCandidates
+			.filterNotNull()
+			.filter { it != except }
+			.toSet()
+		if (vUsable.isEmpty()) return null
+		// Preference order first, then anything else the candidates turned up, so a language the
+		// app does not rank is still usable rather than invisible.
+		val vOrdered = CardLanguage.PREFERENCE_ORDER.filter { it in vUsable } +
+			vUsable.filterNot { it in CardLanguage.PREFERENCE_ORDER }
+		return vOrdered.firstOrNull { mCache.isPinned(completeSetKey(provider, setId, it)) }
 	}
 
 	/**
