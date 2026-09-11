@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -33,13 +34,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.Role
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import com.bitsycore.cardbrowser.ui.common.arrowSelection
 import com.bitsycore.cardbrowser.ui.common.reorderHandle
@@ -966,59 +965,12 @@ private fun SetRow(
 				// column of targets to miss on the way to opening one.
 				else -> {
 					Spacer(Modifier.size(4.dp))
-					// A mark becomes a button in the same place, so the star does not jump when the
-					// mode changes. The same scale-through the game picker's trailing icon uses: a
-					// plain cross-fade leaves both at full size and half-transparent, which reads
-					// as a glitch rather than as one thing becoming another.
-					//
-					// Both branches occupy the same 32dp, so the centre they share is the same
-					// point on screen -- a browsing row with no star still holds the space, which
-					// is what stops the whole row shuffling sideways as the mode turns.
-					AnimatedContent(
-						targetState = isEditing,
-						transitionSpec = {
-							(fadeIn() + scaleIn(initialScale = 0.6f)) togetherWith
-								(fadeOut() + scaleOut(targetScale = 0.6f))
-						},
-						label = "favourite control",
-					) { vIsEditing ->
-						if (!vIsEditing) {
-							Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
-								if (isFavourite) {
-									Icon(
-										imageVector = AppIcons.StarFilled,
-										contentDescription = "${set.name} is a favourite",
-										tint = MaterialTheme.colorScheme.primary,
-										modifier = Modifier.size(20.dp),
-									)
-								}
-							}
-						} else {
-							IconButton(onClick = onToggleFavourite, modifier = Modifier.size(32.dp)) {
-								Icon(
-									imageVector = if (isFavourite) {
-										AppIcons.StarFilled
-									} else {
-										AppIcons.StarBorder
-									},
-									contentDescription = if (isFavourite) {
-										"Remove ${set.name} from favourites"
-									} else {
-										"Add ${set.name} to favourites"
-									},
-									// Filled and coloured when on, outlined and quiet when off, so
-									// a column of rows reads as "these few" rather than as a row of
-									// identical stars.
-									tint = if (isFavourite) {
-										MaterialTheme.colorScheme.primary
-									} else {
-										MaterialTheme.colorScheme.onSurfaceVariant
-									},
-									modifier = Modifier.size(20.dp),
-								)
-							}
-						}
-					}
+					FavouriteStar(
+						name = set.name,
+						isFavourite = isFavourite,
+						isEditing = isEditing,
+						onToggle = onToggleFavourite,
+					)
 					// Offered only while there is something left to fetch, and only while browsing.
 					// A button that starts a download of nothing is worse than no button: it
 					// invites a tap, does the work of checking, and reports that everything was
@@ -1028,15 +980,19 @@ private fun SetRow(
 					// The marks below still say what is held -- this removes the *offer*, not the
 					// statement. Which is the right way round: "you have this" is information, and
 					// "get this" is an action that has nothing to act on.
-					AnimatedVisibility(visible = !isFullyDownloaded && !isEditing) {
-						IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
-							Icon(
-								imageVector = AppIcons.Download,
-								contentDescription = "Download ${set.name}",
-								tint = MaterialTheme.colorScheme.onSurfaceVariant,
-								modifier = Modifier.size(20.dp),
-							)
-						}
+					//
+					// Two axes, animated differently on purpose. A set *becoming* complete takes
+					// the slot away, width and all -- nothing else is moving at that moment. The
+					// mode turning only fades it: the handle is already expanding on the left, and
+					// a second width animation at the other end, on its own spring, leaves the
+					// name column squeezed between two springs that do not finish together. That
+					// is the bounce -- the handle was never the thing bouncing.
+					AnimatedVisibility(visible = !isFullyDownloaded) {
+						DownloadButton(
+							name = set.name,
+							isEditing = isEditing,
+							onDownload = onDownload,
+						)
 					}
 				}
 			}
@@ -1070,6 +1026,99 @@ private fun SetRow(
 			// column got any, so on a row with a long set name the name was squeezed to about one
 			// character per line. The row's own tint is the primary signal anyway; this is the
 			// label that explains it.
+		}
+	}
+}
+
+/**
+ * The favourite mark, in a slot that never moves.
+ *
+ * A favourite's star is the *same* star in both modes, so it is simply drawn and nothing about it
+ * transitions -- morphing it into itself is motion that says something changed when nothing did.
+ * Only the hollow "add" star comes and goes, and only on a row that is not a favourite yet: an
+ * outline on every row while browsing is a column of targets to miss on the way to opening one.
+ *
+ * The slot is a fixed 32dp either way, which is what keeps the rest of the row still.
+ *
+ * Its own composable rather than a block inside the row because `AnimatedVisibility` resolves to
+ * the `RowScope` overload wherever a `Row` receiver is in scope, and the one wanted here is the
+ * plain one.
+ */
+@Composable
+private fun FavouriteStar(
+	name: String,
+	isFavourite: Boolean,
+	isEditing: Boolean,
+	onToggle: () -> Unit,
+) {
+	Box(
+		modifier = Modifier
+			.size(32.dp)
+			.clip(CircleShape)
+			.then(
+				if (isEditing) {
+					Modifier.clickable(role = Role.Button, onClick = onToggle)
+				} else {
+					Modifier
+				},
+			),
+		contentAlignment = Alignment.Center,
+	) {
+		if (isFavourite) {
+			Icon(
+				imageVector = AppIcons.StarFilled,
+				contentDescription = if (isEditing) {
+					"Remove $name from favourites"
+				} else {
+					"$name is a favourite"
+				},
+				tint = MaterialTheme.colorScheme.primary,
+				modifier = Modifier.size(20.dp),
+			)
+		}
+		AnimatedVisibility(
+			visible = isEditing && !isFavourite,
+			enter = fadeIn() + scaleIn(initialScale = 0.6f),
+			exit = fadeOut() + scaleOut(targetScale = 0.6f),
+		) {
+			Icon(
+				imageVector = AppIcons.StarBorder,
+				contentDescription = "Add $name to favourites",
+				// Outlined and quiet when off, filled and coloured when on, so a column of rows
+				// reads as "these few" rather than as a row of identical stars.
+				tint = MaterialTheme.colorScheme.onSurfaceVariant,
+				modifier = Modifier.size(20.dp),
+			)
+		}
+	}
+}
+
+/**
+ * The download offer, in a slot whose width does not depend on the mode.
+ *
+ * Two axes, animated differently on purpose. A set *becoming* complete takes the whole slot away --
+ * that is the caller's `AnimatedVisibility`, and nothing else on the row is moving at the time. The
+ * mode turning only fades the button: the handle is already expanding on the left, and a second
+ * width animation at the other end, on its own spring, leaves the name column squeezed between two
+ * springs that do not finish together. That is the bounce the arranging toggle used to have -- the
+ * handle was never the thing bouncing.
+ */
+@Composable
+private fun DownloadButton(
+	name: String,
+	isEditing: Boolean,
+	onDownload: () -> Unit,
+) {
+	Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+		AnimatedVisibility(visible = !isEditing, enter = fadeIn(), exit = fadeOut()) {
+			IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
+				Icon(
+					imageVector = AppIcons.Download,
+					contentDescription = "Download $name",
+					tint = MaterialTheme.colorScheme.onSurfaceVariant,
+					modifier = Modifier.size(20.dp),
+				)
+			}
 		}
 	}
 }
