@@ -13,11 +13,12 @@ import kotlin.test.assertTrue
 /**
  * The first-launch setup's transitions.
  *
- * Two rules carry real weight here and the rest is paging. The flow must open with *everything*
- * selected, because that is where the app stands without it and a setup whose first action is to
- * hide every game would make its own Next button destructive. And it must not let someone leave
- * the first page having chosen nothing, because the app would then have nothing to show and the
- * cause would be three screens behind them.
+ * Three rules carry real weight here and the rest is paging. On a first launch the flow must open
+ * with *everything* selected, because that is where the app stands without it and a setup whose
+ * first action is to hide every game would make its own Next button destructive. On a re-run from
+ * Settings it must open on what is hidden *now*, or finishing it silently undoes a choice the user
+ * made on the game list. And it must not let someone leave the first page having chosen nothing,
+ * because the app would then have nothing to show and the cause would be three screens behind them.
  */
 class SetupContractTest {
 
@@ -87,6 +88,35 @@ class SetupContractTest {
 
 		val vOn = SetupContract.reduce(vOff, SetupContract.Intent.GameToggled("magic"))
 		assertTrue("magic" in vOn.selected)
+	}
+
+	@Test
+	fun `re-running the flow opens on what is hidden now -- not on everything ticked`() {
+		// The bug: this screen can be re-run from Settings, and it ticked every game regardless of
+		// what the user had hidden on the game list. Finishing then wrote an empty hidden set, so
+		// the flow quietly undid a choice made somewhere else.
+		val vState = SetupContract.reduce(
+			SetupContract.UiState(),
+			SetupContract.Intent.GamesLoaded(games = mGames, hiddenIds = setOf("pokemon")),
+		)
+
+		assertEquals(setOf("magic", "riftbound"), vState.selected)
+	}
+
+	@Test
+	fun `a game the user has never been asked about starts ticked`() {
+		// A build that adds a game has no entry for it either way, and the right default for
+		// something nobody has declined is to show it. Stated because the obvious implementation --
+		// storing what to *show* -- gets this backwards and makes new games invisible.
+		val vState = SetupContract.reduce(
+			SetupContract.UiState(),
+			SetupContract.Intent.GamesLoaded(
+				games = mGames,
+				hiddenIds = setOf("a-game-this-build-no-longer-has"),
+			),
+		)
+
+		assertEquals(setOf("magic", "pokemon", "riftbound"), vState.selected)
 	}
 
 	@Test

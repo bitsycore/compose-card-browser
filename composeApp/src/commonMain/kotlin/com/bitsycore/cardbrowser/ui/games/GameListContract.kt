@@ -57,6 +57,19 @@ object GameListContract :
 	sealed interface Intent {
 
 		/** The registry and preferences answered. */
+		/**
+		 * The order and the hidden list changed somewhere other than this screen.
+		 *
+		 * Separate from [Loaded] on purpose: that one also clears `isLoading` and replaces the game
+		 * list and the last-opened game, none of which a preference write has anything to say
+		 * about. Re-sending it for every change would have this screen reload itself every time the
+		 * user opened a game, which writes `lastGame`.
+		 */
+		data class CustomisationChanged(
+			val order: List<String>,
+			val hiddenIds: Set<String>,
+		) : Intent
+
 		data class Loaded(
 			val games: List<GameProfile>,
 			val sources: Map<GameProfile, String>,
@@ -120,6 +133,11 @@ object GameListContract :
 			order = intent.order,
 			hiddenIds = intent.hiddenIds,
 			isLoading = false,
+		)
+
+		is Intent.CustomisationChanged -> state.copy(
+			order = intent.order,
+			hiddenIds = intent.hiddenIds,
 		)
 
 		is Intent.GameOpened -> state.copy(lastGame = intent.game)

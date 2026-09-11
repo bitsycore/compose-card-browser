@@ -24,14 +24,18 @@ class SetupViewModel(
 	init {
 		viewModelScope.launch {
 			mPreferences.load()
-			dispatch(SetupContract.Intent.GamesLoaded(mRegistry.games))
-			// Seeded from the preference rather than hardcoded, so re-running the flow from
-			// Settings opens on what is currently in force instead of arguing with it.
+			val vPreferences = mPreferences.preferences.value
+			// Both seeded from the preference rather than hardcoded, so re-running the flow from
+			// Settings opens on what is currently in force instead of arguing with it. The games
+			// half of that was the claim this comment made while only the language did it, and a
+			// re-run therefore offered to un-hide everything the user had hidden.
 			dispatch(
-				SetupContract.Intent.LanguagePicked(
-					mPreferences.preferences.value.primaryLanguage,
+				SetupContract.Intent.GamesLoaded(
+					games = mRegistry.games,
+					hiddenIds = vPreferences.hiddenGames,
 				),
 			)
+			dispatch(SetupContract.Intent.LanguagePicked(vPreferences.primaryLanguage))
 		}
 	}
 

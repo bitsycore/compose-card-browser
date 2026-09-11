@@ -4,6 +4,9 @@ import androidx.lifecycle.viewModelScope
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.lib.pulse.viewmodel.PulseViewModel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -49,6 +52,29 @@ class GameListViewModel(
 					hiddenIds = vPreferences.hiddenGames,
 				),
 			)
+		}
+
+		// And then keep following it, because this screen is not the only thing that writes it.
+		//
+		// The bug: the first-launch flow can be re-run from Settings, and it writes `hiddenGames`.
+		// This view model is scoped to its back-stack entry, so it survives the trip out to Settings
+		// and back -- and having read the preference once in `init`, it went on showing the list as
+		// it was before. Un-ticking a game there did nothing visible until the app was restarted,
+		// which is exactly how it was reported.
+		//
+		// Only the two fields a preference write can change, and only when they actually change:
+		// this view model writes them too, so its own writes come back round and are dropped here
+		// rather than re-entering the reducer with what it just produced.
+		viewModelScope.launch {
+			mPreferences.preferences
+				.map { it.gameOrder to it.hiddenGames }
+				.distinctUntilChanged()
+				// The first emission is whatever was already in memory, which `init` above has
+				// either just loaded or is about to.
+				.drop(1)
+				.collect { (vOrder, vHidden) ->
+					dispatch(GameListContract.Intent.CustomisationChanged(vOrder, vHidden))
+				}
 		}
 	}
 

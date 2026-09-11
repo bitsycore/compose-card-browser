@@ -30,9 +30,9 @@ object SetupContract : ContainerContract<SetupContract.UiState, SetupContract.In
 
 	/**
 	 * @property games every game this build serves, in registry order
-	 * @property selected which games will be *shown*. Starts as all of them, because that is what
-	 *   the app does without this screen and a setup that starts by hiding everything would make
-	 *   its own Next button destructive
+	 * @property selected which games will be *shown*. Starts as whatever is not hidden right now,
+	 *   which on a first launch is all of them -- a setup that started by hiding everything would
+	 *   make its own Next button destructive
 	 * @property languages the languages the app knows, in its own preference order
 	 */
 	data class UiState(
@@ -61,8 +61,16 @@ object SetupContract : ContainerContract<SetupContract.UiState, SetupContract.In
 
 	sealed interface Intent {
 
-		/** The registry answered. */
-		data class GamesLoaded(val games: List<GameProfile>) : Intent
+		/**
+		 * The registry answered, and the preference said which of them are currently hidden.
+		 *
+		 * @property hiddenIds what is hidden *now*. Empty on a first launch, which is why the
+		 *   effect below is "everything ticked" without that being stated twice
+		 */
+		data class GamesLoaded(
+			val games: List<GameProfile>,
+			val hiddenIds: Set<String> = emptySet(),
+		) : Intent
 
 		data class GameToggled(val gameId: String) : Intent
 
@@ -94,8 +102,17 @@ object SetupContract : ContainerContract<SetupContract.UiState, SetupContract.In
 
 		is Intent.GamesLoaded -> state.copy(
 			games = intent.games,
-			// Everything, so the first page starts where the app would have been without it.
-			selected = intent.games.mapTo(mutableSetOf()) { it.id.value },
+			// What is on screen right now, which on a first launch is everything -- nothing is
+			// hidden yet, so this starts where the app would have been without this screen at all.
+			//
+			// Re-running the flow from Settings is the case that needs saying. Ticking everything
+			// regardless would show a hidden game as shown, and then *unhide* it on Finish, so the
+			// flow would quietly undo a choice the user made on the game list. A game added by a
+			// later build has no entry in `hiddenIds` and so appears ticked, which is the right
+			// default for something the user has never been asked about.
+			selected = intent.games
+				.map { it.id.value }
+				.filterNotTo(mutableSetOf()) { it in intent.hiddenIds },
 		)
 
 		is Intent.GameToggled -> state.copy(
