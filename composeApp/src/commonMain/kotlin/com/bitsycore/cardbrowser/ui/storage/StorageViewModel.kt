@@ -70,7 +70,11 @@ class StorageViewModel(
 
 	private fun load() {
 		viewModelScope.launch {
-			val vUsage = mCacheManager.usage()
+			// One pass over each cache directory, and the kept records come back with it. This
+			// screen used to take five separate walks plus the image directory, which is why it
+			// took seconds to open after a Magic import. See `CacheManager.report`.
+			val vReport = mCacheManager.report()
+			val vUsage = vReport.usage
 			val vImports = mPreferences.preferences.value.bulkImports
 			val vNames = mRegistry.games.associate { it.id to it.displayName }
 			// Which provider serves which game, so an image-download key -- which carries a
@@ -90,7 +94,7 @@ class StorageViewModel(
 				}
 				.groupBy { it.first }
 
-			val vKept = mRepository.keptByGame().map { vStorage ->
+			val vKept = mRepository.keptByGame(vReport.pinned).map { vStorage ->
 				val vImages = vImageSets[vStorage.game].orEmpty()
 				StorageContract.KeptGame(
 					game = vStorage.game,
@@ -98,6 +102,7 @@ class StorageViewModel(
 					sets = vStorage.sets,
 					bytes = vStorage.bytes,
 					knownSets = vStorage.knownSets,
+					extraSets = vStorage.extraSets,
 					infoLanguages = vStorage.languages,
 					// Distinct sets, not records: one set downloaded in two languages is one set
 					// with pictures, and the images are the same file either way.

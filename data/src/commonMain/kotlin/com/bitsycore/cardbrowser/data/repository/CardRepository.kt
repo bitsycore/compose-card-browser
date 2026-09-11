@@ -30,6 +30,7 @@ import com.bitsycore.cardbrowser.data.cache.CacheKey
 import com.bitsycore.cardbrowser.data.cache.CacheScope
 import com.bitsycore.cardbrowser.data.cache.Completeness
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.PinnedEntry
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -1727,7 +1728,7 @@ class CardRepository(
 	 * one set and a screen that counted only the browsing language would under-report by a factor
 	 * of ten.
 	 */
-	suspend fun keptByGame(): List<GameStorage> {
+	suspend fun keptByGame(pinned: List<PinnedEntry>? = null): List<GameStorage> {
 		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardSet>()))
 		// From the pin markers, not from each game's set list.
 		//
@@ -1738,7 +1739,7 @@ class CardRepository(
 		// Kept as parsed labels rather than raw entries, because both counts below are about the
 		// *parts* -- which set, and which language -- and re-splitting per count is how the two
 		// would drift apart.
-		val vByGame = mCache.pinnedEntries()
+		val vByGame = (pinned ?: mCache.pinnedEntries())
 			.mapNotNull { vEntry ->
 				val vParts = vEntry.label.split(TAB)
 				if (vParts.size < 2 || vParts[0].isEmpty()) null else vParts[0] to (vParts to vEntry)
@@ -1750,19 +1751,41 @@ class CardRepository(
 			val vGame = GameId(vGameId)
 			// How many sets the game has, when its catalogue is still cached. Absent is a real
 			// answer -- the screen says "3 sets" rather than inventing a denominator.
-			val vKnownSets = mRegistry.resolve(vGame)
+			val vCatalogue = mRegistry.resolve(vGame)
 				?.let { setListOnDisk(it, vGame, vSerializer) }
-				?.size
+			val vCatalogueIds = vCatalogue?.mapTo(mutableSetOf()) { it.id.qualified }
+			val vHeldIds = vEntries.mapNotNullTo(mutableSetOf()) { (vParts, _) -> vParts.getOrNull(1) }
 			GameStorage(
 				game = vGame,
-				// Distinct set ids, so this is comparable with `knownSets`. A set held in eleven
-				// languages is one set here and eleven records on disk.
-				sets = vEntries.mapNotNull { (vParts, _) -> vParts.getOrNull(1) }.distinct().size,
+				// Only the sets the catalogue lists, so the numerator and `knownSets` count the
+				// same population. A bulk file does not: Scryfall's dump carries cards for sets
+				// `listSets` filters out -- digital-only Alchemy and MTGO products, and anything
+				// the source states holds no cards -- so an import of Magic pins 1044 set ids
+				// against a catalogue of 988 and the row read "Card info 1044/988". The extras
+				// are real and their bytes are counted; they are simply not part of "how much of
+				// this game do I have", because they are not offered to browse.
+				sets = if (vCatalogueIds == null) {
+					vHeldIds.size
+				} else {
+					vHeldIds.count { it in vCatalogueIds }
+				},
+				extraSets = if (vCatalogueIds == null) 0 else vHeldIds.count { it !in vCatalogueIds },
+				// How many *sets* each language covers, not merely which languages appear. One
+				// Spanish set among a thousand English ones is a fact about the file, not a
+				// second edition of the game, and a bare "11 languages" said the opposite: an
+				// English-only import of Magic reads 11, because Scryfall's cheap dump carries
+				// the handful of cards that have no English printing at all.
 				languages = vEntries
-					.mapNotNull { (vParts, _) -> vParts.getOrNull(2)?.ifEmpty { null } }
-					.mapNotNullTo(mutableSetOf()) { CardLanguage.fromCode(it) },
+					.mapNotNull { (vParts, _) ->
+						val vLanguage = vParts.getOrNull(2)?.ifEmpty { null }
+							?.let(CardLanguage::fromCode)
+						val vSet = vParts.getOrNull(1)
+						if (vLanguage == null || vSet == null) null else vLanguage to vSet
+					}
+					.groupBy({ it.first }, { it.second })
+					.mapValues { (_, vSets) -> vSets.distinct().size },
 				bytes = vEntries.sumOf { (_, vEntry) -> vEntry.bytes },
-				knownSets = vKnownSets,
+				knownSets = vCatalogueIds?.size,
 			)
 		}
 	}

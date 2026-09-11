@@ -193,7 +193,15 @@ class DownloadRenderer {
 							sets = 988,
 							bytes = 441_000_000,
 							knownSets = 988,
-							infoLanguages = setOf(CardLanguage.ENGLISH),
+							// The reported case: an English-only import, whose file none the less
+							// carries a few cards printed in nothing else.
+							extraSets = 56,
+							infoLanguages = mapOf(
+								CardLanguage.ENGLISH to 988,
+								CardLanguage.SPANISH to 3,
+								CardLanguage.JAPANESE to 2,
+								CardLanguage.FRENCH to 1,
+							),
 							importedVariant = com.bitsycore.cardbrowser.data.settings.BulkImportRecord(
 								"default_cards",
 								"2026-09-10T09:14:00Z",
@@ -205,11 +213,11 @@ class DownloadRenderer {
 							sets = 486,
 							bytes = 81_100_000,
 							knownSets = 486,
-							infoLanguages = setOf(
-								CardLanguage.ENGLISH,
-								CardLanguage.FRENCH,
-								CardLanguage.JAPANESE,
-								CardLanguage.GERMAN,
+							infoLanguages = mapOf(
+								CardLanguage.ENGLISH to 486,
+								CardLanguage.FRENCH to 412,
+								CardLanguage.JAPANESE to 301,
+								CardLanguage.GERMAN to 120,
 							),
 						),
 						com.bitsycore.cardbrowser.ui.storage.StorageContract.KeptGame(
@@ -219,7 +227,7 @@ class DownloadRenderer {
 							bytes = 21_000_000,
 							knownSets = 8,
 							thumbnailSets = 2,
-							infoLanguages = setOf(CardLanguage.ENGLISH),
+							infoLanguages = mapOf(CardLanguage.ENGLISH to 2),
 						),
 					),
 					isLoading = false,

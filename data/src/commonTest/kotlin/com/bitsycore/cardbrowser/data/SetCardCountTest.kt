@@ -37,6 +37,7 @@ import okio.Path.Companion.toPath
 import okio.fakefilesystem.FakeFileSystem
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -347,6 +348,51 @@ class SetCardCountTest {
 
 		assertEquals(CardLanguage.FRENCH, vLanguage)
 		assertEquals(1, mProbeCount - vBefore, "one probe for the one language being opened")
+	}
+
+	// ==================
+	// MARK: What the storage screen counts
+	// ==================
+
+	@Test
+	fun `a set the catalogue does not list is not counted against it`() = runTest {
+		// The report was "Card info 1044/988". A bulk file is not the catalogue: Scryfall's dump
+		// carries cards for digital-only sets and for sets it states hold nothing, both of which
+		// `listSets` drops -- so more sets end up pinned than the set list has rows, and the
+		// numerator overtook its own denominator.
+		val vRepository = repository(english = 24, french = 4)
+		vRepository.setList(CountTestGame.id, CardLanguage.ENGLISH).toList()
+		vRepository.setPinned(CountTestGame.id, mSetId, CardLanguage.ENGLISH, isPinned = true)
+		vRepository.setPinned(
+			CountTestGame.id,
+			SourceId(mProviderId, "not-in-the-catalogue"),
+			CardLanguage.ENGLISH,
+			isPinned = true,
+		)
+
+		val vStorage = assertNotNull(vRepository.keptByGame().firstOrNull())
+
+		assertEquals(1, vStorage.sets, "only the set the catalogue lists")
+		assertEquals(1, vStorage.knownSets, "and the denominator is that same list")
+		assertEquals(1, vStorage.extraSets, "the other one is held, and said so apart")
+	}
+
+	@Test
+	fun `languages are counted by how many sets they cover`() = runTest {
+		// "11 languages" for an English-only import was true and read as ten extra editions. What
+		// makes it readable is the weight: one of them covers the game and the rest cover a set.
+		val vRepository = repository(english = 24, french = 4)
+		vRepository.setList(CountTestGame.id, CardLanguage.ENGLISH).toList()
+		vRepository.setPinned(CountTestGame.id, mSetId, CardLanguage.ENGLISH, isPinned = true)
+		vRepository.setPinned(CountTestGame.id, mSetId, CardLanguage.FRENCH, isPinned = true)
+
+		val vStorage = assertNotNull(vRepository.keptByGame().firstOrNull())
+
+		assertEquals(
+			mapOf(CardLanguage.ENGLISH to 1, CardLanguage.FRENCH to 1),
+			vStorage.languages,
+		)
+		assertEquals(1, vStorage.sets, "one set, held twice, is still one set")
 	}
 
 	@Test

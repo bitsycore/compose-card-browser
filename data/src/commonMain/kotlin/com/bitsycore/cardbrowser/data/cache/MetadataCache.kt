@@ -565,22 +565,53 @@ class MetadataCache(
 	 * empty [PinnedEntry.label]. Reported rather than dropped: the bytes are real and a screen that
 	 * hid them would disagree with its own total.
 	 */
+	/**
+	 * Every figure the storage screen needs, from **one** directory walk.
+	 *
+	 * It used to take five. `sizeInBytes`, `entryCount`, `pinnedBytes` and `pinnedEntries` each
+	 * listed the directory and stat-ed every file in it, and the storage screen called all four
+	 * plus a walk of the image cache -- against a directory holding a record, a pin marker and a
+	 * count marker per cached set, which after a Magic import is over three thousand files. The
+	 * screen took seconds to open and none of it was work that had to be repeated.
+	 *
+	 * The marker *labels* are still a read apiece, because that is where the label lives. They are
+	 * a few dozen bytes and there is one per downloaded set.
+	 */
+	suspend fun snapshot(): CacheSnapshot = withContext(mIoDispatcher) {
+		val vAll = entriesOnDisk()
+		val vRecords = vAll.filterNot { isMarker(it.path.name) }
+		val vPinnedNames = pinnedNamesIn(vAll)
+		val vBySize = vAll.associate { it.path.name to it.sizeBytes }
+		CacheSnapshot(
+			totalBytes = vRecords.sumOf { it.sizeBytes },
+			entryCount = vRecords.size,
+			pinnedBytes = vRecords.filter { it.path.name in vPinnedNames }.sumOf { it.sizeBytes },
+			pinned = pinnedEntriesIn(vAll, vBySize),
+		)
+	}
+
 	suspend fun pinnedEntries(): List<PinnedEntry> = withContext(mIoDispatcher) {
 		val vAll = entriesOnDisk()
 		val vBySize = vAll.associate { it.path.name to it.sizeBytes }
-		vAll
-			.filter { it.path.name.endsWith(PIN_SUFFIX) }
-			.map { vMarker ->
-				val vRecord = vMarker.path.name.removeSuffix(PIN_SUFFIX)
-				PinnedEntry(
-					label = readMarker(vMarker.path),
-					// Zero when the marker outlived its record, which a failed write can leave
-					// behind. Still listed, because the pin is real and a screen offering to
-					// delete it is right to.
-					bytes = vBySize[vRecord] ?: 0L,
-				)
-			}
+		pinnedEntriesIn(vAll, vBySize)
 	}
+
+	/** [pinnedEntries]' body, for a caller that has already walked the directory. */
+	private fun pinnedEntriesIn(
+		all: List<DiskEntry>,
+		bySize: Map<String, Long>,
+	): List<PinnedEntry> = all
+		.filter { it.path.name.endsWith(PIN_SUFFIX) }
+		.map { vMarker ->
+			val vRecord = vMarker.path.name.removeSuffix(PIN_SUFFIX)
+			PinnedEntry(
+				label = readMarker(vMarker.path),
+				// Zero when the marker outlived its record, which a failed write can leave
+				// behind. Still listed, because the pin is real and a screen offering to
+				// delete it is right to.
+				bytes = bySize[vRecord] ?: 0L,
+			)
+		}
 
 	private fun readMarker(path: Path): String = try {
 		mFileSystem.read(path) { readUtf8() }
@@ -697,3 +728,15 @@ data class CacheKey(val value: String) {
  * @property bytes what the record occupies
  */
 data class PinnedEntry(val label: String, val bytes: Long)
+
+/**
+ * One reading of the metadata cache, taken in a single pass.
+ *
+ * Exists so the storage screen can ask once instead of four times. See [MetadataCache.snapshot].
+ */
+data class CacheSnapshot(
+	val totalBytes: Long,
+	val entryCount: Int,
+	val pinnedBytes: Long,
+	val pinned: List<PinnedEntry>,
+)

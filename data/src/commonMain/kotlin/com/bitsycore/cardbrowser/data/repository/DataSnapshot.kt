@@ -173,15 +173,21 @@ enum class LanguageSubstitution {
  *   counted records once, and the storage screen divided it by [knownSets] -- which is sets -- and
  *   reported "Card info 1111/988" for a Magic import and "1075/486" for Pokemon. Two different
  *   units either side of a slash is always wrong, however plausible the numbers look
- * @property languages every language those records are filed under, so a row can say what an
- *   import actually left behind. A bulk dump files cards under the language they state, which is
- *   not necessarily the one being browsed in
+ * @property extraSets sets held that the game's catalogue does not list. Scryfall's dump carries
+ *   digital-only products and sets it states are empty, both of which `listSets` drops -- so they
+ *   are on disk, they cannot be browsed, and they are not part of "how much of this game do I
+ *   have". Counted apart rather than folded in, which is what made the row read 1044 of 988
+ * @property languages how many *sets* each language covers. A count per language rather than a
+ *   set of them, because "11 languages" for an English-only import is true and useless: Scryfall's
+ *   cheap dump carries a handful of cards with no English printing, so ten of those eleven are one
+ *   or two sets apiece
  * @property bytes what those records occupy
  */
 data class GameStorage(
 	val game: com.bitsycore.cardbrowser.core.model.GameId,
 	val sets: Int,
-	val languages: Set<com.bitsycore.cardbrowser.core.model.CardLanguage> = emptySet(),
+	val extraSets: Int = 0,
+	val languages: Map<com.bitsycore.cardbrowser.core.model.CardLanguage, Int> = emptyMap(),
 	val bytes: Long,
 	/**
 	 * How many sets the game has in total, or `null` when its catalogue is not cached.

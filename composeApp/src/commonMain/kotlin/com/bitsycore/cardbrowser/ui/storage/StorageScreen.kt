@@ -206,9 +206,32 @@ fun StorageContent(
 			onDismissRequest = { dispatch(StorageContract.Intent.DeleteRequested(null)) },
 			title = { Text("Delete ${vGame.displayName}?") },
 			text = {
+				// The row has one line and says the headline; this has room for the parts that
+				// would not fit, and they are the parts a person about to delete wants: every
+				// language, with how much of the game each covers, and the sets that are on disk
+				// but not in the set list.
 				Text(
-					"${vGame.summary} · ${formatBytes(vGame.bytes)}." +
-						if (vGame.importedVariant != null) " The import would have to be run again." else "",
+					buildString {
+						append(vGame.summary)
+						append(" · ")
+						append(formatBytes(vGame.bytes))
+						append(".")
+						if (vGame.languagesByCoverage.size > 1) {
+							append("\n")
+							append(
+								vGame.languagesByCoverage.joinToString(", ") { (vLanguage, vSets) ->
+									"${vLanguage.displayName} $vSets"
+								},
+							)
+							append(" sets.")
+						}
+						if (vGame.extraSets > 0) {
+							append("\n${vGame.extraSets} more the set list does not show.")
+						}
+						if (vGame.importedVariant != null) {
+							append(" The import would have to be run again.")
+						}
+					},
 				)
 			},
 			confirmButton = {

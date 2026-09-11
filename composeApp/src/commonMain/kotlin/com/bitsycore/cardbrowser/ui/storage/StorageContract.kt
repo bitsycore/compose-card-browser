@@ -61,9 +61,11 @@ object StorageContract :
 	 *   [knownSets], which is also sets. Never a record count; see `GameStorage.sets`
 	 * @property knownSets how many the game has, or `null` when its catalogue is not cached and no
 	 *   denominator can honestly be given
-	 * @property infoLanguages which languages the card records are filed under. A bulk import files
-	 *   cards under the language they state, so this is the only place that can say an English dump
-	 *   left English records behind
+	 * @property extraSets sets held that this game's catalogue does not list -- see
+	 *   `GameStorage.extraSets`. Shown only where there is room for the explanation
+	 * @property infoLanguages how many sets each language covers. A count per language, not a bare
+	 *   list: a bulk import files cards under the language they state, and a handful of records in
+	 *   ten other languages is not ten editions of the game
 	 * @property thumbnailSets how many sets have their grid pictures downloaded. A count, not
 	 *   bytes: images live in the image cache, which is one pool for every game and cannot be
 	 *   attributed to one. Full-size art has no entry because it is never bulk-fetched -- it
@@ -77,11 +79,12 @@ object StorageContract :
 		val bytes: Long,
 		val knownSets: Int? = null,
 		val thumbnailSets: Int = 0,
-		val infoLanguages: Set<CardLanguage> = emptySet(),
+		val extraSets: Int = 0,
+		val infoLanguages: Map<CardLanguage, Int> = emptyMap(),
 		val importedVariant: BulkImportRecord? = null,
 	) {
 
-		/** "Card info 988/988 · English, French · Thumbnails 2" -- only the parts that are there. */
+		/** "Card info 988/988 · English · Thumbnails 2" -- only the parts that are there. */
 		val summary: String
 			get() = buildList {
 				add(if (knownSets != null) "Card info $sets/$knownSets" else "Card info $sets")
@@ -89,24 +92,27 @@ object StorageContract :
 				if (thumbnailSets > 0) add("Thumbnails $thumbnailSets")
 			}.joinToString(" · ")
 
+		/** Languages by how much of the game each covers, most first. */
+		val languagesByCoverage: List<Pair<CardLanguage, Int>>
+			get() = infoLanguages.entries
+				.sortedWith(compareByDescending<Map.Entry<CardLanguage, Int>> { it.value }
+					.thenBy { CardLanguage.PREFERENCE_ORDER.indexOf(it.key) })
+				.map { it.key to it.value }
+
 		/**
-		 * Which languages the card info is in, named while naming them is short.
+		 * The language the download is mostly in, and how many others there are.
 		 *
-		 * Named rather than counted, because "which language did that import actually give me?" is
-		 * the question this screen kept failing to answer -- a Scryfall dump files cards under the
-		 * language they state, so an import made under a French preference is mostly English and
-		 * nothing said so. Past three it becomes a count, which is the point at which a list stops
-		 * being readable at a glance; Magic reaches eleven.
+		 * Weighted rather than listed, because a flat list answers the wrong question. An
+		 * English-only import of Magic files records in eleven languages -- Scryfall's cheap dump
+		 * carries the few cards that have no English printing at all -- so "11 languages" was true
+		 * and read as though ten editions had been downloaded. Ten of them are one set apiece.
 		 */
 		private val languageSummary: String
 			get() {
-				val vOrdered = CardLanguage.PREFERENCE_ORDER.filter { it in infoLanguages }
-					.ifEmpty { infoLanguages.toList() }
-				return if (vOrdered.size <= 3) {
-					vOrdered.joinToString(", ") { it.displayName }
-				} else {
-					"${vOrdered.size} languages"
-				}
+				val vByCoverage = languagesByCoverage
+				val vMain = vByCoverage.firstOrNull() ?: return ""
+				val vRest = vByCoverage.size - 1
+				return if (vRest == 0) vMain.first.displayName else "${vMain.first.displayName} +$vRest"
 			}
 	}
 

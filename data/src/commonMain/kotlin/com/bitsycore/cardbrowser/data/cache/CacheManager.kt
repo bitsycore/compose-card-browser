@@ -1,6 +1,8 @@
 package com.bitsycore.cardbrowser.data.cache
 
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okio.IOException
 import okio.Path
@@ -23,22 +25,38 @@ class CacheManager(
 	private val mImageCacheMaxBytes: () -> Long = { DEFAULT_IMAGE_CACHE_MAX_BYTES },
 ) {
 
-	/** Current usage of both caches, and their ceilings. */
-	suspend fun usage(): CacheUsage = withContext(mIoDispatcher) {
-		val vTotal = mMetadataCache.sizeInBytes()
-		val vKept = mMetadataCache.pinnedBytes()
-		CacheUsage(
-			metadataBytes = vTotal,
-			metadataEntries = mMetadataCache.entryCount(),
-			metadataLimitBytes = mMetadataLimitBytes(),
-			// Split, because the limit governs only one of the two. Kept records -- downloads and
-			// bulk imports -- sit outside it: the ceiling cannot reclaim them, so counting them
-			// against it was a number that could only ever be exceeded. See `MetadataCache.trim`.
-			metadataKeptBytes = vKept,
-			imageBytes = directorySize(mStorage.imageCacheDir),
-			imageLimitBytes = mImageCacheMaxBytes(),
-		)
+	/**
+	 * Current usage of both caches, their ceilings, and what is pinned -- in one pass over each.
+	 *
+	 * One call because the storage screen needs all of it at once and the two halves are both
+	 * directory walks. They run concurrently: the image cache after a full browse of Magic is
+	 * thousands of files and has nothing to do with the metadata directory, so waiting for one
+	 * before starting the other was pure latency.
+	 */
+	suspend fun report(): StorageReport = withContext(mIoDispatcher) {
+		coroutineScope {
+			val vImages = async { directorySize(mStorage.imageCacheDir) }
+			val vMetadata = mMetadataCache.snapshot()
+			StorageReport(
+				usage = CacheUsage(
+					metadataBytes = vMetadata.totalBytes,
+					metadataEntries = vMetadata.entryCount,
+					metadataLimitBytes = mMetadataLimitBytes(),
+					// Split, because the limit governs only one of the two. Kept records --
+					// downloads and bulk imports -- sit outside it: the ceiling cannot reclaim
+					// them, so counting them against it was a number that could only ever be
+					// exceeded. See `MetadataCache.trim`.
+					metadataKeptBytes = vMetadata.pinnedBytes,
+					imageBytes = vImages.await(),
+					imageLimitBytes = mImageCacheMaxBytes(),
+				),
+				pinned = vMetadata.pinned,
+			)
+		}
 	}
+
+	/** Current usage of both caches, and their ceilings. */
+	suspend fun usage(): CacheUsage = report().usage
 
 	/** Empties the metadata cache, downloads included. Preferences are untouched. */
 	suspend fun clearMetadata() {
@@ -128,6 +146,17 @@ class CacheManager(
 		const val DEFAULT_IMAGE_CACHE_MAX_BYTES: Long = 1024L * 1024 * 1024
 	}
 }
+
+/**
+ * One reading of everything on disk: what is used, what is kept, and what the kept records are.
+ *
+ * Taken together because the storage screen needs it together and the alternative was five
+ * directory walks for one screen -- see [MetadataCache.snapshot].
+ */
+data class StorageReport(
+	val usage: CacheUsage,
+	val pinned: List<PinnedEntry>,
+)
 
 /** A reading of both caches, for display. */
 data class CacheUsage(
