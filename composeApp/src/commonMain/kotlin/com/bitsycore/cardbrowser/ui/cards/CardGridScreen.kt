@@ -124,6 +124,12 @@ fun CardGridScreen(
 		when (vEffect) {
 			is CardGridContract.Effect.LanguageUnavailable ->
 				vSnackbarHost.showSnackbar(vEffect.reason)
+
+			CardGridContract.Effect.NavigateBack -> onBack()
+
+			is CardGridContract.Effect.OpenCard -> onOpenCard(vEffect.card)
+
+			CardGridContract.Effect.OpenDownloads -> onOpenDownloads()
 		}
 	}
 	val vState by viewModel.collectAsStateWithLifecycle()
@@ -154,9 +160,6 @@ fun CardGridScreen(
 			dispatch = viewModel::dispatch,
 			fallbackSetName = setName,
 			focusedCardId = vFocusedCardId,
-			onBack = onBack,
-			onOpenCard = onOpenCard,
-			onOpenDownloads = onOpenDownloads,
 			downloads = vJobs,
 		)
 	}
@@ -176,9 +179,6 @@ fun CardGridContent(
 	fallbackSetName: String = "",
 	/** The card the detail screen last showed, so returning scrolls it back into view. */
 	focusedCardId: String? = null,
-	onBack: () -> Unit = {},
-	onOpenCard: (CardPrinting) -> Unit = {},
-	onOpenDownloads: () -> Unit = {},
 	/** The queue, passed in rather than injected, so this composable and its previews need no Koin. */
 	downloads: List<DownloadJob> = emptyList(),
 	/** Hoisted so the screen can post to it from an effect. A preview passes a fresh, unused one. */
@@ -258,12 +258,15 @@ fun CardGridContent(
 						}
 					},
 					navigationIcon = {
-						IconButton(onClick = onBack) {
+						IconButton(onClick = { dispatch(CardGridContract.Intent.BackPressed) }) {
 							Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back to sets")
 						}
 					},
 					actions = {
-						DownloadsButton(jobs = downloads, onClick = onOpenDownloads)
+						DownloadsButton(
+						jobs = downloads,
+						onClick = { dispatch(CardGridContract.Intent.DownloadsRequested) },
+					)
 						// Only where there is a choice to make -- see `UiState.languageOptions`.
 						if (vState.languageOptions.size > 1) {
 							LanguageMenu(
@@ -386,7 +389,7 @@ fun CardGridContent(
 				else -> CardGrid(
 					cards = vState.cards,
 					gridState = vGridState,
-					onOpenCard = onOpenCard,
+					onOpenCard = { dispatch(CardGridContract.Intent.CardOpened(it)) },
 					contentPadding = vPadding,
 				)
 			}

@@ -290,6 +290,9 @@ object CardDetailContract :
 
 	sealed interface Intent {
 
+		/** The back arrow. Navigation goes through the container like everything else. */
+		data object BackPressed : Intent
+
 		data class Load(val cardId: String, val setId: String?) : Intent
 
 		data class Loaded(
@@ -353,9 +356,15 @@ object CardDetailContract :
 		 * Korean edition of the set to fetch. A tap that cannot work has to say so.
 		 */
 		data class LanguageUnavailable(val language: CardLanguage, val reason: String) : Effect
+
+		/** The back arrow, so navigation leaves by the same door as everything else. */
+		data object NavigateBack : Effect
 	}
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
+
+		// Navigation changes no state. The view model turns it into an effect.
+		Intent.BackPressed -> state
 
 		// Only a screen with nothing to show waits. A seeded one is already drawing the card and
 		// must not be thrown back to a spinner while the rest is fetched.

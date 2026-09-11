@@ -90,6 +90,12 @@ object SearchContract :
 
 	sealed interface Intent {
 
+		/** The back arrow. Navigation goes through the container like everything else. */
+		data object BackPressed : Intent
+
+		/** A result was tapped. */
+		data class CardOpened(val card: CardPrinting) : Intent
+
 		/** The text field changed. Does not search; [Submit] does. */
 		data class QueryChanged(val text: String) : Intent
 
@@ -125,7 +131,18 @@ object SearchContract :
 		data object Clear : Intent
 	}
 
-	sealed interface Effect
+	/**
+	 * Navigation, emitted by the container rather than handed to the layout.
+	 *
+	 * The body takes a state and a dispatch and nothing else, so a result row reports "this card was
+	 * tapped" and the container decides that means "go to the detail screen".
+	 */
+	sealed interface Effect {
+
+		data object NavigateBack : Effect
+
+		data class OpenCard(val card: CardPrinting) : Effect
+	}
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
 
@@ -185,5 +202,8 @@ object SearchContract :
 			error = null,
 			requestGeneration = state.requestGeneration + 1,
 		)
+
+		// Navigation changes no state. The view model turns these into effects.
+		Intent.BackPressed, is Intent.CardOpened -> state
 	}
 }

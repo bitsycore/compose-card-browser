@@ -44,6 +44,15 @@ class CardGridViewModel(
 
 	override suspend fun handleIntent(intent: CardGridContract.Intent) {
 		when (intent) {
+			CardGridContract.Intent.BackPressed ->
+				emitEffect(CardGridContract.Effect.NavigateBack)
+
+			is CardGridContract.Intent.CardOpened ->
+				emitEffect(CardGridContract.Effect.OpenCard(intent.card))
+
+			CardGridContract.Intent.DownloadsRequested ->
+				emitEffect(CardGridContract.Effect.OpenDownloads)
+
 			is CardGridContract.Intent.SetSelected -> {
 				mPreferences.update { it.copy(lastSetId = intent.setId) }
 				// What the routed provider can filter on, and which game's vocabulary the sheet

@@ -144,6 +144,15 @@ object CardGridContract :
 
 	sealed interface Intent {
 
+		/** The back arrow. Navigation goes through the container like everything else. */
+		data object BackPressed : Intent
+
+		/** A tile was tapped. */
+		data class CardOpened(val card: CardPrinting) : Intent
+
+		/** The downloads button in the bar. */
+		data object DownloadsRequested : Intent
+
 		/** The screen opened, or the user pulled to refresh. */
 		data object Load : Intent
 
@@ -229,9 +238,18 @@ object CardGridContract :
 
 		/** Shown when a chosen language has nothing for this set, so the tap is not silently lost. */
 		data class LanguageUnavailable(val language: CardLanguage, val reason: String) : Effect
+
+		data object NavigateBack : Effect
+
+		data class OpenCard(val card: CardPrinting) : Effect
+
+		data object OpenDownloads : Effect
 	}
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
+
+		// Navigation changes no state. The view model turns these into effects.
+		Intent.BackPressed, is Intent.CardOpened, Intent.DownloadsRequested -> state
 
 		Intent.Load -> state.copy(
 			isLoading = true,

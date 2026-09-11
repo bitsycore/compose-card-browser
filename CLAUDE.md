@@ -93,6 +93,10 @@ Follow the user's global conventions (Spirtech prefixes, tabs, KDoc). Specifical
 - Section separators (`// ==================` / `// MARK: Name`) between major groups.
 - Screens split as `XScreen()` (binds the view model) and `XContent(state, dispatch)` (pure, so it
   previews). **No Koin inside a `Content`** — a preview has no Koin graph and will throw.
+- **Navigation is dispatched, not called.** A `Content` takes a state and a dispatch and nothing
+  else: a tap sends an intent, the view model emits an effect, and `XScreen` turns that back into a
+  route. No `onBack` threaded through a body. See `docs/ARCHITECTURE.md` § "Every screen is a
+  Screen and a Content".
 
 ---
 

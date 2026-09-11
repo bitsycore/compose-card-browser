@@ -28,7 +28,13 @@ class SettingsRenderer {
 		vOut.mkdirs()
 
 		renderToPng(vOut, "settings", width = 660, height = 2500, density = 1.65f) {
-			SettingsContent(state = settingsState(), dispatch = {}, onBack = {})
+			SettingsContent(state = settingsState(), dispatch = {})
+		}
+		renderToPng(vOut, "settings-custom", width = 660, height = 2500, density = 1.65f) {
+			SettingsContent(
+				state = settingsState().copy(imageLimitBytes = 300L * 1024 * 1024),
+				dispatch = {},
+			)
 		}
 
 		assertTrue(vOut.listFiles().orEmpty().any { it.length() > 0 }, "nothing was rendered")

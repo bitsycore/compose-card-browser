@@ -138,6 +138,8 @@ fun CardDetailScreen(
 
 			is CardDetailContract.Effect.LanguageUnavailable ->
 				vSnackbarHost.showSnackbar(vEffect.reason)
+
+			CardDetailContract.Effect.NavigateBack -> onBack()
 		}
 	}
 
@@ -148,7 +150,6 @@ fun CardDetailScreen(
 		state = vState,
 		dispatch = viewModel::dispatch,
 		prefetchRadius = vPreferences.prefetchRadius,
-		onBack = onBack,
 		snackbarHostState = vSnackbarHost,
 	)
 }
@@ -166,7 +167,6 @@ fun CardDetailContent(
 	dispatch: (CardDetailContract.Intent) -> Unit,
 	/** Cards either side of the open one to fetch ahead. Zero, as in a preview, fetches nothing. */
 	prefetchRadius: Int = 0,
-	onBack: () -> Unit = {},
 	snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
 	val vState = state
@@ -200,7 +200,7 @@ fun CardDetailContent(
 					}
 				},
 				navigationIcon = {
-					IconButton(onClick = onBack) {
+					IconButton(onClick = { dispatch(CardDetailContract.Intent.BackPressed) }) {
 						Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back to cards")
 					}
 				},

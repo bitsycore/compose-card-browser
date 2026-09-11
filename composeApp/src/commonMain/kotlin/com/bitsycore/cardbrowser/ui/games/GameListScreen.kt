@@ -75,6 +75,7 @@ import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.cardbrowser.ui.theme.isDarkTheme
 import org.koin.compose.koinInject
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
+import com.bitsycore.lib.pulse.compose.collectEffect
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
 import com.bitsycore.cardbrowser.ui.common.AppIcons
@@ -113,6 +114,15 @@ fun GameListScreen(
 	onOpenDownloads: () -> Unit = {},
 	viewModel: GameListViewModel = koinViewModel(),
 ) {
+	// The only part of this screen that knows a back stack exists. Everything below dispatches.
+	viewModel.collectEffect { vEffect ->
+		when (vEffect) {
+			is GameListContract.Effect.OpenGame -> onOpenGame(vEffect.game)
+			GameListContract.Effect.OpenSettings -> onOpenSettings()
+			GameListContract.Effect.OpenStorage -> onOpenStorage()
+			GameListContract.Effect.OpenDownloads -> onOpenDownloads()
+		}
+	}
 	val vState by viewModel.collectAsStateWithLifecycle()
 
 	// The queue is application-scoped, so it is read here and handed down as plain state --
@@ -130,10 +140,6 @@ fun GameListScreen(
 	GameListContent(
 		state = vState,
 		dispatch = viewModel::dispatch,
-		onOpenGame = onOpenGame,
-		onOpenSettings = onOpenSettings,
-		onOpenStorage = onOpenStorage,
-		onOpenDownloads = onOpenDownloads,
 		downloads = vJobs,
 		artFor = vArtRegistry::forGame,
 	)
@@ -149,10 +155,6 @@ fun GameListScreen(
 fun GameListContent(
 	state: GameListContract.UiState,
 	dispatch: (GameListContract.Intent) -> Unit,
-	onOpenGame: (GameProfile) -> Unit = {},
-	onOpenSettings: () -> Unit = {},
-	onOpenStorage: () -> Unit = {},
-	onOpenDownloads: () -> Unit = {},
 	downloads: List<DownloadJob> = emptyList(),
 	/**
 	 * A game's logo and accent colour, supplied by the caller.
@@ -186,9 +188,9 @@ fun GameListContent(
 					// is a good way to forget the list is in a mode at all.
 					if (!state.isEditing) {
 						AppOverflowMenu(
-							onOpenSettings = onOpenSettings,
-							onOpenStorage = onOpenStorage,
-							onOpenDownloads = onOpenDownloads,
+							onOpenSettings = { dispatch(GameListContract.Intent.SettingsRequested) },
+							onOpenStorage = { dispatch(GameListContract.Intent.StorageRequested) },
+							onOpenDownloads = { dispatch(GameListContract.Intent.DownloadsRequested) },
 							activeDownloads = downloads.count { it.isActive },
 						)
 					}
@@ -250,7 +252,6 @@ fun GameListContent(
 							canHide = state.canHideMore,
 							onClick = {
 								dispatch(GameListContract.Intent.GameOpened(vGame))
-								onOpenGame(vGame)
 							},
 							dispatch = dispatch,
 							art = artFor(vGame),

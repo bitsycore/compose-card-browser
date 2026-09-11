@@ -63,6 +63,7 @@ import com.bitsycore.cardbrowser.ui.common.NoticeBanner
 import com.bitsycore.cardbrowser.ui.preview.PreviewData
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
+import com.bitsycore.lib.pulse.compose.collectEffect
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import com.bitsycore.cardbrowser.ui.common.AppIcons
@@ -83,14 +84,16 @@ fun SearchScreen(
 	onOpenCard: (CardPrinting) -> Unit,
 	viewModel: SearchViewModel = koinViewModel { parametersOf(SearchArgs(game)) },
 ) {
+	// The only part of this screen that knows a back stack exists. Everything below dispatches.
+	viewModel.collectEffect { vEffect ->
+		when (vEffect) {
+			SearchContract.Effect.NavigateBack -> onBack()
+			is SearchContract.Effect.OpenCard -> onOpenCard(vEffect.card)
+		}
+	}
 	val vState by viewModel.collectAsStateWithLifecycle()
 
-	SearchContent(
-		state = vState,
-		dispatch = viewModel::dispatch,
-		onBack = onBack,
-		onOpenCard = onOpenCard,
-	)
+	SearchContent(state = vState, dispatch = viewModel::dispatch)
 }
 
 /**
@@ -103,8 +106,6 @@ fun SearchScreen(
 fun SearchContent(
 	state: SearchContract.UiState,
 	dispatch: (SearchContract.Intent) -> Unit,
-	onBack: () -> Unit = {},
-	onOpenCard: (CardPrinting) -> Unit = {},
 ) {
 	val vState = state
 	val vFocus = remember { FocusRequester() }
@@ -128,7 +129,7 @@ fun SearchContent(
 			TopAppBar(
 				title = { Text("Search ${vState.game?.shortName.orEmpty()}") },
 				navigationIcon = {
-					IconButton(onClick = onBack) {
+					IconButton(onClick = { dispatch(SearchContract.Intent.BackPressed) }) {
 						Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
 					}
 				},
@@ -188,7 +189,7 @@ fun SearchContent(
 						verticalArrangement = Arrangement.spacedBy(8.dp),
 					) {
 						items(vState.results, key = { it.id.qualified }) { vCard ->
-							SearchResultRow(card = vCard, onClick = { onOpenCard(vCard) })
+							SearchResultRow(card = vCard, onClick = { dispatch(SearchContract.Intent.CardOpened(vCard)) })
 						}
 
 						if (vState.isTruncated) {

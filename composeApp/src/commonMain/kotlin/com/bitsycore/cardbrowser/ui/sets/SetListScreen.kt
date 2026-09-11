@@ -96,6 +96,7 @@ import com.bitsycore.cardbrowser.ui.common.sharedSetContainer
 import com.bitsycore.cardbrowser.ui.preview.PreviewData
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
+import com.bitsycore.lib.pulse.compose.collectEffect
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import com.bitsycore.cardbrowser.ui.common.AppIcons
@@ -118,6 +119,17 @@ fun SetListScreen(
 	onOpenDownloads: () -> Unit,
 	viewModel: SetListViewModel = koinViewModel { parametersOf(SetListArgs(game)) },
 ) {
+	// The only part of this screen that knows a back stack exists. Everything below dispatches.
+	viewModel.collectEffect { vEffect ->
+		when (vEffect) {
+			is SetListContract.Effect.OpenSet -> onOpenSet(vEffect.set)
+			is SetListContract.Effect.OpenSearch -> onOpenSearch(vEffect.game)
+			SetListContract.Effect.NavigateBack -> onBack()
+			SetListContract.Effect.OpenSettings -> onOpenSettings()
+			SetListContract.Effect.OpenStorage -> onOpenStorage()
+			SetListContract.Effect.OpenDownloads -> onOpenDownloads()
+		}
+	}
 	val vState by viewModel.collectAsStateWithLifecycle()
 
 	// The queue is application-scoped rather than this screen's, so it is read here and handed down
@@ -145,12 +157,6 @@ fun SetListScreen(
 	SetListContent(
 		state = vState,
 		dispatch = viewModel::dispatch,
-		onBack = onBack,
-		onOpenSet = onOpenSet,
-		onOpenSettings = onOpenSettings,
-		onOpenStorage = onOpenStorage,
-		onOpenSearch = onOpenSearch,
-		onOpenDownloads = onOpenDownloads,
 		downloads = vJobs,
 		onDownload = { vSet, vKinds, vLanguages ->
 			// One job per language, because everything downstream is per language: a cache key
@@ -225,21 +231,13 @@ fun SetListScreen(
  *
  * No view model, no Koin, no coroutines: everything it needs arrives as arguments, which is what
  * makes it previewable and what keeps the screen's layout separable from how its data is obtained.
- * Navigation stays as callbacks rather than intents -- where the app goes next is the caller's
- * business, not this screen's state machine's.
+ * Navigation is dispatched, not called: see `SetListContract.Effect`.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SetListContent(
 	state: SetListContract.UiState,
 	dispatch: (SetListContract.Intent) -> Unit,
-	onBack: () -> Unit = {},
-	onOpenSet: (CardSet) -> Unit,
-	onOpenSettings: () -> Unit,
-	onOpenStorage: () -> Unit = {},
-	onOpenSearch: (GameProfile) -> Unit = {},
-	/** Opens the download queue, which is a screen rather than a dialog. See `DownloadsScreen`. */
-	onOpenDownloads: () -> Unit = {},
 	downloads: List<DownloadJob> = emptyList(),
 	onDownload: (CardSet, Set<DownloadKind>, Set<CardLanguage>) -> Unit = { _, _, _ -> },
 	/**
@@ -271,7 +269,7 @@ fun SetListContent(
 				navigationIcon = {
 					// The game picker is a real screen above this one now, so this is a genuine
 					// back rather than a decoration.
-					IconButton(onClick = onBack) {
+					IconButton(onClick = { dispatch(SetListContract.Intent.BackPressed) }) {
 						Icon(
 							Icons.AutoMirrored.Outlined.ArrowBack,
 							contentDescription = "Back to games",
@@ -345,16 +343,16 @@ fun SetListContent(
 							)
 						}
 					}
-					IconButton(onClick = { vState.game?.let(onOpenSearch) }) {
+					IconButton(onClick = { dispatch(SetListContract.Intent.SearchRequested) }) {
 						Icon(
 							AppIcons.TravelExplore,
 							contentDescription = "Search cards across all sets",
 						)
 					}
 					AppOverflowMenu(
-						onOpenSettings = onOpenSettings,
-						onOpenStorage = onOpenStorage,
-						onOpenDownloads = onOpenDownloads,
+						onOpenSettings = { dispatch(SetListContract.Intent.SettingsRequested) },
+						onOpenStorage = { dispatch(SetListContract.Intent.StorageRequested) },
+						onOpenDownloads = { dispatch(SetListContract.Intent.DownloadsRequested) },
 						activeDownloads = downloads.count { it.isActive },
 					)
 				},
@@ -447,7 +445,6 @@ fun SetListContent(
 								state = vState,
 								dispatch = dispatch,
 								downloads = downloads,
-								onOpenSet = onOpenSet,
 								onDownload = { vPendingSet = it },
 								reorder = vReorder.takeIf { vState.canReorderFavourites },
 								reorderKeys = vFavouriteKeys,
@@ -463,7 +460,6 @@ fun SetListContent(
 								state = vState,
 								dispatch = dispatch,
 								downloads = downloads,
-								onOpenSet = onOpenSet,
 								onDownload = { vPendingSet = it },
 								reorder = null,
 								reorderKeys = emptyList(),
@@ -532,7 +528,7 @@ fun SetListContent(
 				vPendingSet = null
 				// Straight to the queue, so the download is visibly a thing that now exists rather
 				// than a dialog that closed and apparently did nothing.
-				onOpenDownloads()
+				dispatch(SetListContract.Intent.DownloadsRequested)
 			},
 		)
 	}
@@ -595,7 +591,7 @@ fun SetListContent(
 					vSets.forEach { vSet -> onDownload(vSet, vPerSet, vLanguages) }
 				}
 				vPendingAll = false
-				onOpenDownloads()
+				dispatch(SetListContract.Intent.DownloadsRequested)
 			},
 		)
 	}
@@ -672,7 +668,6 @@ private fun LazyListScope.setRows(
 	state: SetListContract.UiState,
 	dispatch: (SetListContract.Intent) -> Unit,
 	downloads: List<DownloadJob>,
-	onOpenSet: (CardSet) -> Unit,
 	onDownload: (CardSet) -> Unit,
 	reorder: ReorderState?,
 	reorderKeys: List<String>,
@@ -688,10 +683,7 @@ private fun LazyListScope.setRows(
 			region = if (state.region != null) null else state.game?.regionFor(vSet.region),
 			isLastOpened = vId == state.lastOpenedSetId,
 			isSaved = vId in state.savedSetIds,
-			onClick = {
-				dispatch(SetListContract.Intent.SetOpened(vId))
-				onOpenSet(vSet)
-			},
+			onClick = { dispatch(SetListContract.Intent.SetOpened(vSet)) },
 			// Absent until the set has been fetched in the language it opens in, and the row then
 			// falls back to the figure the source states. See `UiState.confirmedCardCounts`.
 			confirmedCardCount = state.confirmedCardCounts[vId],
@@ -1190,8 +1182,6 @@ private fun SetListLoadedPreview() = PreviewFrame {
 			lastOpenedSetId = PreviewData.ORIGINS.id.qualified,
 		),
 		dispatch = {},
-		onOpenSet = {},
-		onOpenSettings = {},
 	)
 }
 
@@ -1201,8 +1191,6 @@ private fun SetListLoadingPreview() = PreviewFrame {
 	SetListContent(
 		state = SetListContract.UiState(isLoading = true),
 		dispatch = {},
-		onOpenSet = {},
-		onOpenSettings = {},
 	)
 }
 
@@ -1220,8 +1208,6 @@ private fun SetListOfflinePreview() = PreviewFrame {
 			error = ProviderError.Offline(),
 		),
 		dispatch = {},
-		onOpenSet = {},
-		onOpenSettings = {},
 	)
 }
 
@@ -1235,8 +1221,6 @@ private fun SetListEmptySearchPreview() = PreviewFrame(isDark = false) {
 			isLoading = false,
 		),
 		dispatch = {},
-		onOpenSet = {},
-		onOpenSettings = {},
 	)
 }
 
@@ -1256,8 +1240,6 @@ private fun SetListSavedPreview() = PreviewFrame {
 			lastOpenedSetId = PreviewData.ORIGINS.id.qualified,
 		),
 		dispatch = {},
-		onOpenSet = {},
-		onOpenSettings = {},
 	)
 }
 
@@ -1295,8 +1277,6 @@ private fun SetListDownloadMarksPreview() = PreviewFrame {
 			),
 		),
 		dispatch = {},
-		onOpenSet = {},
-		onOpenSettings = {},
 	)
 }
 

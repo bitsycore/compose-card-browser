@@ -56,7 +56,17 @@ class GameListViewModel(
 		when (intent) {
 			is GameListContract.Intent.GameOpened -> {
 				mPreferences.update { it.copy(lastGame = intent.game.id.value) }
+				emitEffect(GameListContract.Effect.OpenGame(intent.game))
 			}
+
+			GameListContract.Intent.SettingsRequested ->
+				emitEffect(GameListContract.Effect.OpenSettings)
+
+			GameListContract.Intent.StorageRequested ->
+				emitEffect(GameListContract.Effect.OpenStorage)
+
+			GameListContract.Intent.DownloadsRequested ->
+				emitEffect(GameListContract.Effect.OpenDownloads)
 
 			// Read back off the reduced state rather than recomputed here. `GameOrder` has already
 			// been applied by the reducer, and applying it twice is how the two would drift.

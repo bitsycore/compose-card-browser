@@ -120,8 +120,26 @@ class SetListViewModel(
 			SetListContract.Intent.Refresh -> startLoad()
 
 			is SetListContract.Intent.SetOpened -> {
-				mPreferences.update { it.copy(lastSetId = intent.setId) }
+				mPreferences.update { it.copy(lastSetId = intent.set.id.qualified) }
+				emitEffect(SetListContract.Effect.OpenSet(intent.set))
 			}
+
+			SetListContract.Intent.BackPressed ->
+				emitEffect(SetListContract.Effect.NavigateBack)
+
+			SetListContract.Intent.SettingsRequested ->
+				emitEffect(SetListContract.Effect.OpenSettings)
+
+			SetListContract.Intent.StorageRequested ->
+				emitEffect(SetListContract.Effect.OpenStorage)
+
+			SetListContract.Intent.DownloadsRequested ->
+				emitEffect(SetListContract.Effect.OpenDownloads)
+
+			// Silently ignored when the route named a game this build no longer serves, which is
+			// the same state in which the rest of the screen shows an error rather than a list.
+			SetListContract.Intent.SearchRequested ->
+				stateFlow.value.game?.let { emitEffect(SetListContract.Effect.OpenSearch(it)) }
 
 			// Read back off the reduced state rather than recomputed here: `SetFavourites` has
 			// already been applied by the reducer, and applying it twice is how the two would drift.

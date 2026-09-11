@@ -328,7 +328,19 @@ object SetListContract :
 		data class LastOpenedSetRestored(val setId: String?) : Intent
 
 		/** A set was tapped; remembered for next launch. */
-		data class SetOpened(val setId: String) : Intent
+		data class SetOpened(val set: CardSet) : Intent
+
+		/** The back arrow. Navigation goes through the container like everything else. */
+		data object BackPressed : Intent
+
+		/** The bar menu and the search button: three destinations plus search. */
+		data object SettingsRequested : Intent
+
+		data object StorageRequested : Intent
+
+		data object DownloadsRequested : Intent
+
+		data object SearchRequested : Intent
 
 		/**
 		 * The user picked a different game.
@@ -374,7 +386,29 @@ object SetListContract :
 		data class HideEmptyToggled(val hide: Boolean) : Intent
 	}
 
-	sealed interface Effect
+	/**
+	 * Navigation, emitted by the container rather than handed to the layout.
+	 *
+	 * This used to say navigation stayed as callbacks because where the app goes next is the
+	 * caller's business. It still is -- `SetListScreen` is what turns these back into routes -- but
+	 * the *body* should not be the thing holding them: it takes a state and a dispatch, and opening
+	 * a set is already an intent, because it is also what remembers the last set opened.
+	 */
+	sealed interface Effect {
+
+		data class OpenSet(val set: CardSet) : Effect
+
+		data object NavigateBack : Effect
+
+		data object OpenSettings : Effect
+
+		data object OpenStorage : Effect
+
+		data object OpenDownloads : Effect
+
+		/** Cross-set search of the game this list is for. */
+		data class OpenSearch(val game: GameProfile) : Effect
+	}
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
 
@@ -430,7 +464,15 @@ object SetListContract :
 
 		is Intent.LastOpenedSetRestored -> state.copy(lastOpenedSetId = intent.setId)
 
-		is Intent.SetOpened -> state.copy(lastOpenedSetId = intent.setId)
+		is Intent.SetOpened -> state.copy(lastOpenedSetId = intent.set.id.qualified)
+
+		// Navigation changes no state. The view model turns these into effects.
+		Intent.BackPressed,
+		Intent.SettingsRequested,
+		Intent.StorageRequested,
+		Intent.DownloadsRequested,
+		Intent.SearchRequested,
+		-> state
 
 		is Intent.GameChanged ->
 			if (intent.game == state.game) {

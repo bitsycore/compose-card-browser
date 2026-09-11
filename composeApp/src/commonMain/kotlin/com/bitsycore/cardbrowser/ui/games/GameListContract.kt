@@ -84,9 +84,32 @@ object GameListContract :
 
 		/** Order and hidden list both cleared, back to what the routing table says. */
 		data object CustomisationReset : Intent
+
+		/** The bar menu. Three destinations, three intents, so the body only ever dispatches. */
+		data object SettingsRequested : Intent
+
+		data object StorageRequested : Intent
+
+		data object DownloadsRequested : Intent
 	}
 
-	sealed interface Effect
+	/**
+	 * Navigation, emitted by the container rather than handed to the layout.
+	 *
+	 * A `Content` takes a state and a dispatch. Opening a game is already an intent -- it has to be,
+	 * because it is also what remembers the last game -- so having the *navigation* half of the same
+	 * tap arrive by a separate lambda meant one interaction split across two mechanisms.
+	 */
+	sealed interface Effect {
+
+		data class OpenGame(val game: GameProfile) : Effect
+
+		data object OpenSettings : Effect
+
+		data object OpenStorage : Effect
+
+		data object OpenDownloads : Effect
+	}
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
 
@@ -118,5 +141,8 @@ object GameListContract :
 		)
 
 		is Intent.CustomisationReset -> state.copy(order = emptyList(), hiddenIds = emptySet())
+
+		// Navigation changes no state. The view model turns these into effects.
+		Intent.SettingsRequested, Intent.StorageRequested, Intent.DownloadsRequested -> state
 	}
 }

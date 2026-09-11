@@ -53,6 +53,9 @@ class CardDetailViewModel(
 
 	override suspend fun handleIntent(intent: CardDetailContract.Intent) {
 		when (intent) {
+			CardDetailContract.Intent.BackPressed ->
+				emitEffect(CardDetailContract.Effect.NavigateBack)
+
 			is CardDetailContract.Intent.Load -> load(intent)
 
 			// Told to the session rather than kept here, because the screen that needs to know is the

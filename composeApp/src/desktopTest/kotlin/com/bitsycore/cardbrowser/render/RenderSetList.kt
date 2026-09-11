@@ -35,12 +35,12 @@ class SetListRenderer {
 		val vOut = File("build/render")
 		vOut.mkdirs()
 
-		renderToPng(vOut, "sets-all-lines", width = 660, height = 1100, density = 1.65f) { SetListContent(pokemonState(), {}, onOpenSet = {}, onOpenSettings = {}) }
+		renderToPng(vOut, "sets-all-lines", width = 660, height = 1100, density = 1.65f) { SetListContent(pokemonState(), {}) }
 		renderToPng(vOut, "sets-one-line", width = 660, height = 1100, density = 1.65f) {
-			SetListContent(pokemonState().copy(region = "jp"), {}, onOpenSet = {}, onOpenSettings = {})
+			SetListContent(pokemonState().copy(region = "jp"), {})
 		}
 		renderToPng(vOut, "sets-single-line-game", width = 660, height = 1100, density = 1.65f, isDark = false) {
-			SetListContent(riftboundState(), {}, onOpenSet = {}, onOpenSettings = {})
+			SetListContent(riftboundState(), {})
 		}
 
 		// Short enough that the footer is on screen: the tally and the option that moves it.
@@ -48,8 +48,6 @@ class SetListRenderer {
 			SetListContent(
 				pokemonState().copy(sets = pokemonState().sets.filter { it.code in setOf("sv08", "base2") }),
 				{},
-				onOpenSet = {},
-				onOpenSettings = {},
 			)
 		}
 

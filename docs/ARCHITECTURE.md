@@ -483,8 +483,16 @@ preview has no Koin graph, so a stray `koinInject` inside a Content throws
 That is why the grid's focused-card id and the detail screen's prefetch radius are *parameters*
 rather than injections, even though both are read from a singleton one function up.
 
-Navigation stays as callbacks rather than intents. Where the app goes next is the caller's business,
-and folding it into the contract would have every reducer knowing about routes.
+Navigation is an intent and arrives back as an effect. A tap dispatches `BackPressed` or
+`SetOpened(set)`; the view model emits `Effect.NavigateBack` or `Effect.OpenSet(set)`; `XScreen`
+collects it and calls the lambda the composition root gave it. So `XContent` really does take a
+state and a dispatch and nothing else, and no reducer knows about a route -- the effect names a
+destination in the screen's own vocabulary and `App.kt` decides what that is.
+
+This used to be the opposite: navigation stayed as a callback threaded through `XContent`, on the
+grounds that where the app goes next is the caller's business. It still is, but the *body* was the
+wrong place to hold it, and it split single interactions across two mechanisms -- opening a set both
+dispatched `SetOpened`, which remembers the last set, and called `onOpenSet`, which navigated.
 
 ### Two effects that drive each other need a tiebreaker
 

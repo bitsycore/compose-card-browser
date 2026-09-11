@@ -66,8 +66,6 @@ private fun renderTitle(directory: File, name: String, art: GameArt, isDark: Boo
 		SetListContent(
 			state = SetListContract.UiState(isLoading = false),
 			dispatch = {},
-			onOpenSet = {},
-			onOpenSettings = {},
 			gameArt = art,
 		)
 	}

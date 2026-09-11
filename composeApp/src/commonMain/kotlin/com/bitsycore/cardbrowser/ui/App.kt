@@ -78,7 +78,7 @@ sealed interface Route : NavKey {
 	@Serializable
 	data object Settings : Route
 
-	/** What is on the device, and what can be deleted. Reached from settings. */
+	/** What is on the device, and what can be deleted. Reached from the bar menu. */
 	@Serializable
 	data object Storage : Route
 
@@ -257,14 +257,14 @@ fun App() {
 					}
 
 					is Route.Settings -> NavEntry(vRoute) {
-						SettingsScreen(
-							onBack = { vBackStack.removeLastOrNull() },
-							onOpenStorage = { vBackStack.add(Route.Storage) },
-						)
+						SettingsScreen(onBack = { vBackStack.removeLastOrNull() })
 					}
 
 					is Route.Storage -> NavEntry(vRoute) {
-						StorageScreen(onBack = { vBackStack.removeLastOrNull() })
+						StorageScreen(
+							onBack = { vBackStack.removeLastOrNull() },
+							onOpenCacheSettings = { vBackStack.add(Route.Settings) },
+						)
 					}
 
 					is Route.Downloads -> NavEntry(vRoute) {

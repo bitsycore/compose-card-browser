@@ -64,6 +64,11 @@ class SearchViewModel(
 
 	override suspend fun handleIntent(intent: SearchContract.Intent) {
 		when (intent) {
+			SearchContract.Intent.BackPressed -> emitEffect(SearchContract.Effect.NavigateBack)
+
+			is SearchContract.Intent.CardOpened ->
+				emitEffect(SearchContract.Effect.OpenCard(intent.card))
+
 			SearchContract.Intent.Submit -> {
 				mLiveSearchJob?.cancel()
 				startSearch()
