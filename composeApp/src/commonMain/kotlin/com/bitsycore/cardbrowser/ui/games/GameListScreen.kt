@@ -2,11 +2,19 @@ package com.bitsycore.cardbrowser.ui.games
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -58,6 +66,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.compose.runtime.collectAsState
@@ -177,7 +187,25 @@ fun GameListContent(
 	Scaffold(
 		topBar = {
 			TopAppBar(
-				title = { Text(if (state.isEditing) "Customise list" else "Card Browser") },
+				title = {
+					// The mode's name changes, so it moves rather than being retyped in place. Up
+					// on the way into editing and down on the way out, which matches the direction
+					// the rest of the row's controls travel.
+					AnimatedContent(
+						targetState = state.isEditing,
+						transitionSpec = {
+							val vUp = targetState
+							(
+								slideInVertically { if (vUp) it / 2 else -it / 2 } + fadeIn()
+								) togetherWith (
+								slideOutVertically { if (vUp) -it / 2 else it / 2 } + fadeOut()
+								)
+						},
+						label = "title",
+					) { vIsEditing ->
+						Text(if (vIsEditing) "Customise list" else "Card Browser")
+					}
+				},
 				actions = {
 					IconButton(onClick = { dispatch(GameListContract.Intent.EditingToggled) }) {
 						Icon(
@@ -380,32 +408,50 @@ private fun GameRow(
 			},
 		)
 
-	// Tighter while editing: a mark plus two controls is a lot for one phone-width row. Animated
-	// rather than switched, because the handle expanding into a row whose padding jumps at the same
-	// moment reads as two separate things happening to one row.
-	val vHorizontalPadding by animateDpAsState(
+	// Only the *start* padding gives way, and only because the handle needs the room. The end stays
+	// put: animating both is what made the eye land 8dp off where the chevron had been, so the one
+	// control that should have held still was the one that moved furthest.
+	val vStartPadding by animateDpAsState(
 		targetValue = if (isEditing) 8.dp else 16.dp,
-		animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-		label = "row padding",
+		// This is the bump, and it was mine. `MotionScheme.expressive().defaultSpatialSpec()` is
+		// `spring(dampingRatio = 0.8f, stiffness = 380f)` -- checked in material3 1.12.0-alpha03's
+		// `ExpressiveMotionTokens`, not assumed -- and 0.8 is underdamped, so it overshoots. That
+		// is right for something crossing the screen and wrong for an 8dp inset: the mark and the
+		// name shot past their resting place and came back, which is what the bump was.
+		//
+		// Critically damped instead. A `DampingRatioNoBouncy` spring cannot exceed its target, so
+		// this is a property of the spec rather than a number that happened to look settled.
+		animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = HANDLE_STIFFNESS),
+		label = "row start padding",
 	)
 
 	val vContent: @Composable () -> Unit = {
 		Row(
 			modifier = Modifier
-				.padding(horizontal = vHorizontalPadding, vertical = 12.dp)
+				.padding(start = vStartPadding, end = ROW_END_PADDING, top = 12.dp, bottom = 12.dp)
 				.fillMaxWidth(),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
-			// Expands from the left edge rather than appearing at full width, so the mark and the
-			// name slide over to make room for it instead of being redrawn somewhere else.
+			// Arrives from off the left edge and leaves the same way, so it reads as something
+			// sliding in from outside the row rather than growing out of the game's mark.
 			//
-			// Clipped, which is the default and is the point: unclipped, the handle draws at full
-			// size from the first frame and sits on top of the game's mark while the space for it
-			// is still opening.
+			// `expandHorizontally` is what opens the space; the slide is what fills it. Expanding
+			// alone was a wipe -- the handle appeared a sliver at a time, pinned where it would end
+			// up -- which is why that did not look like an entrance.
+			//
+			// Both specs stated, though neither was the bug: Compose's own defaults here are
+			// already critically damped, and the bump came from the row's start padding above.
+			// They are pinned anyway because these two drive one object between them -- the space
+			// and the thing filling it -- and a default that diverged later would be a wobble
+			// nobody could account for.
 			AnimatedVisibility(
 				visible = isEditing,
-				enter = expandHorizontally() + fadeIn(),
-				exit = shrinkHorizontally() + fadeOut(),
+				enter = expandHorizontally(animationSpec = HANDLE_SIZE_SPEC) +
+					slideInHorizontally(animationSpec = HANDLE_OFFSET_SPEC) { -it } +
+					fadeIn(),
+				exit = shrinkHorizontally(animationSpec = HANDLE_SIZE_SPEC) +
+					slideOutHorizontally(animationSpec = HANDLE_OFFSET_SPEC) { -it } +
+					fadeOut(),
 			) {
 				ReorderHandle(handleModifier ?: Modifier)
 			}
@@ -426,12 +472,19 @@ private fun GameRow(
 					)
 				}
 			}
-			// A cross-fade rather than a swap: the chevron and the eye occupy the same corner and
-			// mean opposite things about what a tap does, so the one replacing the other is worth
-			// showing. Sized to the eye button either way, so the row does not resize mid-fade.
+			// One icon becomes the other in place: the outgoing one shrinks away while the
+			// incoming one grows into the same centre, which reads as a transform rather than as
+			// two pictures dissolving through each other. A plain cross-fade left both at full
+			// size and both half-transparent, which is when it looks like a glitch.
+			//
+			// Both sit in the same `CHEVRON_SLOT`, and the end padding above does not move, so the
+			// centre they share is genuinely the same point on screen in both modes.
 			AnimatedContent(
 				targetState = isEditing,
-				transitionSpec = { fadeIn() togetherWith fadeOut() },
+				transitionSpec = {
+					(fadeIn() + scaleIn(initialScale = 0.6f)) togetherWith
+						(fadeOut() + scaleOut(targetScale = 0.6f))
+				},
 				label = "row trailing control",
 			) { vIsEditing ->
 				if (vIsEditing) {
@@ -456,7 +509,7 @@ private fun GameRow(
 					}
 				} else {
 					// A box of the button's size rather than a disabled button. Both keep the row
-					// from resizing mid-fade, but a disabled `IconButton` also greys the chevron
+					// from resizing mid-swap, but a disabled `IconButton` also greys the chevron
 					// and announces a dead button on every row to a screen reader. The whole row is
 					// the target out here; the chevron is decoration and says so with a null
 					// description.
@@ -517,9 +570,39 @@ private const val HIDDEN_ROW_ALPHA = 0.45f
  *
  * Material's own minimum touch target, which is what an `IconButton` occupies. Stated so the
  * browsing chevron reserves the same space as the editing eye: without it the row's text column
- * resizes underneath the cross-fade and the name shuffles sideways while the icons swap.
+ * resizes underneath the swap and the name shuffles sideways while the icons trade places.
  */
 private val CHEVRON_SLOT = 48.dp
+
+/**
+ * How hard the handle's entrance is driven.
+ *
+ * `MediumLow` rather than the default: the handle is 24dp of travel, and a stiffer spring covers
+ * that so fast there is nothing to see, which is the other way to get an entrance wrong.
+ */
+private const val HANDLE_STIFFNESS = Spring.StiffnessMediumLow
+
+/** The row's width as the handle makes room. Settled -- see the comment at the call site. */
+private val HANDLE_SIZE_SPEC = spring<IntSize>(
+	dampingRatio = Spring.DampingRatioNoBouncy,
+	stiffness = HANDLE_STIFFNESS,
+)
+
+/** The handle's own travel. The same spring, so the two cannot pull against each other. */
+private val HANDLE_OFFSET_SPEC = spring<IntOffset>(
+	dampingRatio = Spring.DampingRatioNoBouncy,
+	stiffness = HANDLE_STIFFNESS,
+)
+
+/**
+ * The row's trailing inset, and it does not animate.
+ *
+ * Fixed on purpose. The start padding gives way to make room for the drag handle, and applying the
+ * same change to both edges dragged the trailing icon 8dp sideways -- so the chevron and the eye
+ * were morphing between two different points and the effect read as a slide rather than a
+ * transform. This is what pins the centre they share.
+ */
+private val ROW_END_PADDING = 16.dp
 
 /** Separates the hidden games from the listed ones, and says how many there are. */
 @Composable
