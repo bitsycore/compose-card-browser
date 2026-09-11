@@ -2,7 +2,6 @@ package com.bitsycore.cardbrowser.ui.settings
 
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.data.cache.CacheManager
-import com.bitsycore.cardbrowser.data.cache.CacheUsage
 import com.bitsycore.cardbrowser.data.settings.BrowsingPreferences
 import com.bitsycore.cardbrowser.data.settings.ThemeMode
 import com.bitsycore.lib.pulse.container.ContainerContract

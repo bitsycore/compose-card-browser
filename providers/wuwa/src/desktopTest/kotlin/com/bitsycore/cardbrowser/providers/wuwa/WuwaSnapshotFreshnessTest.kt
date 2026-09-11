@@ -19,7 +19,6 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 /**
  * Asks UCP whether the bundled snapshot is still the whole game.

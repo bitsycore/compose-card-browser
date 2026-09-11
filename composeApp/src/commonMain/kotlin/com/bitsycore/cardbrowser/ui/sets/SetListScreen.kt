@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.clickable
-import androidx.compose.material3.Checkbox
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -84,7 +82,6 @@ import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.ProviderError
-import com.bitsycore.cardbrowser.data.repository.BulkImportProgress
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.cardbrowser.ui.common.EmptyState
 import com.bitsycore.cardbrowser.ui.common.FastScroller

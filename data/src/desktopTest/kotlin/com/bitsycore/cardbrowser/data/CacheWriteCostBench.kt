@@ -12,7 +12,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import okio.FileSystem
-import okio.Path.Companion.toPath
 import kotlin.test.Ignore
 import kotlin.test.Test
 

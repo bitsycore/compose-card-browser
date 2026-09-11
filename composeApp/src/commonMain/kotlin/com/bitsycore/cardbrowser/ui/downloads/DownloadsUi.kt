@@ -323,7 +323,7 @@ fun DownloadKindDialog(
 								// the difference is the thing a user gets wrong: Scryfall's cheap
 								// dump is described as "the printed language" and is 97% English.
 								vBulkBytes != null && setCount > 1 ->
-									"One file, about ${vBulkBytes!! / 1_000_000} MB" +
+									"One file, about ${vBulkBytes / 1_000_000} MB" +
 										vVariant?.let { " (${it.label.lowercase()})" }.orEmpty() +
 										"."
 								setCount > 1 && cardCount != null ->
