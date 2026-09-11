@@ -1408,7 +1408,25 @@ class CardRepository(
 		val vSetsById = vSets.associateBy { it.id.qualified }
 
 		val vScratch = vStorage.cacheRoot / BULK_SCRATCH_DIR
-		val vBuckets = mutableMapOf<String, okio.BufferedSink>()
+		// Sharded, not one scratch file per set, and that is not a detail.
+		//
+		// This used to hold an open `BufferedSink` per (set, language) for the whole read. For
+		// Scryfall's English dump that is about 1100 open file descriptors at once and for the
+		// every-language one it is thousands -- against a 256 limit on iOS and commonly 1024 on
+		// Android. It crashed a phone, which is how it was found.
+		//
+		// The obvious repair -- keep a small LRU of open sinks -- does not work here, and that is
+		// measured rather than assumed: the file has no locality at all. Sampled 18,050 records
+		// from `default_cards` on 2026-09-11, consecutive cards were in the same bucket with an
+		// average run length of **1.0**, and even a 128-entry LRU would have reopened a file
+		// 10,498 times over those 18,050 writes.
+		//
+		// So the stream goes into a fixed [BULK_SHARDS] files by hash, which bounds descriptors
+		// at a number no platform objects to, and the grouping happens afterwards one shard at a
+		// time in memory. A shard is a known fraction of the whole: even the every-language dump
+		// is a few megabytes per shard, which is the point of choosing the count rather than
+		// letting the catalogue choose it.
+		val vShards = mutableMapOf<Int, okio.BufferedSink>()
 		var vCards = 0
 
 		try {
@@ -1424,9 +1442,13 @@ class CardRepository(
 				// -- so one bucket per set would mix them and store the lot under a single label
 				// that is wrong for most of it.
 				val vBucketKey = bucketKey(vCard.setId, vCard.text.language)
-				val vSink = vBuckets.getOrPut(vBucketKey) {
-					vStorage.fileSystem.sink(vScratch / bucketName(vBucketKey)).buffer()
+				val vSink = vShards.getOrPut(shardOf(vBucketKey)) {
+					vStorage.fileSystem.sink(vScratch / shardName(shardOf(vBucketKey))).buffer()
 				}
+				// The bucket key is written with the record, so the grouping pass does not have to
+				// re-derive it -- and so a shard is readable on its own.
+				vSink.writeUtf8(vBucketKey)
+				vSink.writeUtf8("\t")
 				vSink.writeUtf8(mJson.encodeToString(serializer<CardPrinting>(), vCard))
 				vSink.writeUtf8("\n")
 				vCards++
@@ -1436,14 +1458,23 @@ class CardRepository(
 			}
 		} finally {
 			// Closed before anything is read back, or the last writes are still in a buffer.
-			vBuckets.values.forEach { runCatching { it.close() } }
+			vShards.values.forEach { runCatching { it.close() } }
 		}
 
 		var vSetsWritten = 0
+		// Counted from the shards rather than known up front, so the progress denominator is the
+		// real number of sets and not the number of shards.
+		var vBucketTotal = 0
+		val vGrouped = mutableListOf<Pair<String, List<CardPrinting>>>()
 		try {
-			for ((vBucketKey, _) in vBuckets) {
+			for (vShard in vShards.keys.sorted()) {
 				currentCoroutineContext().ensureActive()
-				val vPrintings = readBucket(vStorage, vScratch / bucketName(vBucketKey))
+				val vByBucket = readShard(vStorage, vScratch / shardName(vShard))
+				vBucketTotal += vByBucket.size
+				vGrouped += vByBucket.toList()
+			}
+			for ((_, vPrintings) in vGrouped) {
+				currentCoroutineContext().ensureActive()
 				if (vPrintings.isEmpty()) continue
 				// Read off the records rather than parsed back out of the key, so the cache is
 				// written under the language the cards in it actually state.
@@ -1473,7 +1504,7 @@ class CardRepository(
 				)
 				mCache.recordCardCount(vKey, vDedupedBucket.size)
 				vSetsWritten++
-				onProgress(BulkImportProgress.Writing(vSetsWritten, vBuckets.size))
+				onProgress(BulkImportProgress.Writing(vSetsWritten, vBucketTotal))
 			}
 		} finally {
 			runCatching { vStorage.fileSystem.deleteRecursively(vScratch) }
@@ -1506,17 +1537,29 @@ class CardRepository(
 		return (vProvider as? BulkCatalogue)?.bulkVariants().orEmpty()
 	}
 
-	/** Reads one set's scratch file back into printings, skipping any line that will not parse. */
-	private fun readBucket(storage: AppStorage, path: okio.Path): List<CardPrinting> {
-		if (!storage.fileSystem.exists(path)) return emptyList()
-		val vOut = mutableListOf<CardPrinting>()
+	/**
+	 * Reads one shard back, grouped by bucket, skipping any line that will not parse.
+	 *
+	 * A shard holds a hash-slice of the whole catalogue, so this is where the memory goes: one
+	 * shard's cards at a time rather than the file's. [BULK_SHARDS] is chosen so that even the
+	 * every-language dump leaves a few megabytes per shard.
+	 */
+	private fun readShard(
+		storage: AppStorage,
+		path: okio.Path,
+	): Map<String, List<CardPrinting>> {
+		if (!storage.fileSystem.exists(path)) return emptyMap()
+		val vOut = LinkedHashMap<String, MutableList<CardPrinting>>()
 		storage.fileSystem.source(path).buffer().use { vSource ->
 			while (true) {
 				val vLine = vSource.readUtf8Line() ?: break
 				if (vLine.isBlank()) continue
-				runCatching { mJson.decodeFromString(serializer<CardPrinting>(), vLine) }
-					.getOrNull()
-					?.let(vOut::add)
+				val vTab = vLine.indexOf('\t')
+				if (vTab <= 0) continue
+				val vCard = runCatching {
+					mJson.decodeFromString(serializer<CardPrinting>(), vLine.substring(vTab + 1))
+				}.getOrNull() ?: continue
+				vOut.getOrPut(vLine.substring(0, vTab)) { mutableListOf() } += vCard
 			}
 		}
 		return vOut
@@ -1526,8 +1569,13 @@ class CardRepository(
 	private fun bucketKey(setId: SourceId, language: CardLanguage?): String =
 		setId.qualified + "|" + (language?.code ?: "-")
 
-	/** A filesystem-safe scratch name. Hashed, because a set code is not a filename. */
-	private fun bucketName(key: String): String = key.encodeUtf8().sha256().hex() + ".jsonl"
+	/** Which shard a bucket's records go to. Stable, and spread by the hash rather than by name. */
+	private fun shardOf(bucketKey: String): Int {
+		val vHex = bucketKey.encodeUtf8().sha256().hex()
+		return vHex.substring(0, 4).toInt(16) % BULK_SHARDS
+	}
+
+	private fun shardName(shard: Int): String = "shard-$shard.jsonl"
 
 	/**
 	 * Protects a downloaded set's records from cache eviction, or releases them.
@@ -1549,8 +1597,22 @@ class CardRepository(
 
 	companion object {
 
-		/** Scratch directory for a bulk import's per-set buckets. Deleted when the import ends. */
+		/** Scratch directory for a bulk import's shards. Deleted when the import ends. */
 		private const val BULK_SCRATCH_DIR = "bulk-scratch"
+
+		/**
+		 * How many scratch files a bulk import streams into.
+		 *
+		 * Two limits, pulling opposite ways. Every shard is open at once during the stream, so
+		 * this is a floor on file descriptors -- iOS allows 256 for the whole process and Android
+		 * commonly 1024, and the app is already using some. And a shard is read back whole into
+		 * memory, so this is also a ceiling on how much that costs.
+		 *
+		 * 64 sits comfortably inside both: descriptors are a rounding error, and the biggest dump
+		 * here -- Scryfall's every-language file, roughly half a million printings -- lands at a
+		 * few megabytes a shard.
+		 */
+		private const val BULK_SHARDS = 64
 
 		/** How often to report while sorting cards into sets. Often enough to move, rarely enough not to thrash. */
 		private const val BULK_PROGRESS_EVERY = 2_000

@@ -156,8 +156,11 @@ class BulkImportTest {
 		releaseDate = null,
 	)
 
-	private fun repository(provider: FakeBulkProvider): CardRepository {
-		val vStorage = AppStorage(FakeFileSystem(), "/cache".toPath(), "/prefs".toPath())
+	private fun repository(
+		provider: FakeBulkProvider,
+		fileSystem: FakeFileSystem = FakeFileSystem(),
+	): CardRepository {
+		val vStorage = AppStorage(fileSystem, "/cache".toPath(), "/prefs".toPath())
 			.also { it.prepare() }
 		return CardRepository(
 			mRegistry = ProviderRegistry(
@@ -298,6 +301,33 @@ class BulkImportTest {
 
 		assertNull(repository(vProvider).importBulk(TestGameProfile.id, variantId = "nope"))
 		assertNull(vProvider.streamedVariant)
+	}
+
+	@Test
+	fun `a huge catalogue holds only a bounded number of files open`() = runTest {
+		// The crash this design exists to prevent, reported from a phone. The import used to keep
+		// one open sink per (set, language) for the whole read -- about 1100 for Scryfall's
+		// English dump and thousands for the every-language one, against a 256 descriptor limit
+		// on iOS and commonly 1024 on Android.
+		//
+		// `FakeFileSystem.openPaths` reports what is open right now, so the assertion is the real
+		// property rather than a proxy for it. 600 buckets is already past iOS's limit and would
+		// have failed the old code.
+		val vFileSystem = FakeFileSystem()
+		val vSets = (0 until 600).map { set("S$it") }
+		val vCards = (0 until 600).map { printing("S$it", "1") }
+		val vProvider = FakeBulkProvider(mProviderId, vCards, vSets)
+
+		var vPeak = 0
+		val vRepository = repository(vProvider, vFileSystem)
+		val vResult = assertNotNull(
+			vRepository.importBulk(TestGameProfile.id) {
+				vPeak = maxOf(vPeak, vFileSystem.openPaths.size)
+			},
+		)
+
+		assertEquals(600, vResult.sets, "every bucket must still be written")
+		assertTrue(vPeak in 1..128, "held $vPeak files open at once")
 	}
 
 }
