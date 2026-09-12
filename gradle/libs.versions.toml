@@ -125,6 +125,11 @@ ktor-serialization-json = { module = "io.ktor:ktor-serialization-kotlinx-json", 
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 ktor-client-java = { module = "io.ktor:ktor-client-java", version.ref = "ktor" }
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
+# Native desktop engines. WinHttp is Windows' own stack and Darwin is NSURLSession -- neither needs
+# anything linked. curl is for Linux, where Ktor offers nothing else and libcurl is present anyway.
+# Only resolved under -PnativeDesktop.
+ktor-client-winhttp = { module = "io.ktor:ktor-client-winhttp", version.ref = "ktor" }
+ktor-client-curl = { module = "io.ktor:ktor-client-curl", version.ref = "ktor" }
 # Test only: an engine that answers from a lambda, so the request the app really builds can be
 # asserted on without a network.
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }

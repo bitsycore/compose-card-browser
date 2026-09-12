@@ -10,34 +10,45 @@ which runs Compose Desktop as a native binary instead of on the JVM — `mingwX6
 ./gradlew -PnativeDesktop=true :core:compileKotlinLinuxX64
 ```
 
-Without it, no native target is declared and `./gradlew build` is exactly what it was. That is
-deliberate — the app module cannot link yet, and a permanently red target is worse than an opt-in
-one.
+Without it, no native target is declared and `./gradlew build` is exactly what it was.
 
 ## Where it has got to
 
-**Every module compiles for `mingwX64`, including `:composeApp`.** That is new as of 2026-09-12:
-`compose-desktop-native` `1.12.0-3` publishes the mirrors that were missing, so every dependency
-this app declares now resolves natively. The table of blockers that used to be here is empty.
+**It runs.** `composeApp.exe` is a native Windows binary with no JVM under it -- SDL3 and Skia in
+place of AWT -- and it starts, opens its window and draws the game picker. That happened on
+2026-09-12, after `compose-desktop-native` `1.12.0-3` published the mirrors that were missing.
 
-What is left is the *link*, and it is one library:
-
-```
-ld.lld: error: undefined symbol: sqlite3_step
-ld.lld: error: undefined symbol: sqlite3_open_v2
-...
+```bash
+./gradlew -PnativeDesktop=true :composeApp:linkDebugExecutableMingwX64
+./gradlew -PnativeDesktop=true :composeApp:packageDebugComposeResourcesMingwX64
+composeApp/build/bin/mingwX64/debugExecutable/composeApp.exe
 ```
 
-Twenty undefined symbols, every one of them SQLite's. Nothing from Compose, Skiko, SDL, Coil, Koin,
-Pulse or Navigation is missing — skiko's DLL and ICU data are provisioned by the bridge's own tasks
-and the rest links. SQLDelight's `native-driver` sits on SQLiter, whose cinterop declares
-`sqlite3.h` and **no implementation**: Apple targets get libsqlite3 from the SDK, Linux from the
-distribution, and Windows from nowhere. Its manifest carries `linkerOpts` for `linux_x64` and
-`macos_x64` and none for `mingw_x64`.
+Three things had to be found by running it, none of which fails a compile:
 
-So a Windows native binary needs a SQLite to link against, from somewhere. Who supplies it is the
-open question — this repository vendoring the amalgamation and compiling it, or
-`compose-desktop-native` publishing it the way it already publishes skiko.
+1. **SQLite is not supplied by anyone.** SQLDelight's `native-driver` sits on SQLiter, whose
+   cinterop declares `sqlite3.h` and ships no implementation: Apple targets take libsqlite3 from the
+   SDK and Linux from the distribution, and its manifest carries `linkerOpts` for `linux_x64` and
+   `macos_x64` and none for `mingw_x64`. Twenty undefined symbols at link, every one of them
+   SQLite's, and nothing else missing. `composeApp/sqlite-mingw.gradle.kts` fetches the
+   amalgamation, checks it against the SHA3-256 sqlite.org publishes beside the file, and compiles
+   it with the clang and MinGW sysroot Kotlin/Native already downloaded.
+2. **Ktor has no engine on these targets.** The app declares okhttp, java and darwin; native
+   desktop needs its own. `HttpClient {}` discovers an engine, an engineless binary finds none, and
+   it surfaces as a global-initialiser failure that names nothing. WinHttp on Windows, Darwin on
+   macOS, curl on Linux -- curl publishes `mingwX64` too and one shared dependency would compile,
+   but it would then want libcurl to link against, which is the problem SQLite already cost a build
+   script. WinHttp and Darwin are the system stacks and need nothing linked.
+3. **The resource archive was empty.** The bridge's `data.kres` task zips *this project's* prepared
+   resources, and `:composeApp` has none -- every logo lives in the `:games:*` module that owns the
+   game. `composeApp/native-resources.gradle.kts` adds them; the fix belongs upstream, and says so.
+
+What has *not* been exercised: anything past the first screen. No set has been downloaded, no card
+store has been opened, no link has been clicked. The app being up is not the app working.
+
+`linuxX64`, `linuxArm64` and `macosArm64` compile and have not been linked from here. Linux needs
+libcurl and libsqlite3 present, which an ordinary distribution has; macOS needs neither. Both are
+guesses and are written down as such.
 
 ## What the bridge plugin substitutes
 
@@ -85,44 +96,47 @@ for bridge `0.4.2` — which asked for a `mingw.1` that was never published — 
 
 ## What this side had to write, and did
 
-Both of the pieces that used to be listed as missing are written. Neither has been *run*.
+Both of the pieces that used to be listed as missing are written, and one of them has run.
 
 - **`NativeDesktopDriverFactory`** (`:database`, `nativeDesktopMain`) — SQLDelight's
   `native-driver`, the same one iOS uses. It hands SQLiter an explicit `basePath`, because the
   default is not where `AppStorage` says the cache lives, and sets WAL, `synchronous=FULL`, foreign
   keys and the busy timeout as *connection configuration* rather than as pragmas. That is the
   lesson from `DesktopDriverFactory`: SQLiter pools connections, and a pragma sent once configures
-  one of them.
+  one of them. **Unexercised** -- Koin builds it lazily and nothing has asked for a set yet.
 - **`platformModule()`** (`:composeApp`, `nativeDesktopMain`) — the same dotted directory under
   `$HOME` the JVM desktop uses, deliberately, so the two desktop builds read one cache and can be
-  compared. The link opener picks its command from `Platform.osFamily`, and refuses a URL rather
+  compared. This one has run: the app starts, which means `AppStorage.prepare()` created those
+  directories on Windows. The link opener picks its command from `Platform.osFamily`, and refuses a URL rather
   than escaping it if it carries anything a shell would read as more than text: the consumer is
   `system()`, and a card name is provider-supplied.
 
-The dark title bar is still JVM-only: it uses JNA. The same `DwmSetWindowAttribute` call is
-cinterop on Kotlin/Native, and rather less work than the JVM version was.
-
 ## The plan for the rest
 
-Settled with the project owner on 2026-09-11 and now delivered: pulse got native targets, and
-coil, koin-compose and navigation3-ui are forks the bridge redirects to. What that plan did *not*
-cover is SQLite on Windows, which is the single open item above.
+Settled with the project owner on 2026-09-11 and delivered on 2026-09-12: pulse got native targets,
+and coil, koin-compose and navigation3-ui are forks the bridge redirects to. What that plan did not
+cover was the three things running the binary found — SQLite, the HTTP engine and the resource
+archive — and all three are handled above.
 
 ## What is still unknown
 
-**Nothing here has run.** `:composeApp` compiles for `mingwX64` and links everything except SQLite;
-no binary has been produced, so the window, the storage paths, the link opener and the card store
-are all unexercised. The first run is likely to find things, in the way the first Android run of
-the card store did.
+**Almost everything past startup.** The window opens and the game picker draws. Nothing beyond that
+has been tried: no provider call has been made over WinHttp, the card store has never been opened
+on this target, and the link opener has never been asked to open anything.
 
-`linuxX64`, `linuxArm64` and `macosArm64` have not been linked from here either — only compiled.
-Linux is likely to link where Windows does not, since SQLiter's manifest carries `linkerOpts` for
-it and a distribution supplies `libsqlite3`; that is a guess and is written down as one.
+The executable itself is declared by the bridge, not here: `compose.desktop { native { entryPoint
+= ... } }` puts one on each of the four targets, and the same block carries the icon spec, which
+builds a `.ico` from the PNGs the JVM distribution already uses and embeds it in the binary. It is
+configured through `extensions.configure(ComposeDesktopNativeExtension::class.java)` rather than as
+a `native { }` block, because Gradle only generates a typed accessor for a plugin named in a
+`plugins { }` block and this one is applied imperatively, under the flag, from the root build.
+
+The dark title bar is still JVM-only -- it uses JNA. The same `DwmSetWindowAttribute` call is
+cinterop on Kotlin/Native, and rather less work than the JVM version was.
 
 ## Why the targets are opt-in rather than always on
 
-Because `:composeApp` cannot link, and a target that is always declared and always broken makes
-`./gradlew build` fail for everyone, on every branch, for a port nobody is working on that day.
-The property keeps the scaffolding in the repository and buildable on demand — which is what makes
-the claim above ("every module below the UI compiles") something anyone can check in one command,
-rather than something that rots.
+Because the native build fetches and compiles SQLite, and because a target that is always declared
+makes every ordinary `./gradlew build` carry work for a platform nobody is on that day. Without the
+flag no native target is declared, `tasks --all` lists nothing for it, and neither of the two script
+plugins is read -- so the ordinary build never reaches for the network.

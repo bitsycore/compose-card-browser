@@ -11,6 +11,8 @@ plugins {
 // checked -- and note it is applied under the flag only, so an ordinary build never reads it.
 if (providers.gradleProperty("nativeDesktop").isPresent) {
 	apply(from = "sqlite-mingw.gradle.kts")
+	// The logos, which live in the game modules and not here. See the file.
+	apply(from = "native-resources.gradle.kts")
 }
 
 kotlin {
@@ -43,11 +45,14 @@ kotlin {
 
 	// The native desktop targets, behind a switch. See :core for why they are opt-in, and
 	// docs/NATIVE_DESKTOP.md for what still has to land before this module can link.
+	// The four targets. The *executables* are not declared here: the bridge's
+	// `compose.desktop { native { entryPoint = ... } }` declares one on each of them, which is the
+	// supported way round and the same place its icon spec lives.
 	if (providers.gradleProperty("nativeDesktop").isPresent) {
 		mingwX64 {
-			binaries.executable { entryPoint = "com.bitsycore.cardbrowser.main" }
 			// SQLite, compiled by `sqlite-mingw.gradle.kts`, because SQLiter supplies none for
-			// this target and Windows has no system one.
+			// this target and Windows has no system one. `binaries.all` rather than a binary by
+			// name, because the binary this applies to is added by the bridge afterwards.
 			@Suppress("UNCHECKED_CAST")
 			val vSqlite = project.extra["sqliteMingwLibrary"] as Provider<RegularFile>
 			val vSqliteTask = project.extra["sqliteMingwTask"]!!
@@ -56,9 +61,9 @@ kotlin {
 				linkTaskProvider.configure { dependsOn(vSqliteTask) }
 			}
 		}
-		linuxX64 { binaries.executable { entryPoint = "com.bitsycore.cardbrowser.main" } }
-		linuxArm64 { binaries.executable { entryPoint = "com.bitsycore.cardbrowser.main" } }
-		macosArm64 { binaries.executable { entryPoint = "com.bitsycore.cardbrowser.main" } }
+		linuxX64()
+		linuxArm64()
+		macosArm64()
 	}
 
 	@Suppress("OPT_IN_USAGE")
@@ -187,6 +192,29 @@ compose.resources {
 }
 
 compose.desktop {
+	// The Kotlin/Native desktop binary. One entry point for all four targets, and the bridge
+	// declares the executable on each -- see docs/NATIVE_DESKTOP.md.
+	//
+	// Configured through `extensions` rather than a `native { }` block because the bridge plugin is
+	// applied imperatively from the root build under the flag, and Gradle only generates a typed
+	// accessor for a plugin named in a `plugins { }` block.
+	if (providers.gradleProperty("nativeDesktop").isPresent) {
+		(this as ExtensionAware).extensions.configure(
+			com.bitsycore.compose.sdl.gradle.ComposeDesktopNativeExtension::class.java,
+		) {
+			entryPoint = "com.bitsycore.cardbrowser.main"
+			// The same PNGs the JVM distribution uses, rather than a second set: the bridge builds
+			// its own `.ico` from them and embeds it in the executable, which is the one thing
+			// jpackage was doing that this build has to do for itself.
+			icon {
+				light.from(project.file("src/desktopMain/resources/app-icon-512.png"))
+				dark.from(project.file("src/desktopMain/resources/app-icon-512.png"))
+				exeIcon.from(project.file("src/desktopMain/resources/app-icon.ico"))
+				embedWindowsIcon.set(true)
+			}
+		}
+	}
+
 	application {
 		mainClass = "com.bitsycore.cardbrowser.MainKt"
 		// Skia loads native code; the flag keeps JDK 24+ from warning about it on every start.

@@ -62,5 +62,31 @@ kotlin {
 		getByName("desktopMain").dependencies {
 			implementation(libs.ktor.client.java)
 		}
+		// An engine per native desktop family: WinHttp, Darwin, curl.
+		//
+		// Ktor's curl engine publishes all four of these targets, so one dependency on the shared
+		// source set would compile -- and on Windows it would then need libcurl to link against, which
+		// is the problem SQLite already cost a build script here. WinHttp is Windows' own stack and
+		// Darwin is NSURLSession: neither needs anything linked that the system does not already have.
+		// curl is left where Ktor offers nothing else, and Linux has libcurl.
+		//
+		// Without one of these the app links and then dies at startup: `HttpClient {}` discovers its
+		// engine, an engineless binary finds none, and it surfaces as a global-initialiser failure
+		// that names nothing. Found by running the Windows binary.
+		if (providers.gradleProperty("nativeDesktop").isPresent) {
+			// Per target rather than per family: the hierarchy template only creates a `mingwMain`
+			// when more than one mingw target exists, and there is one.
+			getByName("mingwX64Main").dependencies {
+				implementation(libs.ktor.client.winhttp)
+			}
+			getByName("macosArm64Main").dependencies {
+				implementation(libs.ktor.client.darwin)
+			}
+			for (vName in listOf("linuxX64Main", "linuxArm64Main")) {
+				getByName(vName).dependencies {
+					implementation(libs.ktor.client.curl)
+				}
+			}
+		}
 	}
 }
