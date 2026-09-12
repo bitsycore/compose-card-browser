@@ -34,6 +34,21 @@ kotlin {
 		linuxX64()
 		linuxArm64()
 		macosArm64()
+
+		// One source set for all four, so the driver is written once. iOS keeps its own: it shares
+		// `NativeSqliteDriver` but not how a file is deleted, which is Foundation there and Okio
+		// here.
+		@Suppress("OPT_IN_USAGE")
+		applyDefaultHierarchyTemplate {
+			common {
+				group("nativeDesktop") {
+					withMingwX64()
+					withLinuxX64()
+					withLinuxArm64()
+					withMacosArm64()
+				}
+			}
+		}
 	}
 
 	sourceSets {
@@ -64,6 +79,14 @@ kotlin {
 		}
 		iosMain.dependencies {
 			implementation(libs.sqldelight.driver.native)
+		}
+		if (providers.gradleProperty("nativeDesktop").isPresent) {
+			getByName("nativeDesktopMain").dependencies {
+				implementation(libs.sqldelight.driver.native)
+				// For deleting a database and its two sidecars. Foundation is not here, and Okio
+				// publishes for all four of these targets.
+				implementation(libs.okio)
+			}
 		}
 	}
 }

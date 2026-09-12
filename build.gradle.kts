@@ -14,15 +14,6 @@ plugins {
 	alias(libs.plugins.composeDesktopNativeBridge) apply false
 }
 
-// The Skia fork the bridge plugin uses for Windows, pinned to what is actually published.
-//
-// `com.bitsycore.compose-desktop-native.bridge:0.4.2` asks for `com.bitsycore.skiko:skiko`
-// at `0.150.1-mingw.1`; `maven.bitsycore.com` has `0.150.1-mingw.2` and nothing else, so
-// `mingwX64` fails to resolve out of the box. Nothing is wrong beyond the version, and forcing
-// it compiles -- see docs/NATIVE_DESKTOP.md.
-//
-// Only under the flag, so a build that declares no native target never sees this rule. Delete it
-// when a bridge release points at a version that exists.
 if (providers.gradleProperty("nativeDesktop").isPresent) {
 	subprojects {
 		// The bridge, on every multiplatform module rather than on the ones that name Compose:
@@ -36,13 +27,26 @@ if (providers.gradleProperty("nativeDesktop").isPresent) {
 		plugins.withId("org.jetbrains.kotlin.multiplatform") {
 			apply(plugin = "com.bitsycore.compose-desktop-native.bridge")
 		}
+		// The one substitution the bridge does not make, because nothing needs forking to make it.
+		//
+		// `org.jetbrains.androidx.navigationevent:navigationevent-compose` is JetBrains' wrapper
+		// and is macOS-only on every version it has published. Google's own
+		// `androidx.navigationevent:navigationevent-compose` publishes `mingwx64`, `linuxx64`,
+		// `linuxarm64` and `macosarm64` at the *same* version this project already pins, so the
+		// coordinates change and the version does not. Checked against Google's maven on
+		// 2026-09-12.
+		//
+		// No code here names it: `NavDisplay` links against it to drive the predictive-back
+		// gesture. See docs/NATIVE_DESKTOP.md.
 		configurations.configureEach {
-			resolutionStrategy.eachDependency {
-				if (requested.group == "com.bitsycore.skiko") useVersion(SKIKO_MINGW_FORK)
+			resolutionStrategy.dependencySubstitution {
+				substitute(module("org.jetbrains.androidx.navigationevent:navigationevent-compose"))
+					.using(module("androidx.navigationevent:navigationevent-compose:$NAVIGATION_EVENT"))
+					.because("the JetBrains wrapper publishes no native desktop targets")
 			}
 		}
 	}
 }
 
-/** The only `com.bitsycore.skiko` version published at the time of writing. */
-val SKIKO_MINGW_FORK = "0.150.1-mingw.2"
+/** Kept equal to `androidxNavigationEvent` in the version catalogue, which is what it replaces. */
+val NAVIGATION_EVENT = libs.versions.androidxNavigationEvent.get()

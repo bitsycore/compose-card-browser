@@ -138,6 +138,17 @@ kotlin {
 			implementation(libs.koin.android)
 		}
 
+		// The window, and only under the flag: this source set does not exist without it.
+		//
+		// The bridge plugin redirects what the app already declares; it does not supply an entry
+		// point, because there is no JVM artifact to redirect one from. `nativeComposeWindow` is
+		// SDL3 and Skia, and it is named here explicitly for the same reason.
+		if (providers.gradleProperty("nativeDesktop").isPresent) {
+			getByName("nativeDesktopMain").dependencies {
+				implementation(libs.compose.desktop.native.window)
+			}
+		}
+
 		getByName("desktopMain").dependencies {
 			implementation(compose.desktop.currentOs)
 			implementation(libs.kotlinx.coroutines.swing)
