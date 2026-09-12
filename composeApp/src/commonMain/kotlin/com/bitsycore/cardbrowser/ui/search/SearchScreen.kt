@@ -82,6 +82,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.bitsycore.cardbrowser.ui.common.AppIcons
 import com.bitsycore.cardbrowser.ui.common.FilterSection
 import com.bitsycore.cardbrowser.ui.common.FilterValueChip
+import com.bitsycore.cardbrowser.ui.common.domainColourOf
+import com.bitsycore.cardbrowser.ui.common.rarityColourOf
 import com.bitsycore.cardbrowser.ui.common.RemovableFilterChip
 
 /**
@@ -595,7 +597,11 @@ private fun SearchFilterSheet(
 		if (vFacets != null && vFacets.rarities.isNotEmpty()) {
 			FilterSection("Rarity") {
 				vFacets.rarities.forEach { vValue ->
-					FilterValueChip(vValue, state.filter.rarity == vValue) {
+					FilterValueChip(
+						label = vValue,
+						isSelected = state.filter.rarity == vValue,
+						colour = rarityColourOf(state.game, vValue),
+					) {
 						onFilterChanged(
 							state.filter.copy(
 								rarity = vValue.takeIf { state.filter.rarity != vValue },
@@ -606,10 +612,18 @@ private fun SearchFilterSheet(
 			}
 		}
 		if (vFacets != null && vFacets.domains.isNotEmpty()) {
-			// The game's own word -- "Colour" for Magic, "Faction" for Altered.
+			// The game's own word -- "Colour" for Magic, "Faction" for Altered -- and its own
+			// order, which no alphabetical sort produces and a player reads as wrong.
 			FilterSection(state.game?.vocabulary?.domain ?: "Domain") {
-				vFacets.domains.forEach { vValue ->
-					FilterValueChip(vValue, state.filter.domain == vValue) {
+				vFacets.domains.sortedBy { vKey ->
+					val vIndex = state.game?.domains?.indexOfFirst { it.key.equals(vKey, true) } ?: -1
+					if (vIndex >= 0) vIndex else Int.MAX_VALUE
+				}.forEach { vValue ->
+					FilterValueChip(
+						label = state.game?.domainFor(vValue)?.label ?: vValue,
+						isSelected = state.filter.domain == vValue,
+						colour = domainColourOf(state.game, vValue),
+					) {
 						onFilterChanged(
 							state.filter.copy(
 								domain = vValue.takeIf { state.filter.domain != vValue },

@@ -32,6 +32,9 @@ import com.bitsycore.cardbrowser.core.provider.SortDirection
 import com.bitsycore.cardbrowser.ui.cards.CardGridContract.toggle
 import com.bitsycore.cardbrowser.ui.common.AppIcons
 import com.bitsycore.cardbrowser.ui.common.FilterSection
+import com.bitsycore.cardbrowser.ui.common.FilterValueChip
+import com.bitsycore.cardbrowser.ui.common.domainColourOf
+import com.bitsycore.cardbrowser.ui.common.rarityColourOf
 import com.bitsycore.cardbrowser.ui.common.RemovableFilterChip
 
 /**
@@ -138,15 +141,13 @@ fun FilterSheet(
 					// being dropped: a source inventing a value must still be filterable.
 					if (vIndex >= 0) vIndex else Int.MAX_VALUE
 				}.forEach { vKey ->
-					val vDomain = state.game?.domainFor(vKey)
-					DomainChip(
-						label = vDomain?.label ?: vKey,
-						colour = vDomain?.let { Color(it.colourArgb.toInt()) },
+					FilterValueChip(
+						label = state.game?.domainFor(vKey)?.label ?: vKey,
 						isSelected = vKey in state.query.domains,
-						onClick = {
-							onQueryChanged(state.query.copy(domains = state.query.domains.toggle(vKey)))
-						},
-					)
+						colour = domainColourOf(state.game, vKey),
+					) {
+						onQueryChanged(state.query.copy(domains = state.query.domains.toggle(vKey)))
+					}
 				}
 			}
 		}
@@ -154,11 +155,9 @@ fun FilterSheet(
 		if (CardFilterField.CARD_TYPE in state.supportedFilters && state.facets.cardTypes.isNotEmpty()) {
 			FilterSection(vVocabulary.cardType) {
 				state.facets.cardTypes.forEach { vType ->
-					FilterChip(
-						selected = vType in state.query.cardTypes,
-						onClick = { onQueryChanged(state.query.copy(cardTypes = state.query.cardTypes.toggle(vType))) },
-						label = { Text(vType) },
-					)
+					FilterValueChip(vType, vType in state.query.cardTypes) {
+						onQueryChanged(state.query.copy(cardTypes = state.query.cardTypes.toggle(vType)))
+					}
 				}
 			}
 		}
@@ -166,11 +165,15 @@ fun FilterSheet(
 		if (CardFilterField.RARITY in state.supportedFilters && state.facets.rarities.isNotEmpty()) {
 			FilterSection("Rarity") {
 				state.facets.rarities.forEach { vRarity ->
-					FilterChip(
-						selected = vRarity in state.query.rarities,
-						onClick = { onQueryChanged(state.query.copy(rarities = state.query.rarities.toggle(vRarity))) },
-						label = { Text(vRarity) },
-					)
+					// In the game's own colours where it prints them, like the domains above and
+					// like the pill on the card itself.
+					FilterValueChip(
+						label = vRarity,
+						isSelected = vRarity in state.query.rarities,
+						colour = rarityColourOf(state.game, vRarity),
+					) {
+						onQueryChanged(state.query.copy(rarities = state.query.rarities.toggle(vRarity)))
+					}
 				}
 			}
 		}
@@ -178,11 +181,9 @@ fun FilterSheet(
 		if (CardFilterField.COST in state.supportedFilters && state.facets.costs.isNotEmpty()) {
 			FilterSection(vVocabulary.cost ?: "Cost") {
 				state.facets.costs.forEach { vCost ->
-					FilterChip(
-						selected = vCost in state.query.costs,
-						onClick = { onQueryChanged(state.query.copy(costs = state.query.costs.toggle(vCost))) },
-						label = { Text("$vCost") },
-					)
+					FilterValueChip("$vCost", vCost in state.query.costs) {
+						onQueryChanged(state.query.copy(costs = state.query.costs.toggle(vCost)))
+					}
 				}
 			}
 		}
@@ -190,11 +191,12 @@ fun FilterSheet(
 		if (CardFilterField.ARTWORK_TREATMENT in state.supportedFilters && state.facets.treatments.size > 1) {
 			FilterSection("Artwork") {
 				state.facets.treatments.forEach { vTreatment ->
-					FilterChip(
-						selected = vTreatment in state.query.treatments,
-						onClick = { onQueryChanged(state.query.copy(treatments = state.query.treatments.toggle(vTreatment))) },
-						label = { Text(CardGridContract.treatmentLabel(vTreatment)) },
-					)
+					FilterValueChip(
+						label = CardGridContract.treatmentLabel(vTreatment),
+						isSelected = vTreatment in state.query.treatments,
+					) {
+						onQueryChanged(state.query.copy(treatments = state.query.treatments.toggle(vTreatment)))
+					}
 				}
 			}
 		}
@@ -280,33 +282,4 @@ fun ActiveFilterChips(
 		}
 		TextButton(onClick = onClearAll) { Text("Clear all") }
 	}
-}
-
-@Composable
-private fun DomainChip(
-	label: String,
-	colour: Color?,
-	isSelected: Boolean,
-	onClick: () -> Unit,
-) {
-	val vColour = colour ?: MaterialTheme.colorScheme.primary
-	// Perceived brightness rather than a plain average: the eye weights green far above blue, and
-	// an unweighted mean calls Magic's blue light enough for black text.
-	val vIsLight = (0.299f * vColour.red + 0.587f * vColour.green + 0.114f * vColour.blue) > 0.6f
-	FilterChip(
-		selected = isSelected,
-		onClick = onClick,
-		label = { Text(label) },
-		colors = FilterChipDefaults.filterChipColors(
-			selectedContainerColor = vColour,
-			selectedLabelColor = if (vIsLight) Color.Black else Color.White,
-			labelColor = MaterialTheme.colorScheme.onSurface,
-		),
-		border = FilterChipDefaults.filterChipBorder(
-			enabled = true,
-			selected = isSelected,
-			borderColor = vColour.copy(alpha = 0.55f),
-			selectedBorderColor = vColour,
-		),
-	)
 }
