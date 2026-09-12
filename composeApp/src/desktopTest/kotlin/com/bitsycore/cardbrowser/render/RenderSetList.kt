@@ -175,6 +175,14 @@ internal fun pokemonArrangingState(isEditing: Boolean) = pokemonState().copy(
 		SourceId(TCGDEX, "sv08").qualified,
 		SourceId(TCGDEX, "base1").qualified,
 	),
+	// Mixed on purpose: one set with nothing left to fetch and the rest with something. Arranging
+	// has to line every star up regardless, which it cannot do if the download slot survives.
+	completeSetIds = setOf(SourceId(TCGDEX, "base1").qualified),
+	imageDownloads = mapOf(
+		SourceId(TCGDEX, "base1").qualified to SetImageStatus(
+			thumbnails = ImageDownloadRecord(fetched = 102, total = 102),
+		),
+	),
 )
 
 /** A game with one product line, which must get no chips at all. */

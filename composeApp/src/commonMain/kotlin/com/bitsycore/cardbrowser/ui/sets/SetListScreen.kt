@@ -1011,19 +1011,8 @@ private fun SetRow(
 					// The marks below still say what is held -- this removes the *offer*, not the
 					// statement. Which is the right way round: "you have this" is information, and
 					// "get this" is an action that has nothing to act on.
-					//
-					// Two axes, animated differently on purpose. A set *becoming* complete takes
-					// the slot away, width and all -- nothing else is moving at that moment. The
-					// mode turning only fades it: the handle is already expanding on the left, and
-					// a second width animation at the other end, on its own spring, leaves the
-					// name column squeezed between two springs that do not finish together. That
-					// is the bounce -- the handle was never the thing bouncing.
-					AnimatedVisibility(visible = canOfferDownload) {
-						DownloadButton(
-							name = set.name,
-							isEditing = isEditing,
-							onDownload = onDownload,
-						)
+					AnimatedVisibility(visible = canOfferDownload && !isEditing) {
+						DownloadButton(name = set.name, onDownload = onDownload)
 					}
 				}
 			}
@@ -1031,9 +1020,13 @@ private fun SetRow(
 			// its records and none of its thumbnails, which is the common case after browsing it
 			// once. Full-size art has no mark because it is never bulk-downloaded and so has no
 			// state to report -- see `DownloadKind`.
-			if (isSaved || images?.isEmpty == false) {
-				Spacer(Modifier.size(6.dp))
+			//
+			// Browsing only. They are things to read, and arranging is not reading: leaving them
+			// on put the star of a downloaded set two notches left of an undownloaded one's, and a
+			// column of controls that do not line up reads as a bug.
+			AnimatedVisibility(visible = !isEditing && (isSaved || images?.isEmpty == false)) {
 				Row(verticalAlignment = Alignment.CenterVertically) {
+					Spacer(Modifier.size(6.dp))
 					if (isSaved) {
 						Icon(
 							imageVector = AppIcons.Description,
@@ -1125,32 +1118,24 @@ private fun FavouriteStar(
 }
 
 /**
- * The download offer, in a slot whose width does not depend on the mode.
+ * The download offer.
  *
- * Two axes, animated differently on purpose. A set *becoming* complete takes the whole slot away --
- * that is the caller's `AnimatedVisibility`, and nothing else on the row is moving at the time. The
- * mode turning only fades the button: the handle is already expanding on the left, and a second
- * width animation at the other end, on its own spring, leaves the name column squeezed between two
- * springs that do not finish together. That is the bounce the arranging toggle used to have -- the
- * handle was never the thing bouncing.
+ * It leaves entirely while arranging, width and all, rather than fading in place: arranging is for
+ * the star, and a row that keeps an invisible slot beyond it puts the stars of downloadable sets
+ * one notch left of the rest. A column of controls that do not line up reads as a bug.
+ *
+ * The slot's width once bore the blame for the arranging toggle's bounce and was innocent -- that
+ * was a start padding stepping 16dp to 4dp in a single frame. See `ArrangingMotionTest`.
  */
 @Composable
-private fun DownloadButton(
-	name: String,
-	isEditing: Boolean,
-	onDownload: () -> Unit,
-) {
-	Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
-		AnimatedVisibility(visible = !isEditing, enter = fadeIn(), exit = fadeOut()) {
-			IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
-				Icon(
-					imageVector = AppIcons.Download,
-					contentDescription = "Download $name",
-					tint = MaterialTheme.colorScheme.onSurfaceVariant,
-					modifier = Modifier.size(20.dp),
-				)
-			}
-		}
+private fun DownloadButton(name: String, onDownload: () -> Unit) {
+	IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
+		Icon(
+			imageVector = AppIcons.Download,
+			contentDescription = "Download $name",
+			tint = MaterialTheme.colorScheme.onSurfaceVariant,
+			modifier = Modifier.size(20.dp),
+		)
 	}
 }
 
