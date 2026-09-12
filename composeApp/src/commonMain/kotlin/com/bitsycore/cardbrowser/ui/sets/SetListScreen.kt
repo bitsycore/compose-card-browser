@@ -786,8 +786,14 @@ private fun LazyListScope.setRows(
 			// Both halves, because a download is both: the records and the pictures. A set with
 			// its cards and none of its art still has something to fetch. Full-size art is not
 			// counted -- it is never bulk-downloaded, so it has no completed state to be in.
-			isFullyDownloaded = vId in state.completeSetIds &&
-				state.imageDownloads[vId]?.thumbnails?.isComplete == true,
+			// Only once the scan has answered. Until then the row knows nothing about this set,
+			// and a button that offers to fetch it is a claim: it appeared on every row of a
+			// fully downloaded game and disappeared a frame later, moving the row as it went.
+			canOfferDownload = state.isDownloadStateKnown &&
+				!(
+					vId in state.completeSetIds &&
+						state.imageDownloads[vId]?.thumbnails?.isComplete == true
+					),
 			onClick = { dispatch(SetListContract.Intent.SetOpened(vSet)) },
 			// Absent until the set has been fetched in the language it opens in, and the row then
 			// falls back to the figure the source states. See `UiState.confirmedCardCounts`.
@@ -847,7 +853,13 @@ private fun SetRow(
 	 * Not [isSaved], which answers the weaker question "is any of this here?" -- a set fetched
 	 * part-way is saved and still has something to download.
 	 */
-	isFullyDownloaded: Boolean = false,
+	/**
+	 * Whether this set has anything left to fetch *and* the app has looked.
+	 *
+	 * Not the inverse of "downloaded": before the scan lands nothing is known, and nothing is
+	 * offered. See `UiState.isDownloadStateKnown`.
+	 */
+	canOfferDownload: Boolean = false,
 	/** Whether the list is being arranged. Off, the star is a mark rather than a button. */
 	isEditing: Boolean = false,
 	onClick: () -> Unit,
@@ -1006,7 +1018,7 @@ private fun SetRow(
 					// a second width animation at the other end, on its own spring, leaves the
 					// name column squeezed between two springs that do not finish together. That
 					// is the bounce -- the handle was never the thing bouncing.
-					AnimatedVisibility(visible = !isFullyDownloaded) {
+					AnimatedVisibility(visible = canOfferDownload) {
 						DownloadButton(
 							name = set.name,
 							isEditing = isEditing,
@@ -1429,6 +1441,8 @@ private fun SetListLoadedPreview() = PreviewFrame {
 		state = SetListContract.UiState(
 			sets = PreviewData.SETS,
 			isLoading = false,
+			// Scanned, so the rows may offer a download -- see `UiState.isDownloadStateKnown`.
+			isDownloadStateKnown = true,
 			lastOpenedSetId = PreviewData.ORIGINS.id.qualified,
 		),
 		dispatch = {},

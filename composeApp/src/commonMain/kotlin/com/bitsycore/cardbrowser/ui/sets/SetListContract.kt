@@ -156,6 +156,16 @@ object SetListContract :
 		 * set fetched part-way is saved and is not finished, so it still has something to fetch.
 		 */
 		val completeSetIds: Set<String> = emptySet(),
+
+		/**
+		 * Whether the scan behind [completeSetIds] has answered yet.
+		 *
+		 * False is "not asked yet", not "there is nothing here", and the difference was visible:
+		 * the download button appeared on every row of a fully downloaded game and vanished a
+		 * moment later, which is the screen offering to fetch something it had not looked for.
+		 */
+		val isDownloadStateKnown: Boolean = false,
+
 		/**
 		 * Whether the list is being arranged rather than browsed.
 		 *
@@ -499,6 +509,8 @@ object SetListContract :
 			savedLanguages = emptyMap(),
 			confirmedCardCounts = emptyMap(),
 			imageDownloads = emptyMap(),
+			completeSetIds = emptySet(),
+			isDownloadStateKnown = false,
 		)
 
 		is Intent.FavouritesRestored -> state.copy(favouriteIds = intent.favouriteIds)
@@ -575,6 +587,9 @@ object SetListContract :
 					confirmedCardCounts = emptyMap(),
 					availableLanguages = emptyMap(),
 					importedVariantIds = emptySet(),
+					completeSetIds = emptySet(),
+					imageDownloads = emptyMap(),
+					isDownloadStateKnown = false,
 					search = "",
 					isLoading = true,
 					error = null,
@@ -588,6 +603,7 @@ object SetListContract :
 		)
 
 		is Intent.SavedSetsResolved -> state.copy(
+			isDownloadStateKnown = true,
 			savedSetIds = intent.setIds,
 			imageDownloads = intent.imageDownloads,
 			savedLanguages = intent.savedLanguages,

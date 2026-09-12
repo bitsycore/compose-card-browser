@@ -157,6 +157,8 @@ private fun pokemonState() = SetListContract.UiState(
 	game = PokemonGame,
 	availableGames = listOf(PokemonGame, RiftboundGame),
 	isLoading = false,
+	// As it is after the store has been scanned, which is when a row may offer a download.
+	isDownloadStateKnown = true,
 	savedSetIds = setOf(SourceId(TCGDEX, "base1").qualified),
 	lastOpenedSetId = SourceId(TCGDEX, "sv08").qualified,
 )
@@ -198,4 +200,5 @@ private fun riftboundState() = SetListContract.UiState(
 	game = RiftboundGame,
 	availableGames = listOf(PokemonGame, RiftboundGame),
 	isLoading = false,
+	isDownloadStateKnown = true,
 )
