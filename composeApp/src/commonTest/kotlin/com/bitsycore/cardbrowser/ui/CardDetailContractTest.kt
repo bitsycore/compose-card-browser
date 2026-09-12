@@ -146,17 +146,6 @@ class CardDetailContractTest {
 	}
 
 	@Test
-	fun `moving to another card drops the zoom`() {
-		// The zoom belongs to the card that was on screen, not to the screen.
-		var vState = reduce(UiState(), loaded(mThree, 0), Intent.ZoomToggled(true))
-		assertTrue(vState.isZoomed)
-
-		vState = reduce(vState, Intent.PageChanged(1))
-
-		assertFalse(vState.isZoomed, "a new card is not the card that was zoomed in on")
-	}
-
-	@Test
 	fun `the language preference survives moving between cards`() {
 		// A preference about the reader rather than about the printing, so it carries across.
 		var vState = reduce(

@@ -231,7 +231,6 @@ fun CardDetailContent(
 				prefetchRadius = prefetchRadius,
 				state = vState,
 				onPageChanged = { dispatch(CardDetailContract.Intent.PageChanged(it)) },
-				onZoomToggle = { dispatch(CardDetailContract.Intent.ZoomToggled(it)) },
 				onLanguageSelected = { dispatch(CardDetailContract.Intent.LanguageSelected(it)) },
 				onOpenCardmarket = { dispatch(CardDetailContract.Intent.OpenCardmarket(it)) },
 				onOpenTcgplayer = { dispatch(CardDetailContract.Intent.OpenTcgplayer(it)) },
@@ -268,7 +267,6 @@ private fun CardPager(
 	prefetchRadius: Int,
 	state: CardDetailContract.UiState,
 	onPageChanged: (Int) -> Unit,
-	onZoomToggle: (Boolean) -> Unit,
 	onLanguageSelected: (CardLanguage) -> Unit,
 	onOpenCardmarket: (String) -> Unit,
 	onOpenTcgplayer: (String) -> Unit,
@@ -353,8 +351,6 @@ private fun CardPager(
 	// and the state already follows it; going the other way would be a second route to the same
 	// place, and the two effects above exist because that is hard to keep straight even once.
 	//
-	// Off while zoomed, for the same reason the swipe is: an arrow key panning a magnified card
-	// should not flick to the next one.
 	// Counted from where the pager is *heading*, not from `currentIndex`.
 	//
 	// `currentIndex` only moves when a page settles -- that is what makes a half-hearted swipe not
@@ -372,7 +368,7 @@ private fun CardPager(
 
 	val vStep: (Int) -> (() -> Unit)? = { vDelta ->
 		val vTarget = vPagerState.targetPage + vDelta
-		if (state.isZoomed || vTarget !in state.cards.indices) {
+		if (vTarget !in state.cards.indices) {
 			null
 		} else {
 			{ vScope.launch { vPagerState.animateScrollToPage(vTarget) } }
@@ -404,8 +400,6 @@ private fun CardPager(
 			// when a swipe starts. Three either side are *prefetched* above, which costs no
 			// composition -- keeping seven full detail pages alive would.
 			beyondViewportPageCount = 1,
-			// Off while zoomed, or a pan across a magnified card would flick to the next one.
-			userScrollEnabled = !state.isZoomed,
 			modifier = Modifier.fillMaxSize(),
 		) { vPage ->
 			val vCard = state.cards[vPage]
@@ -424,7 +418,6 @@ private fun CardPager(
 				// to a question with one.
 				isCurrentPage = vPage == vPagerState.currentPage,
 				onScrollStateReady = { vCurrentScroll = it },
-				onZoomToggle = onZoomToggle,
 				onLanguageSelected = onLanguageSelected,
 				onOpenCardmarket = { onOpenCardmarket(vCard.id.qualified) },
 				onOpenTcgplayer = { onOpenTcgplayer(vCard.id.qualified) },
@@ -571,7 +564,6 @@ private fun PreviewStrip(
 private fun CardDetailPage(
 	state: CardDetailContract.UiState,
 	card: CardPrinting,
-	onZoomToggle: (Boolean) -> Unit,
 	onLanguageSelected: (CardLanguage) -> Unit,
 	onOpenCardmarket: () -> Unit,
 	onOpenTcgplayer: () -> Unit,
@@ -618,10 +610,9 @@ private fun CardDetailPage(
 			// under the bar rather than stop at it.
 			Spacer(Modifier.height(headerHeight))
 
-			ZoomableCardImage(
+			CardDetailImage(
 				card = card,
 				maxImageHeight = vMaxImageHeight,
-				onZoomToggle = onZoomToggle,
 				onOpenFullscreen = onOpenFullscreen,
 				isSharedElement = isSharedElement,
 			)
@@ -796,8 +787,8 @@ private fun CardDetailPage(
 			Spacer(Modifier.height(bottomPadding + 32.dp))
 		}
 
-		// Hints, on the edges, only while there is somewhere to go and nothing is magnified.
-		if (state.canSwipe && !state.isZoomed) {
+		// Hints, on the edges, only while there is somewhere to go.
+		if (state.canSwipe) {
 			SwipeHint(AppIcons.ChevronLeft, Alignment.CenterStart, state.currentIndex > 0)
 			SwipeHint(
 				icon = AppIcons.ChevronRight,
@@ -829,7 +820,12 @@ private fun androidx.compose.foundation.layout.BoxScope.SwipeHint(
 // ==================
 
 /**
- * The large image, pinch- and tap-to-zoom.
+ * The large image. Tapping it opens the fullscreen viewer, which is where zooming lives.
+ *
+ * It used to pinch and pan in place. That put two magnifiable views of the same card in the app,
+ * one of them inside a pager that had to be disabled while it was magnified -- so a pan could
+ * silently turn into a page swipe, and the state saying "this page is zoomed" had to be threaded
+ * through three composables and the contract to stop it.
  *
  * Loads the full-resolution URL rather than the grid's thumbnail: this is the one place where the
  * full image is worth its bytes, and loading it here rather than in the grid is what keeps
@@ -840,17 +836,12 @@ private fun androidx.compose.foundation.layout.BoxScope.SwipeHint(
  *   ratio, and pushes its own name off the bottom of the screen
  */
 @Composable
-private fun ZoomableCardImage(
+private fun CardDetailImage(
 	card: CardPrinting,
 	maxImageHeight: Dp,
-	onZoomToggle: (Boolean) -> Unit,
 	onOpenFullscreen: () -> Unit,
 	isSharedElement: Boolean,
 ) {
-	var vScale by remember(card.id) { mutableFloatStateOf(1f) }
-	var vOffsetX by remember(card.id) { mutableFloatStateOf(0f) }
-	var vOffsetY by remember(card.id) { mutableFloatStateOf(0f) }
-
 	Box(
 		modifier = Modifier
 			// Both bounds are maxima, and neither is `fillMaxWidth`. `aspectRatio` satisfies the
@@ -867,65 +858,17 @@ private fun ZoomableCardImage(
 			.then(if (isSharedElement) Modifier.sharedCardArt(card.id.qualified) else Modifier)
 			.clip(RoundedCornerShape(12.dp))
 			.background(MaterialTheme.colorScheme.surfaceVariant)
-			.pointerInput(card.id) {
-				// Hand-rolled rather than `detectTransformGestures`, which consumes every drag it
-				// sees -- including the one-finger horizontal one that is meant to be a swipe to
-				// the next card. Pointer events are only consumed here when there are two fingers
-				// down (a pinch, which is never a page swipe) or when the card is already magnified
-				// and a drag means "pan". At rest, a horizontal drag passes straight through to the
-				// pager.
-				awaitEachGesture {
-					awaitFirstDown(requireUnconsumed = false)
-					do {
-						val vEvent = awaitPointerEvent()
-						val vIsPinch = vEvent.changes.count { it.pressed } > 1
-						if (vIsPinch || vScale > 1f) {
-							val vZoom = vEvent.calculateZoom()
-							val vPan = vEvent.calculatePan()
-							vScale = (vScale * vZoom).coerceIn(1f, 4f)
-							if (vScale > 1f) {
-								vOffsetX += vPan.x
-								vOffsetY += vPan.y
-							} else {
-								vOffsetX = 0f
-								vOffsetY = 0f
-							}
-							onZoomToggle(vScale > 1f)
-							vEvent.changes.forEach { it.consume() }
-						}
-					} while (vEvent.changes.any { it.pressed })
-				}
-			}
-			.clickable {
-				if (vScale > 1f) {
-					// Tapping a magnified card puts it back, which is the gesture people try first
-					// when they are lost.
-					vScale = 1f
-					vOffsetX = 0f
-					vOffsetY = 0f
-					onZoomToggle(false)
-				} else {
-					// At rest, a tap means "show me this properly".
-					onOpenFullscreen()
-				}
-			},
+			.clickable(onClick = onOpenFullscreen),
 	) {
 		CardImage(
 			artwork = card.artwork,
 			contentDescription = card.artwork.accessibilityText ?: card.displayName,
 			variant = ImageVariant.DISPLAY,
-			// The inline image can be pinched, so it needs real pixels rather than a bitmap sized
-			// to the box it sits in.
+			// Real pixels rather than a bitmap sized to this box: the fullscreen viewer grows this
+			// exact picture, and a box-sized bitmap arrives there already soft.
 			decodeAtSourceResolution = true,
 			contentScale = ContentScale.Fit,
-			modifier = Modifier
-				.fillMaxSize()
-				.graphicsLayer(
-					scaleX = vScale,
-					scaleY = vScale,
-					translationX = vOffsetX,
-					translationY = vOffsetY,
-				),
+			modifier = Modifier.fillMaxSize(),
 		)
 	}
 }

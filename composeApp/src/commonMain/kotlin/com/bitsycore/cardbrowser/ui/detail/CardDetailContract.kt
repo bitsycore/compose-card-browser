@@ -43,7 +43,6 @@ object CardDetailContract :
 		val isLoading: Boolean = true,
 		val error: ProviderError? = null,
 		val requestedLanguage: CardLanguage = CardLanguage.ENGLISH,
-		val isZoomed: Boolean = false,
 		val isFullscreen: Boolean = false,
 		val providerStatesIdentity: Boolean = false,
 		val providerStatesFinishes: Boolean = false,
@@ -330,8 +329,6 @@ object CardDetailContract :
 		/** A language change that could not be fetched. The screen keeps what it had. */
 		data class LanguageChangeFailed(val language: CardLanguage) : Intent
 
-		data class ZoomToggled(val isZoomed: Boolean) : Intent
-
 		/** The card image was tapped, or the fullscreen viewer was dismissed. */
 		data class FullscreenToggled(val isFullscreen: Boolean) : Intent
 
@@ -392,8 +389,6 @@ object CardDetailContract :
 		} else {
 			state.copy(
 				currentIndex = intent.index.coerceIn(0, state.cards.size - 1),
-				// A new card is not the card that was zoomed in on.
-				isZoomed = false,
 				isFullscreen = false,
 			)
 		}
@@ -426,15 +421,12 @@ object CardDetailContract :
 					currentIndex = vIndex,
 					requestedLanguage = intent.language,
 					isChangingLanguage = false,
-					isZoomed = false,
 				)
 			}
 		}
 
 		is Intent.LanguageChangeFailed -> state.copy(isChangingLanguage = false)
 
-
-		is Intent.ZoomToggled -> state.copy(isZoomed = intent.isZoomed)
 
 		is Intent.FullscreenToggled -> state.copy(isFullscreen = intent.isFullscreen)
 
