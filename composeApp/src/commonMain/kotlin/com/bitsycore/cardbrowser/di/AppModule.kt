@@ -17,6 +17,7 @@ import com.bitsycore.cardbrowser.data.net.HttpClientFactory
 import com.bitsycore.cardbrowser.data.net.OkioHttpCacheStorage
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.repository.SetCatalogueWarmer
+import com.bitsycore.cardbrowser.data.repository.SetFactsWarmer
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundArt
@@ -254,6 +255,10 @@ val appModule = module {
 	// scoped to their own back-stack entries.
 	single { BrowseSession() }
 
+	// What each game holds on disk, read while the picker is on screen rather than when a set list
+	// opens. No network: it is the store and the cache.
+	single { SetFactsWarmer(get()) }
+
 	// Warms every game's set catalogue at startup, so the picker leads to an already-populated
 	// list rather than to a spinner and late-arriving set symbols.
 	single {
@@ -261,6 +266,7 @@ val appModule = module {
 			mRepository = get(),
 			mRegistry = get(),
 			mPreferences = get(),
+			mFacts = get(),
 			mScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 		)
 	}
@@ -280,7 +286,9 @@ val appModule = module {
 	}
 
 	viewModel { SetupViewModel(get(), get()) }
-	viewModel { (vArgs: SetListArgs) -> SetListViewModel(get(), get(), get(), get(), vArgs) }
+	viewModel { (vArgs: SetListArgs) ->
+		SetListViewModel(get(), get(), get(), get(), get(), vArgs)
+	}
 	viewModel { GameListViewModel(get(), get()) }
 	viewModel { CardGridViewModel(get(), get(), get(), get()) }
 	viewModel { (vArgs: CardDetailArgs) ->

@@ -43,6 +43,7 @@ class SetCatalogueWarmer(
 	private val mRepository: CardRepository,
 	private val mRegistry: ProviderRegistry,
 	private val mPreferences: PreferencesStore,
+	private val mFacts: SetFactsWarmer,
 	private val mScope: CoroutineScope,
 ) {
 
@@ -65,6 +66,10 @@ class SetCatalogueWarmer(
 					// Collected to completion rather than sampled: the flow emits cache and then
 					// network, and it is the network pass that leaves a fresh catalogue on disk.
 					mRepository.setList(vGame.id, vLanguage).collect { }
+					// And what that catalogue *holds*, which needs no network at all: the set list
+					// asked on arrival, and the answer landed late enough to watch the download
+					// buttons and the saved marks appear a beat after the rows.
+					mFacts.warm(vGame.id, vLanguage)
 				} catch (vError: CancellationException) {
 					throw vError
 				} catch (vError: Exception) {

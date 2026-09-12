@@ -2,12 +2,14 @@ package com.bitsycore.cardbrowser.ui.sets
 
 import androidx.lifecycle.viewModelScope
 import com.bitsycore.cardbrowser.core.model.CardLanguage
+import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.data.download.DownloadKind
 import com.bitsycore.cardbrowser.data.download.DownloadRequest
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
+import com.bitsycore.cardbrowser.data.repository.SetFactsWarmer
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.lib.pulse.viewmodel.PulseViewModel
 import kotlinx.coroutines.Job
@@ -32,6 +34,7 @@ class SetListViewModel(
 	private val mPreferences: PreferencesStore,
 	private val mRegistry: ProviderRegistry,
 	private val mDownloads: DownloadManager,
+	private val mWarmer: SetFactsWarmer,
 	private val mArgs: SetListArgs,
 ) : PulseViewModel<SetListContract.UiState, SetListContract.Intent, SetListContract.Effect>(
 	// Seeded at construction from the route, so the first frame already names the right game
@@ -95,13 +98,19 @@ class SetListViewModel(
 				.collect {
 					val vState = stateFlow.value
 					val vGame = vState.game ?: return@collect
+					// What was warmed describes a device that has since changed.
+					mWarmer.invalidate(vGame.id)
 					// A finished whole-game import has written every set in the catalogue, so the
 					// list itself is stale and not only its marks. Re-reading the marks alone
 					// would leave every row's count saying what it said before the import ran.
 					if (mDownloads.jobs.value.any { it.request.isWholeGameImport && !it.isActive }) {
 						dispatch(SetListContract.Intent.Refresh)
 					}
-					resolveSavedSets(vGame.id, mPreferences.preferences.value.primaryLanguage)
+					resolveSavedSets(
+						vGame.id,
+						mPreferences.preferences.value.primaryLanguage,
+						stateFlow.value.sets,
+					)
 				}
 		}
 
@@ -130,7 +139,11 @@ class SetListViewModel(
 					?.takeIf { it.isNotEmpty() }
 					?.let { dispatch(SetListContract.Intent.BulkAvailable(it)) }
 					?: dispatch(SetListContract.Intent.BulkAvailable(stateFlow.value.bulkVariants))
-				resolveSavedSets(vGame.id, mPreferences.preferences.value.primaryLanguage)
+				resolveSavedSets(
+					vGame.id,
+					mPreferences.preferences.value.primaryLanguage,
+					stateFlow.value.sets,
+				)
 			}
 
 			is SetListContract.Intent.BrowsingLanguageSelected -> {
@@ -227,11 +240,15 @@ class SetListViewModel(
 			// collectLatest rather than collect: the repository emits cache then network, and if a
 			// newer refresh supersedes this one mid-flight the collector unwinds instead of
 			// finishing work nobody is waiting for.
+			// What has already been looked up, so the network emission does not repeat a lookup
+			// the cached one just did over the same sets.
+			var vResolved: Set<String>? = null
 			mRepository.setList(vGame.id, vLanguage).collectLatest { vSnapshot ->
+				val vSets = vSnapshot.value.orEmpty()
 				dispatch(
 					SetListContract.Intent.Loaded(
 						generation = vGeneration,
-						sets = vSnapshot.value.orEmpty(),
+						sets = vSets,
 						origin = vSnapshot.origin,
 						isStale = vSnapshot.isStale,
 						error = vSnapshot.error,
@@ -240,11 +257,22 @@ class SetListViewModel(
 						isFinal = vSnapshot.origin != DataOrigin.CACHE || vSnapshot.error != null,
 					),
 				)
+				// On *this* emission rather than after the whole flow. The marks need no network --
+				// they are a lookup over the list that is already on screen -- and waiting for the
+				// fetch meant a game whose catalogue was cached still spent its first seconds
+				// unable to say what it held.
+				val vIds = vSets.mapTo(mutableSetOf()) { it.id.qualified }
+				if (vIds.isNotEmpty() && vIds != vResolved) {
+					resolveSavedSets(vGame.id, vLanguage, vSets)
+					vResolved = vIds
+				}
 			}
 			dispatch(SetListContract.Intent.LoadFinished(vGeneration))
 
-			// After the list settles, because it is a lookup *over* the list.
-			if (stateFlow.value.requestGeneration == vGeneration) resolveSavedSets(vGame.id, vLanguage)
+			// Only if nothing was emitted to look at: an error, or an empty catalogue.
+			if (stateFlow.value.requestGeneration == vGeneration && vResolved == null) {
+				resolveSavedSets(vGame.id, vLanguage, stateFlow.value.sets)
+			}
 		}
 	}
 
@@ -273,10 +301,15 @@ class SetListViewModel(
 	 * rather than a flow that watches the cache.
 	 *
 	 * Cheap enough to repeat: one file-existence check per set for the records, and a map lookup
-	 * for the images.
+	 * for the images. Cheaper still when the startup sweep has already read them -- see
+	 * `SetFactsWarmer`, which is why this screen can arrive already knowing what it holds.
 	 */
-	private suspend fun resolveSavedSets(game: GameId, language: CardLanguage) {
-		val vSets = stateFlow.value.sets
+	private suspend fun resolveSavedSets(
+		game: GameId,
+		language: CardLanguage,
+		sets: List<CardSet>,
+	) {
+		val vSets = sets
 		if (vSets.isEmpty()) return
 		val vPreferences = mPreferences.preferences.value
 		// The language the *source* will answer in, which is what a download is recorded under.
@@ -289,23 +322,27 @@ class SetListViewModel(
 		// The repository resolves this for itself in `savedSetIds` and the rest; the image side
 		// reads preferences directly and has to do it here. Same function, same answer.
 		val vEffective = mRegistry.effectiveLanguage(game, language) ?: language
+		// Read ahead by the startup sweep where it got there first, and looked up now where it did
+		// not. Same call either way -- `localSetFacts` is the one place the question is asked.
+		val vFacts = mWarmer.peek(game, language, vSets)
+			?: mRepository.localSetFacts(game, vSets, language)
 		dispatch(
 			SetListContract.Intent.SavedSetsResolved(
-				setIds = mRepository.savedSetIds(game, vSets, language),
+				setIds = vFacts.savedSetIds,
 				// Per language as well as per set, because the dialog's question is "do I have the
 				// edition I am about to fetch?" and `setIds` only answers "is any of it here?".
-				savedLanguages = mRepository.savedLanguages(game, vSets, language),
+				savedLanguages = vFacts.savedLanguages,
 				// What each set really holds in the language it opens in, where a fetch has
 				// established it. The source's own figure counts the English printing and is the
 				// wrong number to print beside a row that will open in French.
-				confirmedCardCounts = mRepository.confirmedCardCounts(game, vSets, language),
+				confirmedCardCounts = vFacts.confirmedCardCounts,
 				// Which sets have nothing left to fetch, so the row can stop offering a download.
 				// "Complete", not "saved": a set fetched part-way is on disk and is not finished.
-				completeSetIds = mRepository.completeSetIds(game, vSets, language),
+				completeSetIds = vFacts.completeSetIds,
 				// What is already known about each set's languages, with no requests: the record
 				// left by opening it, or the claim the catalogue came with. See
 				// `CardRepository.availableLanguages`.
-				availableLanguages = mRepository.availableLanguages(game, vSets, language),
+				availableLanguages = vFacts.availableLanguages,
 				// The recorded import against what the source is currently publishing. Equal
 				// means there is nothing to fetch; different -- or absent -- means there is.
 				// The recorded import against what the source is currently publishing, matched on

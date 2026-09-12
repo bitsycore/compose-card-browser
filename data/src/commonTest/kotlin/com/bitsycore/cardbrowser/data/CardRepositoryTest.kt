@@ -34,6 +34,7 @@ import com.bitsycore.cardbrowser.data.cache.InMemorySetRecordStore
 import com.bitsycore.cardbrowser.data.cache.SetRecordStore
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
+import com.bitsycore.cardbrowser.data.repository.SetFactsWarmer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -221,6 +222,54 @@ class CardRepositoryTest {
 		val vResult = repositoryFor(vProvider).setList(TestGame.id).toList().last()
 
 		assertEquals(listOf("VEN", "OGN", "PR"), vResult.value?.map { it.code })
+	}
+
+	@Test
+	fun `a warmed answer is refused when the catalogue has changed under it`() = runTest {
+		// The whole safety of `SetFactsWarmer`. Facts read over yesterday's catalogue say nothing
+		// about a set added since, and describing the new row from them would have it claim to hold
+		// nothing -- a claim nobody checked. Refusing is what makes the warm-up a seed rather than
+		// a second source of truth.
+		val vFileSystem = FakeFileSystem()
+		val vOrigins = CardSet(SourceId(mProviderId, "a"), TestGame.id, "OGN", "Origins", 352, null)
+		val vVendetta = CardSet(SourceId(mProviderId, "b"), TestGame.id, "VEN", "Vendetta", 358, null)
+		val vRepository = repositoryFor(
+			FakeProvider(mProviderId, emptyList(), mSets = listOf(vOrigins)),
+			vFileSystem,
+		)
+		vRepository.setList(TestGame.id).toList()
+		val vWarmer = SetFactsWarmer(vRepository)
+		vWarmer.warm(TestGame.id, null)
+
+		assertNotNull(
+			vWarmer.peek(TestGame.id, null, listOf(vOrigins)),
+			"the catalogue it was warmed over should be answered",
+		)
+		assertNull(
+			vWarmer.peek(TestGame.id, null, listOf(vOrigins, vVendetta)),
+			"a catalogue with a set the warm-up never saw must not be described from it",
+		)
+	}
+
+	@Test
+	fun `the cached catalogue is readable without a request`() = runTest {
+		val vFileSystem = FakeFileSystem()
+		val vSets = listOf(CardSet(SourceId(mProviderId, "a"), TestGame.id, "OGN", "Origins", 352, null))
+		assertNull(
+			repositoryFor(FakeProvider(mProviderId, emptyList(), mSets = vSets), vFileSystem)
+				.cachedSetList(TestGame.id),
+			"nothing is cached yet, which is not the same as an empty catalogue",
+		)
+
+		repositoryFor(FakeProvider(mProviderId, emptyList(), mSets = vSets), vFileSystem)
+			.setList(TestGame.id).toList()
+
+		// A provider that would throw if asked, so answering at all proves nothing was.
+		val vOffline = FakeProvider(mProviderId, emptyList(), mSetsError = ProviderError.Offline())
+		assertEquals(
+			listOf("Origins"),
+			repositoryFor(vOffline, vFileSystem).cachedSetList(TestGame.id)?.map { it.name },
+		)
 	}
 
 	@Test

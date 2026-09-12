@@ -1878,6 +1878,40 @@ class CardRepository(
 	 */
 	suspend fun deleteKept(game: GameId): Int = mSetStore.deleteDownloaded(game)
 
+	/**
+	 * A game's catalogue if one is already on disk, in the language it would open in.
+	 *
+	 * **No network, ever.** `null` means nothing is cached, which is a different answer from an
+	 * empty catalogue and is why this does not return an empty list. What it is for is warming the
+	 * facts a set list states about what is held, before that list is opened -- see
+	 * `LocalSetFacts`.
+	 */
+	suspend fun cachedSetList(game: GameId, language: CardLanguage? = null): List<CardSet>? {
+		val vProvider = mRegistry.resolve(game, language) ?: return null
+		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardSet>()))
+		val vKey = setListKey(vProvider, game, effectiveLanguage(vProvider, language))
+		return mCache.read(vKey, vSerializer)?.payload?.takeIf { it.isNotEmpty() }
+	}
+
+	/**
+	 * Everything a set list can say about what is held, in one lookup and with no requests.
+	 *
+	 * The five calls below are each answerable from disk. Gathered here so the set list and the
+	 * warm-up that runs ahead of it ask exactly the same question -- two callers computing "is this
+	 * downloaded" separately is how the two would come to disagree.
+	 */
+	suspend fun localSetFacts(
+		game: GameId,
+		sets: List<CardSet>,
+		language: CardLanguage? = null,
+	): LocalSetFacts = LocalSetFacts(
+		savedSetIds = savedSetIds(game, sets, language),
+		savedLanguages = savedLanguages(game, sets, language),
+		confirmedCardCounts = confirmedCardCounts(game, sets, language),
+		completeSetIds = completeSetIds(game, sets, language),
+		availableLanguages = availableLanguages(game, sets, language),
+	)
+
 	/** A game's set list if one is cached in any language, without fetching. */
 	private suspend fun setListOnDisk(
 		provider: CardProvider<GameProfile>,
