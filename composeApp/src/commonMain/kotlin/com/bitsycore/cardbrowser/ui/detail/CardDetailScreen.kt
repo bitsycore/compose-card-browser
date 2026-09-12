@@ -92,6 +92,14 @@ import com.bitsycore.cardbrowser.ui.common.DomainChip
 import com.bitsycore.cardbrowser.ui.common.RarityChip
 import com.bitsycore.cardbrowser.ui.common.StatChip
 import com.bitsycore.cardbrowser.ui.common.ErrorState
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import com.bitsycore.cardbrowser.ui.common.FullscreenCardViewer
 import com.bitsycore.cardbrowser.ui.common.ImageVariant
 import com.bitsycore.cardbrowser.ui.common.LoadingState
@@ -177,7 +185,23 @@ fun CardDetailContent(
 	val vState = state
 	val vSnackbarHost = snackbarHostState
 
-	Box(Modifier.fillMaxSize()) {
+	// Escape closes the viewer, which is what back means on a desktop -- `BackHandler` carries the
+	// platform back gesture and answers no keyboard, which `FullscreenBackTest` was written to
+	// check and duly caught. A *preview* handler because the pager below owns the focus: an
+	// ancestor sees the key on the way down, so there is no focus to win.
+	Box(
+		modifier = Modifier
+			.fillMaxSize()
+			.onPreviewKeyEvent { vEvent ->
+				val vIsEscape = vEvent.type == KeyEventType.KeyDown && vEvent.key == Key.Escape
+				if (vIsEscape && vState.isFullscreen) {
+					dispatch(CardDetailContract.Intent.FullscreenToggled(false))
+					true
+				} else {
+					false
+				}
+			},
+	) {
 	// `enterAlways` rather than `exitUntilCollapsed`: this bar is one line of title and a position
 	// counter, so there is no larger form to shrink from -- it either takes the space or it does not.
 	// Reading a card's rules is the one thing this screen is for, so scrolling down gives that space
@@ -238,6 +262,18 @@ fun CardDetailContent(
 			)
 		}
 	}
+
+	// Back closes the viewer before it closes the card. Two things are open, and the top one goes
+	// first -- anything else loses the card as well, which is not what "back" meant.
+	//
+	// `NavigationEvent` rather than `BackHandler`, which Compose 1.12 deprecates in its favour.
+	// This carries no info of its own: the state is what a predictive gesture would draw, and a
+	// dismissable overlay has nothing to show behind itself.
+	NavigationBackHandler(
+		state = rememberNavigationEventState(NavigationEventInfo.None),
+		isBackEnabled = vState.isFullscreen,
+		onBackCompleted = { dispatch(CardDetailContract.Intent.FullscreenToggled(false)) },
+	)
 
 	// Outside the Scaffold so it covers the app bar as well; a card is worth the whole screen.
 	vState.card?.let { vCard ->
