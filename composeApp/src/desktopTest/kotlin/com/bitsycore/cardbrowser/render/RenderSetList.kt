@@ -43,16 +43,7 @@ class SetListRenderer {
 		// download button.
 		listOf(false to "sets-browsing", true to "sets-arranging").forEach { (vEditing, vName) ->
 			renderToPng(vOut, vName, width = 660, height = 700, density = 1.65f) {
-				SetListContent(
-					pokemonState().copy(
-						isEditing = vEditing,
-						favouriteIds = listOf(
-							SourceId(TCGDEX, "sv08").qualified,
-							SourceId(TCGDEX, "base1").qualified,
-						),
-					),
-					{},
-				)
+				SetListContent(pokemonArrangingState(vEditing), {})
 			}
 		}
 
@@ -168,6 +159,20 @@ private fun pokemonState() = SetListContract.UiState(
 	isLoading = false,
 	savedSetIds = setOf(SourceId(TCGDEX, "base1").qualified),
 	lastOpenedSetId = SourceId(TCGDEX, "sv08").qualified,
+)
+
+/**
+ * The list with two favourites, in whichever mode is asked for.
+ *
+ * Shared with `ArrangingMotionTest`, which drives the same state across the mode change and measures
+ * what moves -- so the thing that is rendered and the thing that is measured are one state.
+ */
+internal fun pokemonArrangingState(isEditing: Boolean) = pokemonState().copy(
+	isEditing = isEditing,
+	favouriteIds = listOf(
+		SourceId(TCGDEX, "sv08").qualified,
+		SourceId(TCGDEX, "base1").qualified,
+	),
 )
 
 /** A game with one product line, which must get no chips at all. */

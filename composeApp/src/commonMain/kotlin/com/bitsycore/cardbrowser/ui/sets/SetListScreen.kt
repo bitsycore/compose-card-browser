@@ -894,8 +894,15 @@ private fun SetRow(
 		},
 	) {
 		Row(
+			// Constant, in both modes, for the reason recorded on the game picker's row.
+			//
+			// It used to drop from 16dp to 4dp to claw back room for the handle, and being a plain
+			// `if` rather than an animation it did not ease at all: 12dp of inset vanished in one
+			// frame while the handle was still springing open beside it. That step against a spring
+			// is the boing. One animation drives this corner now -- the handle's -- and the room it
+			// needs is the room it makes.
 			modifier = Modifier
-				.padding(start = if (handleModifier == null) 16.dp else 4.dp, top = 16.dp, end = 16.dp, bottom = 16.dp)
+				.padding(16.dp)
 				.fillMaxWidth(),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
