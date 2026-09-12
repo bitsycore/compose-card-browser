@@ -31,6 +31,8 @@ import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.SortDirection
 import com.bitsycore.cardbrowser.ui.cards.CardGridContract.toggle
 import com.bitsycore.cardbrowser.ui.common.AppIcons
+import com.bitsycore.cardbrowser.ui.common.FilterSection
+import com.bitsycore.cardbrowser.ui.common.RemovableFilterChip
 
 /**
  * The filter sheet.
@@ -73,7 +75,7 @@ fun FilterSheet(
 		// "Descending" toggle. As a separate chip it read as a fifth sort field and went unnoticed;
 		// tapping the already-selected field to flip it, with the arrow saying which way it is
 		// pointing, is the pattern every table header in the world uses.
-		Section("Sort by") {
+		FilterSection("Sort by") {
 			CardGridContract.sortOptions(state.game).forEach { (vField, vLabel) ->
 				val vIsSelected = state.query.sortBy == vField
 				val vIsDescending = state.query.sortDirection == SortDirection.DESCENDING
@@ -126,7 +128,7 @@ fun FilterSheet(
 		if (CardFilterField.DOMAIN in state.supportedFilters && state.facets.domains.isNotEmpty()) {
 			// The word for this axis is the game's, not the app's: Riftbound has domains, Magic
 			// has colours, Altered has factions. `GameVocabulary` is the one place that decides.
-			Section(vVocabulary.domain ?: "Domain") {
+			FilterSection(vVocabulary.domain ?: "Domain") {
 				// In the game's own order, not the order the facets happened to come out in. WUBRG
 				// is the point: no alphabetical sort produces it, and a Magic player reads any
 				// other order as wrong.
@@ -150,7 +152,7 @@ fun FilterSheet(
 		}
 
 		if (CardFilterField.CARD_TYPE in state.supportedFilters && state.facets.cardTypes.isNotEmpty()) {
-			Section(vVocabulary.cardType) {
+			FilterSection(vVocabulary.cardType) {
 				state.facets.cardTypes.forEach { vType ->
 					FilterChip(
 						selected = vType in state.query.cardTypes,
@@ -162,7 +164,7 @@ fun FilterSheet(
 		}
 
 		if (CardFilterField.RARITY in state.supportedFilters && state.facets.rarities.isNotEmpty()) {
-			Section("Rarity") {
+			FilterSection("Rarity") {
 				state.facets.rarities.forEach { vRarity ->
 					FilterChip(
 						selected = vRarity in state.query.rarities,
@@ -174,7 +176,7 @@ fun FilterSheet(
 		}
 
 		if (CardFilterField.COST in state.supportedFilters && state.facets.costs.isNotEmpty()) {
-			Section(vVocabulary.cost ?: "Cost") {
+			FilterSection(vVocabulary.cost ?: "Cost") {
 				state.facets.costs.forEach { vCost ->
 					FilterChip(
 						selected = vCost in state.query.costs,
@@ -186,7 +188,7 @@ fun FilterSheet(
 		}
 
 		if (CardFilterField.ARTWORK_TREATMENT in state.supportedFilters && state.facets.treatments.size > 1) {
-			Section("Artwork") {
+			FilterSection("Artwork") {
 				state.facets.treatments.forEach { vTreatment ->
 					FilterChip(
 						selected = vTreatment in state.query.treatments,
@@ -229,22 +231,6 @@ private fun unsupportedFilterNote(supported: Set<CardFilterField>): String {
 	return "This source does not record ${vMissing.joinToString(" or ")}."
 }
 
-/** A titled row of chips that wraps. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun Section(title: String, content: @Composable FlowRowScope.() -> Unit) {
-	Spacer(Modifier.height(16.dp))
-	Text(title, style = MaterialTheme.typography.titleSmall)
-	Spacer(Modifier.height(6.dp))
-	FlowRow(
-		horizontalArrangement = Arrangement.spacedBy(8.dp),
-		verticalArrangement = Arrangement.spacedBy(4.dp),
-		content = content,
-	)
-}
-
-private typealias FlowRowScope = androidx.compose.foundation.layout.FlowRowScope
-
 /**
  * The active filters, above the grid, each removable in one tap.
  *
@@ -269,63 +255,33 @@ fun ActiveFilterChips(
 		vQuery.domains.forEach { vValue ->
 			// The game's label, so the summary row reads "White" rather than the `W` the filter
 			// is actually keyed on.
-			RemovableChip(state.game?.domainFor(vValue)?.label ?: vValue) {
+			RemovableFilterChip(state.game?.domainFor(vValue)?.label ?: vValue) {
 				onQueryChanged(vQuery.copy(domains = vQuery.domains - vValue))
 			}
 		}
 		vQuery.cardTypes.forEach { vValue ->
-			RemovableChip(vValue) { onQueryChanged(vQuery.copy(cardTypes = vQuery.cardTypes - vValue)) }
+			RemovableFilterChip(vValue) { onQueryChanged(vQuery.copy(cardTypes = vQuery.cardTypes - vValue)) }
 		}
 		vQuery.rarities.forEach { vValue ->
-			RemovableChip(vValue) { onQueryChanged(vQuery.copy(rarities = vQuery.rarities - vValue)) }
+			RemovableFilterChip(vValue) { onQueryChanged(vQuery.copy(rarities = vQuery.rarities - vValue)) }
 		}
 		vQuery.costs.forEach { vValue ->
-			RemovableChip("$vValue energy") {
+			RemovableFilterChip("$vValue energy") {
 				onQueryChanged(vQuery.copy(costs = vQuery.costs - vValue))
 			}
 		}
 		vQuery.treatments.forEach { vValue ->
-			RemovableChip(vValue.displayName) {
+			RemovableFilterChip(vValue.displayName) {
 				onQueryChanged(vQuery.copy(treatments = vQuery.treatments - vValue))
 			}
 		}
 		if (!vQuery.text.isNullOrBlank()) {
-			RemovableChip("\"${vQuery.text}\"") { onQueryChanged(vQuery.copy(text = null)) }
+			RemovableFilterChip("\"${vQuery.text}\"") { onQueryChanged(vQuery.copy(text = null)) }
 		}
 		TextButton(onClick = onClearAll) { Text("Clear all") }
 	}
 }
 
-/** A chip with an x on it. */
-@Composable
-private fun RemovableChip(label: String, onRemove: () -> Unit) {
-	InputChip(
-		selected = true,
-		onClick = onRemove,
-		label = { Text(label) },
-		trailingIcon = {
-			Icon(
-				imageVector = AppIcons.Close,
-				contentDescription = "Remove $label filter",
-				modifier = Modifier.size(16.dp),
-			)
-		},
-	)
-}
-
-/**
- * A domain chip, in that domain's own colour.
- *
- * The colour is a *rule*, declared by the game module -- Magic's red is red whoever supplied the
- * data -- and it arrives here already resolved. `null` means the game has never heard of this
- * value, which happens when a provider invents one; the chip then draws in the theme's own colours
- * rather than being hidden, because a value a card really has must stay filterable.
- *
- * Selected fills with the colour and picks black or white text from its luminance, so a pale chip
- * (Magic white, Pokémon colourless) does not end up white-on-white. Unselected keeps a tinted
- * outline: seven saturated fills in a row read as a paint chart rather than as a list.
- */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DomainChip(
 	label: String,

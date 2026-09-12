@@ -72,6 +72,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -123,6 +128,8 @@ fun CardGridScreen(
 	setName: String,
 	setCode: String,
 	onBack: () -> Unit,
+	/** The store-backed search, scoped to this set. */
+	onOpenSearch: (gameId: String) -> Unit = {},
 	onOpenCard: (CardPrinting) -> Unit,
 	onOpenDownloads: () -> Unit = {},
 	viewModel: CardGridViewModel = koinViewModel(),
@@ -144,6 +151,8 @@ fun CardGridScreen(
 			is CardGridContract.Effect.OpenCard -> onOpenCard(vEffect.card)
 
 			CardGridContract.Effect.OpenDownloads -> onOpenDownloads()
+
+			is CardGridContract.Effect.OpenSearch -> onOpenSearch(vEffect.game)
 		}
 	}
 	val vState by viewModel.collectAsStateWithLifecycle()
@@ -349,6 +358,19 @@ fun CardGridContent(
 									LocalContentColor.current
 								},
 							)
+						}
+						// The same search the set list offers, confined to this set: the inline
+						// field above filters what is loaded, this one asks the store and brings the
+						// filter sheet with it.
+						vState.game?.let { vGame ->
+							IconButton(
+								onClick = { dispatch(CardGridContract.Intent.FullSearchRequested) },
+							) {
+								Icon(
+									imageVector = AppIcons.TravelExplore,
+									contentDescription = "Search this set",
+								)
+							}
 						}
 						BadgedBox(
 							badge = {
@@ -799,6 +821,10 @@ private const val SEPARATOR = "  ·  "
 private fun SearchField(text: String, onTextChanged: (String) -> Unit) {
 	val vFocusRequester = remember { FocusRequester() }
 	LaunchedEffect(Unit) { vFocusRequester.requestFocus() }
+	// The grid filters as you type, so Enter has nothing to submit -- what it is for here is
+	// getting the keyboard out of the way of the results it just produced.
+	val vKeyboard = LocalSoftwareKeyboardController.current
+	val vFocusManager = LocalFocusManager.current
 
 	OutlinedTextField(
 		value = text,
@@ -813,6 +839,13 @@ private fun SearchField(text: String, onTextChanged: (String) -> Unit) {
 			}
 		},
 		singleLine = true,
+		keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+		keyboardActions = KeyboardActions(
+			onSearch = {
+				vKeyboard?.hide()
+				vFocusManager.clearFocus()
+			},
+		),
 		modifier = Modifier
 			.fillMaxWidth()
 			.padding(horizontal = 16.dp, vertical = 8.dp)

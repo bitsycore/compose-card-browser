@@ -17,7 +17,10 @@ import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
 /** Which game to search. Passed at construction so the first frame already knows. */
-data class SearchArgs(val game: GameId)
+/**
+ * @param setId the one set to search, or null for every set of the game
+ */
+data class SearchArgs(val game: GameId, val setId: String? = null)
 
 /**
  * Runs cross-set searches and keeps the set list they need to hand.
@@ -147,7 +150,12 @@ class SearchViewModel(
 		mRepository.setList(mArgs.game, vLanguage).collectLatest { vSnapshot ->
 			vSnapshot.value?.let { vLatest = it }
 		}
-		mSets = vLatest.orEmpty()
+		// One set when the search was opened from inside it, every set otherwise. Narrowing the
+		// list is the whole of the scoping: both search paths take it as the ground they cover.
+		mSets = vLatest.orEmpty().filter { mArgs.setId == null || it.id.qualified == mArgs.setId }
+		mSets.singleOrNull()?.takeIf { mArgs.setId != null }?.let {
+			dispatch(SearchContract.Intent.ScopedToSet(it.name))
+		}
 	}
 
 	private fun startSearch() {

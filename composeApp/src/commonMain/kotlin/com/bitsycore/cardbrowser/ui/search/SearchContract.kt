@@ -52,6 +52,15 @@ object SearchContract :
 		val filter: CardSearchFilter = CardSearchFilter(),
 		val facets: StoredFacets? = null,
 		val isAdvancedOpen: Boolean = false,
+
+		/**
+		 * The set this search is confined to, by name, or null for the whole game.
+		 *
+		 * What it changes is what the screen may claim: a scoped search covers one set completely,
+		 * so the notice about how many sets were reached has nothing to report and the title says
+		 * where you are instead.
+		 */
+		val scopedSetName: String? = null,
 		val requestGeneration: Int = 0,
 	) {
 
@@ -109,7 +118,11 @@ object SearchContract :
 		 * the game a local search could see is exactly the caveat this strip exists for.
 		 */
 		val coverageNotice: String?
-			get() = if (!isLimitedByCache) {
+			get() = if (scopedSetName != null) {
+				// One set, and the search reads what is stored of it: there is no "of 120 sets" to
+				// report, and the title already says which set this is.
+				null
+			} else if (!isLimitedByCache) {
 				null
 			} else {
 				// No branch for an unknown catalogue size, because there is no such state to
@@ -129,6 +142,9 @@ object SearchContract :
 
 		/** A result was tapped. */
 		data class CardOpened(val card: CardPrinting) : Intent
+
+		/** This search covers one set, named here for the title. */
+		data class ScopedToSet(val setName: String) : Intent
 
 		/** The text field changed. Does not search; [Submit] does. */
 		data class QueryChanged(val text: String) : Intent
@@ -235,6 +251,8 @@ object SearchContract :
 			if (intent.generation == state.requestGeneration) state.copy(isLoading = false) else state
 
 		is Intent.AdvancedToggled -> state.copy(isAdvancedOpen = intent.isOpen)
+
+		is Intent.ScopedToSet -> state.copy(scopedSetName = intent.setName)
 
 		is Intent.FilterChanged -> state.copy(filter = intent.filter)
 

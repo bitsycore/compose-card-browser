@@ -67,6 +67,11 @@ class CardGridViewModel(
 			is CardGridContract.Intent.CardOpened ->
 				emitEffect(CardGridContract.Effect.OpenCard(intent.card))
 
+			CardGridContract.Intent.FullSearchRequested ->
+				stateFlow.value.game?.let {
+					emitEffect(CardGridContract.Effect.OpenSearch(it.id.value))
+				}
+
 			CardGridContract.Intent.DownloadsRequested ->
 				emitEffect(CardGridContract.Effect.OpenDownloads)
 

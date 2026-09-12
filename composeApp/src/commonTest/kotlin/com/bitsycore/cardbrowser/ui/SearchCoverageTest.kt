@@ -6,6 +6,7 @@ import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.data.repository.SearchScope
 import com.bitsycore.cardbrowser.ui.search.SearchContract.UiState
 import kotlin.test.Test
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -33,6 +34,25 @@ class SearchCoverageTest {
 		searchedSetCount = searched,
 		knownSetCount = known,
 	)
+
+	@Test
+	fun `a search confined to one set has no coverage to report`() {
+		// The notice exists to say how much of a game was reached. Inside a set there is no such
+		// gap -- the set is the whole of what was asked about -- and the title already names it.
+		val vScoped = UiState(
+			results = listOf(),
+			searchedSetCount = 1,
+			knownSetCount = 120,
+			scope = SearchScope.LOCAL_CACHED_SETS,
+			scopedSetName = "Origins",
+		)
+
+		assertNull(vScoped.coverageNotice)
+		assertNotNull(
+			vScoped.copy(scopedSetName = null).coverageNotice,
+			"across a game, the same numbers do have something to report",
+		)
+	}
 
 	@Test
 	fun `the catalogue size is not presented as what the user has downloaded`() {

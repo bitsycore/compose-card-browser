@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +47,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -71,7 +72,17 @@ import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import com.bitsycore.lib.pulse.compose.collectEffect
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
+import androidx.compose.ui.text.style.TextOverflow
 import com.bitsycore.cardbrowser.ui.common.AppIcons
+import com.bitsycore.cardbrowser.ui.common.FilterSection
+import com.bitsycore.cardbrowser.ui.common.FilterValueChip
+import com.bitsycore.cardbrowser.ui.common.RemovableFilterChip
 
 /**
  * Search every set of one game.
@@ -85,9 +96,11 @@ import com.bitsycore.cardbrowser.ui.common.AppIcons
 @Composable
 fun SearchScreen(
 	game: GameId,
+	/** The one set to search, or null for the whole game. */
+	setId: String? = null,
 	onBack: () -> Unit,
 	onOpenCard: (CardPrinting) -> Unit,
-	viewModel: SearchViewModel = koinViewModel { parametersOf(SearchArgs(game)) },
+	viewModel: SearchViewModel = koinViewModel { parametersOf(SearchArgs(game, setId)) },
 ) {
 	// The only part of this screen that knows a back stack exists. Everything below dispatches.
 	viewModel.collectEffect { vEffect ->
@@ -114,6 +127,11 @@ fun SearchContent(
 ) {
 	val vState = state
 	val vFocus = remember { FocusRequester() }
+	// Dismissing the keyboard on Enter is half the screen back. Two mechanisms because they are
+	// two different things: the keyboard is the platform's, and the focus is Compose's -- leaving
+	// the field focused would bring the keyboard straight back on the next tap anywhere.
+	val vKeyboard = LocalSoftwareKeyboardController.current
+	val vFocusManager = LocalFocusManager.current
 
 	// Focused once, on the way in, and never again.
 	//
@@ -132,7 +150,15 @@ fun SearchContent(
 	Scaffold(
 		topBar = {
 			TopAppBar(
-				title = { Text("Search ${vState.game?.shortName.orEmpty()}") },
+				title = {
+					Text(
+						text = vState.scopedSetName
+							?.let { "Search $it" }
+							?: "Search ${vState.game?.shortName.orEmpty()}",
+						maxLines = 1,
+						overflow = TextOverflow.Ellipsis,
+					)
+				},
 				navigationIcon = {
 					IconButton(onClick = { dispatch(SearchContract.Intent.BackPressed) }) {
 						Icon(AppIcons.ArrowBack, contentDescription = "Back")
@@ -161,18 +187,24 @@ fun SearchContent(
 				// rude. A cache-scoped search has no such cost and runs as you type; the view model
 				// decides which of the two applies. See `SearchViewModel.handleIntent`.
 				keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-				keyboardActions = KeyboardActions(onSearch = { dispatch(SearchContract.Intent.Submit) }),
+				keyboardActions = KeyboardActions(
+					onSearch = {
+						dispatch(SearchContract.Intent.Submit)
+						vKeyboard?.hide()
+						vFocusManager.clearFocus()
+					},
+				),
 				modifier = Modifier
 					.fillMaxWidth()
 					.padding(horizontal = 16.dp, vertical = 8.dp)
 					.focusRequester(vFocus),
 			)
 
-			// The advanced filter, folded away until asked for. Search is a text box for most
-			// people most of the time, and a screen that opens on six controls says otherwise.
-			AdvancedFilterPanel(
+			// Search is a text box for most people most of the time, so the rest is a button and
+			// a sheet rather than a panel that opens on six controls.
+			FilterBar(
 				state = vState,
-				onToggle = { dispatch(SearchContract.Intent.AdvancedToggled(it)) },
+				onOpenSheet = { dispatch(SearchContract.Intent.AdvancedToggled(true)) },
 				onFilterChanged = { dispatch(SearchContract.Intent.FilterChanged(it)) },
 			)
 
@@ -188,7 +220,9 @@ fun SearchContent(
 					)
 
 					vState.isIdle -> EmptyState(
-						if (vState.isProviderSearchable) {
+						if (vState.scopedSetName != null) {
+							"Search the cards you have downloaded from ${vState.scopedSetName}."
+						} else if (vState.isProviderSearchable) {
 							"Search every ${vState.game?.shortName.orEmpty()} set by card name."
 						} else {
 							"Search the ${vState.game?.shortName.orEmpty()} sets you have already opened."
@@ -219,6 +253,24 @@ fun SearchContent(
 					}
 				}
 			}
+		}
+	}
+
+	if (vState.isAdvancedOpen) {
+		// The same sheet states the card grid's filter uses, and for the same reason: a filter
+		// panel at half height is a worse filter panel.
+		val vSheetState = rememberBottomSheetState(
+			SheetValue.Hidden,
+			setOf(SheetValue.Hidden, SheetValue.Expanded),
+		)
+		ModalBottomSheet(
+			onDismissRequest = { dispatch(SearchContract.Intent.AdvancedToggled(false)) },
+			sheetState = vSheetState,
+		) {
+			SearchFilterSheet(
+				state = vState,
+				onFilterChanged = { dispatch(SearchContract.Intent.FilterChanged(it)) },
+			)
 		}
 	}
 }
@@ -419,133 +471,169 @@ private fun SearchFailedPreview() = PreviewFrame {
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AdvancedFilterPanel(
+private fun FilterBar(
 	state: SearchContract.UiState,
-	onToggle: (Boolean) -> Unit,
+	onOpenSheet: () -> Unit,
 	onFilterChanged: (CardSearchFilter) -> Unit,
 ) {
-	val vFacets = state.facets
-	Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-		Row(verticalAlignment = Alignment.CenterVertically) {
-			TextButton(onClick = { onToggle(!state.isAdvancedOpen) }) {
-				Icon(AppIcons.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
-				Spacer(Modifier.width(6.dp))
-				// The count is on the button and not beside it, because it is what the button is
-				// about. A filter you cannot see is the reason a search returns nothing, so how
-				// many are set has to be readable while the panel is shut.
-				Text(
-					if (state.hasAdvancedFilters) {
-						"Filters (${state.activeAdvancedCount})"
-					} else {
-						"Filters"
-					},
-				)
-			}
-			if (state.hasAdvancedFilters) {
-				Spacer(Modifier.weight(1f))
-				TextButton(onClick = { onFilterChanged(CardSearchFilter()) }) { Text("Reset") }
+	Row(
+		modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+		verticalAlignment = Alignment.CenterVertically,
+	) {
+		TextButton(onClick = onOpenSheet) {
+			Icon(AppIcons.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
+			Spacer(Modifier.width(6.dp))
+			// The count is on the button and not beside it, because it is what the button is
+			// about. A filter you cannot see is the reason a search returns nothing, so how many
+			// are set has to be readable while the sheet is shut.
+			Text(
+				if (state.hasAdvancedFilters) {
+					"Filters (${state.activeAdvancedCount})"
+				} else {
+					"Filters"
+				},
+			)
+		}
+		if (state.hasAdvancedFilters) {
+			Spacer(Modifier.weight(1f))
+			TextButton(onClick = { onFilterChanged(CardSearchFilter()) }) { Text("Reset") }
+		}
+	}
+	ActiveSearchFilterChips(state, onFilterChanged)
+}
+
+/**
+ * The filters that are on, under the search box, each removable in one tap.
+ *
+ * The card grid has a row of the same name for the same reason: a filter the user cannot see is a
+ * filter they will blame the app for when a search comes back empty.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ActiveSearchFilterChips(
+	state: SearchContract.UiState,
+	onFilterChanged: (CardSearchFilter) -> Unit,
+) {
+	if (!state.hasAdvancedFilters) return
+	val vFilter = state.filter
+	FlowRow(
+		modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+		horizontalArrangement = Arrangement.spacedBy(6.dp),
+	) {
+		vFilter.excludeText?.takeIf { it.isNotBlank() }?.let { vText ->
+			RemovableFilterChip("not \"$vText\"") {
+				onFilterChanged(vFilter.copy(excludeText = null))
 			}
 		}
-
-		AnimatedVisibility(visible = state.isAdvancedOpen) {
-			Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-				OutlinedTextField(
-					value = state.filter.excludeText.orEmpty(),
-					onValueChange = {
-						onFilterChanged(state.filter.copy(excludeText = it.takeIf(String::isNotBlank)))
-					},
-					label = { Text("Name does not contain") },
-					singleLine = true,
-					modifier = Modifier.fillMaxWidth(),
-				)
-
-				// The pills flow rather than stack. Their labels are a word each, so a column of
-				// them wasted most of the width and made the panel tall enough to push the results
-				// off a phone screen -- and a filter you have to scroll past is one you stop using.
-				// They wrap when the window is too narrow, which is the same behaviour, later.
-				FlowRow(
-					horizontalArrangement = Arrangement.spacedBy(8.dp),
-					verticalArrangement = Arrangement.spacedBy(8.dp),
-				) {
-					if (vFacets != null && vFacets.cardTypes.isNotEmpty()) {
-						FilterChoice(
-							label = state.game?.vocabulary?.cardType ?: "Type",
-							options = vFacets.cardTypes,
-							selected = state.filter.cardType,
-							onSelected = { onFilterChanged(state.filter.copy(cardType = it)) },
-						)
-					}
-					if (vFacets != null && vFacets.rarities.isNotEmpty()) {
-						FilterChoice(
-							label = "Rarity",
-							options = vFacets.rarities,
-							selected = state.filter.rarity,
-							onSelected = { onFilterChanged(state.filter.copy(rarity = it)) },
-						)
-					}
-					if (vFacets != null && vFacets.domains.isNotEmpty()) {
-						FilterChoice(
-							// The game's own word -- "Colour" for Magic, "Faction" for Altered.
-							label = state.game?.vocabulary?.domain ?: "Domain",
-							options = vFacets.domains,
-							selected = state.filter.domain,
-							onSelected = { onFilterChanged(state.filter.copy(domain = it)) },
-						)
-					}
-				}
-				// Pulled out of the facets first: it comes from another module, so it cannot be
-				// smart-cast out of the nullable property it lives on.
-				val vCostRange = vFacets?.costRange
-				if (vCostRange != null) {
-					CostRangeFields(
-						label = state.game?.vocabulary?.cost ?: "Cost",
-						range = vCostRange,
-						min = state.filter.minCost,
-						max = state.filter.maxCost,
-						onChanged = { vMin, vMax ->
-							onFilterChanged(state.filter.copy(minCost = vMin, maxCost = vMax))
-						},
-					)
-				}
+		vFilter.cardType?.let {
+			RemovableFilterChip(it) { onFilterChanged(vFilter.copy(cardType = null)) }
+		}
+		vFilter.rarity?.let {
+			RemovableFilterChip(it) { onFilterChanged(vFilter.copy(rarity = null)) }
+		}
+		vFilter.domain?.let {
+			RemovableFilterChip(it) { onFilterChanged(vFilter.copy(domain = null)) }
+		}
+		if (vFilter.minCost != null || vFilter.maxCost != null) {
+			val vLabel = state.game?.vocabulary?.cost ?: "Cost"
+			val vFrom = vFilter.minCost?.toString() ?: "any"
+			val vTo = vFilter.maxCost?.toString() ?: "any"
+			RemovableFilterChip("$vLabel $vFrom-$vTo") {
+				onFilterChanged(vFilter.copy(minCost = null, maxCost = null))
 			}
 		}
 	}
 }
 
-/** One menu of values, with "Any" as the way back out of a choice. */
+/**
+ * The filters themselves, in a sheet.
+ *
+ * A sheet rather than a panel that unfolds in place, which is what this was: six controls pushed in
+ * between the search box and the results, so the results left the screen exactly when the user was
+ * trying to narrow them. Chips rather than dropdown buttons, so what is set is readable without
+ * opening anything -- the same controls the card grid's filter uses, because to anyone using them
+ * the two are one thing.
+ */
 @Composable
-private fun FilterChoice(
-	label: String,
-	options: List<String>,
-	selected: String?,
-	onSelected: (String?) -> Unit,
+private fun SearchFilterSheet(
+	state: SearchContract.UiState,
+	onFilterChanged: (CardSearchFilter) -> Unit,
 ) {
-	var vIsOpen by remember { mutableStateOf(false) }
-	Box {
-		OutlinedButton(onClick = { vIsOpen = true }) {
-			Text(if (selected == null) label else "$label: $selected")
-			Icon(AppIcons.ArrowDropDown, contentDescription = null)
+	val vFacets = state.facets
+	Column(
+		modifier = Modifier
+			.fillMaxWidth()
+			.verticalScroll(rememberScrollState())
+			.padding(horizontal = 20.dp)
+			.padding(bottom = 32.dp),
+	) {
+		OutlinedTextField(
+			value = state.filter.excludeText.orEmpty(),
+			onValueChange = {
+				onFilterChanged(state.filter.copy(excludeText = it.takeIf(String::isNotBlank)))
+			},
+			label = { Text("Name does not contain") },
+			singleLine = true,
+			modifier = Modifier.fillMaxWidth(),
+		)
+
+		// One value at a time per axis, which is what the store's query takes. Tapping the chip
+		// that is already on turns it off, and that is the whole of what "Any" used to be.
+		if (vFacets != null && vFacets.cardTypes.isNotEmpty()) {
+			FilterSection(state.game?.vocabulary?.cardType ?: "Type") {
+				vFacets.cardTypes.forEach { vValue ->
+					FilterValueChip(vValue, state.filter.cardType == vValue) {
+						onFilterChanged(
+							state.filter.copy(
+								cardType = vValue.takeIf { state.filter.cardType != vValue },
+							),
+						)
+					}
+				}
+			}
 		}
-		DropdownMenu(expanded = vIsOpen, onDismissRequest = { vIsOpen = false }) {
-			DropdownMenuItem(
-				text = { Text("Any") },
-				onClick = {
-					onSelected(null)
-					vIsOpen = false
+		if (vFacets != null && vFacets.rarities.isNotEmpty()) {
+			FilterSection("Rarity") {
+				vFacets.rarities.forEach { vValue ->
+					FilterValueChip(vValue, state.filter.rarity == vValue) {
+						onFilterChanged(
+							state.filter.copy(
+								rarity = vValue.takeIf { state.filter.rarity != vValue },
+							),
+						)
+					}
+				}
+			}
+		}
+		if (vFacets != null && vFacets.domains.isNotEmpty()) {
+			// The game's own word -- "Colour" for Magic, "Faction" for Altered.
+			FilterSection(state.game?.vocabulary?.domain ?: "Domain") {
+				vFacets.domains.forEach { vValue ->
+					FilterValueChip(vValue, state.filter.domain == vValue) {
+						onFilterChanged(
+							state.filter.copy(
+								domain = vValue.takeIf { state.filter.domain != vValue },
+							),
+						)
+					}
+				}
+			}
+		}
+
+		// Pulled out of the facets first: it comes from another module, so it cannot be smart-cast
+		// out of the nullable property it lives on.
+		val vCostRange = vFacets?.costRange
+		if (vCostRange != null) {
+			Spacer(Modifier.height(16.dp))
+			CostRangeFields(
+				label = state.game?.vocabulary?.cost ?: "Cost",
+				range = vCostRange,
+				min = state.filter.minCost,
+				max = state.filter.maxCost,
+				onChanged = { vMin, vMax ->
+					onFilterChanged(state.filter.copy(minCost = vMin, maxCost = vMax))
 				},
 			)
-			options.forEach { vOption ->
-				DropdownMenuItem(
-					text = { Text(vOption) },
-					onClick = {
-						onSelected(vOption)
-						vIsOpen = false
-					},
-					trailingIcon = {
-						if (vOption == selected) Icon(AppIcons.Check, contentDescription = null)
-					},
-				)
-			}
 		}
 	}
 }

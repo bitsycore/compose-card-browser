@@ -211,6 +211,9 @@ object CardGridContract :
 		/** The downloads button in the bar. */
 		data object DownloadsRequested : Intent
 
+		/** The store-backed search, for this set. */
+		data object FullSearchRequested : Intent
+
 		/** The screen opened, or the user pulled to refresh. */
 		data object Load : Intent
 
@@ -324,12 +327,17 @@ object CardGridContract :
 		data class OpenCard(val card: CardPrinting) : Effect
 
 		data object OpenDownloads : Effect
+
+		/** Opens the search screen confined to this set. Carries the game, which the route needs. */
+		data class OpenSearch(val game: String) : Effect
 	}
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
 
 		// Navigation changes no state. The view model turns these into effects.
-		Intent.BackPressed, is Intent.CardOpened, Intent.DownloadsRequested -> state
+		Intent.BackPressed, is Intent.CardOpened, Intent.DownloadsRequested,
+		Intent.FullSearchRequested,
+		-> state
 
 		is Intent.ViewModeChanged -> state.copy(viewMode = intent.mode)
 

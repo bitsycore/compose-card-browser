@@ -125,7 +125,7 @@ sealed interface Route : NavKey {
 	 * restores a search of the game it was actually opened for.
 	 */
 	@Serializable
-	data class Search(val game: String) : Route
+	data class Search(val game: String, val setId: String? = null) : Route
 }
 
 // ==================
@@ -284,6 +284,7 @@ fun App() {
 						SearchScreen(
 							// Same null-game handling as the route above.
 							game = GameId(vRoute.game),
+							setId = vRoute.setId,
 							onBack = { vBackStack.popRoute() },
 							onOpenCard = { vCard ->
 								vBackStack.add(
@@ -324,6 +325,11 @@ fun App() {
 								vBackStack.add(
 									Route.Detail(cardId = vCard.id.qualified, setId = vRoute.setId),
 								)
+							},
+							onOpenSearch = { vGame ->
+								// The same search, confined to this set: one surface, and the
+								// set options simply have nothing to offer from in here.
+								vBackStack.add(Route.Search(vGame, vRoute.setId))
 							},
 							onOpenDownloads = { vBackStack.add(Route.Downloads) },
 						)
