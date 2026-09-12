@@ -26,14 +26,6 @@ kotlin {
 	iosArm64()
 	iosSimulatorArm64()
 
-	// The native desktop targets, behind a switch. See :core for why they are opt-in.
-	if (providers.gradleProperty("nativeDesktop").isPresent) {
-		mingwX64()
-		linuxX64()
-		linuxArm64()
-		macosArm64()
-	}
-
 	sourceSets {
 		commonMain.dependencies {
 			// `api`, not `implementation`: a game module declares a `GameProfile` from :core, and

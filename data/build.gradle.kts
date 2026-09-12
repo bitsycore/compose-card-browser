@@ -4,6 +4,8 @@ plugins {
 	alias(libs.plugins.kotlinSerialization)
 }
 
+val nativeDesktop = providers.gradleProperty("nativeDesktop").map(String::toBoolean).getOrElse(false)
+
 // Sockets and file handles: the shared Ktor stack, the two Okio-backed caches, saved preferences,
 // and the repositories that route between cache and provider.
 //
@@ -24,14 +26,6 @@ kotlin {
 	// Intel-simulator artifact, and a target the app module cannot build is not worth declaring here.
 	iosArm64()
 	iosSimulatorArm64()
-
-	// The native desktop targets, behind a switch. See :core for why they are opt-in.
-	if (providers.gradleProperty("nativeDesktop").isPresent) {
-		mingwX64()
-		linuxX64()
-		linuxArm64()
-		macosArm64()
-	}
 
 	sourceSets {
 		commonMain.dependencies {
@@ -62,20 +56,9 @@ kotlin {
 		getByName("desktopMain").dependencies {
 			implementation(libs.ktor.client.java)
 		}
-		// An engine per native desktop family: WinHttp, Darwin, curl.
-		//
-		// Ktor's curl engine publishes all four of these targets, so one dependency on the shared
-		// source set would compile -- and on Windows it would then need libcurl to link against, which
-		// is the problem SQLite already cost a build script here. WinHttp is Windows' own stack and
-		// Darwin is NSURLSession: neither needs anything linked that the system does not already have.
-		// curl is left where Ktor offers nothing else, and Linux has libcurl.
-		//
-		// Without one of these the app links and then dies at startup: `HttpClient {}` discovers its
-		// engine, an engineless binary finds none, and it surfaces as a global-initialiser failure
-		// that names nothing. Found by running the Windows binary.
-		if (providers.gradleProperty("nativeDesktop").isPresent) {
-			// Per target rather than per family: the hierarchy template only creates a `mingwMain`
-			// when more than one mingw target exists, and there is one.
+		// One HTTP engine per native desktop family. curl publishes mingwX64 too, but would then
+		// want libcurl to link against; WinHttp and Darwin are the system stacks.
+		if (nativeDesktop) {
 			getByName("mingwX64Main").dependencies {
 				implementation(libs.ktor.client.winhttp)
 			}

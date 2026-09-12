@@ -41,8 +41,7 @@ okio = "3.18.1"
 # which is final in JDK 22 and preview in the 21 this project's toolchain targets.
 jna = "5.17.0"
 
-# Compose Desktop targeting Kotlin/Native instead of the JVM. The plugin substitutes the mirrored
-# klibs for `org.jetbrains.compose.*` on native targets; see docs/NATIVE_DESKTOP.md.
+# Experimental: Compose Desktop on Kotlin/Native. See docs/NATIVE_DESKTOP.md.
 composeDesktopNative = "1.12.0-3"
 
 # The card store. `:database` holds every complete set; see that module's README for what the
@@ -113,9 +112,7 @@ sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sq
 sqldelight-driver-jvm = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
 sqldelight-driver-android = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
 sqldelight-driver-native = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
-# The window for the Kotlin/Native desktop port: SDL3 and Skia, in place of AWT. Only resolved
-# under -PnativeDesktop; the bridge plugin redirects everything else but cannot supply an entry
-# point. See docs/NATIVE_DESKTOP.md.
+# The native desktop window: SDL3 and Skia in place of AWT.
 compose-desktop-native-window = { module = "com.bitsycore.compose:desktop-native-window", version.ref = "composeDesktopNative" }
 okio-fakefilesystem = { module = "com.squareup.okio:okio-fakefilesystem", version.ref = "okio" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
@@ -125,9 +122,7 @@ ktor-serialization-json = { module = "io.ktor:ktor-serialization-kotlinx-json", 
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 ktor-client-java = { module = "io.ktor:ktor-client-java", version.ref = "ktor" }
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
-# Native desktop engines. WinHttp is Windows' own stack and Darwin is NSURLSession -- neither needs
-# anything linked. curl is for Linux, where Ktor offers nothing else and libcurl is present anyway.
-# Only resolved under -PnativeDesktop.
+# Native desktop HTTP engines, one per platform family.
 ktor-client-winhttp = { module = "io.ktor:ktor-client-winhttp", version.ref = "ktor" }
 ktor-client-curl = { module = "io.ktor:ktor-client-curl", version.ref = "ktor" }
 # Test only: an engine that answers from a lambda, so the request the app really builds can be

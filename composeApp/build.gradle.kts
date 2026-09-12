@@ -6,13 +6,10 @@ plugins {
 	alias(libs.plugins.kotlinSerialization)
 }
 
-// SQLite for the Windows native binary: SQLiter declares `sqlite3.h` and supplies no
-// implementation, and MinGW has no system one. See the file for what it fetches and how it is
-// checked -- and note it is applied under the flag only, so an ordinary build never reads it.
-if (providers.gradleProperty("nativeDesktop").isPresent) {
-	apply(from = "sqlite-mingw.gradle.kts")
-	// The logos, which live in the game modules and not here. See the file.
-	apply(from = "native-resources.gradle.kts")
+val nativeDesktop = providers.gradleProperty("nativeDesktop").map(String::toBoolean).getOrElse(false)
+
+if (nativeDesktop) {
+	apply(from = "native-desktop.gradle.kts")
 }
 
 kotlin {
@@ -43,51 +40,34 @@ kotlin {
 		}
 	}
 
-	// The native desktop targets, behind a switch. See :core for why they are opt-in, and
-	// docs/NATIVE_DESKTOP.md for what still has to land before this module can link.
-	// The four targets. The *executables* are not declared here: the bridge's
-	// `compose.desktop { native { entryPoint = ... } }` declares one on each of them, which is the
-	// supported way round and the same place its icon spec lives.
-	if (providers.gradleProperty("nativeDesktop").isPresent) {
+	// SQLite and the app icon reach the linker as plain strings, so they are declared as inputs
+	// too: without that a change to either leaves the previous binary in place.
+	if (nativeDesktop) {
 		mingwX64 {
-			// SQLite, compiled by `sqlite-mingw.gradle.kts`, because SQLiter supplies none for
-			// this target and Windows has no system one. `binaries.all` rather than a binary by
-			// name, because the binary this applies to is added by the bridge afterwards.
 			@Suppress("UNCHECKED_CAST")
-			val vSqlite = project.extra["sqliteMingwLibrary"] as Provider<RegularFile>
-			val vSqliteTask = project.extra["sqliteMingwTask"]!!
+			val vSqlite = project.extra["nativeSqliteLibrary"] as Provider<RegularFile>
+			// `binaries.all` because the executable is added by the bridge, after this runs.
 			binaries.all {
 				linkerOpts(vSqlite.get().asFile.absolutePath)
 				linkTaskProvider.configure {
-					dependsOn(vSqliteTask)
-					// Declared as *inputs*, not only as an ordering. Anything handed to the linker
-					// through `linkerOpts` is a string as far as Gradle is concerned, so a changed
-					// library or a changed icon leaves the previous binary in place and calls the
-					// link up to date. That is exactly how the app icon came to be embedded from a
-					// file this build had stopped pointing at: the object was rebuilt, the exe was
-					// not, and nothing said so.
+					dependsOn(
+						project.extra["nativeSqliteTask"]!!,
+						"compileComposeNativeIconResource",
+					)
 					inputs.file(vSqlite).withPropertyName("sqliteStaticLibrary")
-					// By path rather than by task: a `Task` cannot be captured in a provider
-					// under the configuration cache. The path is the bridge's, and this whole
-					// block goes away when the plugin declares its own object as a link input.
-					dependsOn("compileComposeNativeIconResource")
 					inputs.files(
 						project.layout.buildDirectory.file("composeNativeAppIcon/app_icon.o"),
 					).withPropertyName("windowsIconResource")
 				}
 			}
 		}
-		linuxX64()
-		linuxArm64()
-		macosArm64()
 	}
 
 	@Suppress("OPT_IN_USAGE")
 	applyDefaultHierarchyTemplate {
 		common {
-			// One source set for the four native desktop targets, so the entry point is written
-			// once rather than per architecture.
-			if (providers.gradleProperty("nativeDesktop").isPresent) {
+			// One source set for the four native desktop targets.
+			if (nativeDesktop) {
 				group("nativeDesktop") {
 					withMingwX64()
 					withLinuxX64()
@@ -177,12 +157,9 @@ kotlin {
 			implementation(libs.koin.android)
 		}
 
-		// The window, and only under the flag: this source set does not exist without it.
-		//
-		// The bridge plugin redirects what the app already declares; it does not supply an entry
-		// point, because there is no JVM artifact to redirect one from. `nativeComposeWindow` is
-		// SDL3 and Skia, and it is named here explicitly for the same reason.
-		if (providers.gradleProperty("nativeDesktop").isPresent) {
+		// The window. The bridge redirects what the app already declares but supplies no entry
+		// point, so this one is named explicitly.
+		if (nativeDesktop) {
 			getByName("nativeDesktopMain").dependencies {
 				implementation(libs.compose.desktop.native.window)
 			}
@@ -208,24 +185,16 @@ compose.resources {
 }
 
 compose.desktop {
-	// The Kotlin/Native desktop binary. One entry point for all four targets, and the bridge
-	// declares the executable on each -- see docs/NATIVE_DESKTOP.md.
-	//
-	// Configured through `extensions` rather than a `native { }` block because the bridge plugin is
-	// applied imperatively from the root build under the flag, and Gradle only generates a typed
-	// accessor for a plugin named in a `plugins { }` block.
-	if (providers.gradleProperty("nativeDesktop").isPresent) {
+	// The native binary: one entry point, and the bridge declares an executable on each target.
+	// Through `extensions` rather than a `native { }` block because the plugin is applied
+	// imperatively, so Gradle generates no typed accessor for it.
+	if (nativeDesktop) {
 		(this as ExtensionAware).extensions.configure(
 			com.bitsycore.compose.sdl.gradle.ComposeDesktopNativeExtension::class.java,
 		) {
 			entryPoint = "com.bitsycore.cardbrowser.main"
-			// The same PNGs the JVM distribution uses, rather than a second set. `exeIcon` takes
-			// the sizes and the bridge builds the `.ico` itself -- handing it the ready-made
-			// `app-icon.ico` would be giving a container where it wants the pictures, and the
-			// sizes Windows actually draws at are the ones in the list.
-			//
-			// `light` and `dark` are the same files: this icon has no dark variant, and a second
-			// one that is identical would be two things to keep in step for no difference.
+			// The same PNGs the JVM distribution uses. `exeIcon` takes the sizes and builds the
+			// `.ico` itself; this icon has no dark variant, hence the same files twice.
 			icon {
 				val vIcons = project.file("src/desktopMain/resources")
 				light.from(vIcons.resolve("app-icon-32.png"), vIcons.resolve("app-icon-128.png"))

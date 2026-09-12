@@ -5,6 +5,8 @@ plugins {
 	alias(libs.plugins.sqldelight)
 }
 
+val nativeDesktop = providers.gradleProperty("nativeDesktop").map(String::toBoolean).getOrElse(false)
+
 // Where complete sets are held: the schema, the driver per platform, and the store itself.
 //
 // `:data` owns *what* is cached and when; this module owns how it is held. It knows no provider and
@@ -28,16 +30,8 @@ kotlin {
 	iosArm64()
 	iosSimulatorArm64()
 
-	// The native desktop targets, behind a switch. See :core for why they are opt-in.
-	if (providers.gradleProperty("nativeDesktop").isPresent) {
-		mingwX64()
-		linuxX64()
-		linuxArm64()
-		macosArm64()
-
-		// One source set for all four, so the driver is written once. iOS keeps its own: it shares
-		// `NativeSqliteDriver` but not how a file is deleted, which is Foundation there and Okio
-		// here.
+	// One source set for the four native desktop targets; see docs/NATIVE_DESKTOP.md.
+	if (nativeDesktop) {
 		@Suppress("OPT_IN_USAGE")
 		applyDefaultHierarchyTemplate {
 			common {
@@ -80,11 +74,10 @@ kotlin {
 		iosMain.dependencies {
 			implementation(libs.sqldelight.driver.native)
 		}
-		if (providers.gradleProperty("nativeDesktop").isPresent) {
+		if (nativeDesktop) {
 			getByName("nativeDesktopMain").dependencies {
 				implementation(libs.sqldelight.driver.native)
-				// For deleting a database and its two sidecars. Foundation is not here, and Okio
-				// publishes for all four of these targets.
+				// Okio deletes the database and its sidecars; Foundation is not here.
 				implementation(libs.okio)
 			}
 		}
