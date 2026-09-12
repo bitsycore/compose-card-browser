@@ -4,13 +4,12 @@ plugins {
 	alias(libs.plugins.composeMultiplatform)
 	alias(libs.plugins.composeCompiler)
 	alias(libs.plugins.kotlinSerialization)
+	// SQLite and the resource archive for the experimental native desktop target. Does nothing
+	// unless the `nativeDesktop` flag is on.
+	id("cardbrowser.native-desktop")
 }
 
 val nativeDesktop = providers.gradleProperty("nativeDesktop").map(String::toBoolean).getOrElse(false)
-
-if (nativeDesktop) {
-	apply(from = "native-desktop.gradle.kts")
-}
 
 kotlin {
 	jvmToolchain(21)

@@ -1,6 +1,9 @@
 rootProject.name = "CardBrowser"
 
 pluginManagement {
+	// Convention plugins, so a module applies them by id rather than with a script `apply`.
+	includeBuild("build-logic")
+
 	repositories {
 		google {
 			mavenContent {

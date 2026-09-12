@@ -25,7 +25,7 @@ if (providers.gradleProperty("nativeDesktop").map(String::toBoolean).getOrElse(f
 		plugins.withId("org.jetbrains.kotlin.multiplatform") {
 			// The bridge goes on every multiplatform module, not only those naming Compose: it
 			// rewrites what a module *resolves*, and a provider resolves Compose transitively.
-			apply(plugin = "com.bitsycore.compose-desktop-native.bridge")
+			pluginManager.apply("com.bitsycore.compose-desktop-native.bridge")
 			extensions.configure<KotlinMultiplatformExtension> {
 				mingwX64()
 				linuxX64()
