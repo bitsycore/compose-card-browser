@@ -296,7 +296,7 @@ val appModule = module {
 	}
 	viewModel { SettingsViewModel(get(), get(), get(), get()) }
 	viewModel { StorageViewModel(get(), get(), get(), get()) }
-	viewModel { (vArgs: SearchArgs) -> SearchViewModel(get(), get(), get(), vArgs) }
+	viewModel { (vArgs: SearchArgs) -> SearchViewModel(get(), get(), get(), get(), vArgs) }
 }
 
 /**

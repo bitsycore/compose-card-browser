@@ -135,9 +135,15 @@ fun CardDetailScreen(
 	cardId: String,
 	setId: String?,
 	onBack: () -> Unit,
+	/** The list this card was opened from, when it is not the card's set: a search. */
+	browseKey: String? = null,
+	/** Leaves for the card's own set. See `CardDetailContract.Effect.OpenSet`. */
+	onOpenSet: (setId: String, setName: String, setCode: String) -> Unit = { _, _, _ -> },
 	// The arguments go in at construction so the view model can seed its state from the browse
 	// session before the first frame, rather than being told to load after one has already been drawn.
-	viewModel: CardDetailViewModel = koinViewModel { parametersOf(CardDetailArgs(cardId, setId)) },
+	viewModel: CardDetailViewModel = koinViewModel {
+		parametersOf(CardDetailArgs(cardId, setId, browseKey))
+	},
 ) {
 	val vState by viewModel.collectAsStateWithLifecycle()
 	val vSnackbarHost = remember { SnackbarHostState() }
@@ -153,6 +159,9 @@ fun CardDetailScreen(
 				vSnackbarHost.showSnackbar(vEffect.reason)
 
 			CardDetailContract.Effect.NavigateBack -> onBack()
+
+			is CardDetailContract.Effect.OpenSet ->
+				onOpenSet(vEffect.setId, vEffect.setName, vEffect.setCode)
 		}
 	}
 
@@ -231,6 +240,23 @@ fun CardDetailContent(
 				navigationIcon = {
 					IconButton(onClick = { dispatch(CardDetailContract.Intent.BackPressed) }) {
 						Icon(AppIcons.ArrowBack, contentDescription = "Back to cards")
+					}
+				},
+				actions = {
+					// Only on a card reached from a search, where the set it belongs to is
+					// somewhere the user has not been. Inside a set it would go where they
+					// already are.
+					if (vState.isOutsideItsSet) {
+						IconButton(
+							onClick = { dispatch(CardDetailContract.Intent.GoToSetPressed) },
+						) {
+							Icon(
+								imageVector = AppIcons.Style,
+								contentDescription = vState.card
+									?.let { "Go to ${it.setName}" }
+									?: "Go to the set",
+							)
+						}
 					}
 				},
 				scrollBehavior = vScrollBehavior,

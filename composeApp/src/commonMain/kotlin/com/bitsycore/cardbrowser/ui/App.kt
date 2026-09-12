@@ -19,6 +19,10 @@ import org.koin.compose.koinInject
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import com.bitsycore.cardbrowser.ui.browse.BrowseSession
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
@@ -77,7 +81,17 @@ sealed interface Route : NavKey {
 	data class Cards(val setId: String, val setName: String, val setCode: String) : Route
 
 	@Serializable
-	data class Detail(val cardId: String, val setId: String?) : Route
+	/**
+	 * One card, and the list it is being walked through.
+	 *
+	 * @param setId the card's own set: what a fallback load reads, and where "go to set" goes
+	 * @param browseKey the list to swipe -- a search's key, or null for the set itself
+	 */
+	data class Detail(
+		val cardId: String,
+		val setId: String?,
+		val browseKey: String? = null,
+	) : Route
 
 	/**
 	 * The first-launch setup.
@@ -161,6 +175,28 @@ fun App() {
 		// navigation now -- see `SettingsContract.Effect.OpenSetup` -- because having this effect
 		// serve both meant a flag and a pop racing over the same list.
 		val vBackStack = remember { mutableStateListOf<Route>(Route.Games) }
+
+		// "Go to set", from a card opened through a search.
+		//
+		// The grid is put *underneath* the card and the card is then popped onto it, rather than
+		// pushed over it: what the user asked for is to leave this card the way they would have
+		// left it had they arrived from the set, and that is the ordinary container transform back
+		// into the tile. Pushing the grid instead would slide a new screen over the card and leave
+		// the transform with nothing to run between.
+		//
+		// The search goes with it. Back from the grid belongs to the set list -- where the card
+		// would have been reached from -- which is what was asked for and is the only arrangement
+		// where every screen's Back means the thing above it.
+		var vGoToSet by remember { mutableStateOf<Route.Cards?>(null) }
+		LaunchedEffect(vGoToSet) {
+			val vRoute = vGoToSet ?: return@LaunchedEffect
+			vBackStack.slideSetUnderCard(vRoute)
+			// A frame, so the grid is composed and its tile exists before the pop asks the shared
+			// element where to land.
+			withFrameNanos { }
+			vBackStack.popRoute()
+			vGoToSet = null
+		}
 		LaunchedEffect(vPrefs.hasCompletedSetup) {
 			// `!in`, not "is not on top". Pushing a second copy of a route that is already on the
 			// stack gives `NavDisplay` two entries with one key, and popping one of them is then
@@ -253,10 +289,12 @@ fun App() {
 								vBackStack.add(
 									Route.Detail(
 										cardId = vCard.id.qualified,
-										// The card's own set, not the search. The detail screen
-										// looks the set up in the cache to swipe through, and a
-										// search result list is not a set.
+										// The card's own set, which is where "go to set" leads and
+										// what a cold start would fall back to reading.
 										setId = vCard.setId.qualified,
+										// What the swipe walks: these results, published by the
+										// search view model under this key.
+										browseKey = BrowseSession.searchKey(vRoute.game),
 									),
 								)
 							},
@@ -295,7 +333,11 @@ fun App() {
 						CardDetailScreen(
 							cardId = vRoute.cardId,
 							setId = vRoute.setId,
+							browseKey = vRoute.browseKey,
 							onBack = { vBackStack.popRoute() },
+							onOpenSet = { vSetId, vSetName, vSetCode ->
+								vGoToSet = Route.Cards(vSetId, vSetName, vSetCode)
+							},
 						)
 					}
 
@@ -453,4 +495,21 @@ internal fun SnapshotStateList<Route>.popRoute() {
  */
 internal fun SnapshotStateList<Route>.popRoute(route: Route) {
 	if (size > 1) remove(route)
+}
+
+/**
+ * Puts a set's grid underneath the card on top, and drops the search that led there.
+ *
+ * The half of "go to set" that can be reasoned about without a composition: what is left is
+ * `[… , Sets, Cards, Detail]`, so popping the card lands on the grid with the ordinary pop
+ * transition, and Back from the grid is the set list rather than a search the user has finished
+ * with. The pop itself is a frame later, once the grid has been composed for the shared element to
+ * land in.
+ *
+ * Does nothing to a stack with nothing on top to slide under.
+ */
+internal fun SnapshotStateList<Route>.slideSetUnderCard(cards: Route.Cards) {
+	if (isEmpty()) return
+	removeAll { it is Route.Search }
+	add(lastIndex, cards)
 }

@@ -146,6 +146,28 @@ class CardDetailContractTest {
 	}
 
 	@Test
+	fun `a card opened from its own set is not offered a way to it`() {
+		// The button exists to leave a list that is not the set. Inside the set it would go where
+		// the user already is, which is a control that does nothing and a question about whether
+		// it did.
+		val vFromSet = reduce(UiState(), Intent.Load(cardId = "p:c1", setId = "p:s1"))
+		assertFalse(vFromSet.isOutsideItsSet)
+
+		val vSameKey = reduce(UiState(), Intent.Load("p:c1", setId = "p:s1", browseKey = "p:s1"))
+		assertFalse(vSameKey.isOutsideItsSet, "the grid publishes under the set's own id")
+	}
+
+	@Test
+	fun `a card opened from a search is`() {
+		val vFromSearch = reduce(
+			UiState(),
+			Intent.Load("p:c1", setId = "p:s1", browseKey = "search:riftbound"),
+		)
+
+		assertTrue(vFromSearch.isOutsideItsSet)
+	}
+
+	@Test
 	fun `the language preference survives moving between cards`() {
 		// A preference about the reader rather than about the printing, so it carries across.
 		var vState = reduce(

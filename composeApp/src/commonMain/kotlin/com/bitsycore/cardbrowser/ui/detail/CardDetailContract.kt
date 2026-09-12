@@ -40,6 +40,14 @@ object CardDetailContract :
 		val cards: List<CardPrinting> = emptyList(),
 		val currentIndex: Int = 0,
 		val set: CardSet? = null,
+
+		/**
+		 * Whether this card was reached from something other than its own set -- a search.
+		 *
+		 * What it turns on is the way out: the swipe walks the results, so the set the card belongs
+		 * to is somewhere the user has not been and may want to go.
+		 */
+		val isOutsideItsSet: Boolean = false,
 		val isLoading: Boolean = true,
 		val error: ProviderError? = null,
 		val requestedLanguage: CardLanguage = CardLanguage.ENGLISH,
@@ -292,7 +300,15 @@ object CardDetailContract :
 		/** The back arrow. Navigation goes through the container like everything else. */
 		data object BackPressed : Intent
 
-		data class Load(val cardId: String, val setId: String?) : Intent
+		/** "Go to set", offered only on a card that was not opened from its own set. */
+		data object GoToSetPressed : Intent
+
+		data class Load(
+			val cardId: String,
+			val setId: String?,
+			/** The list to swipe through, when it is not the card's set -- see `CardDetailArgs`. */
+			val browseKey: String? = null,
+		) : Intent
 
 		data class Loaded(
 			val cards: List<CardPrinting>,
@@ -356,6 +372,15 @@ object CardDetailContract :
 
 		/** The back arrow, so navigation leaves by the same door as everything else. */
 		data object NavigateBack : Effect
+
+		/**
+		 * Leave for the card's own set, from a card reached through a search.
+		 *
+		 * Carries what the grid's route needs rather than an id to look up again: the card states
+		 * its set's name and code, and the screen that receives this has nothing to look them up
+		 * with.
+		 */
+		data class OpenSet(val setId: String, val setName: String, val setCode: String) : Effect
 	}
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
@@ -365,7 +390,15 @@ object CardDetailContract :
 
 		// Only a screen with nothing to show waits. A seeded one is already drawing the card and
 		// must not be thrown back to a spinner while the rest is fetched.
-		is Intent.Load -> state.copy(isLoading = state.cards.isEmpty(), error = null)
+		is Intent.Load -> state.copy(
+			isLoading = state.cards.isEmpty(),
+			error = null,
+			// A list that is not the card's set is a search: the card came from somewhere it does
+			// not live, and the way back into its own set is worth offering.
+			isOutsideItsSet = intent.browseKey != null && intent.browseKey != intent.setId,
+		)
+
+		Intent.GoToSetPressed -> state
 
 		is Intent.Loaded -> state.copy(
 			cards = intent.cards,

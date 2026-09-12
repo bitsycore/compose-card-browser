@@ -32,6 +32,45 @@ class BackStackTest {
 	}
 
 	@Test
+	fun `going to a card's set leaves the grid under it and the search behind`() {
+		// "Go to set" from a search result. The grid has to end up *under* the card so that
+		// leaving the card is a pop onto it -- the same container transform as coming from the
+		// set -- rather than a new screen pushed over the top.
+		val vStack = mutableStateListOf<Route>(
+			Route.Games,
+			Route.Sets("riftbound"),
+			Route.Search("riftbound"),
+			Route.Detail(cardId = "riftcodex:OGN-001", setId = "riftcodex:OGN", browseKey = "search:riftbound"),
+		)
+
+		vStack.slideSetUnderCard(Route.Cards("riftcodex:OGN", "Origins", "OGN"))
+
+		assertEquals(
+			listOf<Route>(
+				Route.Games,
+				Route.Sets("riftbound"),
+				Route.Cards("riftcodex:OGN", "Origins", "OGN"),
+				Route.Detail(cardId = "riftcodex:OGN-001", setId = "riftcodex:OGN", browseKey = "search:riftbound"),
+			),
+			vStack.toList(),
+			"the grid belongs under the card, and the search is finished with",
+		)
+
+		vStack.popRoute()
+
+		assertEquals(
+			Route.Cards("riftcodex:OGN", "Origins", "OGN"),
+			vStack.last(),
+			"leaving the card lands on the grid",
+		)
+		assertEquals(
+			Route.Sets("riftbound"),
+			vStack[vStack.lastIndex - 1],
+			"and back from the grid is the set list",
+		)
+	}
+
+	@Test
 	fun `popping a named route takes it from wherever it sits`() {
 		// Setup is pushed over the picker on a first launch and over Settings on a re-run, so
 		// finishing it cannot assume it is on top -- an effect emitted a frame earlier may have

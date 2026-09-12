@@ -8,6 +8,7 @@ import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.cardbrowser.data.repository.SearchScope
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
+import com.bitsycore.cardbrowser.ui.browse.BrowseSession
 import com.bitsycore.lib.pulse.viewmodel.PulseViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,6 +30,7 @@ class SearchViewModel(
 	private val mRepository: CardRepository,
 	private val mRegistry: ProviderRegistry,
 	private val mPreferences: PreferencesStore,
+	private val mSession: BrowseSession,
 	private val mArgs: SearchArgs,
 ) : PulseViewModel<SearchContract.UiState, SearchContract.Intent, SearchContract.Effect>(
 	initialState = SearchContract.UiState(
@@ -71,8 +73,16 @@ class SearchViewModel(
 		when (intent) {
 			SearchContract.Intent.BackPressed -> emitEffect(SearchContract.Effect.NavigateBack)
 
-			is SearchContract.Intent.CardOpened ->
+			is SearchContract.Intent.CardOpened -> {
+				// The list the detail will swipe through: these results, in this order, rather
+				// than the card's set. Opening a search result and finding yourself walking a set
+				// you never asked for is the same surprise the grid's own filters avoid.
+				mSession.publish(
+					BrowseSession.searchKey(mArgs.game.value),
+					stateFlow.value.results,
+				)
 				emitEffect(SearchContract.Effect.OpenCard(intent.card))
+			}
 
 			SearchContract.Intent.Submit -> {
 				mLiveSearchJob?.cancel()

@@ -6,10 +6,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * What the card grid is currently showing, so the detail screen can move through the same list.
+ * What the user is currently looking at, so the detail screen can move through the same list.
  *
- * Swiping from one card to the next has to walk *what the user was looking at* -- filtered, sorted,
- * in that order -- not the raw set. Two other ways of arranging that were rejected:
+ * The card grid publishes a set's cards; the search publishes its results. Swiping from one card to
+ * the next has to walk *what the user was looking at* -- filtered, sorted, in that order -- not the
+ * raw set, and a search result list is not a set at all. Two other ways of arranging that were rejected:
  *
  * - **Through the navigation route.** A route has to survive being saved and restored, and 352
  *   source-qualified ids is roughly ten kilobytes of it. Routes carry keys, not payloads.
@@ -45,17 +46,29 @@ class BrowseSession {
 		mFocusedCardId.value = cardId
 	}
 
-	/** The list the grid last published. */
+	/** The list last published, whoever published it. */
 	val current: StateFlow<BrowsingList> get() = mState.asStateFlow()
 
 	/**
-	 * Records what the grid is showing.
+	 * Records what a screen is showing, under a key the route can carry back.
 	 *
-	 * Called on every result the grid accepts, so it stays in step as filters change. Cheap: the
-	 * list is the same instance the grid already holds, not a copy.
+	 * A set's key is its id; a search's is [searchKey]. Called on every result the screen accepts,
+	 * so it stays in step as filters or terms change. Cheap: the list is the same instance the
+	 * screen already holds, not a copy.
 	 */
-	fun publish(setId: String, cards: List<CardPrinting>) {
-		mState.value = BrowsingList(setId = setId, cards = cards)
+	fun publish(key: String, cards: List<CardPrinting>) {
+		mState.value = BrowsingList(key = key, cards = cards)
+	}
+
+	companion object {
+
+		/**
+		 * The key a search publishes under.
+		 *
+		 * Per game rather than per query: the results are replaced as the terms change, and a key
+		 * that changed with them would leave a route pointing at a list nobody holds any more.
+		 */
+		fun searchKey(game: String) = "search:$game"
 	}
 
 	/**
@@ -64,14 +77,14 @@ class BrowseSession {
 	 * Guarded by set id rather than handed over blindly: navigating to a card of one set must never
 	 * be given another set's neighbours because that is what happened to be on screen last.
 	 */
-	fun cardsFor(setId: String?): List<CardPrinting> {
+	fun cardsFor(key: String?): List<CardPrinting> {
 		val vState = mState.value
-		return if (setId != null && vState.setId == setId) vState.cards else emptyList()
+		return if (key != null && vState.key == key) vState.cards else emptyList()
 	}
 }
 
-/** One published list, and the set it belongs to. */
+/** One published list, and the key -- a set id, or a search -- it belongs to. */
 data class BrowsingList(
-	val setId: String? = null,
+	val key: String? = null,
 	val cards: List<CardPrinting> = emptyList(),
 )

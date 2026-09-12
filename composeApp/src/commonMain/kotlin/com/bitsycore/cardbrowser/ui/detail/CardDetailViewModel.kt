@@ -48,7 +48,7 @@ class CardDetailViewModel(
 	init {
 		// Fills in what the seed could not know synchronously: the set behind the Cardmarket link,
 		// the provider's capabilities, and the card itself when the session had nothing.
-		dispatch(CardDetailContract.Intent.Load(mArgs.cardId, mArgs.setId))
+		dispatch(CardDetailContract.Intent.Load(mArgs.cardId, mArgs.setId, mArgs.browseKey))
 	}
 
 	override suspend fun handleIntent(intent: CardDetailContract.Intent) {
@@ -57,6 +57,20 @@ class CardDetailViewModel(
 				emitEffect(CardDetailContract.Effect.NavigateBack)
 
 			is CardDetailContract.Intent.Load -> load(intent)
+
+			CardDetailContract.Intent.GoToSetPressed -> {
+				// From the card rather than from the state's `set`, which is loaded asynchronously
+				// and is null on a card opened straight from a search result.
+				stateFlow.value.card?.let { vCard ->
+					emitEffect(
+						CardDetailContract.Effect.OpenSet(
+							setId = vCard.setId.qualified,
+							setName = vCard.setName,
+							setCode = vCard.setCode,
+						),
+					)
+				}
+			}
 
 			// Told to the session rather than kept here, because the screen that needs to know is the
 			// grid behind this one, and it needs to know after this view model is gone.
@@ -88,7 +102,7 @@ class CardDetailViewModel(
 		// download of a set that was already on disk.
 		val vLanguage = mPreferences.preferences.value.primaryLanguage
 
-		val vCards = siblingsFor(intent.setId, vSetId, vCardId, vGame, vLanguage)
+		val vCards = siblingsFor(intent.browseKey ?: intent.setId, vSetId, vCardId, vGame, vLanguage)
 		val vIndex = vCards.indexOfFirst { it.id == vCardId }
 
 		// The tapped card may be absent from the list -- a stale session, or a set that could not
@@ -267,7 +281,11 @@ class CardDetailViewModel(
 }
 
 /** What the detail screen was opened for. Passed to the view model so it can seed itself. */
-data class CardDetailArgs(val cardId: String, val setId: String?)
+/**
+ * @param setId the card's own set, which is what a fallback load reads and what "go to set" opens
+ * @param browseKey the list to swipe through -- a set id, or a search. Null means the set.
+ */
+data class CardDetailArgs(val cardId: String, val setId: String?, val browseKey: String? = null)
 
 /**
  * The state to open with, from what the browse session already holds.
@@ -281,7 +299,7 @@ private fun seedFrom(
 	args: CardDetailArgs,
 	language: CardLanguage,
 ): CardDetailContract.UiState {
-	val vCards = session.cardsFor(args.setId)
+	val vCards = session.cardsFor(args.browseKey ?: args.setId)
 	val vIndex = vCards.indexOfFirst { it.id.qualified == args.cardId }
 	return if (vIndex >= 0) {
 		CardDetailContract.UiState(
