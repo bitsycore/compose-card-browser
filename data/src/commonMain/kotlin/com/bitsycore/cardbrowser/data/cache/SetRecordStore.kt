@@ -181,18 +181,21 @@ interface SetRecordStore {
 data class CardSearchFilter(
 	val text: String? = null,
 	val excludeText: String? = null,
-	val cardType: String? = null,
-	val rarity: String? = null,
+	/** Any of these, not all: chips on one axis are an OR, as they are in the card grid. */
+	val cardTypes: Set<String> = emptySet(),
+	val rarities: Set<String> = emptySet(),
 	val minCost: Int? = null,
 	val maxCost: Int? = null,
-	val domain: String? = null,
+	val domains: Set<String> = emptySet(),
 	val language: CardLanguage? = null,
+	/** The sets to look in, or empty for every set that has anything stored. */
+	val setIds: Set<String> = emptySet(),
 ) {
 
 	/** True when nothing is set, which is a request to show nothing rather than everything. */
 	val isEmpty: Boolean
-		get() = text.isNullOrBlank() && excludeText.isNullOrBlank() && cardType == null &&
-			rarity == null && minCost == null && maxCost == null && domain == null
+		get() = text.isNullOrBlank() && excludeText.isNullOrBlank() && cardTypes.isEmpty() &&
+			rarities.isEmpty() && minCost == null && maxCost == null && domains.isEmpty()
 }
 
 /** How many rows one search returns. A screenful many times over; not a paging story yet. */
@@ -312,11 +315,11 @@ class SqlSetRecordStore(
 			language = filter.language,
 			text = filter.text?.takeIf { it.isNotBlank() },
 			excludeText = filter.excludeText?.takeIf { it.isNotBlank() },
-			cardType = filter.cardType,
-			rarity = filter.rarity,
+			cardTypes = filter.cardTypes,
+			rarities = filter.rarities,
 			minCost = filter.minCost,
 			maxCost = filter.maxCost,
-			domain = filter.domain,
+			domains = filter.domains,
 			limit = limit,
 		)
 	}

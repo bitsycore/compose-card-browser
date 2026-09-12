@@ -40,6 +40,43 @@ class SqlCardStoreTest {
 	// ==================
 
 	@Test
+	fun `several values on one axis are an OR`() {
+		// The card grid's chips have always been an OR; the store's filter took one value per axis
+		// and the search screen was stuck with it. Two rarities must bring back both, and the
+		// third must stay out -- "any of these" is a different query from "all of these" and from
+		// "the last one you tapped".
+		write("s", null, "Set", false, 1L, listOf(
+			card(1, rarity = "Common"),
+			card(2, rarity = "Rare"),
+			card(3, rarity = "Epic"),
+		))
+
+		val vHits = mStore.search(game = "test", rarities = setOf("Common", "Epic"))
+
+		assertEquals(
+			listOf("Common", "Epic"),
+			vHits.mapNotNull { it.classification.rarity }.sorted(),
+		)
+	}
+
+	@Test
+	fun `several domains are an OR across a card's own list`() {
+		// Domains are stored as one delimited string per card, so this is the axis SQL cannot do in
+		// a single predicate -- the store runs a pass per chosen domain and merges. What matters is
+		// that a card with *either* comes back exactly once.
+		write("s", null, "Set", false, 1L, listOf(
+			card(1, domains = listOf("fury")),
+			card(2, domains = listOf("calm", "fury")),
+			card(3, domains = listOf("order")),
+		))
+
+		val vHits = mStore.search(game = "test", domains = setOf("fury", "calm"))
+
+		assertEquals(2, vHits.size, "the card with both domains must not be returned twice")
+		assertTrue(vHits.none { it.classification.domains == listOf("order") })
+	}
+
+	@Test
 	fun `language is part of a set's identity -- not a column to collapse`() {
 		// `(provider, set, language)` is the key everywhere in this app: cache, downloads, pins,
 		// image records. A schema that treated language as an attribute of one cached set would
@@ -202,8 +239,8 @@ class SqlCardStoreTest {
 			game = "test",
 			text = "card",
 			excludeText = "card 3",
-			cardType = "Unit",
-			rarity = "Common",
+			cardTypes = setOf("Unit"),
+			rarities = setOf("Common"),
 			maxCost = 3,
 		)
 
@@ -275,6 +312,8 @@ class SqlCardStoreTest {
 		number: Int,
 		language: CardLanguage = CardLanguage.ENGLISH,
 		cost: Int? = number % 5,
+		rarity: String = "Common",
+		domains: List<String> = listOf("Fury"),
 	): CardPrinting {
 		val vProvider = ProviderId("p")
 		return CardPrinting(
@@ -296,7 +335,7 @@ class SqlCardStoreTest {
 				language = language,
 			),
 			attributes = CardAttributes(cost = cost),
-			classification = CardClassification(type = "Unit", rarity = "Common", domains = listOf("Fury")),
+			classification = CardClassification(type = "Unit", rarity = rarity, domains = domains),
 			languages = LanguageCoverage(confirmed = setOf(language)),
 			finishes = FinishCoverage(),
 		)

@@ -338,24 +338,55 @@ class SqlCardStore(driver: SqlDriver) {
 		language: CardLanguage? = null,
 		text: String? = null,
 		excludeText: String? = null,
-		cardType: String? = null,
-		rarity: String? = null,
+		cardTypes: Set<String> = emptySet(),
+		rarities: Set<String> = emptySet(),
 		minCost: Int? = null,
 		maxCost: Int? = null,
-		domain: String? = null,
+		domains: Set<String> = emptySet(),
 		limit: Int = 200,
-	): List<CardPrinting> = mQueries.searchPrintings(
-		game = game,
-		language = language?.code,
-		text = text?.let(::fold),
-		excludeText = excludeText?.let(::fold),
-		cardType = cardType,
-		rarity = rarity,
-		maxCost = maxCost?.toLong(),
-		minCost = minCost?.toLong(),
-		domain = domain?.let(::fold),
-		limit = limit.toLong(),
-	).executeAsList().map { JSON.decodeFromString(CardPrinting.serializer(), it) }
+	): List<CardPrinting> {
+		fun query(domain: String?): List<CardPrinting> = mQueries.searchPrintings(
+			game = game,
+			language = language?.code,
+			text = text?.let(::fold),
+			excludeText = excludeText?.let(::fold),
+			// One value is an equality and uses the index; several is a delimited list and a scan.
+			// See the statement, which carries both parameters for exactly this reason.
+			cardType = cardTypes.singleOrNull(),
+			cardTypes = cardTypes.takeIf { it.size > 1 }?.let(::delimited),
+			rarity = rarities.singleOrNull(),
+			rarities = rarities.takeIf { it.size > 1 }?.let(::delimited),
+			maxCost = maxCost?.toLong(),
+			minCost = minCost?.toLong(),
+			domain = domain?.let(::fold),
+			limit = limit.toLong(),
+		).executeAsList().map { JSON.decodeFromString(CardPrinting.serializer(), it) }
+
+		if (domains.size <= 1) return query(domains.singleOrNull())
+
+		// Once per chosen domain, merged. The column is a delimited list of a card's own domains,
+		// so "any of these" is an intersection of two lists and SQL cannot walk both in one
+		// predicate. A game has a handful of domains and each pass is the same indexed query the
+		// single case runs.
+		//
+		// Truncation survives the merge: every pass returns its matches in name order, up to the
+		// same limit, so anything a pass dropped sorts after its own last row and therefore after
+		// the merged list's.
+		return domains
+			.flatMap { query(it) }
+			.distinctBy { it.id.qualified }
+			.sortedBy { it.displayName.lowercase() }
+			.take(limit)
+	}
+
+	/**
+	 * `Unit|Spell`, which the statement brackets with separators itself.
+	 *
+	 * Bracketed *there* rather than here so the parameter is an operand of `||` and SQLDelight can
+	 * see it is text. Left bare, it inferred `Long?` from the `instr` around it and the generated
+	 * signature would not take a string at all.
+	 */
+	private fun delimited(values: Set<String>) = values.joinToString(DOMAIN_SEPARATOR)
 
 	private companion object {
 

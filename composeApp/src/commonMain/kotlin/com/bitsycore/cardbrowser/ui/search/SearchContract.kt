@@ -27,6 +27,9 @@ object SearchContract :
 	 * @property totalCount how many cards matched in total, when the provider says. Larger than
 	 *   `results.size` whenever there are further pages
 	 */
+	/** One set the filter can be pointed at. */
+	data class SetChoice(val id: String, val name: String)
+
 	data class UiState(
 		val game: GameProfile? = null,
 		val query: String = "",
@@ -54,13 +57,12 @@ object SearchContract :
 		val isAdvancedOpen: Boolean = false,
 
 		/**
-		 * The set this search is confined to, by name, or null for the whole game.
+		 * The sets this search may look in, as the filter offers them: id to name.
 		 *
-		 * What it changes is what the screen may claim: a scoped search covers one set completely,
-		 * so the notice about how many sets were reached has nothing to report and the title says
-		 * where you are instead.
+		 * Only sets with something stored. A set nobody has downloaded cannot match, and offering
+		 * it would be offering a filter that always answers nothing.
 		 */
-		val scopedSetName: String? = null,
+		val setOptions: List<SetChoice> = emptyList(),
 		val requestGeneration: Int = 0,
 	) {
 
@@ -73,13 +75,16 @@ object SearchContract :
 		 */
 		val activeAdvancedCount: Int
 			get() = with(filter) {
+				// Values, not axes: choosing three rarities is three filters to the eye, and the
+				// chips below say so one by one.
 				listOf(
-					!excludeText.isNullOrBlank(),
-					cardType != null,
-					rarity != null,
-					domain != null,
-					minCost != null || maxCost != null,
-				).count { it }
+					if (!excludeText.isNullOrBlank()) 1 else 0,
+					cardTypes.size,
+					rarities.size,
+					domains.size,
+					if (minCost != null || maxCost != null) 1 else 0,
+					setIds.size,
+				).sum()
 			}
 
 		/** True when the advanced filter narrows on anything beyond the name. */
@@ -118,9 +123,9 @@ object SearchContract :
 		 * the game a local search could see is exactly the caveat this strip exists for.
 		 */
 		val coverageNotice: String?
-			get() = if (scopedSetName != null) {
-				// One set, and the search reads what is stored of it: there is no "of 120 sets" to
-				// report, and the title already says which set this is.
+			get() = if (filter.setIds.isNotEmpty()) {
+				// The user has named the sets to look in, so "3 of 120" is not a shortfall -- it is
+				// the filter doing what it was asked. The chips say which ones.
 				null
 			} else if (!isLimitedByCache) {
 				null
@@ -143,8 +148,8 @@ object SearchContract :
 		/** A result was tapped. */
 		data class CardOpened(val card: CardPrinting) : Intent
 
-		/** This search covers one set, named here for the title. */
-		data class ScopedToSet(val setName: String) : Intent
+		/** Which sets the filter may offer, from what is stored. */
+		data class SetOptionsLoaded(val sets: List<SetChoice>) : Intent
 
 		/** The text field changed. Does not search; [Submit] does. */
 		data class QueryChanged(val text: String) : Intent
@@ -252,7 +257,7 @@ object SearchContract :
 
 		is Intent.AdvancedToggled -> state.copy(isAdvancedOpen = intent.isOpen)
 
-		is Intent.ScopedToSet -> state.copy(scopedSetName = intent.setName)
+		is Intent.SetOptionsLoaded -> state.copy(setOptions = intent.sets)
 
 		is Intent.FilterChanged -> state.copy(filter = intent.filter)
 

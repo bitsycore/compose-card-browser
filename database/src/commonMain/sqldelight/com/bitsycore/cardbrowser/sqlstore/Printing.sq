@@ -127,6 +127,18 @@ SELECT language, COUNT(*) AS total FROM cached_set GROUP BY language ORDER BY to
 -- Every predicate is opt-in via a NULL guard, which is how one statement serves a filter sheet
 -- with any combination of chips set. `:excludeText` is the "does not contain" half the file cache
 -- has no way to offer at all.
+--
+-- Each of type and rarity has *two* parameters, and exactly one is ever non-null. Picking one value
+-- is an equality, which the `printing_type` and `printing_rarity` indexes serve; picking several is
+-- a bar-delimited list -- `Unit|Spell`, bracketed with separators here -- matched with `instr`,
+-- which they cannot. That is the
+-- trade the second form is making, and it only applies when the user has actually asked for more
+-- than one. `IN` would have been the obvious thing and is not available: the statement is static,
+-- and an empty collection makes it `IN ()`, which SQLite will not parse.
+--
+-- Domains have no multi form here. The column is itself a delimited list, so "any of these" is a
+-- set intersection and SQL cannot iterate both sides in one predicate -- see `SqlCardStore.search`,
+-- which runs this once per chosen domain and merges.
 searchPrintings:
 SELECT payload FROM printing
 WHERE game = :game
@@ -134,7 +146,9 @@ WHERE game = :game
   AND (:text IS NULL OR name_folded LIKE '%' || :text || '%')
   AND (:excludeText IS NULL OR name_folded NOT LIKE '%' || :excludeText || '%')
   AND (:cardType IS NULL OR card_type = :cardType)
+  AND (:cardTypes IS NULL OR (card_type IS NOT NULL AND instr('|' || :cardTypes || '|', '|' || card_type || '|') > 0))
   AND (:rarity IS NULL OR rarity = :rarity)
+  AND (:rarities IS NULL OR (rarity IS NOT NULL AND instr('|' || :rarities || '|', '|' || rarity || '|') > 0))
   AND (:maxCost IS NULL OR (cost IS NOT NULL AND cost <= :maxCost))
   AND (:minCost IS NULL OR (cost IS NOT NULL AND cost >= :minCost))
   AND (:domain IS NULL OR (domains IS NOT NULL AND domains LIKE '%' || :domain || '%'))

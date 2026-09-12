@@ -195,9 +195,14 @@ class InMemorySetRecordStore(
 		val vName = card.text.name.lowercase()
 		if (!text.isNullOrBlank() && !vName.contains(text!!.lowercase())) return false
 		if (!excludeText.isNullOrBlank() && vName.contains(excludeText!!.lowercase())) return false
-		if (cardType != null && card.classification.type != cardType) return false
-		if (rarity != null && card.classification.rarity != rarity) return false
-		if (domain != null && card.classification.domains.none { it.equals(domain, true) }) return false
+		// Any of the chosen values, not all of them: one axis is an OR, like the card grid's.
+		if (cardTypes.isNotEmpty() && card.classification.type !in cardTypes) return false
+		if (rarities.isNotEmpty() && card.classification.rarity !in rarities) return false
+		if (domains.isNotEmpty() &&
+			card.classification.domains.none { vHeld -> domains.any { it.equals(vHeld, true) } }
+		) {
+			return false
+		}
 		// Unknown is not zero, which is the one rule worth keeping in step with the SQL.
 		val vCost = card.attributes.cost
 		if (minCost != null && (vCost == null || vCost < minCost!!)) return false

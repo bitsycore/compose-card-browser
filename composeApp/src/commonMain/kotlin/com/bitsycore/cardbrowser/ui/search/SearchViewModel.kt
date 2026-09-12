@@ -150,11 +150,27 @@ class SearchViewModel(
 		mRepository.setList(mArgs.game, vLanguage).collectLatest { vSnapshot ->
 			vSnapshot.value?.let { vLatest = it }
 		}
-		// One set when the search was opened from inside it, every set otherwise. Narrowing the
-		// list is the whole of the scoping: both search paths take it as the ground they cover.
-		mSets = vLatest.orEmpty().filter { mArgs.setId == null || it.id.qualified == mArgs.setId }
-		mSets.singleOrNull()?.takeIf { mArgs.setId != null }?.let {
-			dispatch(SearchContract.Intent.ScopedToSet(it.name))
+		mSets = vLatest.orEmpty()
+
+		// Which sets the filter may point at: the ones with something stored, because a set nobody
+		// has downloaded cannot match and a chip for it would be a filter that always answers
+		// nothing. Opened from inside a set, that set starts ticked -- a filter rather than a
+		// scope, so it can be removed to widen the search without leaving the screen.
+		val vSaved = mRepository.savedSetIds(mArgs.game, mSets, vLanguage)
+		dispatch(
+			SearchContract.Intent.SetOptionsLoaded(
+				mSets.filter { it.id.qualified in vSaved }
+					.map { SearchContract.SetChoice(it.id.qualified, it.name) },
+			),
+		)
+		mArgs.setId?.takeIf { vId -> mSets.any { it.id.qualified == vId } }?.let { vId ->
+			if (stateFlow.value.filter.setIds.isEmpty()) {
+				dispatch(
+					SearchContract.Intent.FilterChanged(
+						stateFlow.value.filter.copy(setIds = setOf(vId)),
+					),
+				)
+			}
 		}
 	}
 
@@ -237,7 +253,13 @@ class SearchViewModel(
 					text = state.submitted.takeIf { it.isNotBlank() },
 					language = mPreferences.preferences.value.primaryLanguage,
 				),
-				knownSets = mSets,
+				// The sets the filter names, or all of them. This is what the set chips do: the
+				// coverage the search reports counts the same list, so a narrowed search says it
+				// searched what it was asked for rather than reporting a shortfall.
+				knownSets = state.filter.setIds
+					.takeIf { it.isNotEmpty() }
+					?.let { vIds -> mSets.filter { it.id.qualified in vIds } }
+					?: mSets,
 			)
 			dispatch(
 				SearchContract.Intent.Loaded(

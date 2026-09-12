@@ -43,7 +43,13 @@ class SearchFilterRenderer {
 					submitted = "annie",
 					facets = vFacets,
 					isAdvancedOpen = true,
-					filter = CardSearchFilter(excludeText = "fiery", rarity = "Epic", maxCost = 4),
+					filter = CardSearchFilter(
+						excludeText = "fiery",
+						// Two rarities, because one axis is an OR now and the chips have to show
+						// both.
+						rarities = setOf("Epic", "Rare"),
+						maxCost = 4,
+					),
 					isProviderSearchable = false,
 				),
 				dispatch = {},

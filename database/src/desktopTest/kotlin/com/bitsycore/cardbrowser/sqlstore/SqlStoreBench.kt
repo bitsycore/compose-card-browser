@@ -91,9 +91,9 @@ class SqlStoreBench {
 			game = "magic",
 			text = "card",
 			excludeText = "77",
-			cardType = "Creature",
+			cardTypes = setOf("Creature"),
 			maxCost = 4,
-			domain = "fury",
+			domains = setOf("fury"),
 			limit = 200,
 		)
 		println("--- filtered cross-set search: %.2f ms  (%d hits of %,d rows)".format(

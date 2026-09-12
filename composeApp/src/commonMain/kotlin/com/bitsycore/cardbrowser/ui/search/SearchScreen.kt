@@ -80,6 +80,7 @@ import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.ui.text.style.TextOverflow
 import com.bitsycore.cardbrowser.ui.common.AppIcons
+import com.bitsycore.cardbrowser.ui.cards.CardGridContract.toggle
 import com.bitsycore.cardbrowser.ui.common.FilterSection
 import com.bitsycore.cardbrowser.ui.common.FilterValueChip
 import com.bitsycore.cardbrowser.ui.common.domainColourOf
@@ -153,8 +154,10 @@ fun SearchContent(
 		topBar = {
 			TopAppBar(
 				title = {
+					val vOneSet = vState.filter.setIds.singleOrNull()
+						?.let { vId -> vState.setOptions.firstOrNull { it.id == vId }?.name }
 					Text(
-						text = vState.scopedSetName
+						text = vOneSet
 							?.let { "Search $it" }
 							?: "Search ${vState.game?.shortName.orEmpty()}",
 						maxLines = 1,
@@ -222,8 +225,8 @@ fun SearchContent(
 					)
 
 					vState.isIdle -> EmptyState(
-						if (vState.scopedSetName != null) {
-							"Search the cards you have downloaded from ${vState.scopedSetName}."
+						if (vState.filter.setIds.isNotEmpty()) {
+							"Search the cards you have downloaded from the sets you picked."
 						} else if (vState.isProviderSearchable) {
 							"Search every ${vState.game?.shortName.orEmpty()} set by card name."
 						} else {
@@ -527,14 +530,26 @@ private fun ActiveSearchFilterChips(
 				onFilterChanged(vFilter.copy(excludeText = null))
 			}
 		}
-		vFilter.cardType?.let {
-			RemovableFilterChip(it) { onFilterChanged(vFilter.copy(cardType = null)) }
+		vFilter.setIds.forEach { vId ->
+			val vName = state.setOptions.firstOrNull { it.id == vId }?.name ?: vId
+			RemovableFilterChip(vName) {
+				onFilterChanged(vFilter.copy(setIds = vFilter.setIds - vId))
+			}
 		}
-		vFilter.rarity?.let {
-			RemovableFilterChip(it) { onFilterChanged(vFilter.copy(rarity = null)) }
+		vFilter.cardTypes.forEach { vValue ->
+			RemovableFilterChip(vValue) {
+				onFilterChanged(vFilter.copy(cardTypes = vFilter.cardTypes - vValue))
+			}
 		}
-		vFilter.domain?.let {
-			RemovableFilterChip(it) { onFilterChanged(vFilter.copy(domain = null)) }
+		vFilter.rarities.forEach { vValue ->
+			RemovableFilterChip(vValue) {
+				onFilterChanged(vFilter.copy(rarities = vFilter.rarities - vValue))
+			}
+		}
+		vFilter.domains.forEach { vValue ->
+			RemovableFilterChip(state.game?.domainFor(vValue)?.label ?: vValue) {
+				onFilterChanged(vFilter.copy(domains = vFilter.domains - vValue))
+			}
 		}
 		if (vFilter.minCost != null || vFilter.maxCost != null) {
 			val vLabel = state.game?.vocabulary?.cost ?: "Cost"
@@ -579,16 +594,29 @@ private fun SearchFilterSheet(
 			modifier = Modifier.fillMaxWidth(),
 		)
 
-		// One value at a time per axis, which is what the store's query takes. Tapping the chip
-		// that is already on turns it off, and that is the whole of what "Any" used to be.
+		// Which sets to look in. Empty means every set with something stored, which is what a
+		// search from the set list starts as; opening the search from inside a set starts with
+		// that one ticked, and un-ticking it widens the search rather than leaving the screen.
+		if (state.setOptions.isNotEmpty()) {
+			FilterSection("Sets") {
+				state.setOptions.forEach { vSet ->
+					FilterValueChip(vSet.name, vSet.id in state.filter.setIds) {
+						onFilterChanged(
+							state.filter.copy(setIds = state.filter.setIds.toggle(vSet.id)),
+						)
+					}
+				}
+			}
+		}
+
+		// Several values on one axis are an OR, as they are in the card grid: tapping adds, tapping
+		// again removes, and nothing selected means the axis asks nothing.
 		if (vFacets != null && vFacets.cardTypes.isNotEmpty()) {
 			FilterSection(state.game?.vocabulary?.cardType ?: "Type") {
 				vFacets.cardTypes.forEach { vValue ->
-					FilterValueChip(vValue, state.filter.cardType == vValue) {
+					FilterValueChip(vValue, vValue in state.filter.cardTypes) {
 						onFilterChanged(
-							state.filter.copy(
-								cardType = vValue.takeIf { state.filter.cardType != vValue },
-							),
+							state.filter.copy(cardTypes = state.filter.cardTypes.toggle(vValue)),
 						)
 					}
 				}
@@ -599,13 +627,11 @@ private fun SearchFilterSheet(
 				vFacets.rarities.forEach { vValue ->
 					FilterValueChip(
 						label = vValue,
-						isSelected = state.filter.rarity == vValue,
+						isSelected = vValue in state.filter.rarities,
 						colour = rarityColourOf(state.game, vValue),
 					) {
 						onFilterChanged(
-							state.filter.copy(
-								rarity = vValue.takeIf { state.filter.rarity != vValue },
-							),
+							state.filter.copy(rarities = state.filter.rarities.toggle(vValue)),
 						)
 					}
 				}
@@ -621,13 +647,11 @@ private fun SearchFilterSheet(
 				}.forEach { vValue ->
 					FilterValueChip(
 						label = state.game?.domainFor(vValue)?.label ?: vValue,
-						isSelected = state.filter.domain == vValue,
+						isSelected = vValue in state.filter.domains,
 						colour = domainColourOf(state.game, vValue),
 					) {
 						onFilterChanged(
-							state.filter.copy(
-								domain = vValue.takeIf { state.filter.domain != vValue },
-							),
+							state.filter.copy(domains = state.filter.domains.toggle(vValue)),
 						)
 					}
 				}

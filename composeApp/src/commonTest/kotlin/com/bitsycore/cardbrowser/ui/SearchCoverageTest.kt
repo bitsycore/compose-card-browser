@@ -3,6 +3,7 @@ package com.bitsycore.cardbrowser.ui
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.GameId
+import com.bitsycore.cardbrowser.data.cache.CardSearchFilter
 import com.bitsycore.cardbrowser.data.repository.SearchScope
 import com.bitsycore.cardbrowser.ui.search.SearchContract.UiState
 import kotlin.test.Test
@@ -36,20 +37,21 @@ class SearchCoverageTest {
 	)
 
 	@Test
-	fun `a search confined to one set has no coverage to report`() {
-		// The notice exists to say how much of a game was reached. Inside a set there is no such
-		// gap -- the set is the whole of what was asked about -- and the title already names it.
+	fun `a search confined to chosen sets has no coverage to report`() {
+		// The notice exists to say how much of a game the search could reach. Once the user has
+		// named the sets, "3 of 120" is not a shortfall -- it is the filter doing as it was told,
+		// and the chips already say which sets those are.
 		val vScoped = UiState(
 			results = listOf(),
 			searchedSetCount = 1,
 			knownSetCount = 120,
 			scope = SearchScope.LOCAL_CACHED_SETS,
-			scopedSetName = "Origins",
+			filter = CardSearchFilter(setIds = setOf("p:origins")),
 		)
 
 		assertNull(vScoped.coverageNotice)
 		assertNotNull(
-			vScoped.copy(scopedSetName = null).coverageNotice,
+			vScoped.copy(filter = CardSearchFilter()).coverageNotice,
 			"across a game, the same numbers do have something to report",
 		)
 	}
