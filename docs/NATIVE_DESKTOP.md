@@ -16,31 +16,49 @@ one.
 
 ## Where it has got to
 
-**Every module below the UI compiles natively, on all three platform families.** All 22 of them —
-`:core`, `:data`, `:database`, the ten `:games:*` and the eight `:providers:*` — build for
-`mingwX64`, `linuxX64` and `macosArm64`, verified rather than assumed.
+**Every module compiles for `mingwX64`, including `:composeApp`.** That is new as of 2026-09-12:
+`compose-desktop-native` `1.12.0-3` publishes the mirrors that were missing, so every dependency
+this app declares now resolves natively. The table of blockers that used to be here is empty.
 
-That is the part worth knowing, because it says the porting problem is not in this codebase's own
-layers. The data stack in particular came through untouched: coroutines, serialization, datetime,
-Okio, Ktor and Koin's core all publish for all four targets, and so does SQLDelight — including a
-`native-driver` for `mingwX64` and `linuxX64`, which was the piece most likely to have been
-Apple-only.
+What is left is the *link*, and it is one library:
 
-`:composeApp` is the one module that does not build, and the reasons are all other people's
-artifacts.
+```
+ld.lld: error: undefined symbol: sqlite3_step
+ld.lld: error: undefined symbol: sqlite3_open_v2
+...
+```
+
+Twenty undefined symbols, every one of them SQLite's. Nothing from Compose, Skiko, SDL, Coil, Koin,
+Pulse or Navigation is missing — skiko's DLL and ICU data are provisioned by the bridge's own tasks
+and the rest links. SQLDelight's `native-driver` sits on SQLiter, whose cinterop declares
+`sqlite3.h` and **no implementation**: Apple targets get libsqlite3 from the SDK, Linux from the
+distribution, and Windows from nowhere. Its manifest carries `linkerOpts` for `linux_x64` and
+`macos_x64` and none for `mingw_x64`.
+
+So a Windows native binary needs a SQLite to link against, from somewhere. Who supplies it is the
+open question — this repository vendoring the amalgamation and compiling it, or
+`compose-desktop-native` publishing it the way it already publishes skiko.
 
 ## What the bridge plugin substitutes
 
-Read out of `compose-desktop-native-bridge-0.4.2.jar` rather than guessed, because guessing the
+Read out of `compose-desktop-native-bridge-1.12.0-3.jar` rather than guessed, because guessing the
 group name got this wrong once:
 
 - `org.jetbrains.compose.*` → `com.bitsycore.compose.*` for `animation`, `animation-core`,
   `animation-graphics`, `components-resources`, `foundation`, `foundation-layout`, `material3`,
   `material-ripple`, `ui`, `ui-backhandler`, `ui-geometry`, `ui-graphics`, `ui-text`,
   `ui-tooling-preview`, `ui-unit`, `ui-util`.
-- `org.jetbrains.androidx.navigation3:navigation3-ui` → **`com.bitsycore.navigation3:navigation3-ui`**.
+- `org.jetbrains.androidx.navigation3:navigation3-ui` → `com.bitsycore.navigation3:navigation3-ui`.
+- `io.coil-kt.coil3:*` → `com.bitsycore.coil3:*` — `coil`, `coil-core`, `coil-compose`,
+  `coil-compose-core`, `coil-network-core`, `coil-network-ktor3`, `coil-svg`.
+- `io.insert-koin:koin-compose`, `-viewmodel`, `-navigation3`, `koin-core-viewmodel` →
+  `com.bitsycore.koin:*`.
+- `com.bitsycore.lib:pulse`, `-compose`, `-viewmodel`, `-savedstate` → `com.bitsycore.pulse:*`.
 
 `org.jetbrains.compose.runtime:runtime` needs no mirror — JetBrains already publishes it natively.
+
+The bridge version tracks Compose: `bridge-version.properties` inside the jar reads
+`compose=1.12.0`, `composeMaterial3=1.12.0-alpha03`, which is exactly what this project pins.
 
 The one non-obvious part of the setup: **the plugin has to be applied to every module that
 *resolves* Compose klibs, not only to those that declare them.** The `:providers:*` modules depend
@@ -48,88 +66,58 @@ on a `:games:*` module, which depends on `:games:api`, which is where the Compos
 so each provider resolves Compose transitively and fails without the bridge, despite never
 mentioning Compose itself.
 
-## The Skia fork, and the version that is not there
+### The one substitution that is ours
 
-`mingwX64` needs the fork because upstream Skiko supports macOS and Linux but not MinGW. This is
-**not** an authentication problem, which is what it first looked like:
+`org.jetbrains.androidx.navigationevent:navigationevent-compose` is not in the bridge's table, and
+does not need to be. JetBrains' wrapper is macOS-only on every version it has published; Google's
+own `androidx.navigationevent:navigationevent-compose` publishes `mingwx64`, `linuxx64`,
+`linuxarm64` and `macosarm64` — including at `1.1.0`, which is the version this project already
+pins, and every version back to `1.0.0-alpha06`. Checked against Google's maven on 2026-09-12.
+So the root build substitutes the coordinates and keeps the version, under the flag only. Nothing
+is forked.
 
-- bridge `0.4.2` asks for `com.bitsycore.skiko:skiko:0.150.1-mingw.1`
-- `maven.bitsycore.com` publishes `0.150.1-mingw.2`, and nothing else
+## The Skia fork
 
-So resolution fails on a version that was never published. Forcing the published one compiles, and
-the root build does exactly that under the flag — see `SKIKO_MINGW_FORK` in `build.gradle.kts`.
-**Delete that block when a bridge release points at a version that exists.**
+`mingwX64` needs it because upstream Skiko supports macOS and Linux but not MinGW. Bridge
+`1.12.0-3` asks for `com.bitsycore.skiko:skiko:0.150.1-mingw.2`, which is what
+`maven.bitsycore.com` publishes, so there is nothing to do. The forced version this build carried
+for bridge `0.4.2` — which asked for a `mingw.1` that was never published — is deleted.
 
-## What is still missing
+## What this side had to write, and did
 
-Measured on 2026-09-11 against the versions this project pins, by resolving `:composeApp` for
-`mingwX64` — the hardest target — after the skiko pin above.
+Both of the pieces that used to be listed as missing are written. Neither has been *run*.
 
-| Dependency | What it needs | Whose |
-| --- | --- | --- |
-| `com.bitsycore.lib:pulse`, `-viewmodel`, `-compose` | native targets published at all | ours |
-| `io.coil-kt.coil3:coil-compose`, `-network-ktor3`, `-svg` | a mirror + an entry in the bridge's table | upstream, via a mirror |
-| `io.insert-koin:koin-compose`, `-viewmodel` | same | upstream, via a mirror |
-| `org.jetbrains.androidx.navigationevent:navigationevent-compose` | same | upstream, via a mirror |
+- **`NativeDesktopDriverFactory`** (`:database`, `nativeDesktopMain`) — SQLDelight's
+  `native-driver`, the same one iOS uses. It hands SQLiter an explicit `basePath`, because the
+  default is not where `AppStorage` says the cache lives, and sets WAL, `synchronous=FULL`, foreign
+  keys and the busy timeout as *connection configuration* rather than as pragmas. That is the
+  lesson from `DesktopDriverFactory`: SQLiter pools connections, and a pragma sent once configures
+  one of them.
+- **`platformModule()`** (`:composeApp`, `nativeDesktopMain`) — the same dotted directory under
+  `$HOME` the JVM desktop uses, deliberately, so the two desktop builds read one cache and can be
+  compared. The link opener picks its command from `Platform.osFamily`, and refuses a URL rather
+  than escaping it if it carries anything a shell would read as more than text: the consumer is
+  `system()`, and a card name is provider-supplied.
 
-Notes:
-
-- **Pulse gates everything.** It publishes no native targets whatsoever, not even the `macosArm64`
-  that every upstream dependency here manages, so no target can link until it does.
-- **Coil's Linux story is partial and its Windows story is not.** `coil-network-ktor3` and
-  `coil-svg` do publish `linuxX64`/`linuxArm64`; `coil-compose` is macOS-only, and none of the three
-  publishes `mingwX64`.
-- **`navigationevent-compose` may need no fork at all.** Google's own
-  `androidx.navigationevent:navigationevent-compose` publishes `mingwX64`, `linuxX64`, `linuxArm64`
-  and `macosArm64` from `1.2.0-alpha04` — checked on Google's maven, 2026-09-12. What this project
-  depends on is the JetBrains multiplatform wrapper,
-  `org.jetbrains.androidx.navigationevent:navigationevent-compose`, which tops out at `1.1.0` and is
-  macOS-only on *every* version it has published. So the artifact exists; what is missing is a
-  wrapper release that exposes it, or a substitution pointing at Google's coordinates directly.
-  Worth trying before forking anything.
-- **`navigationevent-compose` is predictive back.** NavigationEvent is the multiplatform successor
-  to Android's `OnBackPressedDispatcher`, and the `-compose` artifact is the binding `NavDisplay`
-  uses to drive a back *gesture* — which is what `predictivePopTransitionSpec` in `App.kt` renders.
-  No code here names it: it is declared because Navigation 3 needs it, and it also arrives
-  transitively through `navigation3-ui`. On a desktop with no back gesture it does nothing at
-  runtime, but `NavDisplay` still has to link against it.
-- **`material-icons-core` is gone**, so it is off this list. Every icon is generated from Material
-  Symbols into `AppIcons` by `composeApp/tools/gensymbols.py`, and the app now depends on no icon
-  library on any platform. That turned out to be more than a dozen glyphs: the twenty-four icons
-  already embedded were built with `materialIcon`/`materialPath`, which are *from* that library, so
-  dropping it broke icons that had nothing to do with it. All thirty-six are built from
-  `ImageVector.Builder` now.
-
-**macOS is the closest**: every upstream dependency already publishes `macosArm64`, so it is blocked
-on Pulse alone.
+The dark title bar is still JVM-only: it uses JNA. The same `DwmSetWindowAttribute` call is
+cinterop on Kotlin/Native, and rather less work than the JVM version was.
 
 ## The plan for the rest
 
-Settled with the project owner on 2026-09-11:
+Settled with the project owner on 2026-09-11 and now delivered: pulse got native targets, and
+coil, koin-compose and navigation3-ui are forks the bridge redirects to. What that plan did *not*
+cover is SQLite on Windows, which is the single open item above.
 
-| Dependency | Plan |
-| --- | --- |
-| `com.bitsycore.lib:pulse` | a Desktop Native compatibility target, in its own repository |
-| `io.coil-kt.coil3:*` | fork and redirect, from compose-desktop-native |
-| `io.insert-koin:koin-compose`, `-viewmodel` | fork and redirect, from compose-desktop-native |
-| `org.jetbrains.androidx.navigationevent:navigationevent-compose` | fork and redirect — but try redirecting to Google's artifact first, which already publishes all four |
+## What is still unknown
 
-Each of the bottom three is an entry in the bridge's substitution table, alongside the
-`navigation3-ui` one that is already there — so nothing in this repository has to change for them to
-start resolving.
+**Nothing here has run.** `:composeApp` compiles for `mingwX64` and links everything except SQLite;
+no binary has been produced, so the window, the storage paths, the link opener and the card store
+are all unexercised. The first run is likely to find things, in the way the first Android run of
+the card store did.
 
-## What is still to write on this side
-
-Two pieces of this project's own code, both small and both flagged in `Main.native.kt`:
-
-- **`platformModule()` has no native-desktop actual.** It supplies `AppStorage`'s cache and
-  preferences roots and a `LinkOpener`. Both are per-platform by nature.
-- **`DriverFactory` has no native-desktop implementation.** SQLDelight publishes the driver for
-  these targets, so this is a class, not a research problem.
-
-The dark title bar is a third, smaller one: it uses JNA, which is JVM-only. The same
-`DwmSetWindowAttribute` call is cinterop on Kotlin/Native, and rather less work than the JVM version
-was.
+`linuxX64`, `linuxArm64` and `macosArm64` have not been linked from here either — only compiled.
+Linux is likely to link where Windows does not, since SQLiter's manifest carries `linkerOpts` for
+it and a distribution supplies `libsqlite3`; that is a guess and is written down as one.
 
 ## Why the targets are opt-in rather than always on
 
