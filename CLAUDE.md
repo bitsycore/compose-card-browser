@@ -110,7 +110,7 @@ Follow the user's global conventions (Spirtech prefixes, tabs, KDoc). Specifical
 
 ```bash
 ./gradlew build -x lint          # everything, all four targets, including both iOS ones
-./gradlew desktopTest            # the deterministic suite (513 tests on 2026-09-12, 11 skipped)
+./gradlew desktopTest            # the deterministic suite (515 tests on 2026-09-12, 11 skipped)
 ./gradlew :androidApp:assembleDebug
 ./gradlew :composeApp:run        # desktop
 ```
@@ -220,6 +220,24 @@ its groups the second. Ktor's `ContentNegotiation` is registered for `applicatio
 type ... but was SourceByteReadChannel"* for the third, which reads like a broken DTO and is not.
 That adapter reads the body as text and parses it itself; do not "fix" it back.
 
+**A pragma that returns a row must be run as a query, and a pragma is per connection.** Two
+separate traps, found together when the app crashed on its first launch on a phone.
+
+- Android's `execute` is `SQLiteStatement.executeUpdateDelete`, and the framework refuses any
+  statement that returns rows: *"Queries can be performed using SQLiteDatabase query or rawQuery
+  methods only."* `PRAGMA journal_mode=WAL` returns a row. So does `PRAGMA busy_timeout=5000`;
+  `synchronous` and `foreign_keys` do not when setting. The JVM driver minds none of it, so every
+  desktop test passed. Worse, the recovery path could not tell this from corruption: it discarded
+  the database, opened a clean one, hit the same pragma and crashed with a SQLite stack trace on an
+  empty file. `CardStoreFactory.pragma` is the query form, and it reads the row -- a lazy cursor
+  whose row is never read is a pragma that quietly did nothing.
+- Every pragma except `journal_mode` is per *connection*, and a file-backed `JdbcSqliteDriver` uses
+  `ThreadedConnectionManager`, which opens a connection per statement and closes it again. So the
+  durability pragmas applied to a connection that was gone by the next query: `busy_timeout` read
+  back as sqlite-jdbc's 3000 and **`foreign_keys` was off**. Desktop sets them as connection
+  properties now (`DesktopDriverFactory.DURABILITY`). `StoreDurabilityTest` reads all four back off
+  a fresh connection, which is the only way to tell a pragma that ran from one that did not.
+
 **One corner of a row, one animation.** The arranging toggle has now bounced three times, and each
 time the handle that appears looked like the culprit and was not. What actually bounced was a
 *second* layout change happening on the same corner at the same time: a row inset easing 16dp to 8dp
@@ -317,11 +335,10 @@ nobody re-discovers them the slow way. Delete an entry when it stops being true.
 
 **Unverified, and why**
 
-- **The card store has never been opened on Android or iOS.** Both drivers compile; neither has
-  run. The desktop one is covered by tests that open, reopen, damage and recover a real file, and
-  `CardStoreFactory` discards anything that fails `integrity_check` -- but that path has only been
-  exercised on a JVM. The first launch on a phone also runs the one-off cleanup of a pre-store
-  install, which nothing can rehearse.
+- **The card store has now been opened on Android once, and it crashed** -- see the pragma trap
+  above. That is fixed, and the fix has *not* been confirmed on a device yet; nor has the one-off
+  cleanup of a pre-store install, which nothing can rehearse. `AndroidDriverFactory.DurableCallback`
+  is unverified for the same reason. iOS has still never opened it at all.
 - **iOS has never been linked or run.** Kotlin compiles for both iOS targets in every build; the
   framework, the Swift shell and a simulator run need a Mac.
 - **Scryfall's live suite has not had a clean run** since it tripped its own rate limit: 12 checks

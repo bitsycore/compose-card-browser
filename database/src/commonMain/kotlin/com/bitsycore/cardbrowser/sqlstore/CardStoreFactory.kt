@@ -79,15 +79,27 @@ class CardStoreFactory(private val mDriverFactory: DriverFactory) {
 	 * thing that turns "this file is damaged" into a fact before the app has built a screen on
 	 * top of it. A truncated or garbage file usually fails at `create` instead, which the caller
 	 * above treats identically.
+	 *
+	 * `internal` rather than private so a test can run it against a driver it holds and then ask
+	 * that same connection what the pragmas actually did -- `busy_timeout` and `foreign_keys` are
+	 * per-connection and cannot be observed from anywhere else.
 	 */
-	private fun verify(driver: SqlDriver) {
+	internal fun verify(driver: SqlDriver) {
 		// Prevention, in the order it matters. Recovery below is the net; these are the reasons it
 		// should rarely be needed.
+		//
+		// All but `journal_mode` are per *connection*, and a driver is not obliged to keep one.
+		// Desktop's does not -- `ThreadedConnectionManager` opens one per statement and closes it
+		// again -- so these three reached a connection that was gone by the next query, and
+		// `foreign_keys` read back as off. That platform sets them as connection properties instead,
+		// on every connection it opens; see `DesktopDriverFactory.DURABILITY`. They stay here for
+		// the drivers that do hold one connection, and because `journal_mode` has to be run
+		// somewhere.
 		//
 		// WAL: a process killed mid-transaction leaves that transaction unapplied and everything
 		// before it intact. This is the property per-file atomic replacement gave for free, and
 		// losing it was the strongest argument against migrating at all.
-		driver.execute(null, "PRAGMA journal_mode=WAL", 0)
+		driver.pragma("PRAGMA journal_mode=WAL")
 		// FULL, not NORMAL. Under WAL, `synchronous=NORMAL` does not fsync on commit -- it is
 		// durable against a process crash but *not* against the device losing power, which on a
 		// phone is an ordinary Tuesday rather than an edge case. The cost is paid per transaction,
@@ -96,21 +108,12 @@ class CardStoreFactory(private val mDriverFactory: DriverFactory) {
 		// A second writer waits instead of failing. The download queue runs one job at a time, but
 		// the storage screen reads while it does, and "database is locked" surfacing as a failed
 		// download would be a bug with no cause a user could see.
-		driver.execute(null, "PRAGMA busy_timeout=5000", 0)
+		driver.pragma("PRAGMA busy_timeout=5000")
 		// Rows cannot outlive the set that owns them. Eviction deletes both in one transaction, so
 		// this is a belt on a brace -- but an orphaned printing is invisible: it would answer a
 		// cross-set search from a set the app would say it does not have.
 		driver.execute(null, "PRAGMA foreign_keys=ON", 0)
-		val vResult = driver.executeQuery(
-			identifier = null,
-			sql = "PRAGMA integrity_check",
-			mapper = { vCursor ->
-				app.cash.sqldelight.db.QueryResult.Value(
-					if (vCursor.next().value) vCursor.getString(0) else null,
-				)
-			},
-			parameters = 0,
-		).value
+		val vResult = driver.pragma("PRAGMA integrity_check")
 		// SQLite answers the single string "ok" for a sound database and a list of problems
 		// otherwise. Anything that is not "ok" -- including nothing at all -- is a discard.
 		if (vResult != "ok") {
@@ -118,3 +121,43 @@ class CardStoreFactory(private val mDriverFactory: DriverFactory) {
 		}
 	}
 }
+
+/**
+ * Runs a pragma that answers with a row, and returns its answer.
+ *
+ * ## Why this is not `execute`
+ *
+ * Because on Android `execute` is `SQLiteStatement.executeUpdateDelete`, and the framework refuses
+ * any statement that returns rows:
+ *
+ * ```
+ * SQLiteException: unknown error (code 0 SQLITE_OK): Queries can be performed using
+ * SQLiteDatabase query or rawQuery methods only.
+ * ```
+ *
+ * That is not a corrupt database and there is nothing to recover from -- but the recovery path
+ * cannot tell, so it discarded the file, opened a clean one, hit the same pragma, and the second
+ * failure propagated. The app crashed on its first launch on a phone, on an empty database, with a
+ * stack trace about SQLite. It had never been opened on a device; the JVM driver does not mind
+ * either form, so every desktop test passed.
+ *
+ * **Which pragmas return a row is a fact about each pragma, not a style choice.** `journal_mode`
+ * and `busy_timeout` answer with the resulting value even when setting it; `synchronous` and
+ * `foreign_keys` answer only when read. So the first two go through here and the other two stay on
+ * `execute`. Getting this backwards on Android fails loudly one way and, the other way, runs a
+ * query that sets nothing.
+ *
+ * The row is read rather than discarded, and that matters: a `Cursor` is lazy, so a mapper that
+ * never calls `next()` can leave the statement unexecuted -- a pragma that silently did nothing,
+ * which is the failure this whole class exists to avoid.
+ */
+private fun SqlDriver.pragma(sql: String): String? = executeQuery(
+	identifier = null,
+	sql = sql,
+	mapper = { vCursor ->
+		app.cash.sqldelight.db.QueryResult.Value(
+			if (vCursor.next().value) vCursor.getString(0) else null,
+		)
+	},
+	parameters = 0,
+).value
