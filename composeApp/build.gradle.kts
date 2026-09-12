@@ -58,7 +58,23 @@ kotlin {
 			val vSqliteTask = project.extra["sqliteMingwTask"]!!
 			binaries.all {
 				linkerOpts(vSqlite.get().asFile.absolutePath)
-				linkTaskProvider.configure { dependsOn(vSqliteTask) }
+				linkTaskProvider.configure {
+					dependsOn(vSqliteTask)
+					// Declared as *inputs*, not only as an ordering. Anything handed to the linker
+					// through `linkerOpts` is a string as far as Gradle is concerned, so a changed
+					// library or a changed icon leaves the previous binary in place and calls the
+					// link up to date. That is exactly how the app icon came to be embedded from a
+					// file this build had stopped pointing at: the object was rebuilt, the exe was
+					// not, and nothing said so.
+					inputs.file(vSqlite).withPropertyName("sqliteStaticLibrary")
+					// By path rather than by task: a `Task` cannot be captured in a provider
+					// under the configuration cache. The path is the bridge's, and this whole
+					// block goes away when the plugin declares its own object as a link input.
+					dependsOn("compileComposeNativeIconResource")
+					inputs.files(
+						project.layout.buildDirectory.file("composeNativeAppIcon/app_icon.o"),
+					).withPropertyName("windowsIconResource")
+				}
 			}
 		}
 		linuxX64()
