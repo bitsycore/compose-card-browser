@@ -220,6 +220,19 @@ its groups the second. Ktor's `ContentNegotiation` is registered for `applicatio
 type ... but was SourceByteReadChannel"* for the third, which reads like a broken DTO and is not.
 That adapter reads the body as text and parses it itself; do not "fix" it back.
 
+**One corner of a row, one animation.** The arranging toggle has now bounced three times, and each
+time the handle that appears looked like the culprit and was not. What actually bounced was a
+*second* layout change happening on the same corner at the same time: a row inset easing 16dp to 8dp
+beside the handle's spring (game picker), a download button collapsing its width at the far end of
+the row (set list), and a start padding stepping 16dp to 4dp in a single frame while the handle was
+still opening (set list again). Two animations over two different distances never stay in
+proportion, and an instant step against a spring is worse -- it reads as a snap. `AnimatedVisibility`
+in a `Row` already slides its content in from outside: `expandHorizontally` defaults to
+`expandFrom = End`. It does not need help, and help is what breaks it. `ArrangingMotionTest` follows
+the set mark's left edge frame by frame through the transition; the resting frame is part of the
+track on purpose, because an instant step lands on the very first frame and everything after it
+looks monotone.
+
 **`LazyVerticalGrid` throws on a duplicate key** rather than degrading, so a provider that issues
 two records with the same id is a crash rather than a cosmetic bug. Wuthering Waves shipped exactly
 that: its printed card codes are not unique, several being carried by two records with different
