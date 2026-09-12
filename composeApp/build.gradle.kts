@@ -6,6 +6,13 @@ plugins {
 	alias(libs.plugins.kotlinSerialization)
 }
 
+// SQLite for the Windows native binary: SQLiter declares `sqlite3.h` and supplies no
+// implementation, and MinGW has no system one. See the file for what it fetches and how it is
+// checked -- and note it is applied under the flag only, so an ordinary build never reads it.
+if (providers.gradleProperty("nativeDesktop").isPresent) {
+	apply(from = "sqlite-mingw.gradle.kts")
+}
+
 kotlin {
 	jvmToolchain(21)
 
@@ -37,7 +44,18 @@ kotlin {
 	// The native desktop targets, behind a switch. See :core for why they are opt-in, and
 	// docs/NATIVE_DESKTOP.md for what still has to land before this module can link.
 	if (providers.gradleProperty("nativeDesktop").isPresent) {
-		mingwX64 { binaries.executable { entryPoint = "com.bitsycore.cardbrowser.main" } }
+		mingwX64 {
+			binaries.executable { entryPoint = "com.bitsycore.cardbrowser.main" }
+			// SQLite, compiled by `sqlite-mingw.gradle.kts`, because SQLiter supplies none for
+			// this target and Windows has no system one.
+			@Suppress("UNCHECKED_CAST")
+			val vSqlite = project.extra["sqliteMingwLibrary"] as Provider<RegularFile>
+			val vSqliteTask = project.extra["sqliteMingwTask"]!!
+			binaries.all {
+				linkerOpts(vSqlite.get().asFile.absolutePath)
+				linkTaskProvider.configure { dependsOn(vSqliteTask) }
+			}
+		}
 		linuxX64 { binaries.executable { entryPoint = "com.bitsycore.cardbrowser.main" } }
 		linuxArm64 { binaries.executable { entryPoint = "com.bitsycore.cardbrowser.main" } }
 		macosArm64 { binaries.executable { entryPoint = "com.bitsycore.cardbrowser.main" } }
