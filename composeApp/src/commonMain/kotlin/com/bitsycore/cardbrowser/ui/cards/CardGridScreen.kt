@@ -95,7 +95,11 @@ import com.bitsycore.cardbrowser.ui.common.LoadingState
 import com.bitsycore.cardbrowser.data.repository.LanguageSubstitution
 import com.bitsycore.cardbrowser.ui.common.LanguageMenu
 import com.bitsycore.cardbrowser.ui.common.NoticeBanner
+import com.bitsycore.cardbrowser.ui.common.DomainChip
+import com.bitsycore.cardbrowser.ui.common.StatChip
 import com.bitsycore.cardbrowser.ui.common.sharedCardArt
+import com.bitsycore.cardbrowser.core.game.GameProfile
+import androidx.compose.foundation.layout.FlowRow
 import com.bitsycore.cardbrowser.ui.preview.PreviewData
 import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
@@ -207,7 +211,10 @@ fun CardGridContent(
 	LaunchedEffect(vState.cards.size) {
 		vSelected = vSelected.coerceIn(0, (vState.cards.size - 1).coerceAtLeast(0))
 	}
-	LaunchedEffect(vSelected, vState.viewMode) {
+	// Only while there *is* a cursor. Without the guard this ran on arrival with a selection of 0
+	// and scrolled a restored grid back to the top, which is what every back navigation did.
+	LaunchedEffect(vSelected, vState.viewMode, vCursorVisible) {
+		if (!vCursorVisible) return@LaunchedEffect
 		if (vState.viewMode == CardViewMode.LIST) {
 			if (vListState.layoutInfo.visibleItemsInfo.none { it.index == vSelected }) {
 				vListState.animateScrollToItem(vSelected)
@@ -221,12 +228,19 @@ fun CardGridContent(
 	// Scrolling it into view is worth doing for its own sake, and the shared-element transition needs
 	// it: a lazy grid only composes what is visible, so a tile that is not on screen is not there for
 	// the artwork to fly back to.
-	LaunchedEffect(focusedCardId, vState.cards) {
+	LaunchedEffect(focusedCardId, vState.cards, vState.viewMode) {
 		val vTarget = vState.cards.indexOfFirst { it.id.qualified == focusedCardId }
-		val vAlreadyVisible = vGridState.layoutInfo.visibleItemsInfo.any { it.index == vTarget }
-		if (vTarget >= 0 && !vAlreadyVisible) {
-			// Not animated: this happens while the screen is off-screen or arriving, and a scroll
-			// animation racing the transition is exactly the kind of thing that looks broken.
+		if (vTarget < 0) return@LaunchedEffect
+		// Whichever renderer is on screen. The list used to be left out, so returning to it in list
+		// mode left the row uncomposed and the artwork had nothing to fly back to.
+		//
+		// Not animated: this happens while the screen is off-screen or arriving, and a scroll
+		// animation racing the transition is exactly the kind of thing that looks broken.
+		if (vState.viewMode == CardViewMode.LIST) {
+			if (vListState.layoutInfo.visibleItemsInfo.none { it.index == vTarget }) {
+				vListState.scrollToItem(vTarget)
+			}
+		} else if (vGridState.layoutInfo.visibleItemsInfo.none { it.index == vTarget }) {
 			vGridState.scrollToItem(vTarget)
 		}
 	}
@@ -466,12 +480,19 @@ fun CardGridContent(
 					// The denominator for "4/352". Null where the set's size is unknown, which the
 					// row prints as a bare number rather than inventing one.
 					knownSetSize = vState.knownSetSize,
+					game = vState.game,
 					onOpenCard = { dispatch(CardGridContract.Intent.CardOpened(it)) },
 					contentPadding = vPadding,
 					selected = vSelected,
 					isCursorVisible = vCursorVisible,
 					onSelect = { vSelected = it },
-					onKeyboardUsed = { vCursorVisible = true },
+					// The cursor appears where the list already is, not at the top.
+					onKeyboardUsed = {
+						if (!vCursorVisible) {
+							vSelected = vListState.firstVisibleItemIndex
+							vCursorVisible = true
+						}
+					},
 					canTakeFocus = !vState.isSearchOpen,
 				)
 
@@ -484,7 +505,12 @@ fun CardGridContent(
 					selected = vSelected,
 					isCursorVisible = vCursorVisible,
 					onSelect = { vSelected = it },
-					onKeyboardUsed = { vCursorVisible = true },
+					onKeyboardUsed = {
+						if (!vCursorVisible) {
+							vSelected = vGridState.firstVisibleItemIndex
+							vCursorVisible = true
+						}
+					},
 					canTakeFocus = !vState.isSearchOpen,
 				)
 			}
@@ -604,6 +630,7 @@ private fun CardList(
 	listState: androidx.compose.foundation.lazy.LazyListState,
 	rowHeight: CardRowHeight,
 	knownSetSize: Int?,
+	game: GameProfile?,
 	onOpenCard: (CardPrinting) -> Unit,
 	contentPadding: PaddingValues,
 	selected: Int,
@@ -637,6 +664,7 @@ private fun CardList(
 				rowHeight = rowHeight,
 				knownSetSize = knownSetSize,
 				isSelected = isCursorVisible && vIndex == selected,
+				game = game,
 				onClick = { onOpenCard(vCard) },
 			)
 		}
@@ -650,6 +678,8 @@ private fun CardRow(
 	rowHeight: CardRowHeight,
 	knownSetSize: Int?,
 	isSelected: Boolean,
+	/** For a domain's own label and colour; `null` draws the raw key in the plain chip. */
+	game: GameProfile?,
 	onClick: () -> Unit,
 ) {
 	val vImageHeight = when (rowHeight) {
@@ -689,6 +719,9 @@ private fun CardRow(
 							744f / 1039f
 						},
 					)
+					// The other half of the detail screen's picture, exactly as the tile is:
+					// without this, opening a card from the list had nothing to grow from.
+					.sharedCardArt(card.id.qualified)
 					.clip(RoundedCornerShape(4.dp)),
 			)
 			Spacer(Modifier.width(12.dp))
@@ -699,32 +732,38 @@ private fun CardRow(
 					maxLines = 1,
 					overflow = TextOverflow.Ellipsis,
 				)
-				// Number, rarity and domain on one line: the three things worth scanning a set
-				// for, and short enough that they fit together on a phone.
-				val vSecondLine = buildList {
-					add(collectorLabel(card, knownSetSize))
-					card.classification.rarity?.takeIf { it.isNotBlank() }?.let(::add)
-					card.classification.domains.takeIf { it.isNotEmpty() }
-						?.let { add(it.joinToString(" / ")) }
-				}
-				Text(
-					text = vSecondLine.joinToString(SEPARATOR),
-					style = MaterialTheme.typography.bodySmall,
-					color = MaterialTheme.colorScheme.onSurfaceVariant,
-					maxLines = 1,
-					overflow = TextOverflow.Ellipsis,
-				)
-				// Only where there is room for it. A compact row is one line of detail by
-				// definition; anything more and it is not compact.
-				if (rowHeight != CardRowHeight.COMPACT) {
-					card.classification.type?.takeIf { it.isNotBlank() }?.let { vType ->
-						Text(
-							text = vType,
-							style = MaterialTheme.typography.labelSmall,
-							color = MaterialTheme.colorScheme.onSurfaceVariant,
-							maxLines = 1,
-							overflow = TextOverflow.Ellipsis,
-						)
+				// The number as text, the rest as the same chips the detail screen draws: a
+				// domain is a game's word with a game's colour, and "fury" printed raw was
+				// neither. Dense, because a row is one line rather than a paragraph's width.
+				Spacer(Modifier.height(2.dp))
+				FlowRow(
+					horizontalArrangement = Arrangement.spacedBy(4.dp),
+					verticalArrangement = Arrangement.spacedBy(2.dp),
+					// A compact row is one line of detail by definition.
+					maxLines = if (rowHeight == CardRowHeight.COMPACT) 1 else 2,
+				) {
+					Text(
+						text = collectorLabel(card, knownSetSize),
+						style = MaterialTheme.typography.bodySmall,
+						color = MaterialTheme.colorScheme.onSurfaceVariant,
+						maxLines = 1,
+						overflow = TextOverflow.Ellipsis,
+						// On the pills' centre line rather than on their top edge: it is the same
+						// row of facts, and text sitting high against a chip reads as misaligned.
+						modifier = Modifier.align(Alignment.CenterVertically),
+					)
+					card.classification.rarity?.takeIf { it.isNotBlank() }?.let {
+						StatChip(it, dense = true)
+					}
+					card.classification.domains.forEach { DomainChip(it, game, dense = true) }
+					// Type and supertype, as the detail screen draws them: "Unit", "Legend". On a
+					// compact row they are what the single line drops first, which is the right
+					// order to lose things in -- the name and the number matter more.
+					card.classification.type?.takeIf { it.isNotBlank() }?.let {
+						StatChip(it, dense = true)
+					}
+					card.classification.supertype?.takeIf { it.isNotBlank() }?.let {
+						StatChip(it, dense = true)
 					}
 				}
 			}

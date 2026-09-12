@@ -263,8 +263,11 @@ fun GameListContent(
 					vSelected = vSelected.coerceIn(0, (vVisible.size - 1).coerceAtLeast(0))
 				}
 				// Only when it has gone out of sight, so walking within the window does not drag
-				// the list about underneath the selection.
-				LaunchedEffect(vSelected) {
+				// the list about underneath the selection -- and only while there *is* a cursor.
+				// Without that guard this ran on arrival with a selection of 0 and scrolled a
+				// restored list back to the top, which is what every back navigation did.
+				LaunchedEffect(vSelected, vCursorVisible) {
+					if (!vCursorVisible) return@LaunchedEffect
 					val vVisibleRange = vListState.layoutInfo.visibleItemsInfo
 					if (vVisibleRange.none { it.index == vSelected }) {
 						vListState.animateScrollToItem(vSelected)
@@ -280,7 +283,14 @@ fun GameListContent(
 						selected = vSelected,
 						onSelect = { vSelected = it },
 						isCursorVisible = vCursorVisible,
-						onKeyboardUsed = { vCursorVisible = true },
+						// The cursor appears where the list already is, not at the top.
+						onKeyboardUsed = {
+							if (!vCursorVisible) {
+								vSelected = vListState.firstVisibleItemIndex
+									.coerceIn(0, (vVisible.size - 1).coerceAtLeast(0))
+								vCursorVisible = true
+							}
+						},
 						onActivate = {
 							vVisible.getOrNull(vSelected)?.let {
 								dispatch(GameListContract.Intent.GameOpened(it))

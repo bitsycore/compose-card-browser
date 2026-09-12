@@ -5,6 +5,7 @@ import com.bitsycore.cardbrowser.data.settings.CardTileSize
 import com.bitsycore.cardbrowser.data.settings.CardViewMode
 import com.bitsycore.cardbrowser.ui.cards.CardGridContent
 import com.bitsycore.cardbrowser.ui.cards.CardGridContract
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.ui.preview.PreviewData
 import java.io.File
 import kotlin.test.Ignore
@@ -41,6 +42,8 @@ class CardListRenderer {
 						knownSetSize = 352,
 						viewMode = CardViewMode.LIST,
 						rowHeight = vHeight,
+						// So a domain chip is drawn in the game's own colour rather than as its key.
+						game = RiftboundGame,
 					),
 					dispatch = {},
 				)

@@ -468,7 +468,11 @@ fun SetListContent(
 									(vIndex - vFavourites.size)
 							}
 						}
-						LaunchedEffect(vSelected) {
+						// Only while there *is* a cursor. Without the guard this ran on arrival with a
+						// selection of 0 and scrolled a restored list back to the top, which is what
+						// every back navigation did.
+						LaunchedEffect(vSelected, vCursorVisible) {
+							if (!vCursorVisible) return@LaunchedEffect
 							val vRow = vRowOf(vSelected)
 							if (vListState.layoutInfo.visibleItemsInfo.none { it.index == vRow }) {
 								vListState.animateScrollToItem(vRow)
@@ -484,7 +488,15 @@ fun SetListContent(
 								selected = vSelected,
 								onSelect = { vSelected = it },
 								isCursorVisible = vCursorVisible,
-								onKeyboardUsed = { vCursorVisible = true },
+								// The cursor appears where the list already is, not at the top.
+								onKeyboardUsed = {
+									if (!vCursorVisible) {
+										val vFirstRow = vListState.firstVisibleItemIndex
+										vSelected = vSelectable.indices
+											.firstOrNull { vRowOf(it) >= vFirstRow } ?: 0
+										vCursorVisible = true
+									}
+								},
 								onActivate = {
 									vSelectable.getOrNull(vSelected)?.let {
 										dispatch(SetListContract.Intent.SetOpened(it))
