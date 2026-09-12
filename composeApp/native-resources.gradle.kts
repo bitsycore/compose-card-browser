@@ -38,10 +38,18 @@ val NATIVE_DESKTOP_TARGETS = mapOf(
 	"MacosArm64" to "macosArm64Main",
 )
 
+// Every module that ships resources, found by looking rather than listed by hand.
+//
+// It was a list of `:games:*` at first, and the release binary found the hole within a minute: the
+// Wuthering Waves *provider* bundles a snapshot of its catalogue, `wuwa-cards.json`, because that
+// game has no live API worth calling per set. Any module may hold a resource, so the rule is the
+// directory that holds them, not a naming convention.
+val RESOURCE_MODULES = rootProject.subprojects.filter {
+	it.file("src/commonMain/composeResources").isDirectory
+}
+
 NATIVE_DESKTOP_TARGETS.forEach { (vTarget, vSourceSet) ->
-	// Every module that ships resources. The games own their logos; nothing else has any, and a
-	// module with none contributes an empty directory rather than a failure.
-	val vModules = rootProject.subprojects.filter { it.path.startsWith(":games:") }
+	val vModules = RESOURCE_MODULES
 
 	listOf("packageDebugComposeResources$vTarget", "packageReleaseComposeResources$vTarget")
 		.forEach { vTaskName ->

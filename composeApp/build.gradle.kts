@@ -203,13 +203,20 @@ compose.desktop {
 			com.bitsycore.compose.sdl.gradle.ComposeDesktopNativeExtension::class.java,
 		) {
 			entryPoint = "com.bitsycore.cardbrowser.main"
-			// The same PNGs the JVM distribution uses, rather than a second set: the bridge builds
-			// its own `.ico` from them and embeds it in the executable, which is the one thing
-			// jpackage was doing that this build has to do for itself.
+			// The same PNGs the JVM distribution uses, rather than a second set. `exeIcon` takes
+			// the sizes and the bridge builds the `.ico` itself -- handing it the ready-made
+			// `app-icon.ico` would be giving a container where it wants the pictures, and the
+			// sizes Windows actually draws at are the ones in the list.
+			//
+			// `light` and `dark` are the same files: this icon has no dark variant, and a second
+			// one that is identical would be two things to keep in step for no difference.
 			icon {
-				light.from(project.file("src/desktopMain/resources/app-icon-512.png"))
-				dark.from(project.file("src/desktopMain/resources/app-icon-512.png"))
-				exeIcon.from(project.file("src/desktopMain/resources/app-icon.ico"))
+				val vIcons = project.file("src/desktopMain/resources")
+				light.from(vIcons.resolve("app-icon-32.png"), vIcons.resolve("app-icon-128.png"))
+				dark.from(vIcons.resolve("app-icon-32.png"), vIcons.resolve("app-icon-128.png"))
+				exeIcon.from(
+					listOf(16, 32, 48, 64, 128, 256).map { vIcons.resolve("app-icon-$it.png") },
+				)
 				embedWindowsIcon.set(true)
 			}
 		}
