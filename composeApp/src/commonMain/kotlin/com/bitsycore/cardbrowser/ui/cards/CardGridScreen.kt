@@ -96,6 +96,7 @@ import com.bitsycore.cardbrowser.data.repository.LanguageSubstitution
 import com.bitsycore.cardbrowser.ui.common.LanguageMenu
 import com.bitsycore.cardbrowser.ui.common.NoticeBanner
 import com.bitsycore.cardbrowser.ui.common.DomainChip
+import com.bitsycore.cardbrowser.ui.common.RarityChip
 import com.bitsycore.cardbrowser.ui.common.StatChip
 import com.bitsycore.cardbrowser.ui.common.sharedCardArt
 import com.bitsycore.cardbrowser.core.game.GameProfile
@@ -753,7 +754,7 @@ private fun CardRow(
 						modifier = Modifier.align(Alignment.CenterVertically),
 					)
 					card.classification.rarity?.takeIf { it.isNotBlank() }?.let {
-						StatChip(it, dense = true)
+						RarityChip(it, game, dense = true)
 					}
 					card.classification.domains.forEach { DomainChip(it, game, dense = true) }
 					// Type and supertype, as the detail screen draws them: "Unit", "Legend". On a

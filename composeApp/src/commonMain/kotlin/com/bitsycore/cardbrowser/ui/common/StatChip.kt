@@ -54,6 +54,22 @@ fun StatChip(label: String, colour: Color? = null, dense: Boolean = false) {
 }
 
 /**
+ * A rarity chip, in the game's own colour where it states one.
+ *
+ * Riftbound prints its five in white, blue, purple, orange and yellow; a game that declares none
+ * -- which is most of them -- gets the ordinary chip, because a colour invented here would be this
+ * app asserting something no source said.
+ */
+@Composable
+fun RarityChip(rarity: String, game: GameProfile?, dense: Boolean = false) {
+	StatChip(
+		label = rarity,
+		colour = game?.rarityColourFor(rarity)?.let { Color(it.toInt()) },
+		dense = dense,
+	)
+}
+
+/**
  * A domain chip: the game's own label and colour rather than the raw key the filter is keyed on.
  *
  * Riftbound's `fury` is "Fury" in its own red; a game that has never heard of the key gets the key

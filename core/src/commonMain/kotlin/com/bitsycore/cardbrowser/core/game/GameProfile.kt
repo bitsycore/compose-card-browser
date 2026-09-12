@@ -81,6 +81,20 @@ interface GameProfile {
 		domains.firstOrNull { it.key.equals(key, ignoreCase = true) }
 
 	/**
+	 * The colour each of this game's rarities is drawn in, keyed as [rarityLadder] names them.
+	 *
+	 * A game fact like the ladder itself: Riftbound's Epic is orange on the card, whoever serves
+	 * the data. Empty is the ordinary answer -- most games have no established colour for a rarity
+	 * -- and an undeclared rarity draws in the plain chip colours rather than being hidden or
+	 * guessed at.
+	 */
+	val rarityColours: List<GameRarityColour> get() = emptyList()
+
+	/** The declared colour for [key], or `null` when this game states none. */
+	fun rarityColourFor(key: String): Long? =
+		rarityColours.firstOrNull { it.rarity.equals(key, ignoreCase = true) }?.colourArgb
+
+	/**
 	 * This game's separate product lines, or empty for a game that ships one worldwide.
 	 *
 	 * Not translations -- *different products*. Pokémon prints a Japanese line and an international
@@ -196,5 +210,16 @@ data class GameRegion(
 data class GameDomain(
 	val key: String,
 	val label: String,
+	val colourArgb: Long,
+)
+
+/**
+ * One rarity and the colour that game prints it in.
+ *
+ * Separate from [GameDomain] because a rarity has no key of its own: it is the provider's own
+ * string, matched case-insensitively against the ladder.
+ */
+data class GameRarityColour(
+	val rarity: String,
 	val colourArgb: Long,
 )

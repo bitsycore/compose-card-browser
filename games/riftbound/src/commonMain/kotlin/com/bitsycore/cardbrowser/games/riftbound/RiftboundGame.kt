@@ -1,6 +1,7 @@
 package com.bitsycore.cardbrowser.games.riftbound
 
 import com.bitsycore.cardbrowser.core.game.GameDomain
+import com.bitsycore.cardbrowser.core.game.GameRarityColour
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.GameId
@@ -37,6 +38,15 @@ object RiftboundGame : GameProfile {
 	 */
 	override val rarityLadder: List<String> =
 		listOf("Common", "Uncommon", "Rare", "Epic", "Showcase")
+
+	/** The five the cards themselves print: white, blue, purple, orange, yellow. */
+	override val rarityColours: List<GameRarityColour> = listOf(
+		GameRarityColour("Common", 0xFFE8E8EC),
+		GameRarityColour("Uncommon", 0xFF3E8FD0),
+		GameRarityColour("Rare", 0xFF6F5BD0),
+		GameRarityColour("Epic", 0xFFD98A2B),
+		GameRarityColour("Showcase", 0xFFD9C24A),
+	)
 
 
 	/**

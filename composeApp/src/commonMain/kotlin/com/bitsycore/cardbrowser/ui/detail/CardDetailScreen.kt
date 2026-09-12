@@ -89,6 +89,7 @@ import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.ui.common.CardImage
 import com.bitsycore.cardbrowser.ui.common.DomainChip
+import com.bitsycore.cardbrowser.ui.common.RarityChip
 import com.bitsycore.cardbrowser.ui.common.StatChip
 import com.bitsycore.cardbrowser.ui.common.ErrorState
 import com.bitsycore.cardbrowser.ui.common.FullscreenCardViewer
@@ -644,7 +645,7 @@ private fun CardDetailPage(
 				horizontalArrangement = Arrangement.spacedBy(6.dp),
 				verticalArrangement = Arrangement.spacedBy(2.dp),
 			) {
-				card.classification.rarity?.let { StatChip(it) }
+				card.classification.rarity?.let { RarityChip(it, state.game) }
 				card.classification.type?.let { StatChip(it) }
 				card.classification.supertype?.let { StatChip(it) }
 				// The game's label and colour, not the raw key the filter is keyed on.
