@@ -129,9 +129,9 @@ fun StorageContent(
 				Spacer(Modifier.height(8.dp))
 				SectionHeading(
 					title = "Downloaded",
-					// One line, not a paragraph. The distinction between the two sections is the
-					// whole content of this screen, and it survives being said briefly.
-					subtitle = "Yours until you delete it.",
+					// One line, not a paragraph. The distinction between the sections is the whole
+					// content of this screen, and it survives being said briefly.
+					subtitle = "Yours until you delete it. Tap a game to see what it holds.",
 					trailing = formatBytes(state.keptBytes + state.unattributedKeptBytes),
 				)
 
@@ -164,23 +164,41 @@ fun StorageContent(
 				}
 
 				// ============
+				//  Browsed
+
+				// Its own section, not a cache with a bar beside the images.
+				//
+				// Card data is one database now and nothing evicts any of it: a set you opened is
+				// kept on the same terms as one you downloaded, because it is a few hundred
+				// kilobytes and re-fetching it is a request nobody asked for. So there is no
+				// ceiling to draw a bar against -- only a number and a way to drop it.
+				Spacer(Modifier.height(16.dp))
+				SectionHeading(
+					title = "Browsed",
+					subtitle = "Sets you opened without downloading. Kept until you clear them.",
+					trailing = formatBytes(vUsage.metadataBrowsingBytes),
+				)
+				OutlinedButton(
+					onClick = { dispatch(StorageContract.Intent.ClearBrowsingData) },
+					enabled = vUsage.metadataBrowsingBytes > 0 && !state.isLoading,
+					modifier = Modifier.fillMaxWidth(),
+				) {
+					Text("Clear browsed sets")
+				}
+
+				// ============
 				//  Cached
 
+				// Images alone. This is the one thing here that really is a cache: it is most of
+				// the bytes, the platform may purge it whenever it likes, and a picture that is
+				// gone costs one request the next time it is looked at.
 				Spacer(Modifier.height(16.dp))
 				SectionHeading(
 					title = "Cached",
-					subtitle = "Kept within these limits, and dropped as needed.",
-					trailing = formatBytes(vUsage.metadataBrowsingBytes + vUsage.imageBytes),
+					subtitle = "Kept within this limit, and dropped as needed.",
+					trailing = formatBytes(vUsage.imageBytes),
 				)
 
-				CacheLine(
-					label = "Card data",
-					used = vUsage.metadataBrowsingBytes,
-					limit = vUsage.metadataLimitBytes,
-					onClear = { dispatch(StorageContract.Intent.ClearBrowsingData) },
-					enabled = vUsage.metadataBrowsingBytes > 0 && !state.isLoading,
-				)
-				Spacer(Modifier.height(12.dp))
 				CacheLine(
 					label = "Images",
 					used = vUsage.imageBytes,
@@ -190,8 +208,8 @@ fun StorageContent(
 				)
 
 				Spacer(Modifier.height(12.dp))
-				// Beside the bars, because seeing a cache at its ceiling is the moment anyone
-				// wants to change the ceiling -- and the limits live in settings, not here.
+				// Beside the bar, because seeing a cache at its ceiling is the moment anyone wants
+				// to change the ceiling -- and the limit lives in settings, not here.
 				OutlinedButton(
 					onClick = { dispatch(StorageContract.Intent.CacheSettingsRequested) },
 					modifier = Modifier.fillMaxWidth(),
@@ -374,7 +392,6 @@ private fun round(value: Double): String {
 private fun previewUsage() = CacheUsage(
 	metadataBytes = 486_000_000,
 	metadataEntries = 1_240,
-	metadataLimitBytes = 1_000_000_000,
 	metadataKeptBytes = 462_000_000,
 	imageBytes = 184_000_000,
 	imageLimitBytes = 1_000_000_000,

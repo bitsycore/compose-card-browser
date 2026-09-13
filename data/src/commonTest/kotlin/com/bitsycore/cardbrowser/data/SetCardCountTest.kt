@@ -204,18 +204,32 @@ class SetCardCountTest {
 	}
 
 	@Test
-	fun `a count survives the record it describes being evicted`() = runTest {
-		// The count is a measurement of what a source served, not a property of the cached copy, so
-		// trimming the cards away must not take the number with them. A ceiling of one byte evicts
-		// everything evictable on the next write.
+	fun `a swept set takes its count with it -- and says nothing rather than zero`() = runTest {
+		// This used to assert the opposite, and passed for the wrong reason. The count was once a
+		// sidecar written beside the cards, so it outlived them; it is a column on the set row now
+		// and goes when the row goes. The old test set a one-byte ceiling on the *metadata* cache,
+		// which the count never came from, so the row it was really reading was never touched.
+		//
+		// What matters is not that the number survives but that its absence is absent. A swept set
+		// must drop out of the map entirely: reporting 0 would say the source served no cards,
+		// which is a claim about the source rather than about this device.
 		val vFileSystem = FakeFileSystem()
-		val vRepository = repository(english = 24, french = 4, fileSystem = vFileSystem, maxBytes = 1)
+		val vRepository = repository(english = 24, french = 4, fileSystem = vFileSystem)
 
 		vRepository.cards(mSetId, CountTestGame.id, CardQuery(), CardLanguage.FRENCH).toList()
-
 		assertEquals(
 			4,
 			vRepository.confirmedCardCounts(CountTestGame.id, sets(), CardLanguage.FRENCH)[mSetId.qualified],
+		)
+
+		// What "Clear browsed sets" does. Nothing else sweeps now -- browsed sets are kept until
+		// somebody asks for them to go.
+		mStores.getValue(vFileSystem).trim(ceilingBytes = 0L)
+
+		assertTrue(
+			mSetId.qualified !in
+				vRepository.confirmedCardCounts(CountTestGame.id, sets(), CardLanguage.FRENCH),
+			"a set that is no longer held must not report a count of any kind",
 		)
 	}
 
@@ -529,7 +543,6 @@ class SetCardCountTest {
 	 * `FakeFileSystem`. Complete sets are not files any more, so the store has to be shared on the
 	 * same terms or every such test reads an empty disk and looks like a cache that forgot.
 	 */
-		maxBytes: Long = CacheManager.DEFAULT_CARD_DATA_MAX_BYTES,
 	): CardRepository {
 		val vProvider = PartlyTranslatedProvider(
 			id = mProviderId,

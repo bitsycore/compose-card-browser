@@ -210,13 +210,6 @@ fun SettingsContent(
 				onSelect = { dispatch(SettingsContract.Intent.ImageCacheLimitChosen(it)) },
 			)
 
-			LimitRow(
-				label = "Card data limit",
-				note = "Applies now. A whole set is a few megabytes.",
-				selected = vState.metadataLimitBytes,
-				onSelect = { dispatch(SettingsContract.Intent.MetadataCacheLimitChosen(it)) },
-			)
-
 			// ============
 			//  Network
 
@@ -509,7 +502,6 @@ private fun trimTenth(value: Double): String =
 private fun SettingsPreview() = PreviewFrame {
 	SettingsContent(
 		state = SettingsContract.UiState(
-			metadataLimitBytes = BrowsingPreferences.DEFAULT_METADATA_CACHE_LIMIT_BYTES,
 			imageLimitBytes = BrowsingPreferences.DEFAULT_IMAGE_CACHE_LIMIT_BYTES,
 			attributions = listOf(
 				SettingsContract.ProviderCredit(
@@ -533,7 +525,6 @@ private fun SettingsPreview() = PreviewFrame {
 private fun SettingsLightPreview() = PreviewFrame(isDark = false) {
 	SettingsContent(
 		state = SettingsContract.UiState(
-			metadataLimitBytes = 256L * 1024 * 1024,
 			imageLimitBytes = 128L * 1024 * 1024,
 			prefetchRadius = 0,
 			revalidateSetsOnLaunch = false,

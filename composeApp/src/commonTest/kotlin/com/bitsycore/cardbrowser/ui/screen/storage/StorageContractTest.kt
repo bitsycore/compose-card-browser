@@ -24,7 +24,6 @@ class StorageContractTest {
 	private fun usage(total: Long, kept: Long, limit: Long = 1_000_000_000) = CacheUsage(
 		metadataBytes = total,
 		metadataEntries = 100,
-		metadataLimitBytes = limit,
 		metadataKeptBytes = kept,
 		imageBytes = 0,
 		imageLimitBytes = limit,
@@ -42,8 +41,8 @@ class StorageContractTest {
 
 	@Test
 	fun `browsing data excludes what is kept`() {
-		// The whole point of the screen. An import of 462 MB under a 1 GB limit does not mean
-		// browsing has 462 MB of its allowance spent -- the limit has no power over those bytes.
+		// The whole point of the screen. "Clear browsed sets" must not offer to reclaim the
+		// 462 MB of an import it will not touch.
 		val vUsage = usage(total = 486_000_000, kept = 462_000_000)
 
 		assertEquals(24_000_000, vUsage.metadataBrowsingBytes)

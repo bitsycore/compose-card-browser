@@ -43,7 +43,6 @@ class SettingsRenderer {
 }
 
 private fun settingsState() = SettingsContract.UiState(
-	metadataLimitBytes = BrowsingPreferences.DEFAULT_METADATA_CACHE_LIMIT_BYTES,
 	imageLimitBytes = BrowsingPreferences.DEFAULT_IMAGE_CACHE_LIMIT_BYTES,
 	themeMode = ThemeMode.SYSTEM,
 	prefetchRadius = BrowsingPreferences.DEFAULT_PREFETCH_RADIUS,

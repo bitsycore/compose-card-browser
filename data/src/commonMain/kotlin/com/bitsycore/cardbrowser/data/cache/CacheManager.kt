@@ -8,11 +8,12 @@ import okio.IOException
 import okio.Path
 
 /**
- * What the caches are using, and how to empty them.
+ * What is on disk, and how to empty the parts that can be emptied.
  *
- * Backs the settings screen's cache section. Metadata and images are reported and cleared
- * separately because they behave differently: metadata is small, cheap to refetch and what makes
- * offline browsing work, while images are most of the bytes and the first thing worth dropping.
+ * Card data and images are reported and cleared separately because only one of them is a cache.
+ * Card data is small, it is what makes offline browsing work, and nothing evicts it -- a set is
+ * kept until somebody asks for it to go. Images are most of the bytes, have a ceiling, and are the
+ * first thing worth dropping.
  *
  * Preferences are never touched by anything here. They live under a different root, which is what
  * makes "clear cache" a safe button rather than one that also forgets which set you were reading.
@@ -23,23 +24,20 @@ class CacheManager(
 	/**
 	 * Where the bytes actually are.
 	 *
-	 * The two halves are reported as one "card data" figure because that is what a user has: they
-	 * did not choose to put set lists in one place and sets in another. The split is this app's,
-	 * and the storage screen should not make it the user's problem.
+	 * Reported together with the metadata table as one card-data figure, because that is what a
+	 * user has: they did not choose to put set lists in one table and cards in another.
 	 */
 	private val mSetStore: SetRecordStore,
 	private val mIoDispatcher: CoroutineDispatcher,
-	private val mMetadataLimitBytes: () -> Long = { DEFAULT_CARD_DATA_MAX_BYTES },
 	private val mImageCacheMaxBytes: () -> Long = { DEFAULT_IMAGE_CACHE_MAX_BYTES },
 ) {
 
 	/**
-	 * Current usage of both caches, their ceilings, and what is pinned -- in one pass over each.
+	 * Everything the storage screen shows, in one pass.
 	 *
-	 * One call because the storage screen needs all of it at once and the two halves are both
-	 * directory walks. They run concurrently: the image cache after a full browse of Magic is
-	 * thousands of files and has nothing to do with the metadata directory, so waiting for one
-	 * before starting the other was pure latency.
+	 * The image directory is a real walk -- thousands of files after a full browse of Magic -- and
+	 * the card-data figures are counts out of the database, so the walk is started first and the
+	 * queries run beside it.
 	 */
 	suspend fun report(): StorageReport = withContext(mIoDispatcher) {
 		coroutineScope {
@@ -55,10 +53,8 @@ class CacheManager(
 				usage = CacheUsage(
 					metadataBytes = vMetadata.totalBytes + vSets.unpinnedBytes + vSets.pinnedBytes,
 					metadataEntries = vMetadata.entryCount + vSets.sets,
-					metadataLimitBytes = mMetadataLimitBytes(),
-					// Split, because the limit governs only one of the two. Downloaded sets sit
-					// outside it: the ceiling cannot reclaim them, so counting them against it was
-					// a number that could only ever be exceeded. See `SqlCardStore.trim`.
+					// Split, because the two answer different questions: what you asked for, and
+					// what browsing left behind. Only the second is offered for clearing.
 					metadataKeptBytes = vSets.pinnedBytes,
 					imageBytes = vImages.await(),
 					imageLimitBytes = mImageCacheMaxBytes(),
@@ -67,7 +63,7 @@ class CacheManager(
 		}
 	}
 
-	/** Current usage of both caches, and their ceilings. */
+	/** What is on disk, without the rest of the report. */
 	suspend fun usage(): CacheUsage = report().usage
 
 	/** Empties every card record, downloads included. Preferences are untouched. */
@@ -77,17 +73,16 @@ class CacheManager(
 	}
 
 	/**
-	 * Empties only the part of the metadata cache that browsing filled.
+	 * Empties only what browsing left behind.
 	 *
-	 * Downloaded sets and imported catalogues stay. They are not cache in the sense the word is
-	 * usually meant -- nothing evicts them and nothing re-fetches them by itself -- so sweeping
-	 * them away under a button labelled "clear cached data" would throw away a twenty-minute
-	 * import on a tap meant to reclaim a few megabytes.
+	 * Downloaded sets and imported catalogues stay, which is the whole point: sweeping them away
+	 * under a button meant to reclaim a few megabytes would throw away a twenty-minute import.
+	 *
+	 * This is the only thing that removes browsed sets. Nothing evicts them on its own -- see the
+	 * storage screen's "Browsed" section -- so a zero ceiling here is a deliberate sweep rather
+	 * than the budget catching up.
 	 */
 	suspend fun clearBrowsingMetadata(): Int {
-		// Everything in the metadata cache is browsing data now -- nothing in it is ever kept on
-		// purpose -- and the sets that *are* kept are rows with a `pinned` flag rather than files
-		// that had to be told apart from their neighbours.
 		val vSnapshot = mMetadataStore.snapshot()
 		mMetadataStore.clear()
 		return vSnapshot.entryCount + mSetStore.trim(ceilingBytes = 0L)
@@ -119,17 +114,6 @@ class CacheManager(
 				// A cache that will not clear is not worth crashing over.
 			}
 		}
-	}
-
-	/**
-	 * Evicts metadata down to the current ceiling.
-	 *
-	 * Called when the ceiling is lowered, so the reported usage matches the limit immediately rather
-	 * than drifting under it over the next few writes.
-	 */
-	suspend fun trimMetadata() {
-		// Only the sets. The metadata table is unbounded on purpose -- see `MetadataStore`.
-		mSetStore.trim(mMetadataLimitBytes())
 	}
 
 	private fun directorySize(directory: Path): Long = try {
@@ -165,9 +149,6 @@ class CacheManager(
 		 * precisely why a disposable cache is the right place to be generous.
 		 */
 		const val DEFAULT_IMAGE_CACHE_MAX_BYTES: Long = 1024L * 1024 * 1024
-
-		/** The card store's default ceiling, for callers that do not read the user's. */
-		const val DEFAULT_CARD_DATA_MAX_BYTES: Long = 2L * 1024 * 1024 * 1024
 	}
 }
 
@@ -183,13 +164,12 @@ data class StorageReport(val usage: CacheUsage)
 data class CacheUsage(
 	val metadataBytes: Long,
 	val metadataEntries: Int,
-	val metadataLimitBytes: Long,
-	/** Of [metadataBytes], the part that is kept rather than cached -- see `SqlCardStore.trim`. */
+	/** Of [metadataBytes], the part that was downloaded rather than merely browsed. */
 	val metadataKeptBytes: Long = 0L,
 	val imageBytes: Long,
 	val imageLimitBytes: Long,
 ) {
 
-	/** What browsing occupies: the part the limit actually governs. */
+	/** What browsing left behind: the part "Clear browsed sets" removes. */
 	val metadataBrowsingBytes: Long get() = (metadataBytes - metadataKeptBytes).coerceAtLeast(0L)
 }

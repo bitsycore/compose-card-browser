@@ -96,13 +96,18 @@ cannot overwrite a newer one.
 
 ---
 
-## Storage: two caches and a store
+## Storage: one store and one cache
 
 | | What | Where |
 | --- | --- | --- |
-| **Metadata cache** | Set lists, card detail, per-set language confirmations. Small, many scopes, each with a TTL. | JSON files via Okio, `MetadataCache` |
-| **Card store** | Complete sets and everything derived from them: pins, counts, the eviction budget, and the search across a game. | SQLite via SQLDelight, `:database` |
-| **Image cache** | Card art and thumbnails. | Coil's own disk cache, LRU |
+| **Card store** | Every card record: complete sets, pins, counts, the search across a game — and the small metadata scopes (set lists, card detail, per-set language confirmations) in a `metadata` table. | SQLite via SQLDelight, `:database` |
+| **Image cache** | Card art and thumbnails. The only real cache left: it has a ceiling, it evicts, and the OS may purge it. | Coil's own disk cache, LRU |
+
+Nothing evicts card data. A set you downloaded and a set you merely opened are kept on the same
+terms, because the records are small and re-fetching one is a request nobody asked for; the storage
+screen's "Clear browsed sets" is the only thing that removes the second kind. That is why the
+screen has three sections and not two — *Downloaded*, *Browsed* and *Cached* mean three different
+things about how a byte got there and what will take it away.
 
 The split is measured, not assumed — [database/README.md](../database/README.md) has the benchmark
 that decided it. The short version: the store is 8× slower to write a catalogue and 170× faster to

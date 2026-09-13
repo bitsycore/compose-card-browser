@@ -134,7 +134,6 @@ val appModule = module {
 			mMetadataStore = get(),
 			mSetStore = get(),
 			mIoDispatcher = Dispatchers.Default,
-			mMetadataLimitBytes = { vPreferences.preferences.value.metadataCacheLimitBytes },
 			mImageCacheMaxBytes = { vPreferences.preferences.value.imageCacheLimitBytes },
 		)
 	}

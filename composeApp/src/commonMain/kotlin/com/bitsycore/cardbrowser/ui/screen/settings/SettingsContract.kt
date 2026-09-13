@@ -13,7 +13,6 @@ object SettingsContract :
 	data class UiState(
 		// Limits only. What is *used* belongs to the storage screen, and was being reported in two
 		// places with two layouts -- this one kept the numbers and could not act on them.
-		val metadataLimitBytes: Long = 0,
 		val imageLimitBytes: Long = CacheManager.DEFAULT_IMAGE_CACHE_MAX_BYTES,
 		val preferredLanguages: List<CardLanguage> = CardLanguage.PREFERENCE_ORDER,
 		val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -69,8 +68,6 @@ object SettingsContract :
 		data class ImageCacheLimitChosen(val bytes: Long) : Intent
 
 		/** A new ceiling for cached card records. Takes effect on the next write. */
-		data class MetadataCacheLimitChosen(val bytes: Long) : Intent
-
 		/** How many cards either side of the open one to fetch ahead. Zero switches it off. */
 		data class PrefetchRadiusChosen(val radius: Int) : Intent
 
@@ -141,7 +138,6 @@ object SettingsContract :
 
 		is Intent.PreferencesRead -> state.copy(
 			preferredLanguages = intent.preferences.preferredLanguages,
-			metadataLimitBytes = intent.preferences.metadataCacheLimitBytes,
 			imageLimitBytes = intent.preferences.imageCacheLimitBytes,
 			prefetchRadius = intent.preferences.prefetchRadius,
 			revalidateSetsOnLaunch = intent.preferences.revalidateSetsOnLaunch,
@@ -150,8 +146,6 @@ object SettingsContract :
 		)
 
 		is Intent.ImageCacheLimitChosen -> state.copy(imageLimitBytes = intent.bytes)
-
-		is Intent.MetadataCacheLimitChosen -> state.copy(metadataLimitBytes = intent.bytes)
 
 		is Intent.PrefetchRadiusChosen -> state.copy(prefetchRadius = intent.radius)
 

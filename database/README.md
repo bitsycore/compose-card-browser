@@ -2,17 +2,18 @@
 
 Part of CardBrowser. See [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) for where this sits.
 
-Complete sets and everything derived from them — pins, labels, card counts, the eviction budget —
-live here in one SQLite database. The small metadata scopes (set lists, card detail, search pages,
-per-set languages) stay in `MetadataCache`'s file cache, because they are few and tiny and the
-whole cost was never there.
+All card data lives here in one SQLite database: complete sets and everything derived from them —
+pins, labels, card counts, the eviction budget — and, since 2026-09-13, the small metadata scopes
+too (set lists, card detail, search pages, per-set languages, in the `metadata` table). Those used
+to be one JSON file each under a cache directory with their own atomic-replace, LRU and byte
+budget, which meant card data was in two places with two ways of going missing.
 
 It began as a spike to decide whether to migrate at all, and the app switched over to it on
 2026-09-11. The numbers below are what that spike measured, and they are why.
 
 ## What was measured
 
-SQLDelight 2.3.2, one global database, against `MetadataCache` — same process, same machine, same
+SQLDelight 2.3.2, one global database, against the old file cache — same process, same machine, same
 session, same 1000 sets × 150 printings (roughly Magic's shape, 150,000 rows). Measured
 2026-09-11 by `SqlStoreBench`, which ran both stores back to back. The comparison half of that
 bench went with the file cache's set records; what it produced is here.
@@ -88,17 +89,21 @@ made kept records anonymous.
 
 ## Still not modelled, and still unverified
 
-- **Migrations.** Schema 2 as of 2026-09-13. `1.sqm` is the project's first migration and creates
-  `game_facets`; it is a create and nothing else, and the table only caches values that can always
-  be recomputed, so an install that somehow misses it loses a few hundred milliseconds and nothing
-  more. **No migration has been run on a device.**
+- **Migrations: there are none, deliberately, until 1.0.** Schema 1, and every table is in
+  `create`. Two `.sqm` files existed briefly and were folded away on 2026-09-13 at the project
+  owner's instruction — there is no installed base, so compatibility buys nothing and costs a file
+  per change.
 
-  Before a 1.0 with no installed base, migrations can be folded away: delete the `.sqm` files and
-  the schema drops to 1 with every table already in `create`. A *dev* install would then sit at
-  `user_version = 2` against a schema saying 1, which Android's helper treats as a downgrade and
-  refuses — so fold them away together with a `CURRENT_STORE_GENERATION` bump, which wipes the
-  store once and starts clean. After 1.0 a migration can never be removed: it is the only path an
-  older install has forward.
+  The consequence is that a sound database can be *older than the code*: adding a table keeps the
+  schema at 1, SQLDelight sees a matching version and runs nothing, and the first query against the
+  new table throws "no such table" deep inside a screen. `CardStoreFactory.verifyShape` therefore
+  checks that every table the code queries exists, after the integrity check, and a missing one
+  takes the discard-and-recreate path that already handles corruption. Everything in the store is
+  re-fetchable, so that is the right answer rather than a workaround. A dev install left at a
+  higher `user_version` is refused by Android's helper on open, which lands on the same path.
+
+  **After 1.0 this reverses**: a migration can never be removed, because it is the only path an
+  older install has forward, and `verifyShape` stops being a recovery and becomes a last resort.
 - **The Android driver has opened a real file once, and crashed.** `PRAGMA journal_mode=WAL`
   returns a row, and Android's `execute` refuses any statement that does — see the pragma trap in
   [CLAUDE.md](../CLAUDE.md). That is fixed and the fix has **not** been confirmed on a device.

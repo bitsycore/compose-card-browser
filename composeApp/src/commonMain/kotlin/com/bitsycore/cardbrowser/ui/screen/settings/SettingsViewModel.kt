@@ -72,13 +72,6 @@ class SettingsViewModel(
 				mPreferences.update { it.copy(imageCacheLimitBytes = intent.bytes) }
 			}
 
-			is SettingsContract.Intent.MetadataCacheLimitChosen -> {
-				mPreferences.update { it.copy(metadataCacheLimitBytes = intent.bytes) }
-				// The new ceiling applies to the next write, so evict down to it now rather than
-				// leaving the cache above a limit the user has just lowered.
-				mCacheManager.trimMetadata()
-			}
-
 			is SettingsContract.Intent.HideEmptySetsChanged -> {
 				mPreferences.update { it.copy(hideEmptySets = intent.hide) }
 			}

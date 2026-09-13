@@ -173,8 +173,6 @@ data class BrowsingPreferences(
 	val hasCompletedSetup: Boolean = false,
 	/** Ceiling for downloaded card art. Applied when the image loader is built, so on next launch. */
 	val imageCacheLimitBytes: Long = DEFAULT_IMAGE_CACHE_LIMIT_BYTES,
-	/** Ceiling for cached card and set records. Applied on the next write. */
-	val metadataCacheLimitBytes: Long = DEFAULT_METADATA_CACHE_LIMIT_BYTES,
 	/** How many cards either side of the open one have their art fetched in advance. */
 	val prefetchRadius: Int = DEFAULT_PREFETCH_RADIUS,
 	/** Whether the set list is checked for new sets in the background on launch. */
@@ -244,9 +242,6 @@ data class BrowsingPreferences(
 
 		/** Matches `CacheManager.DEFAULT_IMAGE_CACHE_MAX_BYTES`, restated to avoid a cycle. */
 		const val DEFAULT_IMAGE_CACHE_LIMIT_BYTES: Long = 1024L * 1024 * 1024
-
-		/** How much *browsing* card data may accumulate. Downloads sit outside it. */
-		const val DEFAULT_METADATA_CACHE_LIMIT_BYTES: Long = 512L * 1024 * 1024
 
 		/**
 		 * Bumped whenever what is on disk stops meaning what an older install thought it meant.
