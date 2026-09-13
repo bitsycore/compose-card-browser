@@ -258,7 +258,6 @@ private fun SectionHeading(title: String, subtitle: String, trailing: String) {
 			fontWeight = FontWeight.Medium,
 			modifier = Modifier.weight(1f),
 		)
-		Text(trailing, style = MaterialTheme.typography.titleMedium)
 	}
 	Text(
 		text = subtitle,
