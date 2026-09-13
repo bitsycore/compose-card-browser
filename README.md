@@ -4,6 +4,10 @@
 
 A card browser for ten trading card games, written once and running on Android, iOS and desktop.
 
+**Bugs, suggestions and help: [discord.gg/ZG4trQs2cu](https://discord.gg/ZG4trQs2cu)** — a wrong
+card, a source that has stopped answering, a set that will not download. Say which game and which
+set; that is usually enough to find it.
+
 Kotlin Multiplatform with Compose Multiplatform: one UI and all logic in `commonMain`. There is no
 backend — the app talks to each game's public card database directly, and keeps what you download
 on your own device.

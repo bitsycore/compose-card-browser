@@ -1,5 +1,6 @@
 package com.bitsycore.toploader.ui.screen.about
 
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -134,6 +135,27 @@ fun AboutContent(
 			// ============
 			//  Sources
 
+			// ============
+			//  Where to say something
+
+			// After the two sections above, deliberately. Half of what would otherwise arrive as a
+			// bug report is on this page as a decision -- no prices, no deckbuilding, one source
+			// per game -- and somebody who has just read why is not about to report it.
+			Heading("Bugs, suggestions and help")
+
+			Text(
+				text = "There is a Discord for it. Reports of a wrong card, a source that has " +
+					"stopped answering, or a set that will not download are all useful — say " +
+					"which game and which set and it is usually enough to find it.",
+				style = MaterialTheme.typography.bodySmall,
+				color = MaterialTheme.colorScheme.onSurfaceVariant,
+			)
+			Spacer(Modifier.height(4.dp))
+			TextButton(
+				onClick = { dispatch(AboutContract.Intent.LinkOpened(DISCORD_INVITE)) },
+				contentPadding = PaddingValues(0.dp),
+			) { Text(DISCORD_INVITE, style = MaterialTheme.typography.labelLarge) }
+
 			Heading("Where the card data comes from")
 
 			Text(
@@ -174,6 +196,9 @@ fun AboutContent(
 		}
 	}
 }
+
+/** Where bugs, suggestions and questions go. One place, so it cannot drift between screens. */
+const val DISCORD_INVITE = "https://discord.gg/ZG4trQs2cu"
 
 /** A rule and a heading, so the page reads as sections rather than one wall. */
 @Composable
@@ -229,7 +254,7 @@ private fun SourceRow(
 		source.url?.let { vUrl ->
 			TextButton(
 				onClick = { onOpenLink(vUrl) },
-				contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+				contentPadding = PaddingValues(0.dp),
 			) { Text(vUrl, style = MaterialTheme.typography.labelMedium) }
 		}
 	}
