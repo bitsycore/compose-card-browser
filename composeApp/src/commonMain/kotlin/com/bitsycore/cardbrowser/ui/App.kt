@@ -37,7 +37,6 @@ import com.bitsycore.cardbrowser.ui.common.InstallImageLoader
 import com.bitsycore.cardbrowser.ui.common.LocalSharedTransitionScope
 import com.bitsycore.cardbrowser.ui.detail.CardDetailScreen
 import com.bitsycore.cardbrowser.ui.games.GameListScreen
-import com.bitsycore.cardbrowser.ui.search.SearchScreen
 import com.bitsycore.cardbrowser.ui.sets.SetListScreen
 import com.bitsycore.cardbrowser.ui.settings.SettingsScreen
 import com.bitsycore.cardbrowser.ui.setup.SetupScreen
@@ -78,7 +77,18 @@ sealed interface Route : NavKey {
 	data class Sets(val game: String) : Route
 
 	@Serializable
-	data class Cards(val setId: String, val setName: String, val setCode: String) : Route
+	/**
+	 * Cards: one set, or a whole game.
+	 *
+	 * The same screen for both, which is the point -- opening a set is a search already pointed at
+	 * it. `setId` empty and `game` set is the other entry, from the set list's search button.
+	 */
+	data class Cards(
+		val setId: String,
+		val setName: String,
+		val setCode: String,
+		val game: String? = null,
+	) : Route
 
 	@Serializable
 	/**
@@ -117,15 +127,6 @@ sealed interface Route : NavKey {
 	 * thing you dismiss.
 	 */
 	data object Downloads : Route
-
-	/**
-	 * Cross-set search within one game.
-	 *
-	 * The game travels in the route rather than being read from preferences, so the back stack
-	 * restores a search of the game it was actually opened for.
-	 */
-	@Serializable
-	data class Search(val game: String, val setId: String? = null) : Route
 }
 
 // ==================
@@ -275,34 +276,22 @@ fun App() {
 							},
 							onOpenSettings = { vBackStack.add(Route.Settings) },
 							onOpenStorage = { vBackStack.add(Route.Storage) },
-							onOpenSearch = { vGame -> vBackStack.add(Route.Search(vGame.id.value)) },
+							// The card grid with nothing ticked: the same screen a set opens, over
+							// everything downloaded instead of over one set.
+							onOpenSearch = { vGame ->
+								vBackStack.add(
+									Route.Cards(
+										setId = "",
+										setName = "Search ${vGame.shortName}",
+										setCode = "",
+										game = vGame.id.value,
+									),
+								)
+							},
 							onOpenDownloads = { vBackStack.add(Route.Downloads) },
 						)
 					}
 
-					is Route.Search -> NavEntry(vRoute) {
-						SearchScreen(
-							// Same null-game handling as the route above.
-							game = GameId(vRoute.game),
-							setId = vRoute.setId,
-							onBack = { vBackStack.popRoute() },
-							onOpenCard = { vCard ->
-								vBackStack.add(
-									Route.Detail(
-										cardId = vCard.id.qualified,
-										// The card's own set, which is where "go to set" leads and
-										// what a cold start would fall back to reading.
-										setId = vCard.setId.qualified,
-										// What the swipe walks: these results, published by the
-										// search view model under this key.
-										browseKey = BrowseSession.searchKey(vRoute.game),
-									),
-								)
-							},
-						)
-					}
-
-					// No screen-level transition at all: the container transform is the transition.
 					//
 					// A cross-fade here fights it. The grid fades in as a whole screen while the
 					// shared container is separately growing out of the row, so the two read as
@@ -320,16 +309,12 @@ fun App() {
 							setId = vRoute.setId,
 							setName = vRoute.setName,
 							setCode = vRoute.setCode,
+							gameId = vRoute.game,
 							onBack = { vBackStack.popRoute() },
 							onOpenCard = { vCard ->
 								vBackStack.add(
 									Route.Detail(cardId = vCard.id.qualified, setId = vRoute.setId),
 								)
-							},
-							onOpenSearch = { vGame ->
-								// The same search, confined to this set: one surface, and the
-								// set options simply have nothing to offer from in here.
-								vBackStack.add(Route.Search(vGame, vRoute.setId))
 							},
 							onOpenDownloads = { vBackStack.add(Route.Downloads) },
 						)
@@ -516,6 +501,9 @@ internal fun SnapshotStateList<Route>.popRoute(route: Route) {
  */
 internal fun SnapshotStateList<Route>.slideSetUnderCard(cards: Route.Cards) {
 	if (isEmpty()) return
-	removeAll { it is Route.Search }
+	// The game-wide list the card was opened from goes with it: that is the search, and Back from
+	// the set's grid belongs to the set list -- where the card would have been reached from had it
+	// been browsed to.
+	removeAll { it is Route.Cards && it.setId.isBlank() }
 	add(lastIndex, cards)
 }

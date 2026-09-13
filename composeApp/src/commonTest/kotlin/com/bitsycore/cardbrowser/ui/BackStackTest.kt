@@ -3,6 +3,7 @@ package com.bitsycore.cardbrowser.ui
 import androidx.compose.runtime.mutableStateListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * The back stack cannot be emptied, whatever pops it.
@@ -32,28 +33,27 @@ class BackStackTest {
 	}
 
 	@Test
-	fun `going to a card's set leaves the grid under it and the search behind`() {
-		// "Go to set" from a search result. The grid has to end up *under* the card so that
-		// leaving the card is a pop onto it -- the same container transform as coming from the
-		// set -- rather than a new screen pushed over the top.
+	fun `going to a card's set leaves the grid under it`() {
+		// "Go to set", from a card opened somewhere that is not its set -- a game-wide list. The
+		// grid has to end up *under* the card so that leaving the card is a pop onto it, the same
+		// container transform as coming from the set, rather than a new screen over the top.
 		val vStack = mutableStateListOf<Route>(
 			Route.Games,
 			Route.Sets("riftbound"),
-			Route.Search("riftbound"),
-			Route.Detail(cardId = "riftcodex:OGN-001", setId = "riftcodex:OGN", browseKey = "search:riftbound"),
+			Route.Cards("", "Search Riftbound", "", game = "riftbound"),
+			Route.Detail(cardId = "riftcodex:OGN-001", setId = "riftcodex:OGN", browseKey = "stored:"),
 		)
 
 		vStack.slideSetUnderCard(Route.Cards("riftcodex:OGN", "Origins", "OGN"))
 
 		assertEquals(
-			listOf<Route>(
-				Route.Games,
-				Route.Sets("riftbound"),
-				Route.Cards("riftcodex:OGN", "Origins", "OGN"),
-				Route.Detail(cardId = "riftcodex:OGN-001", setId = "riftcodex:OGN", browseKey = "search:riftbound"),
-			),
-			vStack.toList(),
-			"the grid belongs under the card, and the search is finished with",
+			Route.Cards("riftcodex:OGN", "Origins", "OGN"),
+			vStack[vStack.lastIndex - 1],
+			"the grid belongs directly under the card",
+		)
+		assertTrue(
+			vStack.none { it is Route.Cards && it.setId.isBlank() },
+			"and the game-wide list it was opened from is finished with",
 		)
 
 		vStack.popRoute()

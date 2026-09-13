@@ -242,6 +242,14 @@ object CardGridContract :
 		/** The set this grid is for. Dispatched once, from the navigation argument. */
 		data class SetSelected(val setId: String, val setName: String, val setCode: String) : Intent
 
+		/**
+		 * Opened for a whole game rather than for one of its sets.
+		 *
+		 * The same screen either way. With no set ticked the source is the store, which is what
+		 * the separate search screen used to be -- see `UiState.setId`.
+		 */
+		data class GameSelected(val game: GameProfile) : Intent
+
 		/** The sets the filter points at. Empty is every set with something stored. */
 		data class SetFilterChanged(val setIds: Set<String>) : Intent
 
@@ -356,8 +364,6 @@ object CardGridContract :
 
 		data object OpenDownloads : Effect
 
-		/** Opens the search screen confined to this set. Carries the game, which the route needs. */
-		data class OpenSearch(val game: String) : Effect
 	}
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
@@ -404,6 +410,15 @@ object CardGridContract :
 		)
 
 		is Intent.SetOptionsLoaded -> state.copy(setOptions = intent.sets)
+
+		is Intent.GameSelected -> state.copy(
+			game = intent.game,
+			setName = "Search ${intent.game.shortName}",
+			// Nothing ticked: everything downloaded, which is what this entry point is for.
+			setIds = emptySet(),
+			isLoading = true,
+			requestGeneration = state.requestGeneration + 1,
+		)
 
 		is Intent.QueryChanged -> state.copy(
 			query = intent.query,

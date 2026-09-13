@@ -29,7 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -89,7 +89,9 @@ import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardOrientation
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.provider.CardFilterField
+import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.CardQuery
+import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.ui.browse.BrowseSession
 import com.bitsycore.cardbrowser.ui.common.CardImage
@@ -124,12 +126,18 @@ import com.bitsycore.cardbrowser.ui.common.AppIcons
  */
 @Composable
 fun CardGridScreen(
+	/** The set to open, or empty to open the whole game -- see `gameId`. */
 	setId: String,
 	setName: String,
 	setCode: String,
+	/**
+	 * The game, when this screen was opened for one rather than for a set.
+	 *
+	 * A set names its own game through its source-qualified id, so this is only needed for the
+	 * other entry point: the set list's search, which opens this screen with nothing ticked.
+	 */
+	gameId: String? = null,
 	onBack: () -> Unit,
-	/** The store-backed search, scoped to this set. */
-	onOpenSearch: (gameId: String) -> Unit = {},
 	onOpenCard: (CardPrinting) -> Unit,
 	onOpenDownloads: () -> Unit = {},
 	viewModel: CardGridViewModel = koinViewModel(),
@@ -151,17 +159,22 @@ fun CardGridScreen(
 			is CardGridContract.Effect.OpenCard -> onOpenCard(vEffect.card)
 
 			CardGridContract.Effect.OpenDownloads -> onOpenDownloads()
-
-			is CardGridContract.Effect.OpenSearch -> onOpenSearch(vEffect.game)
 		}
 	}
 	val vState by viewModel.collectAsStateWithLifecycle()
 
 	// Dispatched once per set. Keyed on setId so reusing this view model for a different set
 	// re-runs it, and so returning from detail does not restart the load.
-	LaunchedEffect(setId) {
-		if (vState.setId != setId) {
-			viewModel.dispatch(CardGridContract.Intent.SetSelected(setId, setName, setCode))
+	val vRegistry = koinInject<ProviderRegistry>()
+	LaunchedEffect(setId, gameId) {
+		if (setId.isNotBlank()) {
+			if (vState.setId != setId) {
+				viewModel.dispatch(CardGridContract.Intent.SetSelected(setId, setName, setCode))
+			}
+		} else if (gameId != null && vState.game == null) {
+			vRegistry.profileFor(GameId(gameId))?.let {
+				viewModel.dispatch(CardGridContract.Intent.GameSelected(it))
+			}
 		}
 	}
 
@@ -294,7 +307,11 @@ fun CardGridContent(
 			// search field and the filter chips and made them unreadable.
 			Surface(color = MaterialTheme.colorScheme.surface) {
 			Column {
-				MediumTopAppBar(
+				// A plain bar rather than a medium one: the name and the count sit beside the back
+				// arrow instead of on a line of their own under it. The search box is what lives
+				// below the bar now, and two stacked blocks of chrome above a grid of pictures is
+				// one too many.
+				TopAppBar(
 					title = {
 						Column {
 							Text(
@@ -306,6 +323,8 @@ fun CardGridContent(
 								text = vState.countLabel,
 								style = MaterialTheme.typography.labelSmall,
 								color = MaterialTheme.colorScheme.onSurfaceVariant,
+								maxLines = 1,
+								overflow = TextOverflow.Ellipsis,
 							)
 						}
 					},
@@ -334,19 +353,6 @@ fun CardGridContent(
 									dispatch(CardGridContract.Intent.LanguageOptionsRequested)
 								},
 							)
-						}
-						// The same search the set list offers, confined to this set: the inline
-						// field above filters what is loaded, this one asks the store and brings the
-						// filter sheet with it.
-						vState.game?.let { vGame ->
-							IconButton(
-								onClick = { dispatch(CardGridContract.Intent.FullSearchRequested) },
-							) {
-								Icon(
-									imageVector = AppIcons.TravelExplore,
-									contentDescription = "Search this set",
-								)
-							}
 						}
 						ViewModeButton(
 							mode = vState.viewMode,
