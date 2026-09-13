@@ -1,5 +1,11 @@
 package com.bitsycore.cardbrowser.providers.tcgdex
 
+import io.ktor.client.request.setBody
+import io.ktor.http.contentType
+import io.ktor.http.appendPathSegments
+import io.ktor.http.ContentType
+import io.ktor.client.statement.bodyAsText
+import io.ktor.client.request.post
 import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.SourceId
@@ -37,6 +43,73 @@ class TcgdexLiveSmokeTest {
 	// client is shared for the same reason it is in `ScryfallLiveSmokeTest`: the throttle lives in
 	// the plugin instance, so one client is one budget.
 	private fun provider() = mProvider
+
+	@Test
+	fun `a Japanese-only set arrives with its cards, whatever the source has no scans for`() =
+		runBlocking {
+			// The reported symptom: every card in the Japanese MEGA sets drew a placeholder.
+			//
+			// Measured on 2026-09-13, and it is the source's gap rather than this adapter's. The
+			// REST card list for M2 carries `{id, localId, name}` and no `image` at all -- for a
+			// set that has scans, such as `en/sv08`, every brief card carries one -- and the
+			// per-card endpoint has no `image` field either. Every plausible assets URL 404s.
+			//
+			// So this pins what the app must still do: serve the set, with its names, and leave
+			// the artwork empty rather than inventing a URL that will not load.
+			val vPage = provider().listCards(
+				CardPageRequest(
+					setId = SourceId(TcgdexProvider.PROVIDER_ID, "M2"),
+					query = com.bitsycore.cardbrowser.core.provider.CardQuery(),
+					page = 1,
+					pageSize = 500,
+					language = CardLanguage.JAPANESE,
+				),
+			)
+
+			assertTrue(vPage.cards.isNotEmpty(), "M2 came back with no cards at all")
+			assertTrue(
+				vPage.cards.all { it.displayName.isNotBlank() },
+				"a set with no scans must still carry its names",
+			)
+			// Not an assertion that the images are absent -- TCGdex may add them, and this should
+			// not fail when it does. What must hold is that whatever is offered is usable.
+			val vOffered = vPage.cards.mapNotNull { it.artwork.displayUrl?.ifBlank { null } }
+			println("M2: ${vPage.cards.size} cards, ${vOffered.size} with an image URL")
+			val vClient = HttpClientFactory.create()
+			for (vUrl in vOffered.take(3)) {
+				val vResponse: HttpResponse = vClient.head(vUrl)
+				assertEquals(
+					HttpStatusCode.OK,
+					vResponse.status,
+					"offered an image URL that does not load: $vUrl",
+				)
+			}
+		}
+
+	@Test
+	fun `the GraphQL id filter matches anywhere in an id, not just the start`() = runBlocking {
+		// `fullCards` leans on this filter for rarity and type, and the comment above it used to
+		// say "prefix". It is a `contains` match: on 2026-09-13 `id: "M2-"` answered with 125
+		// `sm2` cards and 125 `gym2` cards and not one `M2`.
+		//
+		// Pinned because the fix -- filtering the answer to this set's own ids -- looks like
+		// belt-and-braces until you know that, and would be the first thing a later reader removed.
+		val vClient = HttpClientFactory.create()
+		val vBody: String = vClient.post("https://api.tcgdex.net") {
+			url { appendPathSegments("v2", "graphql") }
+			contentType(ContentType.Application.Json)
+			setBody(
+				"""{"query":"{ cards(filters: { id: \"M2-\" }, """ +
+					"""pagination: { page: 1, itemsPerPage: 50 }) { id } }"}""",
+			)
+		}.bodyAsText()
+
+		assertTrue(vBody.contains("\"id\""), "the filter returned nothing, so this proves nothing")
+		assertTrue(
+			!vBody.contains("\"M2-"),
+			"the filter now looks like a prefix match -- if TCGdex fixed it, simplify `fullCards`",
+		)
+	}
 
 	@Test
 	fun `the set catalogue loads and carries real release dates`() = runBlocking {

@@ -127,6 +127,49 @@ Every language the app knows, which no other source in this list matches: `de`, 
 `ru`, `zh-cn` and `zh-tw` each return a catalogue of their own alongside the four above, and
 TCGdex's locale tags are the app's own tags unchanged.
 
+### The MEGA-series Japanese sets have no scans at all — 2026-09-13
+
+Reported as "images almost all broken" for `M2`, `M2a`, `M3`, `M4`, `M5`, `M6` and `MC`. Measured,
+and it is the source's gap rather than the adapter's:
+
+| Set | Locale | Cards | Cards carrying an `image` |
+| --- | --- | --- | --- |
+| `M2` インフェルノX | `ja` | 116 | 0 |
+| `M2a` MEGAドリームex | `ja` | 250 | 0 |
+| `M3` ムニキスゼロ | `ja` | 117 | 0 |
+| `M4` ニンジャスピナー | `ja` | 120 | 0 |
+| `M5` アビスアイ | `ja` | 118 | 0 |
+| `M6` ストームエメラルダ | `ja` | 113 | 0 |
+| `MC` スタートデッキ100 | `ja` | 774 | 0 |
+| `sv08` (for contrast) | `en` | 252 | 252 |
+| `sv8` (for contrast) | `ja` | 138 | 106 |
+
+The field is absent from the brief card list *and* from `GET /v2/ja/cards/M2-001`, and every
+plausible assets URL 404s — `assets.tcgdex.net/ja/{M,m}/{M2,m2}/001/{low,high}.webp`. Japanese sets
+in general do have scans, as `sv8` shows, so this is those sets and not that locale. Nothing to fix
+here; it will start working if TCGdex adds them.
+
+### The GraphQL `id` filter is a `contains` match, not a prefix — 2026-09-13
+
+`fullCards` uses `cards(filters: { id: "{set}-" })` for the rarity, category and types the REST
+briefs omit. The comment above it said "prefix". It is not:
+
+| Filter | Cards returned | From the set asked for |
+| --- | --- | --- |
+| `id: "M2-"` | 250 | **0** — 125 `sm2`, 125 `gym2` |
+| `id: "M3-"` | 169 | 0 |
+| `id: "M4-"` | 125 | 0 |
+| `id: "M5-"` | 173 | 0 |
+| `id: "M6-"` | 146 | 0 |
+| `id: "sv08-"` | 250 | 250 |
+| `id: "base1-"` | 102 | 102 |
+| `id: "xy1-"` | 146 | 146 |
+
+Long codes are unaffected, which is why this went unnoticed. There is no `set` filter —
+`filters: { set: "sv08" }` answers `Field "set" is not defined by type "CardsFilters"`. The answer
+is filtered to the set's own ids instead, and the query is skipped for a non-English set, since
+`/v2/ja/graphql` is a 404 and the English schema cannot answer for a Japanese-only set anyway.
+
 Images are a base URL with the quality and extension appended — `{image}/{quality}.{extension}`:
 
 | Variant | Bytes (sample card) |

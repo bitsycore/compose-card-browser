@@ -427,33 +427,52 @@ class TcgdexProvider(
 	 * screen, and what was on screen knew nothing. The alternative is `GET /cards/{id}` per card,
 	 * 252 requests for one set.
 	 *
-	 * One GraphQL query instead. The root `cards` resolver returns full cards, its `id` filter
-	 * matches on a prefix, and a card id is `{setId}-{localId}` -- so `id: "sv08-"` is the set,
-	 * and it answered all 252 in one request on 2026-09-13. The trailing dash matters: without it
-	 * `sv08` also matches `sv08.5`, which is a different set.
+	 * One GraphQL query instead. The root `cards` resolver returns full cards and a card id is
+	 * `{setId}-{localId}`, so `id: "sv08-"` asks for the set and answered all 252 in one request
+	 * on 2026-09-13.
 	 *
-	 * **English only.** `/v2/ja/graphql` is a 404 and both `?lang=` and `Accept-Language` are
-	 * ignored -- a Japanese set id returns an empty list rather than Japanese cards. That is why
-	 * this merges rather than replaces: the locale's own request supplies the names and the
-	 * pictures, and a set outside the international line simply gets nothing here, which is the
-	 * same "unknown" it had before.
+	 * **The `id` filter is a `contains` match, not a prefix match.** Measured on 2026-09-13:
+	 * `id: "M2-"` returns 250 cards, 125 from `sm2` and 125 from `gym2`, and **none** from `M2`.
+	 * The comment here used to say prefix, which is where the trailing dash came from -- the dash
+	 * is still right, because without it `sv08` also matches `sv08.5`, but it was right by
+	 * accident. So the answer is filtered to ids that really belong to the set: without that, a
+	 * short set code silently fills its page with another set's cards and can crowd its own out.
+	 *
+	 * **English only, which is about the product *line* rather than the reader's language.**
+	 * `/v2/ja/graphql` is a 404 and both `?lang=` and `Accept-Language` are ignored. But the seven
+	 * western locales share one id space, so a French `base1` card has the same id as the English
+	 * one and this answers perfectly for it -- the test that pins that asks in French. What it
+	 * cannot answer for is a set whose line English does not carry at all: the Japanese line, and
+	 * the Simplified Chinese one. Those are not asked, which is what stops a Japanese set
+	 * downloading 250 cards of somebody else's every time it is opened. They keep the "unknown"
+	 * rarity they had before, which is the source's gap rather than this adapter's.
 	 *
 	 * Empty on any failure. A rarity nobody could fetch is a filter the sheet does not offer,
 	 * which is the honest outcome; it is not a reason to fail a set that has already arrived.
 	 */
-	private suspend fun fullCards(setLocal: String): Map<String, TcgdexCardDto> = try {
-		val vResponse: TcgdexGraphQlResponse = mClient
-			.post(mBaseUrl) {
-				url { appendPathSegments("v2", "graphql") }
-				contentType(ContentType.Application.Json)
-				setBody(GraphQlQuery(fullCardsQuery(setLocal)))
-			}
-			.body()
-		vResponse.data?.cards.orEmpty().associateBy { it.id }
-	} catch (vError: kotlinx.coroutines.CancellationException) {
-		throw vError
-	} catch (vError: Exception) {
-		emptyMap()
+	private suspend fun fullCards(setLocal: String): Map<String, TcgdexCardDto> {
+		// Unknown means ask. A set the catalogue lookup cannot place is the state this adapter was
+		// already in before the line grouping existed, and a wasted request is better than a
+		// silently unfiltered set.
+		val vLine = runCatching { catalogues().lineById[setLocal] }.getOrNull()
+		if (vLine != null && CardLanguage.ENGLISH !in vLine.languages) return emptyMap()
+		return try {
+			val vResponse: TcgdexGraphQlResponse = mClient
+				.post(mBaseUrl) {
+					url { appendPathSegments("v2", "graphql") }
+					contentType(ContentType.Application.Json)
+					setBody(GraphQlQuery(fullCardsQuery(setLocal)))
+				}
+				.body()
+			vResponse.data?.cards.orEmpty()
+				// Only this set's. See the `contains` note above.
+				.filter { it.id.startsWith("$setLocal-") }
+				.associateBy { it.id }
+		} catch (vError: kotlinx.coroutines.CancellationException) {
+			throw vError
+		} catch (vError: Exception) {
+			emptyMap()
+		}
 	}
 
 	/**
