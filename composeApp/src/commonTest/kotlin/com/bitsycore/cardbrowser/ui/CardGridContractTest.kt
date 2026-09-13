@@ -77,6 +77,27 @@ class CardGridContractTest {
 	}
 
 	@Test
+	fun `one set picked in the search's filter reads that set rather than the store`() {
+		// The report: picking a single set in the global search's filter found nothing, while
+		// opening the same set from the list worked. A store search answers with what is on disk,
+		// and the set had not been downloaded -- so the filter was quietly a different question
+		// from the tap. One set is one set, wherever it was named.
+		val vSearch = reduce(UiState(), Intent.GameSelected(MagicGame))
+		assertTrue(vSearch.isStoredBrowse, "no set named: the store is all there is")
+
+		val vOneSet = reduce(vSearch, Intent.SetFilterChanged(setOf("scryfall:set:vow")))
+
+		assertFalse(vOneSet.isStoredBrowse, "one set is a set browse, and reads its provider")
+		assertEquals("scryfall:set:vow", vOneSet.browseKey)
+
+		// Two is a search again: no source answers "every card in these two sets".
+		assertTrue(
+			reduce(vOneSet, Intent.SetFilterChanged(setOf("scryfall:set:vow", "scryfall:set:mid")))
+				.isStoredBrowse,
+		)
+	}
+
+	@Test
 	fun `a game-wide search is keyed on the sets it searched`() {
 		// What the set list's search button opens: this screen with no set ticked.
 		val vState = reduce(UiState(), Intent.GameSelected(MagicGame))

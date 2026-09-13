@@ -99,7 +99,7 @@ this wrong is the most common way to put the right value in the wrong place.
 
 ```bash
 ./gradlew build -x lint          # everything, all four targets, including both iOS ones
-./gradlew desktopTest            # the deterministic suite (553 tests on 2026-09-13, 11 skipped)
+./gradlew desktopTest            # the deterministic suite (554 tests on 2026-09-13, 11 skipped)
 ./gradlew :androidApp:assembleDebug
 ./gradlew :composeApp:run        # desktop
 ```

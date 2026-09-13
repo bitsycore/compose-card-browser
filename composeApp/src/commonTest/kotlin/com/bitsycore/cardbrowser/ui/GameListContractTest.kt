@@ -26,7 +26,6 @@ class GameListContractTest {
 		GameListContract.Intent.Loaded(
 			games = mGames,
 			sources = emptyMap(),
-			lastGame = null,
 			order = emptyList(),
 			hiddenIds = emptySet(),
 		),
@@ -152,18 +151,21 @@ class GameListContractTest {
 	}
 
 	@Test
-	fun `a hidden game stays hidden when it was the last one opened`() {
-		// `lastGame` only drives a highlight, so pointing at a hidden game must not resurrect it.
-		var vState = GameListContract.reduce(
+	fun `opening a game changes nothing on this screen`() {
+		// It used to remember the game and highlight its row, which read as a hover state and meant
+		// nothing on a touch screen. The *preference* is still written, by the view model, because
+		// something may yet want to resume where the user left off -- but hiding the game the user
+		// last opened must still hide it, which is what this half was really checking.
+		val vOpened = GameListContract.reduce(
 			loaded(),
 			GameListContract.Intent.GameOpened(PokemonGame),
 		)
-		vState = GameListContract.reduce(
-			vState,
+		assertEquals(loaded(), vOpened, "opening a game is navigation, not state")
+
+		val vHidden = GameListContract.reduce(
+			vOpened,
 			GameListContract.Intent.GameVisibilityToggled(PokemonGame),
 		)
-
-		assertEquals(PokemonGame, vState.lastGame)
-		assertFalse(PokemonGame in vState.games)
+		assertFalse(PokemonGame in vHidden.games)
 	}
 }

@@ -181,8 +181,14 @@ object CardGridContract :
 		 * answer: the view model, to pick which load to start, and [browseKey], to name the list it
 		 * publishes. It was a condition written out in the view model and a string built next to
 		 * it, which is two copies of one rule.
+		 *
+		 * **One set is one set, wherever it was chosen.** This used to also require that the set
+		 * match the one the screen was opened for, so picking a single set in the *search's* filter
+		 * searched the store instead of reading it -- which answers with nothing at all for a set
+		 * nobody has downloaded, while opening the same set from the list reads its provider and
+		 * works. A filter naming exactly one set is the same request as opening it.
 		 */
-		val isStoredBrowse: Boolean get() = setIds.size != 1 || setIds.single() != setId
+		val isStoredBrowse: Boolean get() = setIds.size != 1
 
 		/**
 		 * The name the detail screen swipes this list under.
@@ -192,7 +198,11 @@ object CardGridContract :
 		 * rather than arriving alone.
 		 */
 		val browseKey: String
-			get() = if (isStoredBrowse) "stored:" + setIds.sorted().joinToString(",") else setId
+			get() = if (isStoredBrowse) {
+				"stored:" + setIds.sorted().joinToString(",")
+			} else {
+				setIds.single()
+			}
 
 		/**
 		 * The sentence that keeps the screen honest, or `null` when nothing needs saying.

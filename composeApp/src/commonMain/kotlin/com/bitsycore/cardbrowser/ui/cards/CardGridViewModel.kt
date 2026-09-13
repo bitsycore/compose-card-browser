@@ -250,7 +250,10 @@ class CardGridViewModel(
 			startStoredLoad(vSnapshot, debounce)
 			return
 		}
-		val vSetId = SourceId.parse(vSnapshot.setId) ?: return
+		// The set the *filter* names, which is the one the user is asking for. It is the routed set
+		// on the ordinary path and any set at all when one was picked in the search's filter.
+		val vSelectedSet = vSnapshot.setIds.single()
+		val vSetId = SourceId.parse(vSelectedSet) ?: return
 		val vGeneration = vSnapshot.requestGeneration
 		val vQuery = vSnapshot.query
 		// The state's language, which starts as the user's preference and can be changed from the
@@ -260,7 +263,7 @@ class CardGridViewModel(
 		// files, so no set ever showed as saved. `CardRepository` normalises it once, for every
 		// caller, against what the provider will really answer in.
 		val vLanguage = vSnapshot.language ?: mPreferences.preferences.value.primaryLanguage
-		val vGame = gameOf(vSnapshot.setId) ?: return
+		val vGame = gameOf(vSelectedSet) ?: return
 
 		mLoadJob?.cancel()
 		mLoadJob = viewModelScope.launch {
@@ -292,7 +295,7 @@ class CardGridViewModel(
 				// sorted as the user left it -- rather than the raw set. Guarded on the generation
 				// so a superseded response cannot hand the detail screen a list the grid rejected.
 				if (stateFlow.value.requestGeneration == vGeneration) {
-					mSession.publish(vSnapshot.setId, vCards?.cards.orEmpty())
+					mSession.publish(vSnapshot.browseKey, vCards?.cards.orEmpty())
 				}
 
 				// Facets come from the complete set only, so they are recomputed after a load that

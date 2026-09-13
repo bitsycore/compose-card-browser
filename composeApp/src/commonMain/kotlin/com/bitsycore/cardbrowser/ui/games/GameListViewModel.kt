@@ -41,13 +41,10 @@ class GameListViewModel(
 		viewModelScope.launch {
 			mPreferences.load()
 			val vPreferences = mPreferences.preferences.value
-			val vLast = vPreferences.lastGame
-				?.let { vId -> vGames.firstOrNull { it.id.value == vId } }
 			dispatch(
 				GameListContract.Intent.Loaded(
 					games = vGames,
 					sources = vSources,
-					lastGame = vLast,
 					order = vPreferences.gameOrder,
 					hiddenIds = vPreferences.hiddenGames,
 				),

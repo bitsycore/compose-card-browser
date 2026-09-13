@@ -311,7 +311,6 @@ fun GameListContent(
 						GameRow(
 							game = vGame,
 							source = state.sources[vGame],
-							isLastOpened = vGame == state.lastGame,
 							isEditing = state.isEditing,
 							isSelected = vCursorVisible && vIndex == vSelected,
 							isHidden = false,
@@ -357,7 +356,6 @@ fun GameListContent(
 							GameRow(
 								game = vGame,
 								source = state.sources[vGame],
-								isLastOpened = false,
 								isEditing = true,
 								isHidden = true,
 								// A hidden row has no position to drag to: it is out of the list the
@@ -415,7 +413,6 @@ fun GameListContent(
 private fun GameRow(
 	game: GameProfile,
 	source: String?,
-	isLastOpened: Boolean,
 	isEditing: Boolean,
 	/** Drawn with an outline, because the keyboard is pointing at it. */
 	isSelected: Boolean = false,
@@ -431,11 +428,10 @@ private fun GameRow(
 	dispatch: (GameListContract.Intent) -> Unit,
 	art: GameArt?,
 ) {
-	val vColors = if (isLastOpened) {
-		CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-	} else {
-		CardDefaults.cardColors()
-	}
+	// No mark for the game you opened last. It wore a secondaryContainer card, which reads as a
+	// hover state and means nothing on a touch screen -- the same reason the set list's went. The
+	// preference is still written; nothing draws it.
+	val vColors = CardDefaults.cardColors()
 	val vMoveActions = buildList {
 		onMoveUp?.let { add(CustomAccessibilityAction("Move up") { it(); true }) }
 		onMoveDown?.let { add(CustomAccessibilityAction("Move down") { it(); true }) }
@@ -821,7 +817,6 @@ private fun GameListPreview() = PreviewFrame {
 		state = GameListContract.UiState(
 			allGames = PREVIEW_SOURCES.keys.toList(),
 			sources = PREVIEW_SOURCES,
-			lastGame = RiftboundGame,
 			isLoading = false,
 		),
 		dispatch = {},
@@ -836,7 +831,6 @@ private fun GameListLightPreview() = PreviewFrame(isDark = false) {
 		state = GameListContract.UiState(
 			allGames = PREVIEW_SOURCES.keys.toList(),
 			sources = PREVIEW_SOURCES,
-			lastGame = WutheringWavesGame,
 			isLoading = false,
 		),
 		dispatch = {},

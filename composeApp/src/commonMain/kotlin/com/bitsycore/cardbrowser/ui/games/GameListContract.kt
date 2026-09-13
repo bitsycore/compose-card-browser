@@ -26,8 +26,6 @@ object GameListContract :
 	 * @property hiddenIds games the user has hidden, as `GameId` values
 	 * @property sources one line per game naming the provider behind it, so the attribution the
 	 *   sources ask for is visible before a single request is made
-	 * @property lastGame highlighted, so returning to the app lands where you left off. May name a
-	 *   game the user has since hidden, in which case nothing is highlighted and that is correct
 	 * @property isEditing whether the reorder and hide controls are showing. Not persisted: it is a
 	 *   mode you are in, not a setting you have
 	 */
@@ -36,7 +34,6 @@ object GameListContract :
 		val order: List<String> = emptyList(),
 		val hiddenIds: Set<String> = emptySet(),
 		val sources: Map<GameProfile, String> = emptyMap(),
-		val lastGame: GameProfile? = null,
 		val isEditing: Boolean = false,
 		val isLoading: Boolean = true,
 	) {
@@ -60,10 +57,9 @@ object GameListContract :
 		/**
 		 * The order and the hidden list changed somewhere other than this screen.
 		 *
-		 * Separate from [Loaded] on purpose: that one also clears `isLoading` and replaces the game
-		 * list and the last-opened game, none of which a preference write has anything to say
-		 * about. Re-sending it for every change would have this screen reload itself every time the
-		 * user opened a game, which writes `lastGame`.
+		 * Separate from [Loaded] on purpose: that one also clears `isLoading` and replaces the
+		 * game list, neither of which a preference write has anything to say about. Re-sending it
+		 * for every change would have this screen reload itself every time the user opened a game.
 		 */
 		data class CustomisationChanged(
 			val order: List<String>,
@@ -73,7 +69,6 @@ object GameListContract :
 		data class Loaded(
 			val games: List<GameProfile>,
 			val sources: Map<GameProfile, String>,
-			val lastGame: GameProfile?,
 			val order: List<String>,
 			val hiddenIds: Set<String>,
 		) : Intent
@@ -129,7 +124,6 @@ object GameListContract :
 		is Intent.Loaded -> state.copy(
 			allGames = intent.games,
 			sources = intent.sources,
-			lastGame = intent.lastGame,
 			order = intent.order,
 			hiddenIds = intent.hiddenIds,
 			isLoading = false,
@@ -140,7 +134,9 @@ object GameListContract :
 			hiddenIds = intent.hiddenIds,
 		)
 
-		is Intent.GameOpened -> state.copy(lastGame = intent.game)
+		// The game is remembered as a preference, by the view model. Nothing on this screen is
+		// drawn from it -- see `GameRow`.
+		is Intent.GameOpened -> state
 
 		is Intent.EditingToggled -> state.copy(isEditing = !state.isEditing)
 
