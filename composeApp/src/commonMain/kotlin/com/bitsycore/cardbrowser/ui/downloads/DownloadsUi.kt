@@ -288,6 +288,19 @@ fun DownloadKindDialog(
 	// whole-game import. One name for the two, because the row is the same row either way.
 	val vInfoIsElsewhere = cardInfoIsElsewhere(isCardDataBundled, isCardInfoBulkOnly, setCount)
 	val vWantsInfo = vInfo && !vInfoIsElsewhere
+	// Whether the *language* of the records is this dialog's to choose.
+	//
+	// It is not, whenever they arrive as a dump. A file's languages are the file's -- Scryfall
+	// publishes a cheap one that is 97% English and an every-language one four times the size --
+	// so the control that picks them is the variant selector, and a row of language chips beside
+	// it is a second control for the same fact that cannot honour what it is set to.
+	val vInfoLanguageChoosable = vChoosable &&
+		cardInfoLanguageIsChosen(
+			isCardDataBundled = isCardDataBundled,
+			isCardInfoBulkOnly = isCardInfoBulkOnly,
+			setCount = setCount,
+			hasBulkVariants = bulkVariants.isNotEmpty(),
+		)
 
 	var vInfoLanguages by remember(languages, defaultLanguage, languagesAreClaimed) {
 		mutableStateOf(defaultInfoLanguages(languages, defaultLanguage, languagesAreClaimed))
@@ -412,7 +425,7 @@ fun DownloadKindDialog(
 				// Under this row rather than beside the image chips at the bottom, because it is
 				// about *this* tick box: the two halves of a download are chosen separately and
 				// were being explained as one asymmetry a screenful further down.
-				if (vChoosable && !vInfoIsElsewhere) {
+				if (vInfoLanguageChoosable) {
 					LanguagePicker(
 						title = "Card info languages",
 						note = if (languagesAreClaimed) {
@@ -557,7 +570,7 @@ fun DownloadKindDialog(
 				// for a kind the dialog just finished saying it does not offer.
 				enabled = (vWantsInfo || vThumbnails) &&
 					(!vThumbnails || !vChoosable || vLanguages.isNotEmpty()) &&
-					(!vWantsInfo || !vChoosable || vInfoLanguages.isNotEmpty()),
+					(!vWantsInfo || !vInfoLanguageChoosable || vInfoLanguages.isNotEmpty()),
 				onClick = {
 					onConfirm(
 						buildSet {
@@ -725,6 +738,26 @@ internal fun cardInfoIsElsewhere(
 	isCardInfoBulkOnly: Boolean,
 	setCount: Int,
 ): Boolean = isCardDataBundled || (isCardInfoBulkOnly && setCount == 1)
+
+/**
+ * Whether the *language* of the records is this dialog's to choose.
+ *
+ * Only where they are fetched per set. A dump's languages are the dump's -- Scryfall publishes a
+ * cheap file that is 97% English and an every-language one four times the size -- so the control
+ * that picks them is the variant selector, and a row of language chips beside it is a second
+ * control for the same fact that cannot honour what it is set to. The whole-game dialog offered
+ * both at once, which is what this removes.
+ *
+ * Separate from [cardInfoIsElsewhere] because the answers differ exactly where it matters: on the
+ * whole-game dialog for a source with a dump, the card-info *row* is very much offered -- it is how
+ * the import is started -- and its language is not a choice.
+ */
+internal fun cardInfoLanguageIsChosen(
+	isCardDataBundled: Boolean,
+	isCardInfoBulkOnly: Boolean,
+	setCount: Int,
+	hasBulkVariants: Boolean,
+): Boolean = !cardInfoIsElsewhere(isCardDataBundled, isCardInfoBulkOnly, setCount) && !hasBulkVariants
 
 /**
  * Which languages the records are fetched in when the dialog opens.

@@ -10,6 +10,7 @@ import com.bitsycore.cardbrowser.data.download.DownloadRequest
 import com.bitsycore.cardbrowser.data.download.DownloadStatus
 import com.bitsycore.cardbrowser.ui.downloads.describe
 import com.bitsycore.cardbrowser.ui.downloads.cardInfoIsElsewhere
+import com.bitsycore.cardbrowser.ui.downloads.cardInfoLanguageIsChosen
 import com.bitsycore.cardbrowser.ui.downloads.defaultInfoLanguages
 import com.bitsycore.cardbrowser.ui.downloads.infoIsComplete
 import kotlin.test.Test
@@ -74,6 +75,31 @@ class DownloadsUiTest {
 				isCardDataBundled = false,
 				isCardInfoBulkOnly = false,
 				setCount = 1,
+			),
+		)
+	}
+
+	@Test
+	fun `a dump decides its own languages and the chips do not`() {
+		// Magic's whole-game dialog offered the file *and* a row of card-info language chips, which
+		// is two controls for one fact and only one of them is obeyed: Scryfall's cheap dump is
+		// 97% English whatever the chips say, and taking the every-language one is a different
+		// file rather than a different tick. The variant selector is the language control there.
+		assertFalse(
+			cardInfoLanguageIsChosen(
+				isCardDataBundled = false,
+				isCardInfoBulkOnly = true,
+				setCount = 988,
+				hasBulkVariants = true,
+			),
+		)
+		// A source with no dump fetches per set, and then the chips are the only control there is.
+		assertTrue(
+			cardInfoLanguageIsChosen(
+				isCardDataBundled = false,
+				isCardInfoBulkOnly = false,
+				setCount = 42,
+				hasBulkVariants = false,
 			),
 		)
 	}

@@ -64,6 +64,52 @@ class DownloadRenderer {
 				defaultLanguage = CardLanguage.FRENCH,
 			)
 		}
+		// A source whose records come from its dump: the card-info row is replaced by a line
+		// saying where they do come from. Scryfall's case, and the one that is easy to get wrong
+		// in the direction nobody sees -- the tick defaults to on, so hiding the row without also
+		// declining to queue the kind looks identical here and fetches anyway.
+		renderToPng(vOut, "downloads-kind-bulk-only", width = 700, height = 700, density = 1.65f) {
+			DownloadKindDialog(
+				setName = "Foundations",
+				cardCount = 291,
+				onDismiss = {},
+				onConfirm = { _, _, _, _ -> },
+				isCardInfoBulkOnly = true,
+				languages = listOf(CardLanguage.ENGLISH, CardLanguage.FRENCH),
+				defaultLanguage = CardLanguage.FRENCH,
+			)
+		}
+		// The whole-game dialog for a source with a dump: the card-info row is there, because that
+		// row is how the import is started, and its language is not a choice -- the file's is.
+		renderToPng(vOut, "downloads-kind-bulk-whole-game", width = 700, height = 760, density = 1.65f) {
+			DownloadKindDialog(
+				setName = "",
+				setCount = 988,
+				cardCount = 110_000,
+				onDismiss = {},
+				onConfirm = { _, _, _, _ -> },
+				isCardInfoBulkOnly = true,
+				bulkVariants = listOf(
+					BulkSummary(
+						id = "default_cards",
+						label = "Printed languages",
+						compressedBytes = 78_000_000,
+						updatedAt = null,
+						description = "One printing per card.",
+					),
+					BulkSummary(
+						id = "all_cards",
+						label = "Every language",
+						compressedBytes = 393_000_000,
+						updatedAt = null,
+						description = "Every printing in every language.",
+						coversAllLanguages = true,
+					),
+				),
+				languages = listOf(CardLanguage.ENGLISH, CardLanguage.FRENCH),
+				defaultLanguage = CardLanguage.FRENCH,
+			)
+		}
 		renderToPng(vOut, "downloads-kind-partly-held", width = 700, height = 900, density = 1.65f, isDark = false) {
 			DownloadKindDialog(
 				setName = "Base Set",
