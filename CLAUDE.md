@@ -179,6 +179,25 @@ Every `handleIntent` is silently dropped and the state never moves, which looks 
 you are chasing. `Dispatchers.setMain(StandardTestDispatcher())` in a `@BeforeTest` — this cost an
 hour and produced a false reproduction of a bug that was already fixed.
 
+**Pulse reduces *before* it runs `handleIntent`, so an intent must carry what it needs.** Reading
+state the reducer has just cleared gets the cleared value, not the old one. `StorageViewModel` read
+`pendingDelete` inside `handleIntent` under a comment claiming the opposite: the dialog had already
+closed, the target was always null, the delete returned early and `isDeleting` never came back
+down — every trash icon on the screen greyed out and the data stayed on disk.
+`PulseDispatchOrderTest` asks the framework rather than assuming.
+
+**A double that is looser than the query it stands in for cannot fail where the real thing fails.**
+`InMemorySetRecordStore.search` has now hidden two bugs in the same predicate: first by ignoring
+language entirely, then by letting a row stored under *no* language match any language asked for,
+where `searchPrintings` matches none. The second one made a deliberate sabotage run pass and
+reported a bug-free app while One Piece was unsearchable. Mirror the SQL exactly, even where
+leniency looks kinder — and sabotage-check any test written against a fake.
+
+**A provider that states no languages resolves to `null`, which is not "no provider".** Writing
+`registry.resolve(game, lang)?.let { effectiveLanguage(it, lang) } ?: lang` merges the two and
+reinstates the user's raw preference for a source that deliberately names none — OPTCG and TCGCSV
+both do. Rows written under no language were then searched for under `en` and nothing matched.
+
 **`LazyVerticalGrid` throws on a duplicate key** rather than degrading, so a provider issuing two
 records with the same id is a crash. Wuthering Waves shipped exactly that. Any new adapter wants a
 test asserting its keys are distinct.
@@ -243,6 +262,10 @@ an entry when it stops being true.
   in one burst exceeds what the host accepts, and a pause did not clear it.
 - **The bulk import has not been re-run against the real 598 MB dump** since it started skipping
   digital-only sets. The rule and its guard are unit-tested against a fake.
+- **The one-off wipe of an install older than the current schema is desktop-logic only.**
+  `CardStoreFactory.verifyShape` discards a sound database that is missing a table the code
+  queries — see the migrations note in [database/README.md](database/README.md). It is unit-tested;
+  no phone has taken that path.
 
 **Known debt**
 

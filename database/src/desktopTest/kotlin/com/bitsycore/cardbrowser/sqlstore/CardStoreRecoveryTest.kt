@@ -6,6 +6,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -43,6 +44,38 @@ class CardStoreRecoveryTest {
 
 		assertFalse(vOpened.wasRecovered, "a fresh store is not a recovered one")
 		assertEquals(0, vOpened.store.storageSnapshot().sets)
+	}
+
+	@Test
+	fun `a sound store that is older than the code is discarded rather than queried`() {
+		// This project ships no migrations before 1.0, so adding a table keeps the schema at
+		// version 1. SQLDelight sees a matching version and runs nothing, and the first query
+		// against the new table throws "no such table" somewhere deep inside a screen. Checking
+		// the shape up front turns that into the discard-and-recreate path that already exists.
+		DesktopDriverFactory().delete(mFile.absolutePath)
+		factory().open(mFile.absolutePath).store.writeSet(
+			provider = "p", setId = "s", language = CardLanguage.ENGLISH, game = "test",
+			label = "A set", isPinned = true, fetchedAt = 1L, printings = emptyList(),
+			isComplete = true,
+		)
+
+		// An older install, simulated exactly: the file is sound and passes `integrity_check`, it
+		// simply predates a table.
+		DesktopDriverFactory().create(mFile.absolutePath).use { vDriver ->
+			vDriver.execute(null, "DROP TABLE metadata", 0)
+		}
+
+		var vReason: String? = null
+		val vOpened = factory().open(mFile.absolutePath) { vReason = it }
+
+		assertTrue(vOpened.wasRecovered, "an older store must be discarded, not queried")
+		assertTrue(
+			vReason?.contains("metadata") == true,
+			"the caller is told which table was missing, and got: $vReason",
+		)
+		// Recreated and usable, with the table that was missing.
+		assertEquals(0, vOpened.store.storageSnapshot().sets)
+		assertNull(vOpened.store.readMetadata("anything"))
 	}
 
 	@Test
