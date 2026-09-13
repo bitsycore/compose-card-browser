@@ -2,7 +2,7 @@
 
 Three files, and none of them contain any of the app. Everything Toploader does lives in
 `:composeApp` and crosses into Swift as a single `UIViewController` from
-[`MainViewController.kt`](../composeApp/src/iosMain/kotlin/com/bitsycore/cardbrowser/MainViewController.kt).
+[`MainViewController.kt`](../composeApp/src/iosMain/kotlin/com/bitsycore/toploader/MainViewController.kt).
 
 - `iosApp/iOSApp.swift` — the `@main` entry point. Starts Koin, shows `ContentView`.
 - `iosApp/ContentView.swift` — wraps the Compose view controller for SwiftUI.

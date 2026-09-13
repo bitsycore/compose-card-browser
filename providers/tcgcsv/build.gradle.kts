@@ -18,7 +18,7 @@ kotlin {
 	jvm("desktop")
 
 	android {
-		namespace = "com.bitsycore.cardbrowser.providers.tcgcsv"
+		namespace = "com.bitsycore.toploader.providers.tcgcsv"
 		compileSdk = libs.versions.androidCompileSdk.get().toInt()
 		minSdk = libs.versions.androidMinSdk.get().toInt()
 		withHostTest {}

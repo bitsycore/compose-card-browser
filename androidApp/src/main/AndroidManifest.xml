@@ -5,19 +5,19 @@
 	<uses-permission android:name="android.permission.INTERNET" />
 
 	<application
-		android:name=".CardBrowserApplication"
+		android:name=".ToploaderApplication"
 		android:allowBackup="true"
 		android:icon="@mipmap/ic_launcher"
 		android:roundIcon="@mipmap/ic_launcher"
 		android:label="Toploader"
 		android:supportsRtl="true"
-		android:theme="@style/Theme.CardBrowser">
+		android:theme="@style/Theme.Toploader">
 
 		<activity
 			android:name=".MainActivity"
 			android:exported="true"
 			android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
-			android:theme="@style/Theme.CardBrowser">
+			android:theme="@style/Theme.Toploader">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
 				<category android:name="android.intent.category.LAUNCHER" />

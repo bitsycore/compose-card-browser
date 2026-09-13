@@ -12,7 +12,7 @@ kotlin {
 	jvm("desktop")
 
 	android {
-		namespace = "com.bitsycore.cardbrowser.providers.optcg"
+		namespace = "com.bitsycore.toploader.providers.optcg"
 		compileSdk = libs.versions.androidCompileSdk.get().toInt()
 		minSdk = libs.versions.androidMinSdk.get().toInt()
 		withHostTest {}

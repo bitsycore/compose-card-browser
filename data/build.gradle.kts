@@ -16,7 +16,7 @@ kotlin {
 	jvm("desktop")
 
 	android {
-		namespace = "com.bitsycore.cardbrowser.data"
+		namespace = "com.bitsycore.toploader.data"
 		compileSdk = libs.versions.androidCompileSdk.get().toInt()
 		minSdk = libs.versions.androidMinSdk.get().toInt()
 		withHostTest {}

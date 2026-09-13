@@ -1,0 +1,195 @@
+package com.bitsycore.toploader.sqlstore
+
+import com.bitsycore.toploader.core.model.CardLanguage
+import java.io.File
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+/**
+ * What a corrupt database costs.
+ *
+ * This is the question that blocked the migration, and it is the only reason this file exists.
+ * The file cache's blast radius is one set: a record that will not parse is deleted and re-fetched
+ * and nothing else notices. A database has no such property -- one bad page can take every set
+ * with it -- which is a strictly worse failure mode that no amount of speed pays for if the answer
+ * is to crash.
+ *
+ * So the answer has to be demonstrated, not asserted in a comment: a damaged store opens, is
+ * discarded, and comes back empty and usable, and the caller is *told* so it can clear the
+ * preferences that describe a catalogue which no longer exists.
+ */
+class CardStoreRecoveryTest {
+
+	private val mFile = File(
+		System.getProperty("java.io.tmpdir"),
+		"toploader-recovery-test-${this::class.simpleName}.db",
+	)
+
+	@AfterTest
+	fun cleanUp() {
+		DesktopDriverFactory().delete(mFile.absolutePath)
+	}
+
+	private fun factory() = CardStoreFactory(DesktopDriverFactory())
+
+	@Test
+	fun `a sound store opens without being recovered`() {
+		DesktopDriverFactory().delete(mFile.absolutePath)
+
+		val vOpened = factory().open(mFile.absolutePath)
+
+		assertFalse(vOpened.wasRecovered, "a fresh store is not a recovered one")
+		assertEquals(0, vOpened.store.storageSnapshot().sets)
+	}
+
+	@Test
+	fun `a sound store that is older than the code is discarded rather than queried`() {
+		// This project ships no migrations before 1.0, so adding a table keeps the schema at
+		// version 1. SQLDelight sees a matching version and runs nothing, and the first query
+		// against the new table throws "no such table" somewhere deep inside a screen. Checking
+		// the shape up front turns that into the discard-and-recreate path that already exists.
+		DesktopDriverFactory().delete(mFile.absolutePath)
+		factory().open(mFile.absolutePath).store.writeSet(
+			provider = "p", setId = "s", language = CardLanguage.ENGLISH, game = "test",
+			label = "A set", isPinned = true, fetchedAt = 1L, printings = emptyList(),
+			isComplete = true,
+		)
+
+		// An older install, simulated exactly: the file is sound and passes `integrity_check`, it
+		// simply predates a table.
+		DesktopDriverFactory().create(mFile.absolutePath).use { vDriver ->
+			vDriver.execute(null, "DROP TABLE metadata", 0)
+		}
+
+		var vReason: String? = null
+		val vOpened = factory().open(mFile.absolutePath) { vReason = it }
+
+		assertTrue(vOpened.wasRecovered, "an older store must be discarded, not queried")
+		assertTrue(
+			vReason?.contains("metadata") == true,
+			"the caller is told which table was missing, and got: $vReason",
+		)
+		// Recreated and usable, with the table that was missing.
+		assertEquals(0, vOpened.store.storageSnapshot().sets)
+		assertNull(vOpened.store.readMetadata("anything"))
+	}
+
+	@Test
+	fun `a store missing only a column is discarded too`() {
+		// The half the first version of this check missed. Adding a *column* to an existing table
+		// is the commoner change of the two and sailed straight past a check that only asked
+		// whether the table existed -- to fail later, deep in a screen, as "no such column".
+		DesktopDriverFactory().delete(mFile.absolutePath)
+		factory().open(mFile.absolutePath)
+
+		// An older store, simulated exactly: every table present, one column short. SQLite cannot
+		// drop a column from an old file format, so the table is rebuilt without it.
+		DesktopDriverFactory().create(mFile.absolutePath).use { vDriver ->
+			vDriver.execute(null, "ALTER TABLE printing RENAME TO printing_old", 0)
+			vDriver.execute(
+				null,
+				"CREATE TABLE printing (provider TEXT NOT NULL, card_id TEXT NOT NULL, " +
+					"game TEXT NOT NULL, set_id TEXT NOT NULL, set_code TEXT NOT NULL, " +
+					"language TEXT NOT NULL, name TEXT NOT NULL, name_folded TEXT NOT NULL, " +
+					"card_type TEXT, rarity TEXT, cost INTEGER, domains TEXT, " +
+					"payload TEXT NOT NULL, PRIMARY KEY (provider, card_id, language))",
+				0,
+			)
+			vDriver.execute(null, "DROP TABLE printing_old", 0)
+		}
+
+		var vReason: String? = null
+		val vOpened = factory().open(mFile.absolutePath) { vReason = it }
+
+		assertTrue(vOpened.wasRecovered, "a store one column short must be discarded, not queried")
+		assertTrue(
+			vReason?.contains("collector_number") == true,
+			"the caller is told which column was missing, and got: $vReason",
+		)
+	}
+
+	@Test
+	fun `a store reopens on the next launch instead of failing`() {
+		// The ordinary path, and the one an in-memory test cannot see. The desktop driver used to
+		// call `Schema.create` unconditionally, which throws against a file whose tables already
+		// exist -- so the app worked on a fresh install and threw on every launch after it.
+		DesktopDriverFactory().delete(mFile.absolutePath)
+		factory().open(mFile.absolutePath).store.writeSet(
+			provider = "p", setId = "s", language = CardLanguage.ENGLISH, game = "test",
+			label = "A set", isPinned = true, fetchedAt = 1L, printings = emptyList(),
+			isComplete = true,
+		)
+
+		val vReopened = factory().open(mFile.absolutePath)
+
+		assertFalse(vReopened.wasRecovered, "a sound database must not be discarded on reopen")
+		assertEquals(1, vReopened.store.storageSnapshot().sets, "and it must still hold its sets")
+	}
+
+	@Test
+	fun `a garbage file is discarded and the store comes back usable`() {
+		DesktopDriverFactory().delete(mFile.absolutePath)
+		// Not a database at all. This is what a truncated write or a bad sector looks like from
+		// the outside, and the app must survive it rather than refuse to start.
+		mFile.writeBytes(ByteArray(8192) { 0x7A })
+
+		val vReasons = mutableListOf<String>()
+		val vOpened = factory().open(mFile.absolutePath) { vReasons += it }
+
+		assertTrue(vOpened.wasRecovered, "a garbage file must be reported as recovered")
+		assertEquals(1, vReasons.size, "the caller must be told once, with a reason")
+		// And the replacement actually works, which is the half that matters.
+		vOpened.store.writeSet(
+			provider = "p", setId = "s", language = CardLanguage.ENGLISH, game = "test",
+			label = "A set", isPinned = false, fetchedAt = 1L, printings = emptyList(),
+			isComplete = true,
+		)
+		assertEquals(1, vOpened.store.storageSnapshot().sets)
+	}
+
+	@Test
+	fun `a truncated database is discarded rather than half-read`() {
+		DesktopDriverFactory().delete(mFile.absolutePath)
+		// A real database, then cut in half. Salvaging part of it would leave a store whose
+		// contents nobody can characterise, which is the one thing this app must never serve.
+		factory().open(mFile.absolutePath).store.writeSet(
+			provider = "p", setId = "s", language = CardLanguage.ENGLISH, game = "test",
+			label = "A set", isPinned = true, fetchedAt = 1L, printings = emptyList(),
+			isComplete = true,
+		)
+		val vBytes = mFile.readBytes()
+		assertTrue(vBytes.size > 2048, "expected a real database to truncate")
+		mFile.writeBytes(vBytes.copyOf(vBytes.size / 2).also { it.fill(0x00, it.size / 2) })
+
+		val vOpened = factory().open(mFile.absolutePath)
+
+		// Either it was salvageable and opened clean, or it was discarded -- both are acceptable
+		// outcomes and neither is a crash. What is asserted is that the store is *usable* after,
+		// which is the promise the app depends on.
+		assertEquals(
+			if (vOpened.wasRecovered) 0 else 1,
+			vOpened.store.storageSnapshot().sets,
+			"a recovered store starts empty; a salvaged one keeps what it had",
+		)
+	}
+
+	@Test
+	fun `recovery is reported so a caller can clear what described the old data`() {
+		// The failure this guards against is not the crash -- it is the silence after it. Records
+		// of what is on disk live in preferences: which bulk import was taken, which sets had
+		// images fetched. A store that starts fresh without saying so leaves the download dialog
+		// reporting an import that is gone.
+		DesktopDriverFactory().delete(mFile.absolutePath)
+		mFile.writeBytes("not a database".encodeToByteArray())
+
+		var vCleared = false
+		val vOpened = factory().open(mFile.absolutePath) { vCleared = true }
+
+		assertTrue(vOpened.wasRecovered)
+		assertTrue(vCleared, "the discard must be announced, not merely performed")
+	}
+}

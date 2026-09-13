@@ -35,7 +35,7 @@ import os
 import re
 import urllib.request
 
-OUT = "composeApp/src/commonMain/kotlin/com/bitsycore/cardbrowser/ui/common/AppIcons.kt"
+OUT = "composeApp/src/commonMain/kotlin/com/bitsycore/toploader/ui/component/AppIcons.kt"
 
 BASE = "https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web"
 
@@ -83,7 +83,7 @@ WANTED = [
 	("VisibilityOff", "visibility_off", 0, False),
 ]
 
-HEADER = '''package com.bitsycore.cardbrowser.ui.common
+HEADER = '''package com.bitsycore.toploader.ui.component
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor

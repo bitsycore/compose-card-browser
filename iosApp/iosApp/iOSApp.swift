@@ -14,7 +14,7 @@ struct iOSApp: App {
 	init() {
 		// Before the first screen asks Koin for anything. MainViewController() does
 		// this too and it is idempotent, so neither side has to know which ran first.
-		MainViewControllerKt.startCardBrowser()
+		MainViewControllerKt.startToploader()
 	}
 
 	var body: some Scene {

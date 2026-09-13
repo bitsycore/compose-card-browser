@@ -10,7 +10,7 @@ plugins {
 // Kotlin Multiplatform plugin. Kotlin here is compiled by the Android plugin itself, which is why
 // no Kotlin plugin is applied alongside it.
 android {
-	namespace = "com.bitsycore.cardbrowser.android"
+	namespace = "com.bitsycore.toploader.android"
 	compileSdk = libs.versions.androidCompileSdk.get().toInt()
 
 	defaultConfig {

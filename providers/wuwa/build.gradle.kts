@@ -26,7 +26,7 @@ kotlin {
 	jvm("desktop")
 
 	android {
-		namespace = "com.bitsycore.cardbrowser.providers.wuwa"
+		namespace = "com.bitsycore.toploader.providers.wuwa"
 		compileSdk = libs.versions.androidCompileSdk.get().toInt()
 		minSdk = libs.versions.androidMinSdk.get().toInt()
 		androidResources { enable = true }
@@ -77,7 +77,7 @@ kotlin {
 
 compose.resources {
 	// Its own package, so this module's `Res` cannot collide with the app's.
-	packageOfResClass = "com.bitsycore.cardbrowser.providers.wuwa.resources"
+	packageOfResClass = "com.bitsycore.toploader.providers.wuwa.resources"
 	// The module has no `@Composable` anything and no other module reads its resources, so the
 	// accessors stay internal and the class is generated regardless of that.
 	generateResClass = auto
@@ -120,7 +120,7 @@ val vCheckAndroidAsset = tasks.register("androidAssetIsPackaged") {
 	description = "Checks that wuwa-cards.json is packaged into the Android AAR's assets."
 	dependsOn("assembleAndroidMain")
 	val vAarDir = layout.buildDirectory.dir("outputs/aar")
-	val vExpected = "assets/composeResources/com.bitsycore.cardbrowser.providers.wuwa.resources/" +
+	val vExpected = "assets/composeResources/com.bitsycore.toploader.providers.wuwa.resources/" +
 		"files/wuwa-cards.json"
 	doLast {
 		val vAar = vAarDir.get().asFile.listFiles()?.firstOrNull { it.extension == "aar" }

@@ -131,6 +131,6 @@ There are no `TODO`, `FIXME` or `HACK` markers anywhere in the source. *(verifie
   *Riffle* and *Codex* are all taken. The lesson worth keeping: **anything starting with "Card" is
   gone** — that namespace is saturated.
 
-  The Kotlin packages are still `com.bitsycore.cardbrowser.*`. That is internal, nobody sees it,
+  The Kotlin packages are still `com.bitsycore.toploader.*`. That is internal, nobody sees it,
   and renaming a thousand files before 1.0 buys nothing. Do it when there is a reason to touch
   them anyway.

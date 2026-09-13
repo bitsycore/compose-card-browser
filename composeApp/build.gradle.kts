@@ -6,7 +6,7 @@ plugins {
 	alias(libs.plugins.kotlinSerialization)
 	// SQLite and the resource archive for the experimental native desktop target. Does nothing
 	// unless the `nativeDesktop` flag is on.
-	id("cardbrowser.native-desktop")
+	id("toploader.native-desktop")
 }
 
 val nativeDesktop = providers.gradleProperty("nativeDesktop").map(String::toBoolean).getOrElse(false)
@@ -18,11 +18,11 @@ val vGenerateAppBuild by tasks.registering {
 	inputs.property("version", vVersion)
 	outputs.dir(vOut)
 	doLast {
-		val vFile = vOut.get().asFile.resolve("com/bitsycore/cardbrowser/AppBuild.kt")
+		val vFile = vOut.get().asFile.resolve("com/bitsycore/toploader/AppBuild.kt")
 		vFile.parentFile.mkdirs()
 		vFile.writeText(
 			"""
-			package com.bitsycore.cardbrowser
+			package com.bitsycore.toploader
 
 			/** Generated from `libs.versions.toml`. Do not edit; change the catalogue instead. */
 			object AppBuild {
@@ -46,7 +46,7 @@ kotlin {
 	jvm("desktop")
 
 	android {
-		namespace = "com.bitsycore.cardbrowser"
+		namespace = "com.bitsycore.toploader"
 		compileSdk = libs.versions.androidCompileSdk.get().toInt()
 		minSdk = libs.versions.androidMinSdk.get().toInt()
 		androidResources { enable = true }
@@ -209,7 +209,7 @@ kotlin {
 }
 
 compose.resources {
-	packageOfResClass = "com.bitsycore.cardbrowser.resources"
+	packageOfResClass = "com.bitsycore.toploader.resources"
 }
 
 compose.desktop {
@@ -220,7 +220,7 @@ compose.desktop {
 		(this as ExtensionAware).extensions.configure(
 			com.bitsycore.compose.sdl.gradle.ComposeDesktopNativeExtension::class.java,
 		) {
-			entryPoint = "com.bitsycore.cardbrowser.main"
+			entryPoint = "com.bitsycore.toploader.main"
 			// The same PNGs the JVM distribution uses. `exeIcon` takes the sizes and builds the
 			// `.ico` itself; this icon has no dark variant, hence the same files twice.
 			icon {
@@ -236,7 +236,7 @@ compose.desktop {
 	}
 
 	application {
-		mainClass = "com.bitsycore.cardbrowser.MainKt"
+		mainClass = "com.bitsycore.toploader.MainKt"
 		// Skia loads native code; the flag keeps JDK 24+ from warning about it on every start.
 		jvmArgs += "--enable-native-access=ALL-UNNAMED"
 

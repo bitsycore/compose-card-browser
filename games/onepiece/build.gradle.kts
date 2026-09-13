@@ -16,7 +16,7 @@ kotlin {
 	jvm("desktop")
 
 	android {
-		namespace = "com.bitsycore.cardbrowser.games.onepiece"
+		namespace = "com.bitsycore.toploader.games.onepiece"
 		compileSdk = libs.versions.androidCompileSdk.get().toInt()
 		minSdk = libs.versions.androidMinSdk.get().toInt()
 		androidResources { enable = true }
@@ -33,7 +33,7 @@ kotlin {
 }
 
 compose.resources {
-	packageOfResClass = "com.bitsycore.cardbrowser.games.onepiece.resources"
+	packageOfResClass = "com.bitsycore.toploader.games.onepiece.resources"
 	// `always`, not the default `auto`: the resources dependency arrives transitively through
 	// `:games:api`, and `auto` only generates the class for a module that declares it directly.
 	generateResClass = always

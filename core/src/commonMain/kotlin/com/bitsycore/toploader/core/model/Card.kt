@@ -1,0 +1,416 @@
+package com.bitsycore.toploader.core.model
+
+import kotlinx.datetime.LocalDate
+import kotlinx.serialization.Serializable
+
+// ==================
+// MARK: Set
+// ==================
+
+/**
+ * A regional set or release of a game.
+ *
+ * Regional releases stay separate. Two sets are the same set only when one provider says so with an
+ * explicit id; nothing here infers a link from a shared name or a shared release week.
+ *
+ * @property id source-qualified, so a set from a second provider never collides with this one
+ * @property code the provider's short code, e.g. `OGN`. Shown to the user and used for its filters
+ * @property releaseDate `null` when the provider does not state one; the set list sorts those last
+ * @property externalIds marketplace and third-party ids the provider supplied, keyed by [ExternalIdKey]
+ * @property region which of the game's product lines this set belongs to, as a `GameRegion` key, or
+ *   `null` for a game that ships one line worldwide. See `GameProfile.regions`
+ * @property releaseOrder where this set falls in its own line's release order, oldest 0, or `null`
+ *   when the provider states no order. A rank rather than a date, for the case where a source knows
+ *   the chronology without publishing it: TCGdex will sort a catalogue by release date and then omit
+ *   the dates from the response, so for its Japanese line the order is knowable and the dates are
+ *   not. Compared only between sets of the same line -- two catalogues' ranks mean nothing to each
+ *   other
+ * @property languages the languages this set is actually published in, empty when the provider does
+ *   not know set by set. **Not** what the provider can serve in general: that is
+ *   `DataCapabilities.languages`, and using it per set is what offered a Korean Base Set. A language
+ *   here is a claim about this set, so it is what a language menu may offer
+ */
+@Serializable
+data class CardSet(
+	val id: SourceId,
+	val game: GameId,
+	val code: String,
+	val name: String,
+	val cardCount: Int?,
+	val releaseDate: LocalDate?,
+	val externalIds: Map<String, List<String>> = emptyMap(),
+	val symbol: SetSymbol? = null,
+	val region: String? = null,
+	val languages: Set<CardLanguage> = emptySet(),
+	val releaseOrder: Int? = null,
+) {
+
+	/** The provider that supplied this record. Kept for provenance in the UI and in the cache. */
+	val provider: ProviderId get() = id.provider
+
+	/**
+	 * Which language to show this set in, given what the user would prefer.
+	 *
+	 * The one rule, in one place, because more than one caller depends on the answer and they have
+	 * to agree. The grid loads a set in this language and the set list checks whether *this*
+	 * language's copy is on disk; a language embedded in a cache key means two callers disagreeing
+	 * do not merely differ in taste, they read and write different files -- which is how every set
+	 * once failed to show as saved.
+	 *
+	 * [preferred] wins when the set has it. Otherwise the app's preference order picks the best
+	 * available, so a Japan-only set opens in Japanese for a user who prefers French rather than
+	 * opening empty. A set stating no languages falls through to [preferred] unchanged: silence
+	 * from the provider is not evidence of absence.
+	 */
+	fun languageFor(preferred: CardLanguage?): CardLanguage? = when {
+		languages.isEmpty() -> preferred
+		preferred != null && preferred in languages -> preferred
+		else -> CardLanguage.PREFERENCE_ORDER.firstOrNull { it in languages } ?: preferred
+	}
+}
+
+/**
+ * A set's own artwork, where its provider publishes any.
+ *
+ * This is the one piece of *branding* a provider legitimately supplies. A game's logo does not
+ * belong to a provider -- Scryfall is not Magic -- but a set symbol is part of the set record, and
+ * three of the seven sources publish one. The rest state nothing, so this is null and the set list
+ * falls back to the set's code in a tinted tile.
+ *
+ * @property url a single image. Small: these are 4-10 KB glyphs, not card art
+ * @property isMonochrome true when the asset is a single-colour glyph with no palette of its own.
+ *   Scryfall's set symbols are SVGs with no `fill` at all, so they render in the SVG default of
+ *   black and are invisible on a dark theme unless recoloured. Stated by the provider that supplies
+ *   the asset, because whether artwork carries its own colour is a fact about the artwork
+ */
+@Serializable
+data class SetSymbol(
+	val url: String,
+	val isMonochrome: Boolean = false,
+)
+
+/**
+ * Orders sets by their code, numerically where the code carries numbers.
+ *
+ * For games whose sets carry no release date. Sorting those by *name* -- which is what the set list
+ * used to fall back to -- put One Piece's "Awakening of the New Era" before "Romance Dawn", an
+ * order with no relationship to how the game shipped. Code order is the one every player already
+ * knows: OP-01 through OP-14, and naturally rather than as strings, which would put OP-10 before
+ * OP-02.
+ */
+object SetCodeComparator : Comparator<CardSet> {
+
+	override fun compare(a: CardSet, b: CardSet): Int {
+		val vLeft = CardPrinting.naturalParts(a.code)
+		val vRight = CardPrinting.naturalParts(b.code)
+		for (vIndex in 0 until minOf(vLeft.size, vRight.size)) {
+			val vResult = vLeft[vIndex].compareTo(vRight[vIndex])
+			if (vResult != 0) return vResult
+		}
+		return vLeft.size.compareTo(vRight.size)
+	}
+}
+
+/** Keys used in [CardSet.externalIds] and [CardPrinting.externalIds]. */
+object ExternalIdKey {
+
+	/** A Cardmarket *expansion* id. Not a product id -- see `CardmarketLinkBuilder`. */
+	const val CARDMARKET_EXPANSION = "cardmarket.expansion"
+
+	/** A Cardmarket product id, which is what a direct product URL needs. */
+	const val CARDMARKET_PRODUCT = "cardmarket.product"
+
+	/** A TCGplayer group id (sets) or product id (cards). */
+	const val TCGPLAYER = "tcgplayer"
+
+	/** The game publisher's own card id, where the provider exposes one. */
+	const val PUBLISHER_CARD = "publisher.card"
+
+	/**
+	 * The provider's own internal record id, when the app keys on something else.
+	 *
+	 * Riftbound sets are keyed by their game code rather than by Riftcodex's database id, so the
+	 * database id is kept here for provenance and for debugging against the provider's own API.
+	 */
+	const val PROVIDER_RECORD = "provider.record"
+}
+
+// ==================
+// MARK: Artwork and finish
+// ==================
+
+/**
+ * How a printing's art differs from the plain version of the same card.
+ *
+ * A treatment is a property of the artwork, not of the finish: a card can be alternate-art and
+ * non-foil at once. [UNKNOWN] is for providers that expose art variants without saying what kind.
+ */
+@Serializable
+enum class ArtworkTreatment(val displayName: String) {
+	STANDARD("Standard"),
+	ALTERNATE_ART("Alternate art"),
+	EXTENDED_ART("Extended art"),
+	FULL_ART("Full art"),
+	OVERNUMBERED("Overnumbered"),
+	SIGNATURE("Signature"),
+	PROMO("Promo"),
+	UNKNOWN("Other treatment"),
+}
+
+/**
+ * One distinct piece of art for a printing.
+ *
+ * The grid puts a tile per distinct artwork, so this is what a tile is keyed on. Finishes and
+ * languages do not multiply tiles -- they are choices inside the detail screen.
+ *
+ * @property imageUrl the largest image the provider offers
+ * @property thumbnailUrl a small variant for the grid and the preview strip, or `null` when the
+ *   provider's CDN cannot resize, in which case the grid falls back to [imageUrl]
+ * @property displayUrl the variant the detail screen and fullscreen viewer load: native resolution,
+ *   compressed. `null` falls back to [imageUrl]
+ * @property language the language of the *image*, which is not always the language of the text
+ */
+@Serializable
+data class Artwork(
+	val id: SourceId,
+	val imageUrl: String,
+	val thumbnailUrl: String?,
+	val displayUrl: String? = null,
+	val artist: String?,
+	val treatment: ArtworkTreatment,
+	val language: CardLanguage?,
+	val accessibilityText: String? = null,
+) {
+
+	/**
+	 * True when the source published any rendition of this art.
+	 *
+	 * False is a real answer and not a failure: TCGdex has whole sets it holds no scan of -- the
+	 * Japanese MEGA line, measured in [docs/PROVIDER_RESEARCH.md] -- and a screen must be able to
+	 * say "no image" rather than drawing the same broken-image mark it uses for a fetch that went
+	 * wrong.
+	 *
+	 * Any rendition, deliberately. `ImageVariant.chainFor` asks a narrower question -- which
+	 * renditions *this view* can use -- and a card with only a thumbnail has no display rendition
+	 * while plainly having a picture.
+	 */
+	val hasImage: Boolean
+		get() = imageUrl.isNotBlank() ||
+			!thumbnailUrl.isNullOrBlank() ||
+			!displayUrl.isNullOrBlank()
+}
+
+/** A physical finish. Which of these a printing actually exists in is [FinishCoverage]. */
+@Serializable
+enum class Finish(val displayName: String) {
+	NON_FOIL("Non-foil"),
+	FOIL("Foil"),
+	ETCHED("Etched foil"),
+	TEXTURED("Textured foil"),
+}
+
+/**
+ * What a provider can say about the finishes of one printing.
+ *
+ * Same three-way split as [LanguageCoverage], and for the same reason: a provider with no finish
+ * field is not asserting that no foil exists.
+ */
+@Serializable
+data class FinishCoverage(
+	val confirmed: Set<Finish> = emptySet(),
+	val absent: Set<Finish> = emptySet(),
+) {
+
+	/** How [finish] stands for this printing. */
+	fun availabilityOf(finish: Finish): Availability = when (finish) {
+		in confirmed -> Availability.AVAILABLE
+		in absent -> Availability.UNAVAILABLE
+		else -> Availability.UNKNOWN
+	}
+
+	/** True when the provider stated nothing at all about finishes for this printing. */
+	val isUnstated: Boolean get() = confirmed.isEmpty() && absent.isEmpty()
+}
+
+// ==================
+// MARK: Card
+// ==================
+
+/**
+ * The numbers a printing carries, in three deliberately unnamed slots.
+ *
+ * Named `cost`, `primary` and `secondary` rather than after any one game's words. They used to be
+ * `energy`, `might` and `power` -- Riftbound's vocabulary -- which meant a Magic card's mana value
+ * lived in a field called `energy` and a Yu-Gi-Oh level did too. Three neutral slots plus a
+ * per-game label is the honest version of the same model, and `GameVocabulary` supplies the label.
+ *
+ * All nullable: a spell has no attack, a Pokémon card no single play cost.
+ *
+ * @property cost what you pay to play the card -- energy, mana value, level, hand cost
+ * @property primary the first stat -- might, power, ATK, HP, damage
+ * @property secondary the second stat -- power, toughness, DEF, life, speed
+ */
+@Serializable
+data class CardAttributes(
+	val cost: Int? = null,
+	val primary: Int? = null,
+	val secondary: Int? = null,
+)
+
+/** How a printing is categorised by the game. */
+@Serializable
+data class CardClassification(
+	val type: String? = null,
+	val supertype: String? = null,
+	val rarity: String? = null,
+	val domains: List<String> = emptyList(),
+)
+
+/** Display text in one language. [isProviderStated] is false when the language was inferred. */
+@Serializable
+data class LocalizedText(
+	val language: CardLanguage?,
+	val name: String,
+	val rules: String? = null,
+	val flavour: String? = null,
+	val isProviderStated: Boolean = true,
+)
+
+/**
+ * The identity of a card across its printings, where a provider states one reliably.
+ *
+ * Null on [CardPrinting] whenever the provider gives no such relationship. Nothing in this app
+ * invents one: two printings are the same card because a provider said so, never because they share
+ * a name. There is no cross-provider identity at all, which is why this is a [SourceId].
+ */
+@Serializable
+data class CardIdentity(
+	val id: SourceId,
+	val name: String,
+)
+
+/**
+ * A specific printing of a card in a specific set: the unit the grid and the detail screen show.
+ *
+ * This is deliberately *not* "a card". A card identity, a set printing, an artwork, a finish and a
+ * printing language are five separate things, and this type is the third of them with the others
+ * hanging off it.
+ *
+ * @property collectorNumber a string, always. Collector numbers carry letters, leading zeroes and
+ *   suffixes; a provider that happens to expose an integer is normalised into a string here and the
+ *   original is kept in [providerRawCollectorNumber] rather than being the value the app reasons on
+ * @property printingKey the provider's own stable name for *this printing*, when it has one that is
+ *   not [id]. Set only by a provider whose key is genuinely per-printing; `null` otherwise, and then
+ *   [id] is the key. It exists because a provider's record ids can be less stable than its printing
+ *   ids -- Riftcodex issues a fresh database id per record and has been observed emitting the same
+ *   printing twice, so [id] distinguishes records while this distinguishes printings
+ * @property identity `null` when the provider states no cross-printing relationship
+ * @property languages what is known about printing languages -- often [LanguageCoverage.isUnstated]
+ * @property finishes what is known about finishes -- often [FinishCoverage.isUnstated]
+ */
+@Serializable
+data class CardPrinting(
+	val id: SourceId,
+	val game: GameId,
+	val setId: SourceId,
+	val setCode: String,
+	val setName: String,
+	val collectorNumber: String,
+	val providerRawCollectorNumber: String,
+	val printingKey: String? = null,
+	val identity: CardIdentity?,
+	val text: LocalizedText,
+	val artwork: Artwork,
+	val attributes: CardAttributes = CardAttributes(),
+	val classification: CardClassification = CardClassification(),
+	val tags: List<String> = emptyList(),
+	val languages: LanguageCoverage = LanguageCoverage(),
+	val finishes: FinishCoverage = FinishCoverage(),
+	val externalIds: Map<String, List<String>> = emptyMap(),
+	val orientation: CardOrientation = CardOrientation.PORTRAIT,
+) {
+
+	/** The provider that supplied this record. */
+	val provider: ProviderId get() = id.provider
+
+	/**
+	 * What makes two records the same printing.
+	 *
+	 * The provider's own printing key where it declares one, and the record id otherwise -- which
+	 * is always unique, so a provider that declares nothing is simply never de-duplicated.
+	 */
+	val dedupeKey: String get() = printingKey?.let { "${id.provider.value}:$it" } ?: id.qualified
+
+	/** The name to show, which is the text's name rather than any identity's. */
+	val displayName: String get() = text.name
+
+	/**
+	 * Collector numbers in natural order: `2` before `10`, and `10a` after `10`.
+	 *
+	 * A plain string sort puts `10` before `2`, which is the single most visible way a card grid
+	 * can look broken. Numeric runs are compared as numbers and everything else as text.
+	 */
+	val collectorSortKey: List<CollectorSortPart> get() = naturalParts(collectorNumber)
+
+	companion object {
+
+		/** Splits a collector number into alternating numeric and textual runs. */
+		internal fun naturalParts(value: String): List<CollectorSortPart> {
+			val vParts = mutableListOf<CollectorSortPart>()
+			var vIndex = 0
+			while (vIndex < value.length) {
+				val vDigit = value[vIndex].isDigit()
+				var vEnd = vIndex
+				while (vEnd < value.length && value[vEnd].isDigit() == vDigit) vEnd++
+				val vChunk = value.substring(vIndex, vEnd)
+				vParts += if (vDigit) {
+					// A collector number long enough to overflow Long is not a collector number,
+					// but it must not crash the grid either.
+					CollectorSortPart(number = vChunk.toLongOrNull() ?: Long.MAX_VALUE, text = null)
+				} else {
+					CollectorSortPart(number = null, text = vChunk.lowercase())
+				}
+				vIndex = vEnd
+			}
+			return vParts
+		}
+	}
+}
+
+/** One run of a collector number: either a number or a piece of text, never both. */
+@Serializable
+data class CollectorSortPart(
+	val number: Long?,
+	val text: String?,
+) : Comparable<CollectorSortPart> {
+
+	override fun compareTo(other: CollectorSortPart): Int = when {
+		number != null && other.number != null -> number.compareTo(other.number)
+		text != null && other.text != null -> text.compareTo(other.text)
+		// A numeric run sorts before a textual one, so `10` precedes `10a`.
+		number != null -> -1
+		else -> 1
+	}
+}
+
+/** Which way a card is printed. Landscape cards need a different tile aspect in the grid. */
+@Serializable
+enum class CardOrientation {
+	PORTRAIT,
+	LANDSCAPE,
+}
+
+/** Orders printings by [CardPrinting.collectorSortKey], then by name to break ties. */
+object CollectorNumberComparator : Comparator<CardPrinting> {
+
+	override fun compare(a: CardPrinting, b: CardPrinting): Int {
+		val vLeft = a.collectorSortKey
+		val vRight = b.collectorSortKey
+		for (vIndex in 0 until minOf(vLeft.size, vRight.size)) {
+			val vResult = vLeft[vIndex].compareTo(vRight[vIndex])
+			if (vResult != 0) return vResult
+		}
+		val vBySize = vLeft.size.compareTo(vRight.size)
+		return if (vBySize != 0) vBySize else a.displayName.compareTo(b.displayName)
+	}
+}
