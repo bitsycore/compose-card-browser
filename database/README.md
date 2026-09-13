@@ -94,13 +94,19 @@ made kept records anonymous.
   owner's instruction — there is no installed base, so compatibility buys nothing and costs a file
   per change.
 
-  The consequence is that a sound database can be *older than the code*: adding a table keeps the
-  schema at 1, SQLDelight sees a matching version and runs nothing, and the first query against the
-  new table throws "no such table" deep inside a screen. `CardStoreFactory.verifyShape` therefore
-  checks that every table the code queries exists, after the integrity check, and a missing one
-  takes the discard-and-recreate path that already handles corruption. Everything in the store is
-  re-fetchable, so that is the right answer rather than a workaround. A dev install left at a
-  higher `user_version` is refused by Android's helper on open, which lands on the same path.
+  The consequence is that a sound database can be *older than the code*: a change keeps the schema
+  at 1, SQLDelight sees a matching version and runs nothing, and the first query against the new
+  shape throws deep inside a screen. `CardStoreFactory.verifyShape` therefore checks the shape
+  after the integrity check, and a mismatch takes the discard-and-recreate path that already
+  handles corruption. Everything in the store is re-fetchable, so that is the right answer rather
+  than a workaround. A dev install left at a higher `user_version` is refused by Android's helper
+  on open, which lands on the same path.
+
+  **It checks columns as well as tables**, and that is not belt-and-braces: the first version asked
+  only whether each table existed, which is the rarer of the two changes. Adding a column — as
+  `printing.collector_number` did — sailed past it to fail later as "no such column".
+  `REQUIRED_SHAPE` lists every column a query names, and **adding one to `Printing.sq` means adding
+  it there too**; forgetting means an older store is kept and breaks on first use.
 
   **After 1.0 this reverses**: a migration can never be removed, because it is the only path an
   older install has forward, and `verifyShape` stops being a recovery and becomes a last resort.

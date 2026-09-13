@@ -125,34 +125,74 @@ class CardStoreFactory(private val mDriverFactory: DriverFactory) {
 	/**
 	 * Fails when the file is sound but older than the schema the code expects.
 	 *
-	 * This project ships no migrations before 1.0: a table added to `Printing.sq` keeps schema
-	 * version 1, so SQLDelight sees a matching version and runs nothing, and the first query
-	 * against the new table throws "no such table" somewhere deep in a screen. Checking the shape
-	 * up front turns that into the discard-and-recreate path that already exists, which is the
-	 * intended answer -- everything in the store is re-fetchable.
+	 * This project ships no migrations before 1.0: a change to `Printing.sq` keeps schema version 1,
+	 * so SQLDelight sees a matching version and runs nothing, and the first query against the new
+	 * shape throws somewhere deep in a screen. Checking up front turns that into the
+	 * discard-and-recreate path that already exists, which is the intended answer -- everything in
+	 * the store is re-fetchable.
+	 *
+	 * **Columns, not only tables.** The first version of this checked that each table existed and
+	 * nothing more, which is exactly half the problem: adding a *column* to an existing table is the
+	 * commoner change of the two, and it sailed past the check to fail later as "no such column".
 	 */
 	private fun verifyShape(driver: SqlDriver) {
-		val vMissing = REQUIRED_TABLES.filter { vTable ->
-			driver.executeQuery(
-				identifier = null,
-				sql = "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
-				mapper = { vCursor ->
-					vCursor.next()
-					app.cash.sqldelight.db.QueryResult.Value(vCursor.getLong(0) ?: 0L)
-				},
-				parameters = 1,
-				binders = { bindString(0, vTable) },
-			).value == 0L
+		val vMissing = REQUIRED_SHAPE.mapNotNull { (vTable, vColumns) ->
+			val vFound = columnsOf(driver, vTable)
+			when {
+				vFound.isEmpty() -> vTable
+				else -> (vColumns - vFound).takeIf { it.isNotEmpty() }?.let { vGone ->
+					"$vTable.${vGone.joinToString("/")}"
+				}
+			}
 		}
 		if (vMissing.isNotEmpty()) {
 			throw IllegalStateException("the card store is missing ${vMissing.joinToString()}")
 		}
 	}
 
+	/**
+	 * The column names of one table, or empty when there is no such table.
+	 *
+	 * `PRAGMA table_info` returns rows, so it goes through `executeQuery` like every other pragma
+	 * that does -- see the note on [pragma]. The table name is interpolated because a pragma takes
+	 * no parameters; every name reaching here is a constant below, never anything a user typed.
+	 */
+	private fun columnsOf(driver: SqlDriver, table: String): Set<String> = driver.executeQuery(
+		identifier = null,
+		sql = "PRAGMA table_info($table)",
+		mapper = { vCursor ->
+			val vNames = mutableSetOf<String>()
+			// Column 1 is `name`; 0 is the ordinal.
+			while (vCursor.next().value) vCursor.getString(1)?.let(vNames::add)
+			app.cash.sqldelight.db.QueryResult.Value(vNames.toSet())
+		},
+		parameters = 0,
+	).value
+
 	private companion object {
 
-		/** Every table the code queries. A store without one of them is an older store. */
-		val REQUIRED_TABLES = listOf("printing", "cached_set", "game_facets", "metadata")
+		/**
+		 * Every table the code queries, and the columns it names in one.
+		 *
+		 * Not every column -- only the ones a query mentions, because those are the ones whose
+		 * absence throws. Adding a column to `Printing.sq` means adding it here, and forgetting to
+		 * means an older store is quietly kept and fails on first use.
+		 */
+		val REQUIRED_SHAPE: Map<String, Set<String>> = mapOf(
+			"printing" to setOf(
+				"provider", "card_id", "game", "set_id", "set_code", "language",
+				"name", "name_folded", "collector_number", "card_type", "rarity",
+				"cost", "domains", "payload",
+			),
+			"cached_set" to setOf(
+				"provider", "set_id", "language", "game", "label", "pinned",
+				"fetched_at", "card_count", "complete", "bytes", "accessed_at",
+			),
+			"game_facets" to setOf(
+				"game", "row_count", "card_types", "rarities", "domains", "costs", "treatments",
+			),
+			"metadata" to setOf("key", "payload"),
+		)
 	}
 }
 

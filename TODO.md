@@ -18,10 +18,13 @@ no entry, for the same reason it is in [CLAUDE.md](CLAUDE.md).
   `SqlCardStore.search` — it is a real thing to be able to ask — but nothing reaches it through a
   filter any more.
 
-- [ ] **The text predicate differs between the engine and SQL.** *(unverified)*
-  `CardFilterEngine.matchesText` matches a folded name substring **or** a collector-number prefix;
-  `searchPrintings` matches `name_folded LIKE '%x%'` only. Searching a collector number finds cards
-  in a set and nothing across a game. Worth confirming before changing either.
+- [x] **The text predicate differs between the engine and SQL.** *(fixed 2026-09-13)*
+  Confirmed, then fixed: the engine matched a folded name substring **or** a collector-number
+  prefix, and `searchPrintings` matched the name only — so a number found cards in a set and
+  nothing across a game, which reads as "there are none". `printing` has a `collector_number`
+  column and an index it can actually use (a prefix test, unlike the name half), and
+  `SqlCardStoreTest` runs the real engine and the real database over the same needles and asserts
+  they agree.
 
 - [ ] **`ArtworkTreatment.STANDARD` cannot be filtered for in a stored browse.** *(unverified)*
   The store has a `:standardArt` flag keyed on the payload *not* containing a treatment, which is a

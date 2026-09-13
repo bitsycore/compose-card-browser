@@ -22,6 +22,13 @@ CREATE TABLE printing (
     language      TEXT    NOT NULL,
     name          TEXT    NOT NULL,
     name_folded   TEXT    NOT NULL,
+    -- The printed number, lower-cased, for the search box.
+    --
+    -- Its own column rather than a payload scan, because the text search is the one predicate here
+    -- with no index to lean on and a `LIKE` over the whole serialised card would be far worse. Held
+    -- lower-cased for the same reason `name_folded` is folded: so the query can compare directly
+    -- instead of calling a function on every row.
+    collector_number TEXT NOT NULL DEFAULT '',
     card_type     TEXT,
     rarity        TEXT,
     cost          INTEGER,
@@ -35,6 +42,11 @@ CREATE INDEX printing_set ON printing (provider, set_id, language);
 
 -- Cross-set search, which is the query the file cache genuinely cannot do.
 CREATE INDEX printing_name ON printing (game, name_folded);
+
+-- Collector-number lookup. This one *is* servable by an index, because it is a prefix test --
+-- `LIKE 'x%'` with no leading wildcard -- which is why typing a number stays fast while typing a
+-- name cannot.
+CREATE INDEX printing_number ON printing (game, collector_number);
 
 -- The advanced search's narrowing columns, one index per axis it filters on.
 --
@@ -95,8 +107,8 @@ CREATE INDEX cached_set_evictable ON cached_set (pinned, accessed_at);
 upsertPrinting:
 INSERT OR REPLACE INTO printing (
     provider, card_id, game, set_id, set_code, language,
-    name, name_folded, card_type, rarity, cost, domains, payload
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    name, name_folded, collector_number, card_type, rarity, cost, domains, payload
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 upsertCachedSet:
 INSERT OR REPLACE INTO cached_set (
@@ -149,7 +161,11 @@ searchPrintings:
 SELECT payload FROM printing
 WHERE game = :game
   AND (:language IS NULL OR language = :language)
-  AND (:text IS NULL OR name_folded LIKE '%' || :text || '%')
+  -- Name anywhere, or collector number from the start. The same two rules `CardFilterEngine`
+  -- applies inside a set: typing "1" should offer 1, 10 and 100, not every card with a 1 in its
+  -- number. Matching only the name here meant a number found cards in a set and nothing across a
+  -- game, which reads as "there are none".
+  AND (:text IS NULL OR name_folded LIKE '%' || :text || '%' OR collector_number LIKE :text || '%')
   AND (:excludeText IS NULL OR name_folded NOT LIKE '%' || :excludeText || '%')
   AND (:cardType IS NULL OR card_type = :cardType)
   AND (:cardTypes IS NULL OR (card_type IS NOT NULL AND instr('|' || :cardTypes || '|', '|' || card_type || '|') > 0))

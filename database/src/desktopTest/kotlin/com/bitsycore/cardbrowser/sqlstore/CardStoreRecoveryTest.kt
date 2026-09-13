@@ -79,6 +79,40 @@ class CardStoreRecoveryTest {
 	}
 
 	@Test
+	fun `a store missing only a column is discarded too`() {
+		// The half the first version of this check missed. Adding a *column* to an existing table
+		// is the commoner change of the two and sailed straight past a check that only asked
+		// whether the table existed -- to fail later, deep in a screen, as "no such column".
+		DesktopDriverFactory().delete(mFile.absolutePath)
+		factory().open(mFile.absolutePath)
+
+		// An older store, simulated exactly: every table present, one column short. SQLite cannot
+		// drop a column from an old file format, so the table is rebuilt without it.
+		DesktopDriverFactory().create(mFile.absolutePath).use { vDriver ->
+			vDriver.execute(null, "ALTER TABLE printing RENAME TO printing_old", 0)
+			vDriver.execute(
+				null,
+				"CREATE TABLE printing (provider TEXT NOT NULL, card_id TEXT NOT NULL, " +
+					"game TEXT NOT NULL, set_id TEXT NOT NULL, set_code TEXT NOT NULL, " +
+					"language TEXT NOT NULL, name TEXT NOT NULL, name_folded TEXT NOT NULL, " +
+					"card_type TEXT, rarity TEXT, cost INTEGER, domains TEXT, " +
+					"payload TEXT NOT NULL, PRIMARY KEY (provider, card_id, language))",
+				0,
+			)
+			vDriver.execute(null, "DROP TABLE printing_old", 0)
+		}
+
+		var vReason: String? = null
+		val vOpened = factory().open(mFile.absolutePath) { vReason = it }
+
+		assertTrue(vOpened.wasRecovered, "a store one column short must be discarded, not queried")
+		assertTrue(
+			vReason?.contains("collector_number") == true,
+			"the caller is told which column was missing, and got: $vReason",
+		)
+	}
+
+	@Test
 	fun `a store reopens on the next launch instead of failing`() {
 		// The ordinary path, and the one an in-memory test cannot see. The desktop driver used to
 		// call `Schema.create` unconditionally, which throws against a file whose tables already

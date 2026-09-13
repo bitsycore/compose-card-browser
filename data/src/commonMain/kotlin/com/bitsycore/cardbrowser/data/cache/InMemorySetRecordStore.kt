@@ -226,7 +226,16 @@ class InMemorySetRecordStore(
 
 	private fun CardSearchFilter.matches(card: CardPrinting): Boolean {
 		val vName = card.text.name.lowercase()
-		if (!text.isNullOrBlank() && !vName.contains(text!!.lowercase())) return false
+		// Name anywhere, or collector number from the start -- both halves, exactly as
+		// `searchPrintings` does it and as `CardFilterEngine` does inside a set. Matching only the
+		// name here would make this fake unable to fail where the real query fails, which is the
+		// one job it has and which it has already failed twice.
+		if (!text.isNullOrBlank()) {
+			val vNeedle = text!!.lowercase()
+			val vMatches = vName.contains(vNeedle) ||
+				card.collectorNumber.lowercase().startsWith(vNeedle)
+			if (!vMatches) return false
+		}
 		if (!excludeText.isNullOrBlank() && vName.contains(excludeText!!.lowercase())) return false
 		// Any of the chosen values, not all of them: one axis is an OR, like the card grid's.
 		if (cardTypes.isNotEmpty() && card.classification.type !in cardTypes) return false

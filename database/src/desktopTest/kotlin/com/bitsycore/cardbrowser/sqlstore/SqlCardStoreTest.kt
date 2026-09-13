@@ -384,6 +384,56 @@ class SqlCardStoreTest {
 		}
 	}
 
+	@Test
+	fun `a collector number finds its card across a game`() {
+		// It found one inside a set and nothing across a game, because the engine matched the name
+		// or the number and this statement matched only the name. An empty result is a claim that
+		// there are none, so the two had to be made to agree.
+		write("s", null, "Set", true, 1L, (1..3).map { card(it) })
+
+		assertEquals(1, mStore.search(game = "test", text = "2").size)
+	}
+
+	@Test
+	fun `a collector number matches from the start -- not anywhere`() {
+		// Typing 1 should offer 1, 10 and 100 -- not every card with a 1 somewhere in its number.
+		//
+		// Named without digits on purpose. "Card 21" contains a 1, so the *name* half matches it and
+		// the prefix rule cannot be seen -- which is what the first version of this test tripped on.
+		write("s", null, "Set", true, 1L, listOf(
+			card(1, name = "Alpha"),
+			card(10, name = "Beta"),
+			card(100, name = "Gamma"),
+			card(21, name = "Delta"),
+		))
+
+		val vHits = mStore.search(game = "test", text = "1")
+			.map { it.collectorNumber }
+			.sorted()
+
+		assertEquals(listOf("1", "10", "100"), vHits, "21 contains a 1 but does not start with one")
+	}
+
+	@Test
+	fun `the store and the engine answer the same text the same way`() {
+		// The cost axis had exactly this bug and now has exactly this test. Real SQLite, the real
+		// engine, the same cards, the same needles.
+		val vCards = listOf(card(1), card(10), card(100), card(21))
+		write("s", null, "Set", true, 1L, vCards)
+
+		for (vNeedle in listOf("1", "10", "2", "card", "card 1", "zzz", "")) {
+			val vFromStore = mStore.search(game = "test", text = vNeedle.takeIf { it.isNotEmpty() })
+				.map { it.id.local }
+				.sorted()
+			val vFromEngine = CardFilterEngine
+				.apply(vCards, CardQuery(text = vNeedle.takeIf { it.isNotEmpty() }), listOf("Common"))
+				.map { it.id.local }
+				.sorted()
+
+			assertEquals(vFromEngine, vFromStore, "the two disagree on \"$vNeedle\"")
+		}
+	}
+
 	// ==================
 	// MARK: Removing part of a game
 	// ==================
@@ -480,6 +530,8 @@ class SqlCardStoreTest {
 		cost: Int? = number % 5,
 		rarity: String = "Common",
 		domains: List<String> = listOf("Fury"),
+		/** Overridable so a text test can use a name with no digits in it. */
+		name: String = "Card $number",
 	): CardPrinting {
 		val vProvider = ProviderId("p")
 		return CardPrinting(
@@ -491,7 +543,7 @@ class SqlCardStoreTest {
 			setName = "Set",
 			collectorNumber = number.toString(),
 			providerRawCollectorNumber = number.toString(),
-			text = LocalizedText(language, "Card $number"),
+			text = LocalizedText(language, name),
 			artwork = Artwork(
 				id = SourceId(vProvider, "a$number"),
 				imageUrl = "https://example.test/$number.png",

@@ -74,6 +74,8 @@ class SqlCardStore(driver: SqlDriver) {
 					// Folded once, at write time. Folding at query time would mean no index could
 					// be used, which is most of what this store is for.
 					name_folded = fold(vCard.displayName),
+					// Lower-cased once, for the same reason.
+					collector_number = vCard.collectorNumber.lowercase(),
 					card_type = vCard.classification.type,
 					rarity = vCard.classification.rarity,
 					cost = vCard.attributes.cost?.toLong(),
