@@ -136,6 +136,12 @@ SELECT language, COUNT(*) AS total FROM cached_set GROUP BY language ORDER BY to
 -- than one. `IN` would have been the obvious thing and is not available: the statement is static,
 -- and an empty collection makes it `IN ()`, which SQLite will not parse.
 --
+-- Artwork treatment is read out of the payload rather than from a column of its own. It is the one
+-- axis with no projection beside it, and adding one would be a schema change to every install's
+-- downloaded cards for the sake of a filter. The payload is the serialised printing, and the only
+-- field in it called `treatment` is the artwork's, so the substring is exact. Standard art carries
+-- no such field at all -- the serialiser omits a default -- which is what `:standardArt` looks for.
+--
 -- Domains have no multi form here. The column is itself a delimited list, so "any of these" is a
 -- set intersection and SQL cannot iterate both sides in one predicate -- see `SqlCardStore.search`,
 -- which runs this once per chosen domain and merges.
@@ -152,8 +158,19 @@ WHERE game = :game
   AND (:maxCost IS NULL OR (cost IS NOT NULL AND cost <= :maxCost))
   AND (:minCost IS NULL OR (cost IS NOT NULL AND cost >= :minCost))
   AND (:domain IS NULL OR (domains IS NOT NULL AND domains LIKE '%' || :domain || '%'))
+  AND (:treatment IS NULL OR payload LIKE '%"treatment":"' || :treatment || '"%')
+  AND (:standardArt IS NULL OR (:standardArt = 1 AND payload NOT LIKE '%"treatment":%'))
 ORDER BY name_folded
 LIMIT :limit;
+
+-- Whether a game has any card of one artwork treatment stored, so the filter offers only the
+-- treatments there is something to find. One cheap existence check per value, and there are eight.
+gameHasTreatment:
+SELECT EXISTS(
+    SELECT 1 FROM printing
+    WHERE game = :game AND payload LIKE '%"treatment":"' || :treatment || '"%'
+    LIMIT 1
+);
 
 -- Which of a game's sets are held *whole*, for the set list.
 --

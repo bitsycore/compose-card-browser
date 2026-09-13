@@ -157,22 +157,24 @@ class SqlCardStore(driver: SqlDriver) {
 	 * de-duplicated here rather than in SQL -- `DISTINCT` over the joined string would offer
 	 * "Fury / Calm" as though it were one domain.
 	 */
-	fun facetsForGame(game: String): StoredFacets = StoredFacets(
-		cardTypes = mQueries.cardTypesInGame(game).executeAsList().filterNotNull().sorted(),
-		rarities = mQueries.raritiesInGame(game).executeAsList().filterNotNull().sorted(),
-		domains = mQueries.domainsInGame(game).executeAsList()
-			.filterNotNull()
-			.flatMap { it.split(DOMAIN_SEPARATOR) }
-			.map { it.trim() }
-			.filter { it.isNotEmpty() }
-			.distinct()
-			.sorted(),
-		costRange = mQueries.costRangeInGame(game).executeAsOne().let { vRow ->
-			val vLow = vRow.low
-			val vHigh = vRow.high
-			if (vLow == null || vHigh == null) null else vLow.toInt()..vHigh.toInt()
-		},
-	)
+	fun facetsForGame(game: String, treatmentNames: List<String> = emptyList()): StoredFacets =
+		StoredFacets(
+			cardTypes = mQueries.cardTypesInGame(game).executeAsList().filterNotNull().sorted(),
+			rarities = mQueries.raritiesInGame(game).executeAsList().filterNotNull().sorted(),
+			domains = mQueries.domainsInGame(game).executeAsList()
+				.filterNotNull()
+				.flatMap { it.split(DOMAIN_SEPARATOR) }
+				.map { it.trim() }
+				.filter { it.isNotEmpty() }
+				.distinct()
+				.sorted(),
+			costRange = mQueries.costRangeInGame(game).executeAsOne().let { vRow ->
+				val vLow = vRow.low
+				val vHigh = vRow.high
+				if (vLow == null || vHigh == null) null else vLow.toInt()..vHigh.toInt()
+			},
+			treatments = treatmentsForGame(game, treatmentNames),
+		)
 
 	/** What browsing occupies. Pinned sets excluded -- see [setPinned]. */
 	fun unpinnedBytes(): Long = mQueries.unpinnedBytes().executeAsOne()
@@ -343,9 +345,11 @@ class SqlCardStore(driver: SqlDriver) {
 		minCost: Int? = null,
 		maxCost: Int? = null,
 		domains: Set<String> = emptySet(),
+		/** Artwork treatments by name, as `ArtworkTreatment` declares them. */
+		treatments: Set<String> = emptySet(),
 		limit: Int = 200,
 	): List<CardPrinting> {
-		fun query(domain: String?): List<CardPrinting> = mQueries.searchPrintings(
+		fun query(domain: String?, treatment: String?): List<CardPrinting> = mQueries.searchPrintings(
 			game = game,
 			language = language?.code,
 			text = text?.let(::fold),
@@ -359,10 +363,21 @@ class SqlCardStore(driver: SqlDriver) {
 			maxCost = maxCost?.toLong(),
 			minCost = minCost?.toLong(),
 			domain = domain?.let(::fold),
+			// Standard art is the absence of the field rather than a value of it, so it is asked
+			// for separately. See the statement.
+			treatment = treatment?.takeIf { it != STANDARD_TREATMENT },
+			standardArt = if (treatment == STANDARD_TREATMENT) 1L else null,
 			limit = limit.toLong(),
 		).executeAsList().map { JSON.decodeFromString(CardPrinting.serializer(), it) }
 
-		if (domains.size <= 1) return query(domains.singleOrNull())
+		// Both axes that cannot be expressed once, run once per value and merged. Domains because a
+		// card holds a list of them; treatments because the predicate is a substring of the payload
+		// and "any of these" is no more expressible over it than over a delimited column.
+		val vDomains = domains.takeIf { it.isNotEmpty() }?.toList() ?: listOf(null)
+		val vTreatments = treatments.takeIf { it.isNotEmpty() }?.toList() ?: listOf(null)
+		if (vDomains.size == 1 && vTreatments.size == 1) {
+			return query(vDomains.single(), vTreatments.single())
+		}
 
 		// Once per chosen domain, merged. The column is a delimited list of a card's own domains,
 		// so "any of these" is an intersection of two lists and SQL cannot walk both in one
@@ -372,12 +387,23 @@ class SqlCardStore(driver: SqlDriver) {
 		// Truncation survives the merge: every pass returns its matches in name order, up to the
 		// same limit, so anything a pass dropped sorts after its own last row and therefore after
 		// the merged list's.
-		return domains
-			.flatMap { query(it) }
+		return vDomains
+			.flatMap { vDomain -> vTreatments.map { vDomain to it } }
+			.flatMap { (vDomain, vTreatment) -> query(vDomain, vTreatment) }
 			.distinctBy { it.id.qualified }
 			.sortedBy { it.displayName.lowercase() }
 			.take(limit)
 	}
+
+	/**
+	 * Which artwork treatments a game has anything stored for.
+	 *
+	 * One existence check per value the enum declares, which is eight cheap queries. Derived rather
+	 * than assumed for the same reason every other facet is: a filter for something this device
+	 * does not hold is a control that can only ever answer nothing.
+	 */
+	fun treatmentsForGame(game: String, candidates: List<String>): List<String> =
+		candidates.filter { mQueries.gameHasTreatment(game, it).executeAsOne() }
 
 	/**
 	 * `Unit|Spell`, which the statement brackets with separators itself.
@@ -389,6 +415,9 @@ class SqlCardStore(driver: SqlDriver) {
 	private fun delimited(values: Set<String>) = values.joinToString(DOMAIN_SEPARATOR)
 
 	private companion object {
+
+		/** The one treatment the serialiser omits, because it is the default. */
+		const val STANDARD_TREATMENT = "STANDARD"
 
 		/** Matches the file cache's parser: a record carries fields this build has no DTO for. */
 		val JSON = Json { ignoreUnknownKeys = true; explicitNulls = false }
@@ -480,4 +509,6 @@ data class StoredFacets(
 	val domains: List<String>,
 	/** The costs actually present, or null where no card in the game publishes one. */
 	val costRange: IntRange?,
+	/** Artwork treatments present, by enum name. Empty where every stored card is standard art. */
+	val treatments: List<String> = emptyList(),
 )

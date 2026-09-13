@@ -54,6 +54,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.GameId
+import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.data.repository.SearchScope
 import com.bitsycore.cardbrowser.games.altered.AlteredGame
@@ -226,7 +227,8 @@ fun SearchContent(
 
 					vState.isIdle -> EmptyState(
 						if (vState.filter.setIds.isNotEmpty()) {
-							"Search the cards you have downloaded from the sets you picked."
+							"Search the cards you have downloaded from the sets you picked, " +
+								"by name or by filter alone."
 						} else if (vState.isProviderSearchable) {
 							"Search every ${vState.game?.shortName.orEmpty()} set by card name."
 						} else {
@@ -551,6 +553,11 @@ private fun ActiveSearchFilterChips(
 				onFilterChanged(vFilter.copy(domains = vFilter.domains - vValue))
 			}
 		}
+		vFilter.treatments.forEach { vValue ->
+			RemovableFilterChip(vValue.displayName) {
+				onFilterChanged(vFilter.copy(treatments = vFilter.treatments - vValue))
+			}
+		}
 		if (vFilter.minCost != null || vFilter.maxCost != null) {
 			val vLabel = state.game?.vocabulary?.cost ?: "Cost"
 			val vFrom = vFilter.minCost?.toString() ?: "any"
@@ -706,6 +713,28 @@ private fun SearchFilterSheet(
 						)
 					}
 				}
+			}
+		}
+
+		// Alternate art and its relatives, offered only where the store holds some. A card whose
+		// art is standard carries no treatment at all -- see the statement -- so "Standard" is a
+		// value like any other here rather than the absence of a filter.
+		if (vFacets != null && vFacets.treatments.size > 1) {
+			FilterSection("Artwork") {
+				ArtworkTreatment.entries
+					.filter { it.name in vFacets.treatments }
+					.forEach { vTreatment ->
+						FilterValueChip(
+							label = vTreatment.displayName,
+							isSelected = vTreatment in state.filter.treatments,
+						) {
+							onFilterChanged(
+								state.filter.copy(
+									treatments = state.filter.treatments.toggle(vTreatment),
+								),
+							)
+						}
+					}
 			}
 		}
 

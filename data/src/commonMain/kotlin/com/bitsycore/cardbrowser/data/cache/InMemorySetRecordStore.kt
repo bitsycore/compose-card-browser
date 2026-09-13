@@ -203,6 +203,7 @@ class InMemorySetRecordStore(
 		) {
 			return false
 		}
+		if (treatments.isNotEmpty() && card.artwork.treatment !in treatments) return false
 		// Unknown is not zero, which is the one rule worth keeping in step with the SQL.
 		val vCost = card.attributes.cost
 		if (minCost != null && (vCost == null || vCost < minCost!!)) return false

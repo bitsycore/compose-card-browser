@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.data.cache
 
+import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.GameId
@@ -187,6 +188,8 @@ data class CardSearchFilter(
 	val minCost: Int? = null,
 	val maxCost: Int? = null,
 	val domains: Set<String> = emptySet(),
+	/** Artwork treatments, as `ArtworkTreatment` names them. Alternate art, and its relatives. */
+	val treatments: Set<ArtworkTreatment> = emptySet(),
 	val language: CardLanguage? = null,
 	/** The sets to look in, or empty for every set that has anything stored. */
 	val setIds: Set<String> = emptySet(),
@@ -195,7 +198,8 @@ data class CardSearchFilter(
 	/** True when nothing is set, which is a request to show nothing rather than everything. */
 	val isEmpty: Boolean
 		get() = text.isNullOrBlank() && excludeText.isNullOrBlank() && cardTypes.isEmpty() &&
-			rarities.isEmpty() && minCost == null && maxCost == null && domains.isEmpty()
+			rarities.isEmpty() && minCost == null && maxCost == null && domains.isEmpty() &&
+			treatments.isEmpty()
 }
 
 /** How many rows one search returns. A screenful many times over; not a paging story yet. */
@@ -320,12 +324,15 @@ class SqlSetRecordStore(
 			minCost = filter.minCost,
 			maxCost = filter.maxCost,
 			domains = filter.domains,
+			treatments = filter.treatments.mapTo(mutableSetOf()) { it.name },
 			limit = limit,
 		)
 	}
 
-	override suspend fun facetsForGame(game: GameId): StoredFacets =
-		withContext(mIoDispatcher) { mStore.facetsForGame(game.value) }
+	override suspend fun facetsForGame(game: GameId): StoredFacets = withContext(mIoDispatcher) {
+		// The candidates are the enum's, and the store answers which of them it actually holds.
+		mStore.facetsForGame(game.value, ArtworkTreatment.entries.map { it.name })
+	}
 
 	override suspend fun completeSetsForGame(game: GameId): Map<String, Set<String>> =
 		withContext(mIoDispatcher) { mStore.completeSetsForGame(game.value) }

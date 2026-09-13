@@ -82,6 +82,7 @@ object SearchContract :
 					cardTypes.size,
 					rarities.size,
 					domains.size,
+					treatments.size,
 					if (minCost != null || maxCost != null) 1 else 0,
 					setIds.size,
 				).sum()
@@ -91,11 +92,12 @@ object SearchContract :
 		val hasAdvancedFilters: Boolean get() = activeAdvancedCount > 0
 
 		/** True before anything has been searched for. */
-		val isIdle: Boolean get() = submitted.isBlank() && !isLoading
+		val isIdle: Boolean get() = submitted.isBlank() && !hasAdvancedFilters && !isLoading
 
 		/** True when a search ran and matched nothing. */
 		val isEmptyResult: Boolean
-			get() = submitted.isNotBlank() && !isLoading && results.isEmpty() && error == null
+			get() = (submitted.isNotBlank() || hasAdvancedFilters) &&
+				!isLoading && results.isEmpty() && error == null
 
 		/**
 		 * True when the results came only from sets already downloaded, and that is less than the
@@ -213,7 +215,10 @@ object SearchContract :
 		is Intent.QueryChanged -> state.copy(query = intent.text)
 
 		Intent.Submit ->
-			if (state.query.isBlank()) {
+			// A blank box is a search when there are filters set: "every alternate art in Origins"
+			// is a question, and it has no name in it. Blank *and* unfiltered is not -- that asks
+			// for the whole store, which is the one query this screen will not run.
+			if (state.query.isBlank() && !state.hasAdvancedFilters) {
 				state
 			} else {
 				state.copy(
