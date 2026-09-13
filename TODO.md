@@ -131,6 +131,6 @@ There are no `TODO`, `FIXME` or `HACK` markers anywhere in the source. *(verifie
   *Riffle* and *Codex* are all taken. The lesson worth keeping: **anything starting with "Card" is
   gone** — that namespace is saturated.
 
-  The Kotlin packages are still `com.bitsycore.toploader.*`. That is internal, nobody sees it,
-  and renaming a thousand files before 1.0 buys nothing. Do it when there is a reason to touch
-  them anyway.
+  The Kotlin packages are `com.bitsycore.toploader.*` as of the same day: 2013 references across
+  261 files, 238 directories moved with `git mv` so the history follows a file rather than
+  stopping at it.
