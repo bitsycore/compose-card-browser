@@ -778,10 +778,14 @@ private fun backdropFor(art: GameArt?): Color =
  * 3dp, roughly a stroke width, and the softness is bought with more rings and lower alpha rather
  * than with distance.
  *
- * `Modifier.dropShadow` does not help: it takes a `Shape` and its `DropShadowPainter` is built from
- * that shape and the draw size, so it shadows the artwork's bounding *rectangle*. That is a blurry
- * version of the plate this replaced. Nothing in the toolkit blurs an image's own alpha on every
- * target -- `Modifier.blur` is `RenderEffect` on Android and this app's `minSdk` is 24.
+ * `Modifier.dropShadow` is the API that ought to do this -- one draw, a real blur, an exact radius,
+ * colour, spread and offset -- and it does not, because its geometry is a `Shape` rather than the
+ * content. On a mostly-transparent wordmark it draws a blurred black rectangle, which is the plate
+ * this replaced. `DropShadowProbe` renders exactly that so the question does not have to be
+ * re-argued from the signature.
+ *
+ * Nothing else in the toolkit blurs an image's own alpha on every target either: `Modifier.blur` is
+ * a `RenderEffect` on Android, which is API 31, and this app's `minSdk` is 24.
  *
  * Offset copies rather than a real blur. `Modifier.blur` is a no-op on Android below API 31, and
  * the one platform this has to work on is a phone -- an effect that silently does nothing on older
