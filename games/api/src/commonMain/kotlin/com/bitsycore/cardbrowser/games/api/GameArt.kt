@@ -72,16 +72,18 @@ import org.jetbrains.compose.resources.DrawableResource
  * subtitle, and Lorcana's runs 0/0/36/48/2% by fifths of the image, the middle bands being the word
  * LORCANA itself. In each case what vanishes is the part that names the game.
  *
- * **All three carry [logoShadow] instead of a plate**, and that replaced a plate in each case.
- * Altered and Lorcana used to set [backdropArgb] to [DARK_BACKDROP] and Riftbound had nothing at
- * all; the plate solved the contrast and cost a coloured slab behind the mark on every screen it
- * appears on, which the project owner did not want on any of the three.
+ * **None of the three carries a plate any more.** Altered and Lorcana set [backdropArgb] to
+ * [DARK_BACKDROP] and Riftbound had nothing at all; the plate solved the contrast and cost a
+ * coloured slab behind the mark on every screen it appears on, which the project owner did not want
+ * on any of the three.
  *
- * A shadow pays for the same thing differently. It follows the *mark's own shape* rather than its
- * bounding box, so what it separates from the background is the letterform, and where the artwork
- * already reads -- Altered's wordmark on the dark theme -- there is nothing behind it to see. That
- * is why it needs no light/dark pair the way a plate does: a dark halo under a light mark is
- * invisible on a dark background by construction.
+ * The UI draws a soft dark halo under *every* mark instead, and it is not a property here. It
+ * follows the artwork's own shape rather than its bounding box, so what it separates from the
+ * background is the letterform; it is faint enough to read as depth rather than as an outline; and
+ * where a mark needs nothing -- a black wordmark, or any of them on the dark theme -- there is
+ * nothing to see. A flag saying which marks get one was tried and removed: the three that needed it
+ * were the three that had it, and the other seven were not harmed by it, so the flag was a table of
+ * games in exchange for nothing. See `HaloedLogo`.
  *
  * **Cyberpunk keeps its light plate**, because it is its own published lockup rather than a
  * workaround -- see below. Its dark one is gone for the same reason as the others: on the dark
@@ -142,10 +144,6 @@ import org.jetbrains.compose.resources.DrawableResource
  *   it on the dark one" -- fine while every flagged logo wanted the same dark grey, and useless the
  *   moment a mark wanted its own brand colour behind it. A colour says everything the boolean did
  *   and one thing more, so [DARK_BACKDROP] is now a value rather than a hidden default
- * @property logoShadow true for a mark with no dark outline of its own, which is then drawn over a
- *   dark halo of its own shape so its edges survive a pale background. For colour artwork, which
- *   cannot be recoloured to suit the theme -- the alternative for such a mark is a plate, and this
- *   is the cheaper half of that choice
  */
 interface GameArt {
 
@@ -163,8 +161,6 @@ interface GameArt {
 
 	val backdropDarkArgb: Long? get() = backdropArgb
 
-	val logoShadow: Boolean get() = false
-
 	companion object {
 
 		/**
@@ -174,11 +170,11 @@ interface GameArt {
 		 * the light theme sees a change. A fixed value rather than a theme colour, because the whole
 		 * point is that it does *not* follow the theme.
 		 *
-		 * **No game uses it now.** Altered and Lorcana did, and both moved to [logoShadow] -- the
-		 * plate was doing the job and the project owner did not want a slab behind the mark. Kept
-		 * because a plate is still the right answer for artwork a halo cannot rescue, and Cyberpunk
-		 * shows one is reachable; a future mark wanting the neutral dark one should not have to
-		 * re-pick the colour.
+		 * **No game uses it now.** Altered and Lorcana did, and both dropped it when the UI started
+		 * drawing a halo under every mark -- the plate was doing the job and the project owner did
+		 * not want a slab behind the mark. Kept because a plate is still the right answer for
+		 * artwork a halo cannot rescue, and Cyberpunk shows one is reachable; a future mark wanting
+		 * the neutral dark one should not have to re-pick the colour.
 		 */
 		const val DARK_BACKDROP: Long = 0xFF201E26
 

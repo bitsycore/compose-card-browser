@@ -91,15 +91,9 @@ object LorcanaArt : GameArt {
 	/** The gold of the wordmark itself, sampled from the artwork rather than chosen. */
 	override val accentArgb: Long = 0xFFC0A878
 
-	/**
-	 * The gold wordmark washes out on a pale tile.
-	 *
-	 * Measured the same way the other three flagged logos were: 33% of its visible pixels fall
-	 * below a 2:1 contrast ratio against a light tile, and the loss is not spread evenly -- by
-	 * fifths of the image it runs 0%, 0%, 36%, 48%, 2%. Those middle bands are "LORCANA" itself,
-	 * so what disappears is the name. The "Disney" script above it is fine, which is exactly the
-	 * shape of the Riftbound case -- and it gets the same answer, a halo on the letterforms rather
-	 * than `GameArt.DARK_BACKDROP` behind the whole tile, which is what it used to wear.
-	 */
-	override val logoShadow: Boolean = true
+	// The gold wordmark washes out on a pale tile: 33% of its visible pixels fall below a 2:1
+	// contrast ratio, and the loss is not spread evenly -- by fifths of the image it runs 0%, 0%,
+	// 36%, 48%, 2%. Those middle bands are "LORCANA" itself, so what disappears is the name, while
+	// the "Disney" script above it is fine. Exactly the shape of the Riftbound case, and it used to
+	// get the same answer: `GameArt.DARK_BACKDROP` behind the whole tile. The halo replaced it.
 }

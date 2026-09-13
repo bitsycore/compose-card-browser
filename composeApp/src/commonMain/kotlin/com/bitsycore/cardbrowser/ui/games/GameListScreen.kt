@@ -24,6 +24,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import com.bitsycore.cardbrowser.ui.common.arrowSelection
@@ -78,7 +81,15 @@ import com.bitsycore.cardbrowser.games.altered.AlteredGame
 import com.bitsycore.cardbrowser.games.onepiece.OnePieceGame
 import com.bitsycore.cardbrowser.games.magic.MagicGame
 import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundArt
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
+import com.bitsycore.cardbrowser.games.altered.AlteredArt
+import com.bitsycore.cardbrowser.games.lorcana.LorcanaArt
+import com.bitsycore.cardbrowser.games.magic.MagicArt
+import com.bitsycore.cardbrowser.games.onepiece.OnePieceArt
+import com.bitsycore.cardbrowser.games.pokemon.PokemonArt
+import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesArt
+import com.bitsycore.cardbrowser.games.yugioh.YuGiOhArt
 import com.bitsycore.cardbrowser.ui.common.DRAGGED_ROW_ELEVATION
 import com.bitsycore.cardbrowser.ui.common.LoadingState
 import com.bitsycore.cardbrowser.ui.common.ReorderHandle
@@ -713,7 +724,7 @@ internal fun GameMark(art: GameArt?, width: Dp = 72.dp, height: Dp = 48.dp) {
 		} else {
 			// `Fit` rather than `Crop`: these are wordmarks of every aspect ratio -- the Magic one
 			// is 960x275 -- and cropping one is far worse than letterboxing it.
-			HaloedLogo(art) { vModifier, vTint ->
+			HaloedLogo { vModifier, vTint ->
 				Image(
 					painter = painterResource(vLogo),
 					contentDescription = null,
@@ -748,11 +759,29 @@ private fun backdropFor(art: GameArt?): Color =
 		?: (art?.accent ?: MaterialTheme.colorScheme.primary).copy(alpha = 0.18f)
 
 /**
- * Draws a mark over a dark halo of its own shape, where the mark asks for one.
+ * Draws a mark over a soft dark halo of its own shape. Every mark, not a chosen few.
  *
- * The alternative to a plate, for the three logos with no dark outline. A plate is a rectangle and
- * is therefore visible whether or not the mark needed rescuing; a halo follows the letterforms, so
- * it separates exactly what would otherwise wash out and disappears into a dark background.
+ * The alternative to a plate, which is what the three logos with no dark outline used to wear. A
+ * plate is a rectangle and is therefore visible whether or not the mark needed rescuing; a halo
+ * follows the letterforms, so it separates exactly what would otherwise wash out and disappears
+ * into a dark background.
+ *
+ * `GameArt` carried a flag for which marks got one, and it is gone. At this weight the halo is a
+ * hint of depth under anything and a rescue under the three that need it; the other seven were not
+ * hurt by it, so the flag was a table of games in exchange for nothing.
+ *
+ * ## Why a fake blur and not a wide one
+ *
+ * The copies have to *overlap*. Pushed out to 9dp they stop being a gradient and become legible
+ * ghosts of the wordmark -- "LEAGUE OF LEGENDS" repeated four times in a fan below itself, which is
+ * unmistakable once seen and was the state of this for one render. So the rings stay inside about
+ * 3dp, roughly a stroke width, and the softness is bought with more rings and lower alpha rather
+ * than with distance.
+ *
+ * `Modifier.dropShadow` does not help: it takes a `Shape` and its `DropShadowPainter` is built from
+ * that shape and the draw size, so it shadows the artwork's bounding *rectangle*. That is a blurry
+ * version of the plate this replaced. Nothing in the toolkit blurs an image's own alpha on every
+ * target -- `Modifier.blur` is `RenderEffect` on Android and this app's `minSdk` is 24.
  *
  * Offset copies rather than a real blur. `Modifier.blur` is a no-op on Android below API 31, and
  * the one platform this has to work on is a phone -- an effect that silently does nothing on older
@@ -778,17 +807,13 @@ private fun backdropFor(art: GameArt?): Color =
  *   one, which then applies its own -- a copy must be a silhouette whatever the mark normally is
  */
 @Composable
-internal fun HaloedLogo(art: GameArt?, image: @Composable (Modifier, ColorFilter?) -> Unit) {
-	if (art?.logoShadow != true) {
-		image(Modifier, null)
-		return
-	}
+internal fun HaloedLogo(image: @Composable (Modifier, ColorFilter?) -> Unit) {
 	Box(contentAlignment = Alignment.Center) {
-		HALO_RINGS.forEach { (vRadius, vAlpha) ->
+		HALO_RINGS.forEach { (vRadius, vAlpha, vCount) ->
 			// The tint's own alpha is what fades a copy: `ColorFilter.tint` blends `SrcIn`, so a
 			// translucent black lands as a translucent silhouette masked by the artwork.
 			val vTint = ColorFilter.tint(Color.Black.copy(alpha = vAlpha))
-			ringOffsets(vRadius).forEach { (vX, vY) ->
+			ringOffsets(vRadius, vCount).forEach { (vX, vY) ->
 				image(Modifier.matchParentSize().offset(x = vX, y = vY), vTint)
 			}
 		}
@@ -797,36 +822,35 @@ internal fun HaloedLogo(art: GameArt?, image: @Composable (Modifier, ColorFilter
 }
 
 /**
- * The halo's rings: how far out, and how dark each one is on its own.
+ * The halo's rings: how far out each is, how dark it is alone, and how many copies draw it.
  *
- * Three of them, 24 draws of a bitmap that is at most 132dp wide. Tuned by rendering the three
- * marks that use it on the light theme and looking -- the inner ring does the separating, the outer
- * two only soften where it ends.
+ * Five of them reaching 9dp, 52 draws of a bitmap that is at most 132dp wide. The spread is what
+ * makes it read as a blur: three tight rings gave a falloff, but one that was over within 3dp, so it
+ * still had a findable edge. Reaching three times as far with each ring correspondingly fainter puts
+ * the edge somewhere nobody can point at, which is the whole request.
+ *
+ * The outer two carry twelve copies rather than eight. Eight points on a 9dp circle are 7dp apart
+ * and the ring shows its corners; on a 1.5dp one they overlap and it does not.
  *
  * Black rather than a theme colour on purpose. The mark is being separated from a *pale* background,
- * which is the only case there is -- these are all light artwork -- so a halo that inverted with the
- * theme would turn white on the dark theme and put a glow around a mark that needed nothing.
+ * which is the only case there is -- so a halo that inverted with the theme would turn white on the
+ * dark theme and put a glow around a mark that needed nothing.
  */
-private val HALO_RINGS: List<Pair<Float, Float>> = listOf(
-	1f to 0.12f,
-	2f to 0.08f,
-	3.25f to 0.05f,
+private val HALO_RINGS: List<Triple<Float, Float, Int>> = listOf(
+	Triple(0.8f, 0.05f, 8),
+	Triple(1.6f, 0.045f, 8),
+	Triple(2.4f, 0.035f, 12),
+	Triple(3.2f, 0.025f, 12),
 )
 
-/** The eight directions, at one radius. Diagonals are pulled in so the ring is round, not square. */
-private fun ringOffsets(radius: Float): List<Pair<Dp, Dp>> {
-	val vDiagonal = radius * 0.707f
-	return listOf(
-		radius.dp to 0.dp,
-		(-radius).dp to 0.dp,
-		0.dp to radius.dp,
-		0.dp to (-radius).dp,
-		vDiagonal.dp to vDiagonal.dp,
-		vDiagonal.dp to (-vDiagonal).dp,
-		(-vDiagonal).dp to vDiagonal.dp,
-		(-vDiagonal).dp to (-vDiagonal).dp,
-	)
-}
+/** [count] copies evenly around a circle of [radius], so a ring is round rather than square. */
+private fun ringOffsets(radius: Float, count: Int): List<Pair<Dp, Dp>> =
+	(0 until count).map { vStep ->
+		val vAngle = TWO_PI * vStep / count
+		(radius * cos(vAngle)).dp to (radius * sin(vAngle)).dp
+	}
+
+private const val TWO_PI = 2f * PI.toFloat()
 
 /**
  * The plate this mark states for the theme in force, or `null` if it states none.
@@ -862,6 +886,25 @@ private fun GameMarkFallback(art: GameArt?) {
 // MARK: Previews
 // ==================
 
+/**
+ * The art the previews draw with.
+ *
+ * `GameListContent.artFor` defaults to `{ null }` so the content stays free of Koin, and for a long
+ * while every preview took that default -- which meant every preview showed [GameMarkFallback] and
+ * not one of them showed a logo. Nothing about the marks, the plates or the halo could be seen in an
+ * IDE at all, which was noticed only when someone went looking for the halo in one.
+ */
+private val PREVIEW_ART: Map<GameProfile, GameArt> = mapOf(
+	RiftboundGame to RiftboundArt,
+	PokemonGame to PokemonArt,
+	MagicGame to MagicArt,
+	OnePieceGame to OnePieceArt,
+	AlteredGame to AlteredArt,
+	YuGiOhGame to YuGiOhArt,
+	WutheringWavesGame to WutheringWavesArt,
+	LorcanaGame to LorcanaArt,
+)
+
 private val PREVIEW_SOURCES: Map<GameProfile, String> = mapOf(
 	RiftboundGame to "Riftcodex",
 	PokemonGame to "TCGdex",
@@ -884,6 +927,7 @@ private fun GameListPreview() = PreviewFrame {
 			isLoading = false,
 		),
 		dispatch = {},
+		artFor = PREVIEW_ART::get,
 	)
 }
 
@@ -898,6 +942,7 @@ private fun GameListLightPreview() = PreviewFrame(isDark = false) {
 			isLoading = false,
 		),
 		dispatch = {},
+		artFor = PREVIEW_ART::get,
 	)
 }
 
@@ -919,6 +964,7 @@ private fun GameListSingleGamePreview() = PreviewFrame {
 			isLoading = false,
 		),
 		dispatch = {},
+		artFor = PREVIEW_ART::get,
 	)
 }
 

@@ -87,11 +87,9 @@ object RiftboundArt : GameArt {
 
 	override val accentArgb: Long = 0xFF7C6BF5
 
-	// A shadow rather than a plate, which is the third answer this mark has had.
-	//
-	// The measurement stands throughout: 31% of its visible pixels fall below a 2:1 contrast ratio
-	// on a light tile, and all of it is the white "LEAGUE OF LEGENDS" subtitle. A plate fixed that
-	// and was visible on every screen the logo appears on; nothing at all left the subtitle to
-	// vanish. A halo is paid only where the subtitle is.
-	override val logoShadow: Boolean = true
+	// No plate, and the measurement that once put one here stands: 31% of this mark's visible pixels
+	// fall below a 2:1 contrast ratio on a light tile, all of it the white "LEAGUE OF LEGENDS"
+	// subtitle. A plate fixed that and was visible on every screen the logo appears on; nothing at
+	// all left the subtitle to vanish. The halo the UI draws under every mark is paid only where the
+	// subtitle is -- see `GameArt`.
 }

@@ -297,7 +297,7 @@ fun SetListContent(
 							// separating from a pale background needs it on both screens, and the
 							// two drawing it their own way is how three of them ended up correct
 							// here and invisible there.
-							HaloedLogo(gameArt) { vModifier, vTint ->
+							HaloedLogo { vModifier, vTint ->
 								Image(
 									painter = painterResource(vLogo),
 									// The title *is* the game name, so the real mark carries it for a

@@ -71,8 +71,7 @@ object AlteredArt : GameArt {
 
 	override val accentArgb: Long = 0xFF4FA97C
 
-	// A near-white wordmark: 49% of its visible pixels fall below a 2:1 contrast ratio against a
-	// light tile, the worst of the ten. It wore `GameArt.DARK_BACKDROP` on the light theme for that,
-	// and a shadow buys the same legibility without a slab behind the mark on every screen.
-	override val logoShadow: Boolean = true
+	// A near-white wordmark, and the worst of the ten on a light tile: 49% of its visible pixels
+	// fall below a 2:1 contrast ratio. It wore `GameArt.DARK_BACKDROP` for that. It now states
+	// nothing, because the halo the UI draws under every mark is what carries it -- see `GameArt`.
 }
