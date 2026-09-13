@@ -148,6 +148,9 @@ object StorageContract :
 
 		/** "Cache settings" -- the limits these bars are measured against live in settings. */
 		data object CacheSettingsRequested : Intent
+
+		/** A game row was tapped: show what it is actually holding. */
+		data class GameOpened(val game: GameId) : Intent
 	}
 
 	sealed interface Effect {
@@ -158,6 +161,9 @@ object StorageContract :
 		data object NavigateBack : Effect
 
 		data object OpenCacheSettings : Effect
+
+		/** One game's breakdown, where a language or a set can go on its own. */
+		data class OpenGame(val game: GameId) : Effect
 	}
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
@@ -181,6 +187,6 @@ object StorageContract :
 		Intent.ClearBrowsingData, Intent.ClearImages -> state.copy(isLoading = true)
 
 		// Navigation changes no state. The view model turns these into effects.
-		Intent.BackPressed, Intent.CacheSettingsRequested -> state
+		Intent.BackPressed, Intent.CacheSettingsRequested, is Intent.GameOpened -> state
 	}
 }

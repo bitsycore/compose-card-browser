@@ -156,6 +156,24 @@ class InMemorySetRecordStore(
 		return vGoing.size
 	}
 
+	override suspend fun downloadedSets(game: GameId): List<PinnedSet> =
+		pinnedSets().filter { it.game == game.value }
+
+	override suspend fun deleteDownloadedSet(
+		provider: String,
+		setId: String,
+		language: String,
+	): Boolean {
+		// The key stores a null language where the store writes "-", so both spellings are matched
+		// -- the caller has only ever seen the stored form.
+		val vKey = mRows.keys.firstOrNull { vKey ->
+			vKey.provider == provider && vKey.setId == setId &&
+				(vKey.language ?: "-") == language
+		} ?: return false
+		mRows.remove(vKey)
+		return true
+	}
+
 	override suspend fun trim(ceilingBytes: Long): Int {
 		if (ceilingBytes > 0L) return 0
 		val vGoing = mRows.filterValues { !it.isPinned }.keys.toList()

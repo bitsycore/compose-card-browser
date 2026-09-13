@@ -364,6 +364,12 @@ WHERE pinned = 1 AND game = ? GROUP BY language ORDER BY bytes DESC;
 deletePinnedForGame:
 DELETE FROM cached_set WHERE pinned = 1 AND game = ?;
 
+-- One downloaded edition: a set in a language. The storage screen offers these individually so a
+-- reader who wants the English printings back can drop the Japanese ones without losing the game.
+pinnedSetsForGame:
+SELECT provider, set_id, language, label, card_count, bytes FROM cached_set
+WHERE pinned = 1 AND game = ? ORDER BY label, language;
+
 deletePrintingsForGame:
 DELETE FROM printing WHERE game = ?;
 

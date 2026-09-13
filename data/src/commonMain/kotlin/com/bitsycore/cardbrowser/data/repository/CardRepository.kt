@@ -1674,6 +1674,48 @@ class CardRepository(
 	suspend fun deleteKept(game: GameId): Int = mSetStore.deleteDownloaded(game)
 
 	/**
+	 * Everything one game has downloaded, one entry per set per language.
+	 *
+	 * The breakdown behind a storage row, so a reader can drop one language or one set instead of
+	 * the whole game. Sets the cached catalogue does not list are marked rather than hidden: a bulk
+	 * import brings them, they take up real space, and a screen that cannot show them is a screen
+	 * whose total does not add up.
+	 */
+	suspend fun keptSets(game: GameId): List<KeptSet> {
+		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardSet>()))
+		val vCatalogue = mRegistry.resolve(game)
+			?.let { setListOnDisk(it, game, vSerializer) }
+			?.mapTo(mutableSetOf()) { it.id.qualified }
+		return mSetStore.downloadedSets(game).map { vSet ->
+			KeptSet(
+				provider = vSet.provider,
+				setId = vSet.setId,
+				languageCode = vSet.language,
+				label = vSet.label,
+				cardCount = vSet.cardCount,
+				bytes = vSet.bytes,
+				// No catalogue on disk is not evidence a set is absent from it, so everything is
+				// left unmarked rather than marked as an extra.
+				isInCatalogue = vCatalogue == null || vSet.setId in vCatalogue,
+			)
+		}
+	}
+
+	/** Deletes one downloaded edition. Returns true when there was one to delete. */
+	suspend fun deleteKeptSet(set: KeptSet): Boolean =
+		mSetStore.deleteDownloadedSet(set.provider, set.setId, set.languageCode)
+
+	/**
+	 * Deletes every edition of [game] stored under [languageCode].
+	 *
+	 * @return how many went
+	 */
+	suspend fun deleteKeptLanguage(game: GameId, languageCode: String): Int =
+		keptSets(game)
+			.filter { it.languageCode == languageCode }
+			.count { deleteKeptSet(it) }
+
+	/**
 	 * A game's catalogue if one is already on disk, in the language it would open in.
 	 *
 	 * **No network, ever.** `null` means nothing is cached, which is a different answer from an

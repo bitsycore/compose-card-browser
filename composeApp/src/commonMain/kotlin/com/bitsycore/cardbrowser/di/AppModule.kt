@@ -61,6 +61,8 @@ import com.bitsycore.cardbrowser.ui.screen.sets.SetListArgs
 import com.bitsycore.cardbrowser.ui.screen.sets.SetListViewModel
 import com.bitsycore.cardbrowser.ui.screen.settings.SettingsViewModel
 import com.bitsycore.cardbrowser.ui.screen.storage.StorageViewModel
+import com.bitsycore.cardbrowser.ui.screen.storagedetail.StorageDetailArgs
+import com.bitsycore.cardbrowser.ui.screen.storagedetail.StorageDetailViewModel
 import com.bitsycore.cardbrowser.data.download.DownloadManager
 import com.bitsycore.cardbrowser.ui.image.CoilImagePrefetcher
 import kotlinx.coroutines.CoroutineScope
@@ -286,6 +288,9 @@ val appModule = module {
 	}
 	viewModel { SettingsViewModel(get(), get(), get(), get()) }
 	viewModel { StorageViewModel(get(), get(), get(), get()) }
+	viewModel { (vArgs: StorageDetailArgs) ->
+		StorageDetailViewModel(get(), get(), get(), vArgs)
+	}
 }
 
 /**

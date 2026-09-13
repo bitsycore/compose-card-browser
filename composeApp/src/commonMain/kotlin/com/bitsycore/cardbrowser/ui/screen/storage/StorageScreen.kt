@@ -55,6 +55,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun StorageScreen(
 	onBack: () -> Unit,
 	onOpenCacheSettings: () -> Unit = {},
+	onOpenGame: (GameId) -> Unit = {},
 	viewModel: StorageViewModel = koinViewModel(),
 ) {
 	val vSnackbar = remember { SnackbarHostState() }
@@ -73,6 +74,8 @@ fun StorageScreen(
 			StorageContract.Effect.NavigateBack -> onBack()
 
 			StorageContract.Effect.OpenCacheSettings -> onOpenCacheSettings()
+
+			is StorageContract.Effect.OpenGame -> onOpenGame(vEffect.game)
 		}
 	}
 	val vState by viewModel.collectAsStateWithLifecycle()
@@ -145,6 +148,7 @@ fun StorageContent(
 						game = vGame,
 						isBusy = state.isDeleting,
 						onDelete = { dispatch(StorageContract.Intent.DeleteRequested(vGame)) },
+						onOpen = { dispatch(StorageContract.Intent.GameOpened(vGame.game)) },
 					)
 					Spacer(Modifier.height(8.dp))
 				}
@@ -296,14 +300,25 @@ private fun CacheLine(
 	}
 }
 
-/** One game's kept records, with the delete that is the only way to remove them. */
+/**
+ * One game's kept records: the headline, a way in, and the delete that removes all of it.
+ *
+ * The row itself opens the breakdown. The trash icon is still here because "remove this game
+ * entirely" is the common case and should not need two screens -- but it is the only thing this
+ * row can offer, and a reader who wants one language back needs [onOpen].
+ */
 @Composable
 private fun KeptGameRow(
 	game: StorageContract.KeptGame,
 	isBusy: Boolean,
 	onDelete: () -> Unit,
+	onOpen: () -> Unit = {},
 ) {
-	Card(colors = CardDefaults.cardColors(), modifier = Modifier.fillMaxWidth()) {
+	Card(
+		onClick = onOpen,
+		colors = CardDefaults.cardColors(),
+		modifier = Modifier.fillMaxWidth(),
+	) {
 		Row(
 			modifier = Modifier.padding(16.dp).fillMaxWidth(),
 			verticalAlignment = Alignment.CenterVertically,

@@ -376,6 +376,39 @@ class SqlCardStore(driver: SqlDriver) {
 		mQueries.pinnedLanguagesForGame(game).executeAsList()
 			.associate { it.language to (it.bytes ?: 0L) }
 
+	/** One game's downloaded editions, one row per set per language. */
+	fun pinnedSetsForGame(game: String): List<PinnedSet> =
+		mQueries.pinnedSetsForGame(game).executeAsList().map {
+			PinnedSet(
+				provider = it.provider,
+				setId = it.set_id,
+				language = it.language,
+				game = game,
+				label = it.label,
+				cardCount = it.card_count.toInt(),
+				bytes = it.bytes,
+			)
+		}
+
+	/**
+	 * Deletes one downloaded edition -- a set in one language.
+	 *
+	 * The cards and the record go together in one transaction. Dropping only the record would
+	 * leave printings that no set claims, and an orphan is worse than a leak here: it answers a
+	 * search from a set the app would say it does not have.
+	 *
+	 * @return true when something was there to delete
+	 */
+	fun deleteDownloadedSet(provider: String, setId: String, language: String): Boolean {
+		var vExisted = false
+		mDatabase.transaction {
+			vExisted = mQueries.hasSet(provider, setId, language).executeAsOne() > 0
+			mQueries.deleteSetRows(provider, setId, language)
+			mQueries.deleteCachedSet(provider, setId, language)
+		}
+		return vExisted
+	}
+
 	/** Deletes one game's downloads. Rows and records together, in one transaction. */
 	fun deleteDownloadedGame(game: String): Int {
 		var vRemoved = 0

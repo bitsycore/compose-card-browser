@@ -63,6 +63,9 @@ class StorageViewModel(
 			StorageContract.Intent.CacheSettingsRequested ->
 				emitEffect(StorageContract.Effect.OpenCacheSettings)
 
+			is StorageContract.Intent.GameOpened ->
+				emitEffect(StorageContract.Effect.OpenGame(intent.game))
+
 			else -> Unit
 		}
 	}

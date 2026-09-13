@@ -136,6 +136,12 @@ interface SetRecordStore {
 	/** Deletes one game's downloads. Returns how many records went. */
 	suspend fun deleteDownloaded(game: GameId): Int
 
+	/** One game's downloaded editions, one entry per set per language. */
+	suspend fun downloadedSets(game: GameId): List<PinnedSet>
+
+	/** Deletes one downloaded edition. Returns true when there was one. */
+	suspend fun deleteDownloadedSet(provider: String, setId: String, language: String): Boolean
+
 	/** Evicts least-recently-used unpinned sets until browsing fits. Returns how many went. */
 	suspend fun trim(ceilingBytes: Long): Int
 
@@ -303,6 +309,17 @@ class SqlSetRecordStore(
 
 	override suspend fun deleteDownloaded(game: GameId): Int =
 		withContext(mIoDispatcher) { mStore.deleteDownloadedGame(game.value) }
+
+	override suspend fun downloadedSets(game: GameId): List<PinnedSet> =
+		withContext(mIoDispatcher) { mStore.pinnedSetsForGame(game.value) }
+
+	override suspend fun deleteDownloadedSet(
+		provider: String,
+		setId: String,
+		language: String,
+	): Boolean = withContext(mIoDispatcher) {
+		mStore.deleteDownloadedSet(provider, setId, language)
+	}
 
 	override suspend fun trim(ceilingBytes: Long): Int =
 		withContext(mIoDispatcher) { mStore.trim(ceilingBytes) }

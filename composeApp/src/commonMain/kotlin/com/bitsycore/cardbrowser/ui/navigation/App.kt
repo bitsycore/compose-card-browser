@@ -16,6 +16,8 @@ import com.bitsycore.cardbrowser.data.cache.CacheReconciler
 import com.bitsycore.cardbrowser.data.cache.SetRecordStore
 import com.bitsycore.cardbrowser.data.repository.SetCatalogueWarmer
 import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateListOf
@@ -41,6 +43,8 @@ import com.bitsycore.cardbrowser.ui.screen.sets.SetListScreen
 import com.bitsycore.cardbrowser.ui.screen.settings.SettingsScreen
 import com.bitsycore.cardbrowser.ui.screen.setup.SetupScreen
 import com.bitsycore.cardbrowser.ui.screen.storage.StorageScreen
+import com.bitsycore.cardbrowser.ui.screen.storagedetail.StorageDetailArgs
+import com.bitsycore.cardbrowser.ui.screen.storagedetail.StorageDetailScreen
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -118,6 +122,10 @@ sealed interface Route : NavKey {
 	/** What is on the device, and what can be deleted. Reached from the bar menu. */
 	@Serializable
 	data object Storage : Route
+
+	/** One game's downloads, broken down so part of them can be deleted. */
+	@Serializable
+	data class StorageDetail(val game: String) : Route
 
 	/**
 	 * The download queue.
@@ -367,6 +375,16 @@ fun App() {
 						StorageScreen(
 							onBack = { vBackStack.popRoute() },
 							onOpenCacheSettings = { vBackStack.add(Route.Settings) },
+							onOpenGame = { vBackStack.add(Route.StorageDetail(it.value)) },
+						)
+					}
+
+					is Route.StorageDetail -> NavEntry(vRoute) {
+						StorageDetailScreen(
+							onBack = { vBackStack.popRoute() },
+							viewModel = koinViewModel {
+								parametersOf(StorageDetailArgs(GameId(vRoute.game)))
+							},
 						)
 					}
 

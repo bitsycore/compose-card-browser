@@ -329,6 +329,54 @@ class SqlCardStoreTest {
 	 * Positional on purpose: the point of each test is the argument it varies, and named arguments
 	 * for the five it does not would bury that.
 	 */
+	// ==================
+	// MARK: Removing part of a game
+	// ==================
+
+	@Test
+	fun `deleting one edition leaves the other languages alone`() {
+		// The storage screen offers a set in one language. The neighbouring editions are separate
+		// rows and must survive, and so must their cards -- a delete that took the printings of
+		// every edition sharing a set id would empty a set the screen still lists.
+		write("s1", CardLanguage.ENGLISH, "Set One", true, 1L, listOf(card(1), card(2)))
+		write("s1", CardLanguage.FRENCH, "Set One", true, 1L, listOf(card(1), card(2)))
+		write("s2", CardLanguage.ENGLISH, "Set Two", true, 1L, listOf(card(3)))
+
+		assertTrue(mStore.deleteDownloadedSet("p", "s1", "fr"))
+
+		assertEquals(
+			listOf("s1/en", "s2/en"),
+			mStore.pinnedSetsForGame("test").map { "${it.setId}/${it.language}" }.sorted(),
+		)
+		assertEquals(2, mStore.readSet("p", "s1", CardLanguage.ENGLISH).size)
+		assertTrue(
+			mStore.readSet("p", "s1", CardLanguage.FRENCH).isEmpty(),
+			"the French printings went with the French record",
+		)
+	}
+
+	@Test
+	fun `deleting an edition that is not there says so`() {
+		write("s1", CardLanguage.ENGLISH, "Set One", true, 1L, listOf(card(1)))
+
+		assertFalse(mStore.deleteDownloadedSet("p", "s1", "ja"))
+		assertFalse(mStore.deleteDownloadedSet("p", "nope", "en"))
+		assertEquals(1, mStore.pinnedSetsForGame("test").size)
+	}
+
+	@Test
+	fun `a set stored under no language is listed and deletable`() {
+		// OPTCG states no language at all, so its rows are written under "-". That is a real
+		// edition the screen has to be able to name and remove, not a null to be skipped.
+		write("s1", null, "Set One", true, 1L, listOf(card(1)))
+
+		val vHeld = mStore.pinnedSetsForGame("test")
+		assertEquals(listOf("-"), vHeld.map { it.language })
+
+		assertTrue(mStore.deleteDownloadedSet("p", "s1", "-"))
+		assertTrue(mStore.pinnedSetsForGame("test").isEmpty())
+	}
+
 	private fun write(
 		setId: String,
 		language: CardLanguage?,

@@ -184,3 +184,32 @@ data class GameStorage(
 	 */
 	val knownSets: Int? = null,
 )
+
+/**
+ * One downloaded edition: a set, in one language.
+ *
+ * What the storage screen shows when a game is opened. A set held in English and Japanese is two of
+ * these, because that is what is on disk and what deleting one of them removes.
+ *
+ * @property provider carried because deleting needs it. A set id is only unique within the source
+ *   that issued it
+ * @property languageCode as stored, so `"-"` where the source states no language at all. Not a
+ *   [com.bitsycore.cardbrowser.core.model.CardLanguage]: "the source never said" is a real state and
+ *   has no enum value
+ * @property isInCatalogue false for a set the game's cached set list does not offer -- a bulk import
+ *   brings these, and they are real records the screen must be able to reach
+ */
+data class KeptSet(
+	val provider: String,
+	val setId: String,
+	val languageCode: String,
+	val label: String,
+	val cardCount: Int,
+	val bytes: Long,
+	val isInCatalogue: Boolean = true,
+) {
+
+	/** The language, or null where the source states none. */
+	val language: com.bitsycore.cardbrowser.core.model.CardLanguage?
+		get() = com.bitsycore.cardbrowser.core.model.CardLanguage.fromCode(languageCode)
+}
