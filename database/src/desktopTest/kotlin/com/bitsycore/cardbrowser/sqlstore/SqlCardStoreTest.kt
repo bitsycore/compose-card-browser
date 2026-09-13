@@ -267,6 +267,25 @@ class SqlCardStoreTest {
 	}
 
 	@Test
+	fun `the filter values are remembered and re-read when the rows change`() {
+		// Computing them is five DISTINCT scans plus an unindexable LIKE per treatment. For Magic
+		// that is several passes over 110,000 payloads, and it used to run every time the search
+		// screen opened.
+		write("s", null, "Set", false, 1L, (1..10).map { card(it) })
+		val vFirst = mStore.facetsForGame("test")
+
+		// A second read must not recompute. Proven by writing straight into the cache row: a
+		// recompute would overwrite this and the assertion would see the real value back.
+		mStore.rememberFacetsForTest("test", rarities = listOf("Sentinel"))
+		assertEquals(listOf("Sentinel"), mStore.facetsForGame("test").rarities)
+
+		// Downloading another set changes the row count, which is the signal to recompute.
+		write("s2", null, "Set 2", false, 1L, listOf(card(11, rarity = "Epic")))
+		assertEquals(listOf("Common", "Epic"), mStore.facetsForGame("test").rarities)
+		assertEquals(vFirst.cardTypes, mStore.facetsForGame("test").cardTypes)
+	}
+
+	@Test
 	fun `one absurd cost does not become a million filter values`() {
 		// Magic's Gleemax has a mana value of 1,000,000. The filter sheet used to build its cost
 		// chips by expanding MIN..MAX, so one such card turned a sixteen-value axis into a million

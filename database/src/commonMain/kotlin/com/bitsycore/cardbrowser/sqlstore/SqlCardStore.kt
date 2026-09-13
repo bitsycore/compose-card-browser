@@ -153,11 +153,64 @@ class SqlCardStore(driver: SqlDriver) {
 	 * From the rows, not from a game profile. A profile says what a game *can* have; this says what
 	 * is on the device, so the search cannot offer a rarity that would match nothing.
 	 *
-	 * Domains are stored joined, because a card can have several, so they are split back apart and
-	 * de-duplicated here rather than in SQL -- `DISTINCT` over the joined string would offer
-	 * "Fury / Calm" as though it were one domain.
+	 * Domains are stored joined, because a card can have several, so they are split apart here
+	 * rather than in SQL -- `DISTINCT` over the joined string would offer "Fury / Calm" as one
+	 * domain.
+	 *
+	 * Answered from `game_facets` when the game's row count still matches, because computing it is
+	 * five DISTINCT scans plus an unindexable LIKE per treatment -- several passes over 110,000
+	 * payloads for Magic, every time the search screen opened.
 	 */
-	fun facetsForGame(game: String, treatmentNames: List<String> = emptyList()): StoredFacets =
+	fun facetsForGame(game: String, treatmentNames: List<String> = emptyList()): StoredFacets {
+		val vRows = mQueries.printingCountInGame(game).executeAsOne()
+		mQueries.facetsOf(game).executeAsOneOrNull()?.let { vCached ->
+			if (vCached.row_count == vRows) {
+				return StoredFacets(
+					cardTypes = vCached.card_types.split(DOMAIN_SEPARATOR).filter { it.isNotEmpty() },
+					rarities = vCached.rarities.split(DOMAIN_SEPARATOR).filter { it.isNotEmpty() },
+					domains = vCached.domains.split(DOMAIN_SEPARATOR).filter { it.isNotEmpty() },
+					costRange = vCached.costs.split(DOMAIN_SEPARATOR)
+						.mapNotNull { it.toIntOrNull() }
+						.let { if (it.isEmpty()) null else it.min()..it.max() },
+					costs = vCached.costs.split(DOMAIN_SEPARATOR).mapNotNull { it.toIntOrNull() },
+					treatments = vCached.treatments.split(DOMAIN_SEPARATOR).filter { it.isNotEmpty() },
+				)
+			}
+		}
+		val vFresh = computeFacets(game, treatmentNames)
+		mQueries.putFacets(
+			game = game,
+			row_count = vRows,
+			card_types = vFresh.cardTypes.joinToString(DOMAIN_SEPARATOR),
+			rarities = vFresh.rarities.joinToString(DOMAIN_SEPARATOR),
+			domains = vFresh.domains.joinToString(DOMAIN_SEPARATOR),
+			costs = vFresh.costs.joinToString(DOMAIN_SEPARATOR),
+			treatments = vFresh.treatments.joinToString(DOMAIN_SEPARATOR),
+		)
+		return vFresh
+	}
+
+	/**
+	 * Writes a facet row directly, so a test can prove the cache is read rather than recomputed.
+	 *
+	 * There is no other way to tell the two apart from outside: a recompute returns the same values
+	 * the cache holds, so the only observable difference is whether a value the scans could never
+	 * produce survives a second call.
+	 */
+	fun rememberFacetsForTest(game: String, rarities: List<String>) {
+		mQueries.putFacets(
+			game = game,
+			row_count = mQueries.printingCountInGame(game).executeAsOne(),
+			card_types = "",
+			rarities = rarities.joinToString(DOMAIN_SEPARATOR),
+			domains = "",
+			costs = "",
+			treatments = "",
+		)
+	}
+
+	/** The scans themselves. Six queries, one of them unindexable -- see `game_facets`. */
+	private fun computeFacets(game: String, treatmentNames: List<String>): StoredFacets =
 		StoredFacets(
 			cardTypes = mQueries.cardTypesInGame(game).executeAsList().filterNotNull().sorted(),
 			rarities = mQueries.raritiesInGame(game).executeAsList().filterNotNull().sorted(),

@@ -88,9 +88,17 @@ made kept records anonymous.
 
 ## Still not modelled, and still unverified
 
-- **Migrations.** The schema has no version beyond SQLDelight's own. The switchover did not need
-  one — a pre-store install is wiped once, by `CacheReconciler` — but the *next* schema change
-  will.
+- **Migrations.** Schema 2 as of 2026-09-13. `1.sqm` is the project's first migration and creates
+  `game_facets`; it is a create and nothing else, and the table only caches values that can always
+  be recomputed, so an install that somehow misses it loses a few hundred milliseconds and nothing
+  more. **No migration has been run on a device.**
+
+  Before a 1.0 with no installed base, migrations can be folded away: delete the `.sqm` files and
+  the schema drops to 1 with every table already in `create`. A *dev* install would then sit at
+  `user_version = 2` against a schema saying 1, which Android's helper treats as a downgrade and
+  refuses — so fold them away together with a `CURRENT_STORE_GENERATION` bump, which wipes the
+  store once and starts clean. After 1.0 a migration can never be removed: it is the only path an
+  older install has forward.
 - **The Android driver has opened a real file once, and crashed.** `PRAGMA journal_mode=WAL`
   returns a row, and Android's `execute` refuses any statement that does — see the pragma trap in
   [CLAUDE.md](../CLAUDE.md). That is fixed and the fix has **not** been confirmed on a device.

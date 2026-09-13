@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.ui.screen.cards
 
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.AlertDialog
@@ -264,6 +265,19 @@ fun FilterSheet(
 			)
 		}
 
+		if (state.isLoadingFacets && state.facets.isEmpty) {
+			Spacer(Modifier.height(16.dp))
+			Row(verticalAlignment = Alignment.CenterVertically) {
+				CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+				Spacer(Modifier.size(10.dp))
+				Text(
+					text = "Reading the filters…",
+					style = MaterialTheme.typography.bodySmall,
+					color = MaterialTheme.colorScheme.onSurfaceVariant,
+				)
+			}
+		}
+
 		// Two different silences, said differently, because they are opposite facts.
 		//
 		// The second one had no message at all: a complete set whose records carry no type, rarity
@@ -271,7 +285,7 @@ fun FilterSheet(
 		// reachable and not rare -- records saved before this app started asking a source for
 		// those fields have none, so one set filters and the set below it does not, which is
 		// exactly how it was reported.
-		if (state.facets.isEmpty) {
+		if (state.facets.isEmpty && !state.isLoadingFacets) {
 			Spacer(Modifier.height(16.dp))
 			Text(
 				text = if (!state.isCompleteSet) {

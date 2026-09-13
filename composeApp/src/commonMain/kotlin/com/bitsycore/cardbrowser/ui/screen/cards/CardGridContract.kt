@@ -63,6 +63,15 @@ object CardGridContract :
 		val knownSetCount: Int = 0,
 		/** True when the store returned as many rows as it is willing to return. */
 		val isTruncated: Boolean = false,
+
+		/**
+		 * True while the filter values are being read.
+		 *
+		 * Worth a state of its own because on a large game it is visible. Computing them is six
+		 * queries over every card the game has stored, and the answer is kept afterwards -- so it
+		 * is slow once per download and instant every time after.
+		 */
+		val isLoadingFacets: Boolean = false,
 		val setName: String = "",
 		val setCode: String = "",
 		/**
@@ -360,6 +369,9 @@ object CardGridContract :
 		/** How much of the game the last store-backed search could see. See `UiState.coverageNotice`. */
 		data class SearchCoverage(val searched: Int, val known: Int, val isTruncated: Boolean) : Intent
 
+		/** The filter values are being read, or have arrived. */
+		data class FacetsLoading(val isLoading: Boolean) : Intent
+
 		/** What the routed provider can filter on, so the sheet offers only what works. */
 		data class CapabilitiesResolved(
 			val supportedFilters: Set<com.bitsycore.cardbrowser.core.provider.CardFilterField>,
@@ -532,7 +544,9 @@ object CardGridContract :
 		is Intent.LoadFinished ->
 			if (intent.generation == state.requestGeneration) state.copy(isLoading = false) else state
 
-		is Intent.FacetsComputed -> state.copy(facets = intent.facets)
+		is Intent.FacetsComputed -> state.copy(facets = intent.facets, isLoadingFacets = false)
+
+		is Intent.FacetsLoading -> state.copy(isLoadingFacets = intent.isLoading)
 
 		is Intent.SearchCoverage -> state.copy(
 			searchedSetCount = intent.searched,

@@ -220,6 +220,44 @@ WHERE game = ? AND cost IS NOT NULL
 ORDER BY cost;
 
 -- ==========================================================================
+-- The filter values, remembered
+-- ==========================================================================
+
+-- What the filter sheet offers for a game, worked out once and kept.
+--
+-- The five queries above are DISTINCT scans, and the treatment probe is a LIKE with no index that
+-- can serve it. For Magic that is several passes over 110,000 serialised payloads every time the
+-- search screen opens, which is the delay this table removes.
+--
+-- `row_count` is the validity check: the facets describe the printings that existed when they were
+-- computed, so a different count means the store has grown or shrunk and they are recomputed. It
+-- cannot catch a change that leaves the count identical -- a set deleted and another downloaded in
+-- the same moment -- which is why this is a cache and not the answer.
+CREATE TABLE game_facets (
+    game        TEXT    NOT NULL PRIMARY KEY,
+    row_count   INTEGER NOT NULL,
+    card_types  TEXT    NOT NULL,
+    rarities    TEXT    NOT NULL,
+    domains     TEXT    NOT NULL,
+    costs       TEXT    NOT NULL,
+    treatments  TEXT    NOT NULL
+);
+
+facetsOf:
+SELECT row_count, card_types, rarities, domains, costs, treatments
+FROM game_facets WHERE game = ?;
+
+putFacets:
+INSERT OR REPLACE INTO game_facets (game, row_count, card_types, rarities, domains, costs, treatments)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+printingCountInGame:
+SELECT COUNT(*) FROM printing WHERE game = ?;
+
+clearFacets:
+DELETE FROM game_facets;
+
+-- ==========================================================================
 -- Eviction, the budget, and what a download left
 -- ==========================================================================
 
@@ -310,6 +348,9 @@ WHERE provider = ? AND set_id = ? AND language = ?;
 
 isSetPinned:
 SELECT pinned FROM cached_set WHERE provider = ? AND set_id = ? AND language = ?;
+
+clearFacetsForGame:
+DELETE FROM game_facets WHERE game = ?;
 
 clearAll:
 DELETE FROM printing;

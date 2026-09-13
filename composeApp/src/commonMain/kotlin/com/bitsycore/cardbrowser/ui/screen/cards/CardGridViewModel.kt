@@ -80,7 +80,7 @@ class CardGridViewModel(
 
 			is CardGridContract.Intent.SetFilterChanged -> startLoad(debounce = false)
 
-			is CardGridContract.Intent.SearchCoverage -> Unit
+			is CardGridContract.Intent.SearchCoverage, is CardGridContract.Intent.FacetsLoading -> Unit
 
 			is CardGridContract.Intent.GameSelected -> {
 				resolveGameCapabilities(intent.game)
@@ -431,10 +431,12 @@ class CardGridViewModel(
 	private fun loadStoredFacets(game: GameId, rarityLadder: List<String>) {
 		if (mStoredFacetGame == game) return
 		viewModelScope.launch {
+			dispatch(CardGridContract.Intent.FacetsLoading(true))
 			val vStored = mRepository.searchFacets(game)
 			if (vStored.cardTypes.isEmpty() && vStored.rarities.isEmpty() &&
 				vStored.domains.isEmpty() && vStored.costs.isEmpty()
 			) {
+				dispatch(CardGridContract.Intent.FacetsLoading(false))
 				return@launch
 			}
 			mStoredFacetGame = game
