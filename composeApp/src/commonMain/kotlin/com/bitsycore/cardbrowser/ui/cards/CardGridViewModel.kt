@@ -1,5 +1,9 @@
 package com.bitsycore.cardbrowser.ui.cards
 
+import com.bitsycore.cardbrowser.core.model.GameId
+import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
+import com.bitsycore.cardbrowser.core.game.RarityLadder
+import com.bitsycore.cardbrowser.core.filter.CardFacets
 import androidx.lifecycle.viewModelScope
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.CardLanguage
@@ -44,6 +48,9 @@ class CardGridViewModel(
 
 	private var mLoadJob: Job? = null
 
+	/** Which game's stored facets have been read. See [loadStoredFacets]. */
+	private var mStoredFacetGame: GameId? = null
+
 	init {
 		// The view choice is a habit rather than a per-screen setting, so it arrives with the
 		// screen instead of resetting to grid every time a set is opened.
@@ -73,6 +80,7 @@ class CardGridViewModel(
 			is CardGridContract.Intent.SetFilterChanged -> startLoad(debounce = false)
 
 			is CardGridContract.Intent.GameSelected -> {
+				resolveGameCapabilities(intent.game)
 				loadSetOptions(intent.game)
 				startLoad(debounce = false)
 			}
@@ -322,6 +330,7 @@ class CardGridViewModel(
 	 */
 	private fun startStoredLoad(snapshot: CardGridContract.UiState, debounce: Boolean) {
 		val vGame = snapshot.game?.id ?: gameOf(snapshot.setId)?.id ?: return
+		loadStoredFacets(vGame, snapshot.game?.rarityLadder.orEmpty())
 		val vGeneration = snapshot.requestGeneration
 		val vQuery = snapshot.query
 		val vLanguage = snapshot.language ?: mPreferences.preferences.value.primaryLanguage
@@ -363,6 +372,72 @@ class CardGridViewModel(
 			if (stateFlow.value.requestGeneration == vGeneration) {
 				mSession.publish(snapshot.browseKey, vResults.cards)
 			}
+		}
+	}
+
+	/**
+	 * What the game's routed source can filter on, for the search that is not one set.
+	 *
+	 * The set branch resolves this from the provider the *set id* names, which a game-wide search
+	 * does not have -- so `supportedFilters` stayed empty, and a sheet that offers only what its
+	 * source supports offered nothing. The whole global search had a sort order and no filters.
+	 *
+	 * The language half of `CapabilitiesResolved` is deliberately the source's own list here and
+	 * carries no confirmation. Those are per-set claims -- which editions *this set* has -- and
+	 * there is no set to make them about; a search across a game's cards is not a claim that any
+	 * one of them is published in what the menu shows.
+	 */
+	private fun resolveGameCapabilities(game: GameProfile) {
+		val vProvider = mRegistry.resolve(game) ?: return
+		dispatch(
+			CardGridContract.Intent.CapabilitiesResolved(
+				supportedFilters = vProvider.capabilities.filtering.supported,
+				game = game,
+				languages = vProvider.capabilities.data.languages,
+				language = mPreferences.preferences.value.primaryLanguage,
+			),
+		)
+	}
+
+	/**
+	 * The filterable values across everything this game has stored, for the searches that are not
+	 * one set.
+	 *
+	 * The set branch computes facets from the complete set it just loaded; this branch has no such
+	 * set, and nothing filled them in -- so a game-wide search offered a sort order and no filters
+	 * at all. `CardRepository.searchFacets` existed for exactly this and had no caller: it was the
+	 * deleted search screen's, and moving that screen into the card grid left the call behind.
+	 *
+	 * Once per game rather than per load. The values do not depend on the query, so re-reading them
+	 * on every keystroke is five SQL queries to produce the answer already on screen.
+	 *
+	 * In its own coroutine, and deliberately not `mLoadJob`: that job is cancelled by the next
+	 * keystroke, and the chips would then be cancelled along with a search they do not belong to.
+	 */
+	private fun loadStoredFacets(game: GameId, rarityLadder: List<String>) {
+		if (mStoredFacetGame == game) return
+		mStoredFacetGame = game
+		viewModelScope.launch {
+			val vStored = mRepository.searchFacets(game)
+			dispatch(
+				CardGridContract.Intent.FacetsComputed(
+					CardFacets(
+						domains = vStored.domains,
+						cardTypes = vStored.cardTypes,
+						// The game's own order, so the chips read Common to Showcase rather than
+						// alphabetically -- the same treatment `CardFilters.facetsOf` gives the
+						// per-set ones, which is what makes the two sheets look like one control.
+						rarities = RarityLadder.sorted(rarityLadder, vStored.rarities),
+						// Every cost between the lowest and the highest stored. A range rather than
+						// the values actually present: the store answers with the two ends, and
+						// inventing the gaps is cheaper than a query per cost.
+						costs = vStored.costRange?.toList().orEmpty(),
+						treatments = vStored.treatments.mapNotNull { vName ->
+							ArtworkTreatment.entries.firstOrNull { it.name == vName }
+						},
+					),
+				),
+			)
 		}
 	}
 

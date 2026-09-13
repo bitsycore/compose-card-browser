@@ -41,6 +41,27 @@ class CardGridContractTest {
 		assertFalse(vAfter.isFilterSheetOpen)
 	}
 
+	@Test
+	fun `a game-wide search offers the filters its source supports`() {
+		// The whole global search used to come up with a sort order and nothing else: capabilities
+		// were resolved from the provider a *set id* names, and this branch has no set. The sheet
+		// draws only what its source supports, so an empty set of supported filters is an empty
+		// sheet however many cards are on screen.
+		val vState = reduce(
+			UiState(),
+			Intent.GameSelected(MagicGame),
+			Intent.CapabilitiesResolved(
+				supportedFilters = setOf(CardFilterField.RARITY, CardFilterField.DOMAIN),
+				game = MagicGame,
+				languages = setOf(CardLanguage.ENGLISH),
+				language = CardLanguage.ENGLISH,
+			),
+		)
+
+		assertEquals(setOf(CardFilterField.RARITY, CardFilterField.DOMAIN), vState.supportedFilters)
+		assertEquals(MagicGame, vState.game)
+	}
+
 	// ==================
 	// MARK: The browse key
 	// ==================
