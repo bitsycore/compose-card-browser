@@ -411,21 +411,30 @@ fun SetListContent(
 				// used to be. It acts on the rows below it, while the bar above holds what acts on
 				// the whole game -- the language, the bulk download, the search across sets. Next
 				// to the field it is in the same band as the list it rearranges.
-				// 4dp on top, 8dp below, and not a slip. An `OutlinedTextField` with a label
-				// reserves room above its border for the label to float into, so an even inset
-				// puts the *visible outline* 4dp lower than it looks in the source. The card
-				// grid's field carries the same correction, and the two screens should not sit
-				// their one shared control at two different heights.
+				// The inset above depends on what is above it, because a chip row is not an app
+				// bar: it hands down 8dp of touch-target padding that cannot be seen, so 4dp on
+				// top of that is the same gap the bar needs 12dp to produce. Every visible edge on
+				// this screen ends up 12dp from the next one.
 				Row(
 					modifier = Modifier
 						.fillMaxWidth()
-						.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp),
+						.padding(
+							start = 16.dp,
+							end = 16.dp,
+							top = if (vState.regionOptions.isEmpty()) 12.dp else 4.dp,
+							bottom = 8.dp,
+						),
 					verticalAlignment = Alignment.CenterVertically,
 				) {
 					OutlinedTextField(
 						value = vState.search,
 						onValueChange = { dispatch(SetListContract.Intent.SearchChanged(it)) },
-						label = { Text("Search sets") },
+						// A placeholder, not a label. A floating label reserves 8dp above the
+						// border for itself whether or not it has floated, which is invisible
+						// space that every inset around this field then had to be written to
+						// cancel -- and it was got wrong three times running. A search box that
+						// says what it is until you type in it loses nothing by it.
+						placeholder = { Text("Search sets") },
 						leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
 						singleLine = true,
 						modifier = Modifier.weight(1f),
@@ -758,7 +767,10 @@ private fun RegionFilter(
 		modifier = Modifier
 			.fillMaxWidth()
 			.horizontalScroll(vScroll)
-			.padding(horizontal = 16.dp, vertical = 4.dp),
+			// 4dp above and none below. A Material chip pads itself out to the 48dp touch target,
+			// so it already carries 8dp of invisible space on each side -- adding 4dp below as
+			// well as above made the gap under this row half as big again as the one over it.
+			.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 0.dp),
 		horizontalArrangement = Arrangement.spacedBy(8.dp),
 	) {
 		FilterChip(

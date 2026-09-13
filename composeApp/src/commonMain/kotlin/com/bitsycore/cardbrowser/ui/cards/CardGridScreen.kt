@@ -900,7 +900,9 @@ private fun SearchField(
 	OutlinedTextField(
 		value = text,
 		onValueChange = onTextChanged,
-		label = { Text("Name or collector number") },
+		// A placeholder, not a label -- see the set list's field for why. A floating label reserves
+		// invisible space above the border that every surrounding inset then has to cancel.
+		placeholder = { Text("Name or collector number") },
 		leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
 		trailingIcon = {
 			if (text.isNotEmpty()) {
@@ -917,12 +919,9 @@ private fun SearchField(
 				vFocusManager.clearFocus()
 			},
 		),
-		// Not a symmetric inset, because the field is not symmetric. An `OutlinedTextField` with a
-		// label reserves room above its border for the label to float into, so an equal 8dp either
-		// side put the visible outline 16dp below the app bar and 12dp above whatever follows --
-		// measured at 26px against 20px in `card-grid-chrome.png`. 4dp on top makes the two gaps
-		// the same size on screen, which is what "equal padding" means to someone looking at it.
-		modifier = modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp),
+		// 12dp to the bar above, and 8dp here plus the 4dp of whatever follows below it. Measured
+		// rather than assumed, in `card-grid-chrome.png`.
+		modifier = modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
 	)
 }
 
