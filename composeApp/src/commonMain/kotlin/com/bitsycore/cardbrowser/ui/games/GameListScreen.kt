@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import com.bitsycore.cardbrowser.ui.common.arrowSelection
@@ -712,16 +713,20 @@ internal fun GameMark(art: GameArt?, width: Dp = 72.dp, height: Dp = 48.dp) {
 		} else {
 			// `Fit` rather than `Crop`: these are wordmarks of every aspect ratio -- the Magic one
 			// is 960x275 -- and cropping one is far worse than letterboxing it.
-			Image(
-				painter = painterResource(vLogo),
-				contentDescription = null,
-				contentScale = ContentScale.Fit,
-				modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 10.dp),
-				// A monochrome wordmark is painted rather than left as drawn -- see [logoTintFor].
-				// Deliberately never the row accent: a teal Wuthering Waves logo is not its logo,
-				// and colour artwork is not tinted at all.
-				colorFilter = logoTintFor(art),
-			)
+			HaloedLogo(art) { vModifier, vTint ->
+				Image(
+					painter = painterResource(vLogo),
+					contentDescription = null,
+					contentScale = ContentScale.Fit,
+					modifier = vModifier
+						.fillMaxSize()
+						.padding(horizontal = 8.dp, vertical = 10.dp),
+					// A monochrome wordmark is painted rather than left as drawn -- see
+					// [logoTintFor]. Deliberately never the row accent: a teal Wuthering Waves logo
+					// is not its logo, and colour artwork is not tinted at all.
+					colorFilter = vTint ?: logoTintFor(art),
+				)
+			}
 		}
 	}
 }
@@ -741,6 +746,53 @@ internal fun GameMark(art: GameArt?, width: Dp = 72.dp, height: Dp = 48.dp) {
 private fun backdropFor(art: GameArt?): Color =
 	art?.let { logoBackdropFor(it) }
 		?: (art?.accent ?: MaterialTheme.colorScheme.primary).copy(alpha = 0.18f)
+
+/**
+ * Draws a mark over a dark halo of its own shape, where the mark asks for one.
+ *
+ * The alternative to a plate, for the three logos with no dark outline. A plate is a rectangle and
+ * is therefore visible whether or not the mark needed rescuing; a halo follows the letterforms, so
+ * it separates exactly what would otherwise wash out and disappears into a dark background.
+ *
+ * Eight offset copies rather than a real blur. `Modifier.blur` is a no-op on Android below API 31,
+ * and the one platform this has to work on is a phone -- an effect that silently does nothing on
+ * older devices is the same class of bug as a plate that never got drawn. Eight copies of a small
+ * bitmap is cheap and looks the same everywhere.
+ *
+ * `matchParentSize` on the copies is what keeps the box the size of the mark: they fill whatever the
+ * real one measured to and contribute nothing to the measurement themselves.
+ *
+ * @param image draws the mark. The `ColorFilter` it is handed is the halo's, or `null` for the real
+ *   one, which then applies its own -- a copy must be a silhouette whatever the mark normally is
+ */
+@Composable
+internal fun HaloedLogo(art: GameArt?, image: @Composable (Modifier, ColorFilter?) -> Unit) {
+	if (art?.logoShadow != true) {
+		image(Modifier, null)
+		return
+	}
+	Box(contentAlignment = Alignment.Center) {
+		val vHalo = ColorFilter.tint(LOGO_HALO_COLOUR)
+		HALO_OFFSETS.forEach { (vX, vY) ->
+			image(Modifier.matchParentSize().offset(x = vX, y = vY), vHalo)
+		}
+		image(Modifier, null)
+	}
+}
+
+/** The eight directions the halo is cast in, at the one distance it is cast over. */
+private val HALO_OFFSETS: List<Pair<Dp, Dp>> = listOf(-1f, 0f, 1f)
+	.flatMap { vX -> listOf(-1f, 0f, 1f).map { vY -> vX.dp to vY.dp } }
+	.filterNot { it.first == 0.dp && it.second == 0.dp }
+
+/**
+ * The halo's colour: black, and thin enough that it reads as an edge rather than as a shape.
+ *
+ * Fixed rather than a theme colour on purpose. The mark is being separated from a *pale* background,
+ * which is the only case there is -- these are all light artwork -- so a halo that inverted with the
+ * theme would turn white on the dark theme and put a glow around a mark that needed nothing.
+ */
+private val LOGO_HALO_COLOUR = Color.Black.copy(alpha = 0.55f)
 
 /**
  * The plate this mark states for the theme in force, or `null` if it states none.

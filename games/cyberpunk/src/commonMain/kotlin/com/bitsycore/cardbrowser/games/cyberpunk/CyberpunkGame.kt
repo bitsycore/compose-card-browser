@@ -100,6 +100,9 @@ object CyberpunkArt : GameArt {
 	/** The yellow plate the black wordmark is published on. */
 	override val backdropArgb: Long = 0xFFFEEC00
 
-	/** The near-black plate the yellow wordmark is published on. Not pure black, which reads harsh. */
-	override val backdropDarkArgb: Long = 0xFF0B0B0D
+	// And no plate on the dark theme, where the yellow mark is already the published lockup against
+	// a dark background. It wore a near-black one, which was the right colour and therefore looked
+	// reasonable: a near-black slab on a near-black surface is a rectangle you can see and no
+	// contrast you gain. `backdropDarkArgb` defaults to `backdropArgb`, so this has to say null.
+	override val backdropDarkArgb: Long? = null
 }

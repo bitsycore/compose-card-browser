@@ -299,11 +299,25 @@ fun App() {
 					// set list rather than out of one of its rows. Standing the screen transition
 					// down leaves the shared bounds as the only thing moving, which is the point:
 					// the row becomes the screen, and the set list simply waits underneath.
+					//
+					// Unless there is no row to grow out of. The global search opens the same screen
+					// from a button in the app bar, with no set and so no shared container, and
+					// standing the transition down there left nothing moving at all: the search
+					// appeared and later vanished. It takes the app's ordinary cross-fade, which is
+					// what every other screen reached from a button gets.
 					is Route.Cards -> NavEntry(
 						vRoute,
-						metadata = NavDisplay.transitionSpec { heldStill(zIndex = 1f) } +
-							NavDisplay.popTransitionSpec { heldStill(zIndex = 0f) } +
-							NavDisplay.predictivePopTransitionSpec { heldStill(zIndex = 0f) },
+						metadata = if (vRoute.setId.isBlank()) {
+							NavDisplay.transitionSpec { fadeThroughTransform(zIndex = 1f) } +
+								NavDisplay.popTransitionSpec { fadeThroughTransform(zIndex = 0f) } +
+								NavDisplay.predictivePopTransitionSpec {
+									fadeThroughTransform(zIndex = 0f)
+								}
+						} else {
+							NavDisplay.transitionSpec { heldStill(zIndex = 1f) } +
+								NavDisplay.popTransitionSpec { heldStill(zIndex = 0f) } +
+								NavDisplay.predictivePopTransitionSpec { heldStill(zIndex = 0f) }
+						},
 					) {
 						CardGridScreen(
 							setId = vRoute.setId,
@@ -447,14 +461,22 @@ private fun heldStill(zIndex: Float): ContentTransform =
  */
 private fun <T : Any> fadeThrough(
 	zIndex: Float,
-): AnimatedContentTransitionScope<Scene<T>>.() -> ContentTransform = {
+): AnimatedContentTransitionScope<Scene<T>>.() -> ContentTransform = { fadeThroughTransform(zIndex) }
+
+/**
+ * The same cross-fade as a bare [ContentTransform], for the per-entry metadata blocks.
+ *
+ * Those hand their lambda an `AnimatedContentTransitionScope<Scene<*>>`, which no `Scene<Route>`
+ * receiver fits. Neither form reads the receiver at all -- the transform is the same four arguments
+ * either way -- so this is the shape both spell, and [heldStill] is already written this way.
+ */
+private fun fadeThroughTransform(zIndex: Float): ContentTransform =
 	ContentTransform(
 		targetContentEnter = fadeIn(tween(ENTER_MILLIS, easing = LinearOutSlowInEasing)),
 		initialContentExit = fadeOut(tween(EXIT_MILLIS, easing = FastOutLinearInEasing)),
 		targetContentZIndex = zIndex,
 		sizeTransform = null,
 	)
-}
 
 /** Slightly slower in than out, so the two overlap rather than leaving a gap of background. */
 private const val ENTER_MILLIS = 280

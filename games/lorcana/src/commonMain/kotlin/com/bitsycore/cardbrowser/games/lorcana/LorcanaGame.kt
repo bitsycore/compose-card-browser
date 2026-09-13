@@ -98,10 +98,8 @@ object LorcanaArt : GameArt {
 	 * below a 2:1 contrast ratio against a light tile, and the loss is not spread evenly -- by
 	 * fifths of the image it runs 0%, 0%, 36%, 48%, 2%. Those middle bands are "LORCANA" itself,
 	 * so what disappears is the name. The "Disney" script above it is fine, which is exactly the
-	 * shape of the Riftbound case.
+	 * shape of the Riftbound case -- and it gets the same answer, a halo on the letterforms rather
+	 * than `GameArt.DARK_BACKDROP` behind the whole tile, which is what it used to wear.
 	 */
-	override val backdropArgb: Long = GameArt.DARK_BACKDROP
-
-	// Light only, like Altered's: gold filigree on a dark row is what this mark is for.
-	override val backdropDarkArgb: Long? = null
+	override val logoShadow: Boolean = true
 }

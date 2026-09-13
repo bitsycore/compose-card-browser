@@ -67,6 +67,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import com.bitsycore.cardbrowser.games.api.GameArt
 import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
+import com.bitsycore.cardbrowser.ui.games.HaloedLogo
 import com.bitsycore.cardbrowser.ui.games.logoBackdropFor
 import com.bitsycore.cardbrowser.ui.games.logoTintFor
 import org.jetbrains.compose.resources.painterResource
@@ -292,21 +293,31 @@ fun SetListContent(
 						Text(vState.game?.shortName.orEmpty())
 					} else {
 						val vLogoImage = @Composable {
-							Image(
-								painter = painterResource(vLogo),
-								// The title *is* the game name, so this carries it for a screen
-								// reader rather than being decorative.
-								contentDescription = vState.game?.displayName,
-								contentScale = ContentScale.Fit,
-								// Bounded both ways. Height is what normally binds, but these are
-								// wordmarks of wildly different aspect -- One Piece is 149 dp wide
-								// at 30 dp tall against Pokémon's 59 -- and without a width cap the
-								// widest of them crowds the three action buttons on a narrow phone.
-								// `Fit` then scales by whichever limit binds first.
-								modifier = Modifier.heightIn(max = 30.dp).widthIn(max = 132.dp),
-								// Exactly the picker's rule, from the same function.
-								colorFilter = logoTintFor(gameArt),
-							)
+							// Exactly the picker's halo, from the same function -- a mark that needs
+							// separating from a pale background needs it on both screens, and the
+							// two drawing it their own way is how three of them ended up correct
+							// here and invisible there.
+							HaloedLogo(gameArt) { vModifier, vTint ->
+								Image(
+									painter = painterResource(vLogo),
+									// The title *is* the game name, so the real mark carries it for a
+									// screen reader. The halo copies are the same picture eight more
+									// times and must stay silent.
+									contentDescription = vState.game?.displayName
+										.takeIf { vTint == null },
+									contentScale = ContentScale.Fit,
+									// Bounded both ways. Height is what normally binds, but these
+									// are wordmarks of wildly different aspect -- One Piece is 149
+									// dp wide at 30 dp tall against Pokémon's 59 -- and without a
+									// width cap the widest of them crowds the three action buttons
+									// on a narrow phone. `Fit` then scales by whichever limit binds.
+									modifier = vModifier
+										.heightIn(max = 30.dp)
+										.widthIn(max = 132.dp),
+									// Exactly the picker's rule, from the same function.
+									colorFilter = vTint ?: logoTintFor(gameArt),
+								)
+							}
 						}
 
 						// Artwork that declares a plate gets it here too, not only in the picker.
@@ -370,18 +381,6 @@ fun SetListContent(
 							contentDescription = "Search cards across all sets",
 						)
 					}
-					// Arranging, as its own mode. The same control the game picker has, in the same
-					// place, because it does the same thing to the same kind of list.
-					IconButton(onClick = { dispatch(SetListContract.Intent.EditingToggled) }) {
-						Icon(
-							imageVector = if (vState.isEditing) AppIcons.Check else AppIcons.Tune,
-							contentDescription = if (vState.isEditing) {
-								"Done arranging favourites"
-							} else {
-								"Arrange favourites"
-							},
-						)
-					}
 					AppOverflowMenu(
 						onOpenSettings = { dispatch(SetListContract.Intent.SettingsRequested) },
 						onOpenStorage = { dispatch(SetListContract.Intent.StorageRequested) },
@@ -403,14 +402,36 @@ fun SetListContent(
 				)
 			}
 
-			OutlinedTextField(
-				value = vState.search,
-				onValueChange = { dispatch(SetListContract.Intent.SearchChanged(it)) },
-				label = { Text("Search sets") },
-				leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
-				singleLine = true,
-				modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-			)
+			// Arranging sits beside the search rather than in the app bar, which is where it used
+			// to be. It acts on the rows below it, while the bar above holds what acts on the whole
+			// game -- the language, the bulk download, the search across sets. Next to the field it
+			// is in the same band as the list it rearranges.
+			Row(
+				modifier = Modifier
+					.fillMaxWidth()
+					.padding(horizontal = 16.dp, vertical = 8.dp),
+				verticalAlignment = Alignment.CenterVertically,
+			) {
+				OutlinedTextField(
+					value = vState.search,
+					onValueChange = { dispatch(SetListContract.Intent.SearchChanged(it)) },
+					label = { Text("Search sets") },
+					leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
+					singleLine = true,
+					modifier = Modifier.weight(1f),
+				)
+				Spacer(Modifier.size(4.dp))
+				IconButton(onClick = { dispatch(SetListContract.Intent.EditingToggled) }) {
+					Icon(
+						imageVector = if (vState.isEditing) AppIcons.Check else AppIcons.Tune,
+						contentDescription = if (vState.isEditing) {
+							"Done arranging favourites"
+						} else {
+							"Arrange favourites"
+						},
+					)
+				}
+			}
 
 			// The honesty strip. Shown whenever what is on screen is not a fresh network result.
 			when {

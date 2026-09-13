@@ -72,11 +72,7 @@ object AlteredArt : GameArt {
 	override val accentArgb: Long = 0xFF4FA97C
 
 	// A near-white wordmark: 49% of its visible pixels fall below a 2:1 contrast ratio against a
-	// light tile, so the light theme gets a plate.
-	override val backdropArgb: Long = GameArt.DARK_BACKDROP
-
-	// And the dark theme does not. A near-white mark on a dark row is the case it was drawn for --
-	// the plate was only ever there for the light one, and `backdropDarkArgb` defaults to whatever
-	// `backdropArgb` says, so it was being carried onto a theme that never needed it.
-	override val backdropDarkArgb: Long? = null
+	// light tile, the worst of the ten. It wore `GameArt.DARK_BACKDROP` on the light theme for that,
+	// and a shadow buys the same legibility without a slab behind the mark on every screen.
+	override val logoShadow: Boolean = true
 }

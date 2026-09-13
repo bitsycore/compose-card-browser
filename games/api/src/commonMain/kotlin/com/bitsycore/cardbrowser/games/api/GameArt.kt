@@ -72,21 +72,21 @@ import org.jetbrains.compose.resources.DrawableResource
  * subtitle, and Lorcana's runs 0/0/36/48/2% by fifths of the image, the middle bands being the word
  * LORCANA itself. In each case what vanishes is the part that names the game.
  *
- * **Altered and Lorcana** set [backdropArgb] to [DARK_BACKDROP], so the artwork sits on something
- * like what it was drawn for. Both are full-colour artwork, which is the reason they need a plate
- * at all: a mark that cannot be recoloured has to have its background changed instead.
+ * **All three carry [logoShadow] instead of a plate**, and that replaced a plate in each case.
+ * Altered and Lorcana used to set [backdropArgb] to [DARK_BACKDROP] and Riftbound had nothing at
+ * all; the plate solved the contrast and cost a coloured slab behind the mark on every screen it
+ * appears on, which the project owner did not want on any of the three.
  *
- * **A plate belongs to a theme, not to a mark.** Both of those set [backdropDarkArgb] to `null`:
- * a near-white wordmark and gold filigree are drawn for a dark background, so on the dark theme
- * the plate was covering the one case the artwork already handled. `backdropDarkArgb` defaults to
- * whatever [backdropArgb] says, which is how it came to be carried onto both.
+ * A shadow pays for the same thing differently. It follows the *mark's own shape* rather than its
+ * bounding box, so what it separates from the background is the letterform, and where the artwork
+ * already reads -- Altered's wordmark on the dark theme -- there is nothing behind it to see. That
+ * is why it needs no light/dark pair the way a plate does: a dark halo under a light mark is
+ * invisible on a dark background by construction.
  *
- * **Riftbound has none at all**, by the project owner's call after looking at both themes. Its 31%
- * is the subtitle alone; the measurement still says what it said, and the judgement is that a plate
- * on every screen the logo appears on is too much to pay for it.
- *
- * **Cyberpunk keeps both**, because both are its own published lockup rather than a workaround --
- * see below.
+ * **Cyberpunk keeps its light plate**, because it is its own published lockup rather than a
+ * workaround -- see below. Its dark one is gone for the same reason as the others: on the dark
+ * theme the mark painted its own yellow is the whole lockup, and the near-black slab behind it was
+ * a second background over a background.
  *
  * ## Artwork that is painted rather than plated
  *
@@ -98,13 +98,15 @@ import org.jetbrains.compose.resources.DrawableResource
  *
  * Its mark is published two ways, black-on-yellow and yellow-on-black, and the brand picks whichever
  * suits what it sits against. The app does the same: on the light theme a yellow plate with the
- * wordmark painted the theme's near-black, and on the dark theme a near-black plate with the
- * wordmark painted its own `0xFFFEEC00`. Both pairs are the publisher's own lockup rather than an
- * invention, and each is drawn against the colour it was drawn for.
+ * wordmark painted the theme's near-black, and on the dark theme the wordmark painted its own
+ * `0xFFFEEC00` on whatever the app's own dark surface is. Both are the publisher's own lockup
+ * rather than an invention, and each is drawn against the colour it was drawn for.
  *
  * That is the case that made both properties theme-aware. It went through a plain yellow plate on
- * both themes, then no plate at all, before landing here -- neither of those is wrong exactly, but
- * only this one is the mark as its owner draws it on each background.
+ * both themes, then no plate at all, then a near-black plate on the dark theme before landing here.
+ * The near-black plate was the mistake worth recording: it was the right *colour*, which is why it
+ * looked reasonable, and a slab of near-black on a near-black surface is a rectangle you can see and
+ * no contrast you gain.
  *
  * It is also why [tintLogo] and [backdropArgb] are no longer mutually exclusive. The old rule was
  * that a tinted mark on a fixed plate inverts with the theme while its plate stays put, leaving a
@@ -140,6 +142,10 @@ import org.jetbrains.compose.resources.DrawableResource
  *   it on the dark one" -- fine while every flagged logo wanted the same dark grey, and useless the
  *   moment a mark wanted its own brand colour behind it. A colour says everything the boolean did
  *   and one thing more, so [DARK_BACKDROP] is now a value rather than a hidden default
+ * @property logoShadow true for a mark with no dark outline of its own, which is then drawn over a
+ *   dark halo of its own shape so its edges survive a pale background. For colour artwork, which
+ *   cannot be recoloured to suit the theme -- the alternative for such a mark is a plate, and this
+ *   is the cheaper half of that choice
  */
 interface GameArt {
 
@@ -157,6 +163,8 @@ interface GameArt {
 
 	val backdropDarkArgb: Long? get() = backdropArgb
 
+	val logoShadow: Boolean get() = false
+
 	companion object {
 
 		/**
@@ -165,6 +173,12 @@ interface GameArt {
 		 * Close to the dark theme's own surface, so on that theme it is nearly invisible and only
 		 * the light theme sees a change. A fixed value rather than a theme colour, because the whole
 		 * point is that it does *not* follow the theme.
+		 *
+		 * **No game uses it now.** Altered and Lorcana did, and both moved to [logoShadow] -- the
+		 * plate was doing the job and the project owner did not want a slab behind the mark. Kept
+		 * because a plate is still the right answer for artwork a halo cannot rescue, and Cyberpunk
+		 * shows one is reachable; a future mark wanting the neutral dark one should not have to
+		 * re-pick the colour.
 		 */
 		const val DARK_BACKDROP: Long = 0xFF201E26
 
