@@ -411,10 +411,15 @@ fun SetListContent(
 				// used to be. It acts on the rows below it, while the bar above holds what acts on
 				// the whole game -- the language, the bulk download, the search across sets. Next
 				// to the field it is in the same band as the list it rearranges.
+				// 4dp on top, 8dp below, and not a slip. An `OutlinedTextField` with a label
+				// reserves room above its border for the label to float into, so an even inset
+				// puts the *visible outline* 4dp lower than it looks in the source. The card
+				// grid's field carries the same correction, and the two screens should not sit
+				// their one shared control at two different heights.
 				Row(
 					modifier = Modifier
 						.fillMaxWidth()
-						.padding(horizontal = 16.dp, vertical = 8.dp),
+						.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp),
 					verticalAlignment = Alignment.CenterVertically,
 				) {
 					OutlinedTextField(
@@ -513,7 +518,14 @@ fun SetListContent(
 
 						LazyColumn(
 							state = vListState,
-							contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+							// 4dp at the top so the first row sits the same distance below the search field
+				// as the field sits below the bar. The field contributes 8dp of its own.
+				contentPadding = PaddingValues(
+					start = 16.dp,
+					end = 16.dp,
+					top = 4.dp,
+					bottom = 8.dp,
+				),
 							verticalArrangement = Arrangement.spacedBy(8.dp),
 							modifier = Modifier.arrowSelection(
 								count = vSelectable.size,
