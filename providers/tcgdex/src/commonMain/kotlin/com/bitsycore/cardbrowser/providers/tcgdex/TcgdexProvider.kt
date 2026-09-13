@@ -222,8 +222,30 @@ class TcgdexProvider(
 		Catalogues(
 			byLanguage = vByLanguage,
 			dates = releaseDates(),
+			lineById = linesById(vByLanguage),
 			readAt = TimeSource.Monotonic.markNow(),
 		)
+	}
+
+	/**
+	 * Set id to the line that publishes it, first line wins.
+	 *
+	 * Exact-case membership, like everything else keyed on a TCGdex set id: `set=` is matched
+	 * case-insensitively by the API, so `SM10` and `sm10` are two different sets in two different
+	 * lines and folding their case would merge them.
+	 */
+	private fun linesById(
+		catalogues: Map<CardLanguage, List<TcgdexSetBriefDto>?>,
+	): Map<String, CatalogueLine> {
+		val vById = mutableMapOf<String, CatalogueLine>()
+		for (vLine in CATALOGUE_LINES) {
+			for (vLanguage in vLine.languages) {
+				catalogues[vLanguage].orEmpty().forEach { vBrief ->
+					if (vBrief.id.isNotBlank()) vById.getOrPut(vBrief.id) { vLine }
+				}
+			}
+		}
+		return vById
 	}
 
 	/**
@@ -355,20 +377,38 @@ class TcgdexProvider(
 	 * the repository asking for it twice.
 	 */
 	override suspend fun listCards(request: CardPageRequest): CardPage {
-		val vLocale = localeFor(request.language)
 		if (request.page > 1) {
 			return CardPage(emptyList(), request.page, request.pageSize, totalCount = null, hasMore = false)
 		}
+		// The set's line, not the user's preference -- see `languageForSet`.
+		val vLanguage = languageForSet(request.setId.local, request.language)
+		val vLocale = vLanguage.code
 		return mapProviderErrors("TCGdex.listCards") {
 			val vSet: TcgdexSetDto = mClient
 				.get(mBaseUrl) { url { appendPathSegments("v2", vLocale, "sets", request.setId.local) } }
 				.body()
 			val vMapped = TcgdexMapper.toSet(vSet, id)
-			val vLanguage = languageFor(request.language)
+			// What the REST response cannot say, asked for once. See `fullCards`.
+			val vFull = fullCards(request.setId.local)
 			val vCards = if (vMapped == null) {
 				emptyList()
 			} else {
-				vSet.cards.mapNotNull { TcgdexMapper.toPrinting(it, id, vMapped, vLanguage) }
+				vSet.cards.mapNotNull { vBrief ->
+					val vDetail = vFull[vBrief.id]
+					if (vDetail == null) {
+						TcgdexMapper.toPrinting(vBrief, id, vMapped, vLanguage)
+					} else {
+						// The name and the picture stay the locale's; only the facts the brief
+						// does not carry come from the other request. A French set keeps its
+						// French names and gains its rarities.
+						TcgdexMapper.toPrinting(
+							vDetail.copy(name = vBrief.name, image = vBrief.image ?: vDetail.image),
+							id,
+							vMapped,
+							vLanguage,
+						)
+					}
+				}
 			}
 			CardPage(
 				cards = vCards,
@@ -378,6 +418,44 @@ class TcgdexProvider(
 				hasMore = false,
 			)
 		}
+	}
+
+	/**
+	 * A set's cards with their rarity, category and types, by card id, or empty if that failed.
+	 *
+	 * `GET /{lang}/sets/{id}` returns **brief** cards -- `{id, localId, name, image}` and nothing
+	 * else. So every Pokémon card in the grid had no rarity, no category and no type, which is why
+	 * the filter sheet showed none of those sections: they are drawn from the facets of what is on
+	 * screen, and what was on screen knew nothing. The alternative is `GET /cards/{id}` per card,
+	 * 252 requests for one set.
+	 *
+	 * One GraphQL query instead. The root `cards` resolver returns full cards, its `id` filter
+	 * matches on a prefix, and a card id is `{setId}-{localId}` -- so `id: "sv08-"` is the set,
+	 * and it answered all 252 in one request on 2026-09-13. The trailing dash matters: without it
+	 * `sv08` also matches `sv08.5`, which is a different set.
+	 *
+	 * **English only.** `/v2/ja/graphql` is a 404 and both `?lang=` and `Accept-Language` are
+	 * ignored -- a Japanese set id returns an empty list rather than Japanese cards. That is why
+	 * this merges rather than replaces: the locale's own request supplies the names and the
+	 * pictures, and a set outside the international line simply gets nothing here, which is the
+	 * same "unknown" it had before.
+	 *
+	 * Empty on any failure. A rarity nobody could fetch is a filter the sheet does not offer,
+	 * which is the honest outcome; it is not a reason to fail a set that has already arrived.
+	 */
+	private suspend fun fullCards(setLocal: String): Map<String, TcgdexCardDto> = try {
+		val vResponse: TcgdexGraphQlResponse = mClient
+			.post(mBaseUrl) {
+				url { appendPathSegments("v2", "graphql") }
+				contentType(ContentType.Application.Json)
+				setBody(GraphQlQuery(fullCardsQuery(setLocal)))
+			}
+			.body()
+		vResponse.data?.cards.orEmpty().associateBy { it.id }
+	} catch (vError: kotlinx.coroutines.CancellationException) {
+		throw vError
+	} catch (vError: Exception) {
+		emptyMap()
 	}
 
 	/**
@@ -434,13 +512,15 @@ class TcgdexProvider(
 	}
 
 	override suspend fun cardDetail(id: SourceId, language: CardLanguage?): CardPrinting? {
-		val vLocale = localeFor(language)
+		// A card id is `{setId}-{localId}`, so the set it belongs to -- and therefore its line --
+		// is in the id. Same reason as `listCards`: the wrong locale is a 404, not a translation.
+		val vLanguage = languageForSet(id.local.substringBeforeLast('-'), language)
 		return mapProviderErrors("TCGdex.cardDetail") {
 			try {
 				val vCard: TcgdexCardDto = mClient
-					.get(mBaseUrl) { url { appendPathSegments("v2", vLocale, "cards", id.local) } }
+					.get(mBaseUrl) { url { appendPathSegments("v2", vLanguage.code, "cards", id.local) } }
 					.body()
-				TcgdexMapper.toPrinting(vCard, this.id, set = null, language = languageFor(language))
+				TcgdexMapper.toPrinting(vCard, this.id, set = null, language = vLanguage)
 			} catch (vError: ClientRequestException) {
 				if (vError.response.status == HttpStatusCode.NotFound) null else throw vError
 			}
@@ -513,6 +593,36 @@ class TcgdexProvider(
 	private fun languageFor(language: CardLanguage?): CardLanguage =
 		resolveLanguage(language) ?: CardLanguage.ENGLISH
 
+	/**
+	 * The language a *particular set* can be asked for, which is not always the one requested.
+	 *
+	 * A TCGdex set id exists only inside the locales of its own product line: `/en/sets/SV1a` and
+	 * `/fr/sets/SV1a` are 404, and so is `/en/sets/SC1D`. Resolving the locale from the user's
+	 * preference alone therefore left every Japanese, Taiwanese and Chinese set listed with a card
+	 * count and opening to nothing at all -- no cards, no images -- for anyone not browsing in one
+	 * of those languages. Measured 2026-09-13.
+	 *
+	 * So the set's line decides. The requested language wins when the line publishes it, which is
+	 * what keeps a Korean-preferring user reading the Japan line in Korean; otherwise the line's
+	 * own first language answers. The record is then stamped with what was *served*, not what was
+	 * asked for, so a Japanese-line set browsed in English says Japanese on the card and in the
+	 * grid's language menu -- which is the truth and is the whole point of the distinction.
+	 *
+	 * Falls back to [languageFor] when the catalogues cannot be read or do not know the id. That is
+	 * the old behaviour, which is right for a set this adapter has never seen listed: guessing a
+	 * line for it would be inventing one.
+	 */
+	private suspend fun languageForSet(setLocal: String, language: CardLanguage?): CardLanguage {
+		val vLine = runCatching { catalogues().lineById[setLocal] }.getOrNull()
+			?: return languageFor(language)
+		val vRequested = resolveLanguage(language)
+		return if (vRequested != null && vRequested in vLine.languages) {
+			vRequested
+		} else {
+			vLine.languages.first()
+		}
+	}
+
 	/** The GraphQL request envelope. One field, because one query is all this adapter sends. */
 	@Serializable
 	private data class GraphQlQuery(val query: String)
@@ -526,9 +636,14 @@ class TcgdexProvider(
 	 * Monotonic rather than wall-clock, so a device whose clock jumps cannot make this look either
 	 * fresh forever or permanently stale.
 	 */
+	/**
+	 * @param lineById which product line each set id belongs to, first line to carry it winning --
+	 *   the same order [merge] assigns a region in, so the two cannot disagree about a set
+	 */
 	private class Catalogues(
 		val byLanguage: Map<CardLanguage, List<TcgdexSetBriefDto>?>,
 		val dates: Map<String, LocalDate>,
+		val lineById: Map<String, CatalogueLine>,
 		val readAt: TimeMark,
 	)
 
@@ -575,6 +690,22 @@ class TcgdexProvider(
 		private const val RELEASE_DATE_QUERY = "{ sets { id releaseDate } }"
 
 		/**
+		 * Every card of one set, with the fields the REST set endpoint leaves out.
+		 *
+		 * `itemsPerPage` is [MAX_PAGE_SIZE], which is above every real set size, so this is one
+		 * page by construction -- the same reasoning that makes the REST call unpaged.
+		 *
+		 * Only the fields that are used: asking for a non-nullable field a brief card cannot fill
+		 * makes the server answer the whole query with errors, which is how `set { cards { rarity
+		 * } }` was ruled out.
+		 */
+		private fun fullCardsQuery(setLocal: String): String =
+			"{ cards(filters: { id: \"$setLocal-\" }, " +
+				"pagination: { page: 1, itemsPerPage: $MAX_PAGE_SIZE }) " +
+				"{ id localId name rarity category types hp illustrator stage suffix " +
+				"trainerType energyType } }"
+
+		/**
 		 * TCGdex's locales, grouped into the product lines they publish, highest priority first.
 		 *
 		 * The grouping is measured, not assumed. Exact-case id overlap across the eleven
@@ -592,6 +723,13 @@ class TcgdexProvider(
 		 * A locale appears once. Korean sits under Japan, and Traditional Chinese under its own
 		 * line, because its Japanese-id sets are picked up as a language of the Japan line by
 		 * priority -- which is what leaves exactly its 36 exclusives behind.
+		 *
+		 * ## A set id lives inside its own line
+		 *
+		 * `/en/sets/SV1a`, `/fr/sets/SV1a` and `/en/sets/SC1D` are all 404, checked on 2026-09-13.
+		 * So a line is not decoration on the set list: it decides which locale a set's *cards* can
+		 * be asked for, which is why [languageForSet] exists and why asking in the user's own
+		 * language alone left every Japanese, Taiwanese and Chinese set listed and empty.
 		 */
 		private val CATALOGUE_LINES: List<CatalogueLine> = listOf(
 			CatalogueLine(

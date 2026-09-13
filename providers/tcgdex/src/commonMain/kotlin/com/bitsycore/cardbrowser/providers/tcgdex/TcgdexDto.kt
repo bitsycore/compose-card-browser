@@ -76,9 +76,16 @@ data class TcgdexGraphQlResponse(
 	val data: TcgdexGraphQlData? = null,
 )
 
+/**
+ * @property cards full cards, for the one query that asks for them -- see
+ *   `TcgdexProvider.fullCards`. The REST set endpoint hands back *brief* cards, which carry a name
+ *   and a picture and nothing else, so this is the only way to know a Pokémon card's rarity or
+ *   type without one request per card
+ */
 @Serializable
 data class TcgdexGraphQlData(
 	val sets: List<TcgdexSetDateDto> = emptyList(),
+	val cards: List<TcgdexCardDto> = emptyList(),
 )
 
 /** An id and the date the REST catalogue does not carry. */
