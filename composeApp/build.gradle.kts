@@ -15,6 +15,7 @@ val nativeDesktop = providers.gradleProperty("nativeDesktop").map(String::toBool
 val vGenerateAppBuild = tasks.register("generateAppBuild") {
 	description = "Generates a Kotlin file with the app's version, so the About screen can read it."
     val vVersion = libs.versions.app.get()
+    val vCode = libs.versions.appCode.get()
 	val vOut = layout.buildDirectory.dir("generated/appBuild")
 	inputs.property("version", vVersion)
 	outputs.dir(vOut)
@@ -29,6 +30,7 @@ val vGenerateAppBuild = tasks.register("generateAppBuild") {
 			object AppBuild {
 
 				const val VERSION: String = "$vVersion"
+				const val CODE: String = "$vCode"
 			}
 			""".trimIndent() + System.lineSeparator(),
 		)

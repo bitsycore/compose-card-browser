@@ -17,7 +17,7 @@ android {
 		applicationId = "com.bitsycore.toploader"
 		minSdk = libs.versions.androidMinSdk.get().toInt()
 		targetSdk = libs.versions.androidTargetSdk.get().toInt()
-		versionCode = 1
+		versionCode = libs.versions.appCode.get().toInt()
 		versionName = libs.versions.app.get()
 	}
 
