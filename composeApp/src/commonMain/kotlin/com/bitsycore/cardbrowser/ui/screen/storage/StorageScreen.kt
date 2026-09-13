@@ -180,7 +180,6 @@ fun StorageContent(
 				)
 
 				CacheLine(
-					label = "Images",
 					used = vUsage.imageBytes,
 					limit = vUsage.imageLimitBytes,
 					onClear = { dispatch(StorageContract.Intent.ClearImages) },
@@ -272,7 +271,6 @@ private fun SectionHeading(title: String, subtitle: String, trailing: String) {
 /** One cache, its share of its limit, and the button that empties it. */
 @Composable
 private fun CacheLine(
-	label: String,
 	used: Long,
 	limit: Long,
 	onClear: () -> Unit,
@@ -281,8 +279,8 @@ private fun CacheLine(
 	Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
 		Column(Modifier.weight(1f)) {
 			Text(
-				text = if (limit > 0) "$label · ${formatBytes(used)} of ${formatBytes(limit)}" else
-					"$label · ${formatBytes(used)}",
+				text = if (limit > 0) "${formatBytes(used)} of ${formatBytes(limit)}" else
+                    formatBytes(used),
 				style = MaterialTheme.typography.bodyMedium,
 			)
 			if (limit > 0) {
