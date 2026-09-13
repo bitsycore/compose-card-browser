@@ -395,6 +395,9 @@ object CardGridContract :
 			setId = intent.setId,
 			setName = intent.setName,
 			setCode = intent.setCode,
+			// Shut, on a set. What you came here for is the pictures; the box is a tap away and
+			// taking a strip of the screen for it before it is asked for is the wrong default.
+			isSearchOpen = false,
 			// Preselected, so opening a set is a search already pointed at it -- and the way out
 			// of that set is to untick it rather than to leave the screen.
 			setIds = setOfNotNull(intent.setId.takeIf { it.isNotBlank() }),
@@ -414,6 +417,9 @@ object CardGridContract :
 		is Intent.GameSelected -> state.copy(
 			game = intent.game,
 			setName = "Search ${intent.game.shortName}",
+			// Open, on a game: this entry point *is* the search, and arriving at it with the box
+			// shut would be asking the user to press a button to get what they just asked for.
+			isSearchOpen = true,
 			// Nothing ticked: everything downloaded, which is what this entry point is for.
 			setIds = emptySet(),
 			isLoading = true,

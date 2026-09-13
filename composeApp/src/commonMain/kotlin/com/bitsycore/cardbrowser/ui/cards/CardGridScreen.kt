@@ -354,6 +354,54 @@ fun CardGridContent(
 								},
 							)
 						}
+						// The box is shut on a set and open on a game-wide list, so this button is
+						// how you get it. Tinted while a search is running, so a hidden field is
+						// never a hidden filter.
+						IconButton(
+							onClick = {
+								dispatch(
+									CardGridContract.Intent.SearchToggled(!vState.isSearchOpen),
+								)
+							},
+						) {
+							Icon(
+								imageVector = if (vState.isSearchOpen) {
+									AppIcons.SearchOff
+								} else {
+									AppIcons.Search
+								},
+								contentDescription = if (vState.isSearchOpen) {
+									"Hide search"
+								} else {
+									"Search"
+								},
+								tint = if (!vState.query.text.isNullOrBlank()) {
+									MaterialTheme.colorScheme.primary
+								} else {
+									LocalContentColor.current
+								},
+							)
+						}
+						// The filters live beside the box while it is open. With it shut they would
+						// be unreachable, so the bar carries them instead -- one control in one
+						// place at a time rather than two of it.
+						if (!vState.isSearchOpen) {
+							BadgedBox(
+								badge = {
+									if (vState.activeFilterCount > 0) {
+										Badge { Text("${vState.activeFilterCount}") }
+									}
+								},
+							) {
+								IconButton(
+									onClick = {
+										dispatch(CardGridContract.Intent.FilterSheetToggled(true))
+									},
+								) {
+									Icon(AppIcons.FilterList, contentDescription = "Filters")
+								}
+							}
+						}
 						ViewModeButton(
 							mode = vState.viewMode,
 							rowHeight = vState.rowHeight,
@@ -372,10 +420,13 @@ fun CardGridContent(
 					scrollBehavior = vScrollBehavior,
 				)
 
-				// Folds away with the bar, and only with the bar. Scrolling down is a request for
-				// more grid; the search itself is not a mode any more -- it is what this screen is,
-				// which is why there is no button to turn it on.
-				AnimatedVisibility(visible = vScrollBehavior.state.collapsedFraction < 0.5f) {
+				// Folds away with the bar as well as with its own button. Scrolling down is a
+				// request for more grid, and a search field that stays behind while the bar it
+				// belongs to collapses reads as a leftover. The query itself is untouched -- it
+				// survives as a chip, and the field returns on the way back up.
+				AnimatedVisibility(
+					visible = vState.isSearchOpen && vScrollBehavior.state.collapsedFraction < 0.5f,
+				) {
 					Row(
 						modifier = Modifier.fillMaxWidth().padding(end = 8.dp),
 						verticalAlignment = Alignment.CenterVertically,
