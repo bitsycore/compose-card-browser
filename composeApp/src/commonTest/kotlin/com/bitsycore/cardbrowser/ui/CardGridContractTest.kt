@@ -62,6 +62,47 @@ class CardGridContractTest {
 		assertEquals(MagicGame, vState.game)
 	}
 
+	@Test
+	fun `a game-wide search says how much of the game it could see`() {
+		// The app asks no source to search its own catalogue -- that path was implemented five
+		// times and called from nowhere, and was deleted. So an empty result here means "not in
+		// what you have downloaded" and never "no such card", and the screen has to say which.
+		val vState = reduce(
+			UiState(),
+			Intent.GameSelected(MagicGame),
+			Intent.SearchCoverage(searched = 12, known = 988, isTruncated = false),
+		)
+
+		assertEquals(
+			"Searched the 12 sets you have downloaded, of 988.",
+			vState.coverageNotice,
+		)
+	}
+
+	@Test
+	fun `a truncated search says it is showing the first of them`() {
+		val vState = reduce(
+			UiState(),
+			Intent.GameSelected(MagicGame),
+			loaded(1, List(200) { card("c$it") }),
+			Intent.SearchCoverage(searched = 988, known = 988, isTruncated = true),
+		)
+
+		// 200 is the store's row limit. Printing it as a total would be the "227 of 358" mistake
+		// again, in the other direction.
+		assertEquals(
+			"Searched the 988 sets you have downloaded, of 988. Showing the first 200.",
+			vState.coverageNotice,
+		)
+	}
+
+	@Test
+	fun `a set browse says nothing about downloaded set counts`() {
+		val vState = reduce(UiState(), Intent.SetSelected("scryfall:set:vow", "Crimson Vow", "VOW"))
+
+		assertNull(vState.coverageNotice, "there is no catalogue question when one set is open")
+	}
+
 	// ==================
 	// MARK: The browse key
 	// ==================

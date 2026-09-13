@@ -101,12 +101,12 @@ cannot overwrite a newer one.
 | | What | Where |
 | --- | --- | --- |
 | **Metadata cache** | Set lists, card detail, per-set language confirmations. Small, many scopes, each with a TTL. | JSON files via Okio, `MetadataCache` |
-| **Card store** | Complete sets and everything derived from them: pins, counts, the eviction budget, cross-set search. | SQLite via SQLDelight, `:database` |
+| **Card store** | Complete sets and everything derived from them: pins, counts, the eviction budget, and the search across a game. | SQLite via SQLDelight, `:database` |
 | **Image cache** | Card art and thumbnails. | Coil's own disk cache, LRU |
 
 The split is measured, not assumed — [database/README.md](../database/README.md) has the benchmark
 that decided it. The short version: the store is 8× slower to write a catalogue and 170× faster to
-count one, and cross-set search is not possible without it.
+count one, and searching across a game is not possible without it.
 
 Both are per-language. A cache key embeds the language, so records fetched as `fr` and read as `en`
 are different files — which is a bug this codebase has had, and the reason `CardRepository`

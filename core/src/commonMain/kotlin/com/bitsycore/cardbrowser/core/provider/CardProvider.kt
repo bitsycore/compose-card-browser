@@ -112,16 +112,6 @@ interface CardProvider<out G : GameProfile> {
 	suspend fun confirmLanguages(setId: SourceId, candidates: Set<CardLanguage>): Set<CardLanguage> =
 		candidates
 
-	/**
-	 * One page of cards matching [request]'s text, across every set of the game.
-	 *
-	 * Only called when [DataCapabilities.crossSetSearch] is true. The default throws rather than
-	 * returning nothing, because an adapter that declares the capability and then quietly answers
-	 * with an empty page is indistinguishable from a search that genuinely found nothing -- and the
-	 * caller would report "no cards match" for a search that never ran.
-	 */
-	suspend fun searchAllSets(request: CardSearchRequest): CardPage =
-		throw UnsupportedOperationException("$displayName does not support cross-set search")
 }
 
 // ==================
@@ -194,14 +184,6 @@ data class DataCapabilities(
 	val finishes: Boolean,
 	/** True when the provider maps individual printings to Cardmarket *products*. */
 	val cardmarketProductMapping: Boolean,
-	/**
-	 * True when the provider can search text across every set in one request.
-	 *
-	 * False does not mean the app cannot search across sets for this game -- it means the *server*
-	 * cannot, so the search screen falls back to the sets already held on disk and says exactly
-	 * that. The two produce very different result sets and the user is told which one they got.
-	 */
-	val crossSetSearch: Boolean = false,
 	/**
 	 * True when the card records ship inside the app rather than being fetched.
 	 *
@@ -338,33 +320,6 @@ data class CardPageRequest(
 ) {
 
 	init {
-		require(page >= 1) { "Pages are 1-based" }
-		require(pageSize >= 1) { "A page must hold at least one card" }
-	}
-}
-
-/**
- * A text search over every set of one game.
- *
- * Separate from [CardPageRequest] rather than a nullable `setId` on it, because the two are not the
- * same operation and conflating them is how a cross-set result ends up cached under a set key. A
- * set page is complete-able and cacheable; a search is neither, and nothing here pretends otherwise.
- *
- * No game is carried: the provider being asked serves exactly one, and it is in that provider's
- * type. Only [text] is carried besides. The structured filters exist to narrow a set the app
- * already holds whole, and applying them to a page of results drawn from a hundred sets would
- * produce a list the user would read as "every Fury card in the game" when it is nothing of the
- * sort.
- */
-data class CardSearchRequest(
-	val text: String,
-	val language: CardLanguage? = null,
-	val page: Int = 1,
-	val pageSize: Int = 60,
-) {
-
-	init {
-		require(text.isNotBlank()) { "A search needs something to search for" }
 		require(page >= 1) { "Pages are 1-based" }
 		require(pageSize >= 1) { "A page must hold at least one card" }
 	}

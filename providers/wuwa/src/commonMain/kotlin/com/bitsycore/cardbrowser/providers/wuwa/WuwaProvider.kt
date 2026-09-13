@@ -10,7 +10,6 @@ import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.core.provider.CardPage
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardProvider
-import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
@@ -104,7 +103,6 @@ class WuwaProvider : CardProvider<WutheringWavesGame> {
 			// No finish field exists. False means unknown here, not "no foil".
 			finishes = false,
 			cardmarketProductMapping = false,
-			crossSetSearch = true,
 			// The catalogue is a file in the app -- see `WuwaCatalogue`. UCP publishes no API this
 			// app can call for records, which is why the snapshot exists, so there is never
 			// anything to fetch, keep or delete for them.
@@ -151,24 +149,6 @@ class WuwaProvider : CardProvider<WutheringWavesGame> {
 
 	override suspend fun cardDetail(id: SourceId, language: CardLanguage?): CardPrinting? =
 		WuwaCatalogue.printing(id.local, languageFor(language), this.id)
-
-	/**
-	 * Text search across every set.
-	 *
-	 * Matches the name and the printed code, which is what the search box means. Local, like
-	 * everything else here, so it is exhaustive rather than a page of whatever a server ranked
-	 * first.
-	 */
-	override suspend fun searchAllSets(request: CardSearchRequest): CardPage {
-		val vNeedle = request.text.trim()
-		val vCards = WuwaCatalogue
-			.printings(languageFor(request.language), id)
-			.filter {
-				it.displayName.contains(vNeedle, ignoreCase = true) ||
-					it.providerRawCollectorNumber.contains(vNeedle, ignoreCase = true)
-			}
-		return page(vCards, request.page, request.pageSize)
-	}
 
 	// ============
 	//  Internals

@@ -10,7 +10,6 @@ import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.core.provider.CardPage
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardProvider
-import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
@@ -123,7 +122,6 @@ class TcgdexProvider(
 			artworkVariants = false,
 			finishes = true,
 			cardmarketProductMapping = true,
-			crossSetSearch = true,
 			thumbnailImages = true,
 		),
 		attribution = Attribution(
@@ -524,57 +522,6 @@ class TcgdexProvider(
 			} catch (vError: ClientRequestException) {
 				if (vError.response.status == HttpStatusCode.NotFound) null else throw vError
 			}
-		}
-	}
-
-	/**
-	 * Name search across every set in the locale.
-	 *
-	 * `name=like:{text}` is TCGdex's own substring operator. The results are *brief* cards, so they
-	 * carry a name, a number and an image and nothing else -- which is what a search result row
-	 * shows. The set name is derived from the card id's prefix rather than fetched, because
-	 * resolving 60 results to 60 set names would be 60 requests to fill in a subtitle.
-	 */
-	override suspend fun searchAllSets(request: CardSearchRequest): CardPage {
-		val vLocale = localeFor(request.language)
-		val vLanguage = languageFor(request.language)
-		return mapProviderErrors("TCGdex.searchAllSets") {
-			val vResults: List<TcgdexCardBriefDto> = mClient
-				.get(mBaseUrl) {
-					url { appendPathSegments("v2", vLocale, "cards") }
-					parameter("name", "like:${request.text}")
-					parameter("pagination:page", request.page)
-					parameter("pagination:itemsPerPage", request.pageSize)
-				}
-				.body()
-			val vCards = vResults.mapNotNull { vBrief ->
-				val vSetLocal = vBrief.id.substringBeforeLast('-', missingDelimiterValue = "")
-				if (vSetLocal.isBlank()) return@mapNotNull null
-				TcgdexMapper.toPrinting(
-					dto = vBrief,
-					provider = id,
-					// A placeholder set carrying only what the id proves. Its name is the id, which
-					// the search row shows as-is rather than inventing a prettier one.
-					set = CardSet(
-						id = SourceId(id, vSetLocal),
-						game = PokemonGame.id,
-						code = vSetLocal.uppercase(),
-						name = vSetLocal,
-						cardCount = null,
-						releaseDate = null,
-					),
-					language = vLanguage,
-				)
-			}
-			CardPage(
-				cards = vCards,
-				page = request.page,
-				pageSize = request.pageSize,
-				// TCGdex returns a bare array with no envelope, so there is no total to report and
-				// none is guessed from the page being full.
-				totalCount = null,
-				hasMore = vCards.size >= request.pageSize,
-			)
 		}
 	}
 

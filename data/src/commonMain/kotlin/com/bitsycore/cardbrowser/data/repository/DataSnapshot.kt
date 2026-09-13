@@ -88,46 +88,30 @@ data class SetCards(
 // ==================
 
 /**
- * How much of a game a search actually covered.
+ * What a search across a game's cards found, and how much of the game it could see.
  *
- * The two are not interchangeable and the difference is not cosmetic. A remote search asks the
- * provider about every card it has; a local one looks only at the sets this device has already
- * downloaded, which on a fresh install is none. Presenting the second as though it were the first
- * would tell a user that a card does not exist when what happened is that they have never opened
- * the set it is in.
- */
-enum class SearchScope {
-
-	/** The provider searched its whole catalogue. */
-	REMOTE_ALL_SETS,
-
-	/** Only the sets already on disk were searched, because the provider cannot search remotely. */
-	LOCAL_CACHED_SETS,
-}
-
-/**
- * The results of a cross-set search, with an account of what was searched.
+ * A search here reads the card store, which holds the sets this device has downloaded. That is the
+ * only kind of search the app does: no source is asked to search its own catalogue, because the one
+ * that could was implemented five times and called from nowhere -- see `docs/PROVIDERS.md`.
  *
- * @property scope which of the two kinds of search produced [cards]
- * @property searchedSetCount how many sets were actually looked at. Meaningful for
- *   [SearchScope.LOCAL_CACHED_SETS]; for a remote search it is the number the provider spanned,
- *   which it does not report, so it is the count of sets the results happen to come from
- * @property knownSetCount how many sets the game has in total, so the UI can say "12 of 87"
- * @property totalCount the provider's own match count, when it states one
- * @property hasMore whether the provider has further pages
+ * So the counts are not decoration. An empty result from a catalogue and an empty result from an
+ * empty device mean opposite things, and the screen has to be able to tell them apart.
+ *
+ * @property searchedSetCount how many of the game's sets were actually looked at -- the ones held
+ * @property knownSetCount how many the game has in total, so the UI can say "12 of 87"
+ * @property totalCount how many matched before any limit was applied, when that is known
+ * @property hasMore whether the result was truncated
  */
 data class CardSearchResults(
 	val cards: List<com.bitsycore.cardbrowser.core.model.CardPrinting>,
-	val scope: SearchScope,
 	val searchedSetCount: Int,
 	val knownSetCount: Int,
 	val totalCount: Int? = null,
 	val hasMore: Boolean = false,
 ) {
 
-	/** True when a local search could not see the whole game. */
-	val isLimitedByCache: Boolean
-		get() = scope == SearchScope.LOCAL_CACHED_SETS && searchedSetCount < knownSetCount
+	/** True when the search could not see the whole game, because not all of it is downloaded. */
+	val isLimitedByCache: Boolean get() = searchedSetCount < knownSetCount
 }
 
 /**

@@ -10,7 +10,6 @@ import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.core.provider.CardPage
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardProvider
-import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
@@ -148,7 +147,6 @@ class ScryfallProvider(
 			// `CardmarketLinkBuilder`, which had been building the `/Products/Singles/{n}` shape
 			// that does not resolve.
 			cardmarketProductMapping = true,
-			crossSetSearch = true,
 			thumbnailImages = true,
 			// Scryfall asks clients to take its bulk files rather than page its API for data it
 			// has already packaged, and its catalogue is 988 sets -- so a per-set card-info
@@ -286,18 +284,6 @@ class ScryfallProvider(
 		throw vError
 	} catch (vError: Exception) {
 		true
-	}
-
-	override suspend fun searchAllSets(request: CardSearchRequest): CardPage {
-		val vLanguage = resolveLanguage(request.language) ?: CardLanguage.ENGLISH
-		return mapProviderErrors("Scryfall.searchAllSets") {
-			// Quoted, so a multi-word search is one name term rather than several loose ones that
-			// Scryfall would AND together across different fields.
-			val vTerm = "name:${quote(request.text)}"
-			searchPage(vTerm, vLanguage, request.page)
-				?: searchPage(vTerm, CardLanguage.ENGLISH, request.page)
-				?: CardPage(emptyList(), request.page, MAX_PAGE_SIZE, totalCount = 0, hasMore = false)
-		}
 	}
 
 	/**

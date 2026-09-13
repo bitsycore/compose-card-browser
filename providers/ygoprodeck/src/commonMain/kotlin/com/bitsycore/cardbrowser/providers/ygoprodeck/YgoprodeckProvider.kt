@@ -10,7 +10,6 @@ import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.core.provider.CardPage
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardProvider
-import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
@@ -115,7 +114,6 @@ class YgoprodeckProvider(
 			artworkVariants = false,
 			finishes = false,
 			cardmarketProductMapping = false,
-			crossSetSearch = true,
 			thumbnailImages = true,
 		),
 		attribution = Attribution(
@@ -264,18 +262,6 @@ class YgoprodeckProvider(
 		// Unknown, not absent. Keeping the language leaves a switch that may fail and says so;
 		// dropping it hides an edition that probably exists.
 		true
-	}
-
-	override suspend fun searchAllSets(request: CardSearchRequest): CardPage {
-		val vLanguage = resolveLanguage(request.language) ?: CardLanguage.ENGLISH
-		return mapProviderErrors("YGOPRODeck.searchAllSets") {
-			fetchPage(
-				vLanguage = vLanguage,
-				vPage = request.page,
-				vSize = request.pageSize.coerceAtMost(MAX_PAGE_SIZE),
-				vSet = null,
-			) { parameter("fname", request.text) }
-		}
 	}
 
 	/**

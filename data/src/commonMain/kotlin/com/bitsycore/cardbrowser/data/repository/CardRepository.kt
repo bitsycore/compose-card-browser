@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.data.repository
 
+import com.bitsycore.cardbrowser.data.cache.SEARCH_LIMIT
 import com.bitsycore.cardbrowser.core.filter.CardFacets
 import com.bitsycore.cardbrowser.core.filter.CardFilterEngine
 import com.bitsycore.cardbrowser.core.model.CardLanguage
@@ -15,7 +16,6 @@ import com.bitsycore.cardbrowser.core.provider.CardPage
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardProvider
 import com.bitsycore.cardbrowser.core.provider.CardQuery
-import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.BulkCatalogue
@@ -644,7 +644,6 @@ class CardRepository(
 		if (filter.isEmpty) {
 			return CardSearchResults(
 				cards = emptyList(),
-				scope = SearchScope.LOCAL_CACHED_SETS,
 				searchedSetCount = 0,
 				knownSetCount = knownSets.size,
 			)
@@ -661,181 +660,25 @@ class CardRepository(
 		val vCards = mSetStore.search(game, filter.copy(language = vLanguage))
 		return CardSearchResults(
 			cards = vCards,
-			scope = SearchScope.LOCAL_CACHED_SETS,
 			// How much of the game was actually searched, from what is stored rather than from
 			// what the results happen to span -- a filter that matches three cards has not
 			// searched three sets.
 			searchedSetCount = storedSetCount(game, knownSets),
 			knownSetCount = knownSets.size,
+			// The store stops at `SEARCH_LIMIT` rows. A full page is the only evidence available
+			// that it stopped early -- and a screen printing "200 cards" for a search that matched
+			// four thousand is the kind of number this app must not present as a total.
+			hasMore = vCards.size >= SEARCH_LIMIT,
 		)
 	}
 
 	/** What a game's stored cards contain, so the filter list offers nothing that matches nothing. */
 	suspend fun searchFacets(game: GameId): StoredFacets = mSetStore.facetsForGame(game)
 
-	/** How many of [knownSets] are held in any language. The denominator of a local search. */
+	/** How many of [knownSets] are held in any language. The denominator of a stored search. */
 	private suspend fun storedSetCount(game: GameId, knownSets: List<CardSet>): Int {
 		val vProvider = mRegistry.resolve(game) ?: return 0
 		return knownSets.count { mSetStore.languagesHeld(vProvider.id, it.id).isNotEmpty() }
-	}
-
-	fun searchAllSets(
-		game: GameId,
-		text: String,
-		knownSets: List<CardSet>,
-		language: CardLanguage? = null,
-	): Flow<DataSnapshot<CardSearchResults>> = flow {
-		val vNeedle = text.trim()
-		if (vNeedle.isEmpty()) return@flow
-
-		val vProvider = mRegistry.resolve(game, language)
-			?: run {
-				emit(DataSnapshot.failed<CardSearchResults>(ProviderError.Unknown("No provider serves $game")))
-				return@flow
-			}
-
-		val vLanguage = effectiveLanguage(vProvider, language)
-		val vCanSearchRemotely = vProvider.capabilities.data.crossSetSearch
-
-		// 1. The sets already on disk, always, and first.
-		val vLocal = searchCachedSets(vProvider, vNeedle, knownSets, vLanguage)
-		// Skipped only when it found nothing *and* a real search is about to run: an empty local
-		// result flashed up before the network answers reads as "no matches" for a moment.
-		if (vLocal.cards.isNotEmpty() || !vCanSearchRemotely) {
-			emit(
-				DataSnapshot(
-					value = vLocal,
-					origin = DataOrigin.CACHE,
-					completeness = if (vLocal.isLimitedByCache) Completeness.PARTIAL else Completeness.COMPLETE,
-					fetchedAtEpochMillis = mClock(),
-					isStale = false,
-				),
-			)
-		}
-
-		if (!vCanSearchRemotely) return@flow
-
-		// 2. The same search, if it has been run before and is still fresh.
-		//
-		// A search used to be the one path that always hit the network -- every submit, every
-		// return to the screen, every back-navigation. Typing "dragon", opening a card and coming
-		// back cost two identical requests.
-		//
-		// Held for the same 24 hours as a set, and for the same reason: a card's printings do not
-		// change between one afternoon and the next, and a set released inside the window is
-		// findable the moment its own list is refreshed. A stale entry is still emitted first and
-		// then replaced, so the screen is never blank while the network is asked again.
-		val vSearchKey = searchKey(vProvider, vNeedle, vLanguage)
-		val vSearchSerializer = CacheEnvelope.serializer(serializer<CachedSearchPage>())
-		val vCachedSearch = mCache.read(vSearchKey, vSearchSerializer)
-		if (vCachedSearch != null) {
-			val vIsStale = vCachedSearch.isStale(mClock(), mCardsTtlMillis)
-			emit(
-				DataSnapshot(
-					value = searchResultsOf(vCachedSearch.payload, knownSets),
-					origin = DataOrigin.CACHE,
-					completeness = vCachedSearch.completeness,
-					fetchedAtEpochMillis = vCachedSearch.fetchedAtEpochMillis,
-					isStale = vIsStale,
-				),
-			)
-			if (!vIsStale) return@flow
-		}
-
-		// 3. The provider's answer, which supersedes both.
-		try {
-			currentCoroutineContext().ensureActive()
-			val vPage = vProvider.searchAllSets(
-				CardSearchRequest(
-					text = vNeedle,
-					language = vLanguage,
-					page = 1,
-					pageSize = SEARCH_PAGE_SIZE.coerceAtMost(vProvider.capabilities.maxPageSize),
-				),
-			)
-			val vCards = dedupePrintings(vPage.cards)
-			val vFetchedAt = mClock()
-			// One page of a match list is not the whole match list, and the screen says so rather
-			// than letting the user assume they are looking at everything.
-			val vCompleteness = if (vPage.hasMore) Completeness.PARTIAL else Completeness.COMPLETE
-			val vPayload = CachedSearchPage(
-				cards = vCards,
-				totalCount = vPage.totalCount,
-				hasMore = vPage.hasMore,
-			)
-			mCache.write(
-				key = vSearchKey,
-				envelope = CacheEnvelope(
-					schemaVersion = CacheEnvelope.CURRENT_SCHEMA_VERSION,
-					provider = vProvider.id,
-					language = vLanguage,
-					scope = CacheScope.Search(needle = vNeedle.lowercase(), page = 1),
-					fetchedAtEpochMillis = vFetchedAt,
-					completeness = vCompleteness,
-					payload = vPayload,
-				),
-				serializer = vSearchSerializer,
-			)
-			emit(
-				DataSnapshot.fresh(
-					value = searchResultsOf(vPayload, knownSets),
-					fetchedAt = vFetchedAt,
-					completeness = vCompleteness,
-				),
-			)
-		} catch (vError: ProviderError) {
-			// The cached page for *this* search where there is one, and only the local sets
-			// otherwise. Falling straight back to `vLocal` meant a failed refresh replaced 60
-			// visible cached results with an empty list, and the screen drew a full-page "No
-			// connection" over results the user could see a moment earlier.
-			val vFallback = vCachedSearch?.let { searchResultsOf(it.payload, knownSets) } ?: vLocal
-			emit(
-				DataSnapshot(
-					value = vFallback,
-					origin = DataOrigin.CACHE,
-					completeness = vCachedSearch?.completeness ?: Completeness.PARTIAL,
-					fetchedAtEpochMillis = vCachedSearch?.fetchedAtEpochMillis ?: mClock(),
-					isStale = true,
-					error = vError,
-				),
-			)
-		}
-	}
-
-	/**
-	 * Searches the complete sets this device already holds.
-	 *
-	 * Reads only what is on disk and never issues a request, which is what makes it safe to run
-	 * before every remote search and what makes search work with no network at all.
-	 *
-	 * A set cached as [Completeness.PARTIAL] is still searched -- part of a set is more than none
-	 * of it -- but it does not count towards [CardSearchResults.searchedSetCount], so the coverage
-	 * the UI reports stays a count of sets genuinely searched end to end.
-	 */
-	private suspend fun searchCachedSets(
-		provider: CardProvider<GameProfile>,
-		text: String,
-		knownSets: List<CardSet>,
-		language: CardLanguage?,
-	): CardSearchResults {
-		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardPrinting>()))
-		val vQuery = CardQuery(text = text)
-		val vHits = mutableListOf<CardPrinting>()
-		var vComplete = 0
-
-		for (vSet in knownSets) {
-			currentCoroutineContext().ensureActive()
-			val vCached = mSetStore.read(provider.id, vSet.id, language, mClock()) ?: continue
-			if (vCached.isComplete) vComplete++
-			vHits += CardFilterEngine.apply(vCached.cards, vQuery, provider.game.rarityLadder)
-		}
-
-		return CardSearchResults(
-			cards = dedupePrintings(vHits),
-			scope = SearchScope.LOCAL_CACHED_SETS,
-			searchedSetCount = vComplete,
-			knownSetCount = knownSets.size,
-		)
 	}
 
 	// ============
@@ -1505,31 +1348,6 @@ class CardRepository(
 	 * has on disk right now, which changes as sets are downloaded and would be a lie if it came
 	 * out of a file written yesterday.
 	 */
-	private fun searchResultsOf(page: CachedSearchPage, knownSets: List<CardSet>) = CardSearchResults(
-		cards = page.cards,
-		scope = SearchScope.REMOTE_ALL_SETS,
-		searchedSetCount = page.cards.map { it.setId }.distinct().size,
-		knownSetCount = knownSets.size,
-		totalCount = page.totalCount,
-		hasMore = page.hasMore,
-	)
-
-	/**
-	 * The key for one search.
-	 *
-	 * Lower-cased and trimmed, so "Fury", "fury" and " fury " are one entry rather than three --
-	 * the provider is being asked the same question in each case. The language is in the key
-	 * because the answer is in that language.
-	 */
-	private fun searchKey(provider: CardProvider<GameProfile>, needle: String, language: CardLanguage?) =
-		CacheKey.of(
-			"v${CacheEnvelope.CURRENT_SCHEMA_VERSION}",
-			provider.id.value,
-			"search",
-			needle.trim().lowercase(),
-			language?.code ?: "-",
-		)
-
 	private fun cardDetailKey(provider: CardProvider<GameProfile>, id: SourceId, language: CardLanguage?) =
 		CacheKey.of(
 			"v${CacheEnvelope.CURRENT_SCHEMA_VERSION}",

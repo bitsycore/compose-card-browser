@@ -4,7 +4,6 @@ import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
-import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -95,18 +94,4 @@ class OptcgLiveSmokeTest {
 		assertEquals("077", vCard.collectorNumber)
 	}
 
-	@Test
-	fun `cross-set search spans sets and pages client-side`() = runBlocking {
-		val vPage = provider().searchAllSets(
-			CardSearchRequest(text = "Luffy", pageSize = 10),
-		)
-
-		assertEquals(10, vPage.cards.size, "The client-side window should cap the page")
-		assertTrue(vPage.hasMore, "Luffy matches far more than ten cards")
-		assertNotNull(vPage.totalCount)
-		assertTrue(
-			vPage.cards.all { it.displayName.contains("Luffy", ignoreCase = true) },
-			"Every result should actually match",
-		)
-	}
 }

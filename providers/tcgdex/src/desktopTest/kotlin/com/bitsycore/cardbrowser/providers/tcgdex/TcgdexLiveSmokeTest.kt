@@ -4,7 +4,6 @@ import com.bitsycore.cardbrowser.core.model.Availability
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
-import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.data.net.HttpClientFactory
 import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
 import io.ktor.client.plugins.ClientRequestException
@@ -344,26 +343,6 @@ class TcgdexLiveSmokeTest {
 		assertTrue(vProduct.first().toLongOrNull() != null, "Product id should be numeric")
 	}
 
-	@Test
-	fun `cross-set search finds a card across eras`() = runBlocking {
-		val vPage = provider().searchAllSets(
-			CardSearchRequest(text = "Charizard",
-				language = CardLanguage.ENGLISH,
-				pageSize = 20,
-			),
-		)
-
-		assertTrue(vPage.cards.isNotEmpty(), "Charizard should match something")
-		assertTrue(
-			vPage.cards.all { it.displayName.contains("Charizard", ignoreCase = true) },
-			"Every result should actually match the search term",
-		)
-		// The point of a cross-set search: results from more than one set.
-		assertTrue(
-			vPage.cards.map { it.setId }.distinct().size > 1,
-			"Results should span several sets",
-		)
-	}
 	@Test
 	fun `set logos resolve -- and the advertised symbol still does not`() = runBlocking<Unit> {
 		val vClient = HttpClientFactory.create()

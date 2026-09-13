@@ -116,7 +116,6 @@ class RiftcodexProvider(
 			artworkVariants = true,
 			finishes = false,
 			cardmarketProductMapping = false,
-			crossSetSearch = false,
 			thumbnailImages = true,
 		),
 		attribution = Attribution(

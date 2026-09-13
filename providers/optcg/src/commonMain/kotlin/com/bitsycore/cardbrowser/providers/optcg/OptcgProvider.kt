@@ -10,7 +10,6 @@ import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.core.provider.CardPage
 import com.bitsycore.cardbrowser.core.provider.CardPageRequest
 import com.bitsycore.cardbrowser.core.provider.CardProvider
-import com.bitsycore.cardbrowser.core.provider.CardSearchRequest
 import com.bitsycore.cardbrowser.core.provider.CardSortField
 import com.bitsycore.cardbrowser.core.provider.DataCapabilities
 import com.bitsycore.cardbrowser.core.provider.FilterSupport
@@ -93,7 +92,6 @@ class OptcgProvider(
 			artworkVariants = false,
 			finishes = false,
 			cardmarketProductMapping = false,
-			crossSetSearch = true,
 		),
 		attribution = Attribution(
 			text = "One Piece card data from the OPTCG API, a community project not affiliated " +
@@ -153,39 +151,6 @@ class OptcgProvider(
 				if (vError.response.status == HttpStatusCode.NotFound) null else throw vError
 			}
 		}
-
-	/**
-	 * Name search across every expansion.
-	 *
-	 * `/api/sets/filtered/` has no paging of its own, so the whole match list arrives at once and is
-	 * trimmed here. `hasMore` is set from whether the trim actually removed anything, which is a
-	 * fact about the response rather than a guess.
-	 */
-	override suspend fun searchAllSets(request: CardSearchRequest): CardPage {
-		return mapProviderErrors("OPTCG.searchAllSets") {
-			val vCards: List<OptcgCardDto> = try {
-				mClient
-					.get(mBaseUrl) {
-						url { appendPathSegments("api", "sets", "filtered", "") }
-						parameter("card_name", request.text)
-					}
-					.body()
-			} catch (vError: ClientRequestException) {
-				// A search matching nothing answers 404 rather than with an empty array.
-				if (vError.response.status == HttpStatusCode.NotFound) emptyList() else throw vError
-			}
-			val vMapped = vCards.mapNotNull { OptcgMapper.toPrinting(it, id, set = null) }
-			val vFrom = (request.page - 1) * request.pageSize
-			val vWindow = vMapped.drop(vFrom).take(request.pageSize)
-			CardPage(
-				cards = vWindow,
-				page = request.page,
-				pageSize = request.pageSize,
-				totalCount = vMapped.size,
-				hasMore = vFrom + vWindow.size < vMapped.size,
-			)
-		}
-	}
 
 	companion object {
 

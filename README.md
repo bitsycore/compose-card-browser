@@ -35,8 +35,8 @@ What each source can and cannot do, in full: [docs/PROVIDERS.md](docs/PROVIDERS.
   988-set catalogue.
 - **Browse a set's cards** as a grid or a list, at three sizes, with filters drawn from what is
   actually in the set: type, rarity, the game's colour axis, cost, artwork treatment.
-- **Search across sets**, either on the server where the source supports it or across everything
-  you have downloaded — and the app says which of the two it did.
+- **Search across a game**, over everything you have downloaded, with the app saying how many of
+  the game's sets that was.
 - **Read one card** with its art, rules text, stats, printings and a link to Cardmarket where the
   game has one.
 - **Download for offline use**, per set or a whole game, choosing which languages you want for the
@@ -53,7 +53,7 @@ The app is built so it never states something it does not know, and that shapes 
   getting English means the card says English.
 - "Unknown" and "unavailable" are different, and are drawn differently.
 - Results filtered from part of a set are labelled partial, with the real set size beside them.
-- A cross-set search that only looked at your downloads says so, with a count.
+- A search across a game says how many of its sets you have downloaded, because that is all it looked at.
 - Two printings are the same card because the source said so, never because they share a name.
 
 ---

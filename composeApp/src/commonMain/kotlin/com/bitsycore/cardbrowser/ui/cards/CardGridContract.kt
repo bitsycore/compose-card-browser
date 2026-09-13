@@ -56,6 +56,19 @@ object CardGridContract :
 
 		/** The sets the filter may offer: those with something stored. */
 		val setOptions: List<SetChoice> = emptyList(),
+
+		/**
+		 * How much of the game a store-backed search could actually see.
+		 *
+		 * `searched` is the sets held on this device; `known` is the sets the game has. They are the
+		 * whole honesty of this screen's other mode: no source is asked to search its own catalogue,
+		 * so an empty result means "not in what you have downloaded" and never "no such card".
+		 * Both zero while a set is being browsed, where the question does not arise.
+		 */
+		val searchedSetCount: Int = 0,
+		val knownSetCount: Int = 0,
+		/** True when the store returned as many rows as it is willing to return. */
+		val isTruncated: Boolean = false,
 		val setName: String = "",
 		val setCode: String = "",
 		/**
@@ -225,6 +238,15 @@ object CardGridContract :
 					}
 				error != null && cards.isNotEmpty() -> "Showing saved cards. Refresh failed."
 				origin == DataOrigin.CACHE && isStale -> "Saved copy, refreshing…"
+				// 4. A search across a game, which can only see what is downloaded. Said always,
+				//    not only when it found nothing: a result that looks complete and is not is the
+				//    more misleading of the two.
+				isStoredBrowse && knownSetCount > 0 -> buildString {
+					append("Searched the ")
+					append(if (searchedSetCount == 1) "1 set" else "$searchedSetCount sets")
+					append(" you have downloaded, of $knownSetCount.")
+					if (isTruncated) append(" Showing the first ${cards.size}.")
+				}
 				else -> null
 			}
 
@@ -340,6 +362,9 @@ object CardGridContract :
 
 		/** The filter values present in the set, once the whole set is known. */
 		data class FacetsComputed(val facets: CardFacets) : Intent
+
+		/** How much of the game the last store-backed search could see. See `UiState.coverageNotice`. */
+		data class SearchCoverage(val searched: Int, val known: Int, val isTruncated: Boolean) : Intent
 
 		/** What the routed provider can filter on, so the sheet offers only what works. */
 		data class CapabilitiesResolved(
@@ -514,6 +539,12 @@ object CardGridContract :
 			if (intent.generation == state.requestGeneration) state.copy(isLoading = false) else state
 
 		is Intent.FacetsComputed -> state.copy(facets = intent.facets)
+
+		is Intent.SearchCoverage -> state.copy(
+			searchedSetCount = intent.searched,
+			knownSetCount = intent.known,
+			isTruncated = intent.isTruncated,
+		)
 
 		is Intent.CapabilitiesResolved -> state.copy(
 			supportedFilters = intent.supportedFilters,

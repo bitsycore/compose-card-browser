@@ -1,9 +1,14 @@
 # Providers
 
-A **provider** is one data source, adapted. It answers four questions — what sets exist, what cards
-are in a set, what one card is, and optionally what matches a search across sets — and declares in
-`ProviderCapabilities` what it can and cannot do, so the app never offers a control the source
-cannot honour.
+A **provider** is one data source, adapted. It answers three questions — what sets exist, what cards
+are in a set, and what one card is — and declares in `ProviderCapabilities` what it can and cannot
+do, so the app never offers a control the source cannot honour.
+
+**Searching is not one of them.** Every search in the app reads the card store, over the sets this
+device has downloaded, and says so. A `searchAllSets` contract existed, was implemented by five
+adapters, and was called from nowhere after the search screen was folded into the card grid; it was
+deleted on 2026-09-13 rather than re-wired. If server-side search comes back it comes back
+deliberately, with a UI that can say which of the two kinds of search produced a result.
 
 One module per source under `providers/`. A provider knows its source's URLs, DTOs and quirks and
 nothing about the UI. `:core` defines the contract and knows no provider's name; a test enforces
@@ -28,7 +33,6 @@ Companion: [GAMES.md](GAMES.md) — what a *game* declares, which is a different
 | `cardDetail(id, language)` | yes | One card, fully populated. |
 | `resolveLanguage(requested)` | default | Which language this source will *really* answer in. Walks `CardLanguage.PREFERENCE_ORDER` when nothing is asked for, so a source carrying everything answers in the user's first preference rather than English. |
 | `confirmLanguages(setId, candidates)` | default (returns the candidates) | Which of a set's claimed languages actually have cards. Override where a source over-claims. |
-| `searchAllSets(request)` | default (throws) | Server-side search across every set. Only implement it where `crossSetSearch` is true. |
 
 `BulkCatalogue` is a separate optional interface: `bulkVariants()` lists the dumps a source
 publishes and `streamAll(variantId)` reads one. Implement it only where the source really publishes
@@ -70,7 +74,6 @@ send a second request to re-fetch a subset of what is already there.
 | `artworkVariants` | — | The source distinguishes alternate art. |
 | `finishes` | — | The source states finishes. False means *unknown*, not absent. |
 | `cardmarketProductMapping` | — | Individual printings map to Cardmarket product ids. |
-| `crossSetSearch` | `false` | The **server** can search every set. False does not mean the app cannot — it falls back to the sets already on disk and says so. |
 | `bundledCardData` | `false` | Records ship inside the app. Nothing to download, keep or clear. |
 | `thumbnailImages` | `false` | A small rendition distinct from the full image. False makes a bulk image download fall back to full art, which is roughly four times the bytes — so the dialog says the honest size. |
 | `cardInfoFromBulkOnly` | `false` | Records come from the dump, not the API. Takes card info off the *single-set* download dialog and points at the whole-game import. Browsing a set still reads the API. |
@@ -85,18 +88,18 @@ the game list.
 Generated from the running Koin graph on 2026-09-13. To regenerate, print
 `ProviderRegistry.games` and each adapter's `capabilities` from a test that builds the real graph.
 
-| Adapter | Serves | Languages | Cross-set | Thumbs | Identity | Art variants | Finishes | Bulk | Max page |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `riftcodex` | Riftbound | 1 (en) | no | yes | yes | yes | no | no | 100 |
-| `tcgdex` | Pokémon | 11 | yes | yes | no | no | yes | no | 1000 |
-| `scryfall` | Magic | 11 | yes | yes | yes | yes | yes | **yes** | 175 |
-| `optcg` | One Piece | 0 | yes | no | no | no | no | no | 1000 |
-| `altered-db` | Altered | 5 (de en es fr it) | no | no | no | no | no | no | 1000 |
-| `ygoprodeck` | Yu-Gi-Oh! | 7 | yes | yes | no | no | no | no | 100 |
-| `ucp-wuwa` | Wuthering Waves | 3 (ja ko zh-cn) | yes | yes | yes | yes | no | no | 200 |
-| `tcgcsv-lorcana` | Disney Lorcana | 0 | no | yes | no | no | no | no | 1000 |
-| `tcgcsv-cyberpunk` | Cyberpunk TCG | 0 | no | yes | no | no | no | no | 1000 |
-| `tcgcsv-wowtcg` | WoW TCG | 0 | no | yes | no | no | no | no | 1000 |
+| Adapter | Serves | Languages | Thumbs | Identity | Art variants | Finishes | Bulk | Max page |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `riftcodex` | Riftbound | 1 (en) | yes | yes | yes | no | no | 100 |
+| `tcgdex` | Pokémon | 11 | yes | no | no | yes | no | 1000 |
+| `scryfall` | Magic | 11 | yes | yes | yes | yes | **yes** | 175 |
+| `optcg` | One Piece | 0 | no | no | no | no | no | 1000 |
+| `altered-db` | Altered | 5 (de en es fr it) | no | no | no | no | no | 1000 |
+| `ygoprodeck` | Yu-Gi-Oh! | 7 | yes | no | no | no | no | 100 |
+| `ucp-wuwa` | Wuthering Waves | 3 (ja ko zh-cn) | yes | yes | yes | no | no | 200 |
+| `tcgcsv-lorcana` | Disney Lorcana | 0 | yes | no | no | no | no | 1000 |
+| `tcgcsv-cyberpunk` | Cyberpunk TCG | 0 | yes | no | no | no | no | 1000 |
+| `tcgcsv-wowtcg` | WoW TCG | 0 | yes | no | no | no | no | 1000 |
 
 Eight modules, ten adapters: `providers/tcgcsv` holds three, one per TCGplayer category.
 

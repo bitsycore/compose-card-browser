@@ -365,7 +365,6 @@ class RiftcodexProviderTest {
 		assertTrue(CardFilterField.TEXT in vCapabilities.filtering.localOnly)
 		assertTrue(CardFilterField.RARITY in vCapabilities.filtering.localOnly)
 		// And no cross-set search, for the same reason.
-		assertFalse(vCapabilities.data.crossSetSearch)
 		// Neither is offered at all, which is what keeps them off the filter sheet.
 		assertFalse(CardFilterField.FINISH in vCapabilities.filtering.supported)
 		assertFalse(CardFilterField.LANGUAGE in vCapabilities.filtering.supported)

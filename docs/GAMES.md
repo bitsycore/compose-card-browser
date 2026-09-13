@@ -117,7 +117,6 @@ above; this is the two joined, on 2026-09-13.
 | Languages | 1 | 11 | 11 | — | 5 | 7 | 3 | — | — | — |
 | Set symbols | | ● | ● | | | ● | | | | |
 | Thumbnails | ● | ● | ● | | | ● | ● | ● | ● | ● |
-| Server-side search | | ● | ● | ● | | ● | ● | | | |
 | Cardmarket link | ● | ● | ● | ● | n/a | ● | | | | |
 
 What would close the visible gaps, and whether it can be closed:

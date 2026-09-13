@@ -115,7 +115,6 @@ class AlteredProvider(
 			artworkVariants = false,
 			finishes = false,
 			cardmarketProductMapping = false,
-			crossSetSearch = false,
 		),
 		attribution = Attribution(
 			text = "Altered card data and images from the community Altered TCG Card Database. " +

@@ -80,6 +80,8 @@ class CardGridViewModel(
 
 			is CardGridContract.Intent.SetFilterChanged -> startLoad(debounce = false)
 
+			is CardGridContract.Intent.SearchCoverage -> Unit
+
 			is CardGridContract.Intent.GameSelected -> {
 				resolveGameCapabilities(intent.game)
 				loadSetOptions(intent.game)
@@ -356,7 +358,10 @@ class CardGridViewModel(
 					setIds = snapshot.setIds,
 					language = vLanguage,
 				),
-				knownSets = emptyList(),
+				// The catalogue, so the result can say how much of the game it could see. Read from
+				// the cache: this is the screen that only searches what is downloaded, and asking
+				// the network for a denominator would be a request made to draw a sentence.
+				knownSets = mRepository.cachedSetList(vGame, vLanguage).orEmpty(),
 			)
 			dispatch(
 				CardGridContract.Intent.Loaded(
@@ -371,6 +376,13 @@ class CardGridViewModel(
 					isStale = false,
 					error = null,
 					isFinal = true,
+				),
+			)
+			dispatch(
+				CardGridContract.Intent.SearchCoverage(
+					searched = vResults.searchedSetCount,
+					known = vResults.knownSetCount,
+					isTruncated = vResults.hasMore,
 				),
 			)
 			if (stateFlow.value.requestGeneration == vGeneration) {
