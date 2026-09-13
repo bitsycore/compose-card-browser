@@ -235,7 +235,6 @@ class DownloadRenderer {
 				state = com.bitsycore.cardbrowser.ui.screen.storage.StorageContract.UiState(
 					usage = com.bitsycore.cardbrowser.data.cache.CacheUsage(
 						metadataBytes = 486_000_000,
-						metadataEntries = 1_240,
 						metadataKeptBytes = 462_000_000,
 						imageBytes = 184_000_000,
 						imageLimitBytes = 1_000_000_000,

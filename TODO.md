@@ -84,7 +84,11 @@ Everything below compiles and is desktop-tested. None of it has run where it wil
 
 ## Cleanup
 
-- [ ] **`CardRepository.kt` is 2057 lines.** The one genuinely oversized file in the tree.
+- [x] **`CardRepository.kt` was 2057 lines.** *(2026-09-13)* The bulk import is its own class:
+  1797 + 384. It was the one part with a lifecycle of its own — a scratch directory and sixty-four
+  shard files — where the rest of the class is "read a thing, cache a thing". `dedupedPrintings`
+  and `resolvedLanguage` went top-level rather than being copied, which also closed a duplicated
+  `effectiveLanguage`. Still large; split again only where there is a seam, not for the number.
 - [x] **`SetListScreen` built `DownloadRequest`s in the composition layer.** *(fixed 2026-09-13)*
   The rules — resolving the language the source really answers in, splitting records from pictures,
   one job per language — are in `SetListViewModel`, and the queue reaches the screen as state. The
@@ -93,7 +97,7 @@ Everything below compiles and is desktop-tested. None of it has run where it wil
   exercised without a device" was wrong.
 - [ ] **`SetListScreen.kt` is still 1507 lines.** Large, but it is now one composable tree with no
   logic in it. Split by section if it grows again.
-- [ ] **`CacheUsage.metadataEntries` is computed and displayed nowhere.** *(verified)*
+- [x] **`CacheUsage.metadataEntries` is computed and displayed nowhere.** *(removed 2026-09-13)*
 - [ ] **The Wuthering Waves snapshot goes stale silently.** It is a bundled file, so the game
   gaining cards is invisible until `:providers:wuwa:liveProviderTest` fails. Regenerate with
   `python providers/wuwa/tools/scrape_wuwa.py --refresh`.

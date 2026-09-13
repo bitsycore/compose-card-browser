@@ -52,7 +52,6 @@ class CacheManager(
 			StorageReport(
 				usage = CacheUsage(
 					metadataBytes = vMetadata.totalBytes + vSets.unpinnedBytes + vSets.pinnedBytes,
-					metadataEntries = vMetadata.entryCount + vSets.sets,
 					// Split, because the two answer different questions: what you asked for, and
 					// what browsing left behind. Only the second is offered for clearing.
 					metadataKeptBytes = vSets.pinnedBytes,
@@ -147,7 +146,6 @@ data class StorageReport(val usage: CacheUsage)
 /** A reading of both caches, for display. */
 data class CacheUsage(
 	val metadataBytes: Long,
-	val metadataEntries: Int,
 	/** Of [metadataBytes], the part that was downloaded rather than merely browsed. */
 	val metadataKeptBytes: Long = 0L,
 	val imageBytes: Long,

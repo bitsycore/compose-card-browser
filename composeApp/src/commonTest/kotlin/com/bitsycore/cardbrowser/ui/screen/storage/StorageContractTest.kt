@@ -24,7 +24,6 @@ class StorageContractTest {
 
 	private fun usage(total: Long, kept: Long, limit: Long = 1_000_000_000) = CacheUsage(
 		metadataBytes = total,
-		metadataEntries = 100,
 		metadataKeptBytes = kept,
 		imageBytes = 0,
 		imageLimitBytes = limit,
