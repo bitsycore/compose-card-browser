@@ -808,9 +808,9 @@ internal fun HaloedLogo(art: GameArt?, image: @Composable (Modifier, ColorFilter
  * theme would turn white on the dark theme and put a glow around a mark that needed nothing.
  */
 private val HALO_RINGS: List<Pair<Float, Float>> = listOf(
-	1f to 0.20f,
-	2f to 0.13f,
-	3.25f to 0.08f,
+	1f to 0.12f,
+	2f to 0.08f,
+	3.25f to 0.05f,
 )
 
 /** The eight directions, at one radius. Diagonals are pulled in so the ring is round, not square. */
