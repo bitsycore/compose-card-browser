@@ -303,16 +303,17 @@ fun App() {
 					// Unless there is no row to grow out of. The global search opens the same screen
 					// from a button in the app bar, with no set and so no shared container, and
 					// standing the transition down there left nothing moving at all: the search
-					// appeared and later vanished. It takes the app's ordinary cross-fade, which is
-					// what every other screen reached from a button gets.
+					// appeared and later vanished. It slides, like the other hop into a list --
+					// which makes the lateral move the app's answer for "went deeper without a
+					// shared element" rather than a single special case, and that is a better rule
+					// than the cross-fade it had first, which read as a screen swap rather than as
+					// going somewhere.
 					is Route.Cards -> NavEntry(
 						vRoute,
 						metadata = if (vRoute.setId.isBlank()) {
-							NavDisplay.transitionSpec { fadeThroughTransform(zIndex = 1f) } +
-								NavDisplay.popTransitionSpec { fadeThroughTransform(zIndex = 0f) } +
-								NavDisplay.predictivePopTransitionSpec {
-									fadeThroughTransform(zIndex = 0f)
-								}
+							NavDisplay.transitionSpec { slideForward() } +
+								NavDisplay.popTransitionSpec { slideBack() } +
+								NavDisplay.predictivePopTransitionSpec { slideBack() }
 						} else {
 							NavDisplay.transitionSpec { heldStill(zIndex = 1f) } +
 								NavDisplay.popTransitionSpec { heldStill(zIndex = 0f) } +
@@ -470,22 +471,14 @@ private fun heldStill(zIndex: Float): ContentTransform =
  */
 private fun <T : Any> fadeThrough(
 	zIndex: Float,
-): AnimatedContentTransitionScope<Scene<T>>.() -> ContentTransform = { fadeThroughTransform(zIndex) }
-
-/**
- * The same cross-fade as a bare [ContentTransform], for the per-entry metadata blocks.
- *
- * Those hand their lambda an `AnimatedContentTransitionScope<Scene<*>>`, which no `Scene<Route>`
- * receiver fits. Neither form reads the receiver at all -- the transform is the same four arguments
- * either way -- so this is the shape both spell, and [heldStill] is already written this way.
- */
-private fun fadeThroughTransform(zIndex: Float): ContentTransform =
+): AnimatedContentTransitionScope<Scene<T>>.() -> ContentTransform = {
 	ContentTransform(
 		targetContentEnter = fadeIn(tween(ENTER_MILLIS, easing = LinearOutSlowInEasing)),
 		initialContentExit = fadeOut(tween(EXIT_MILLIS, easing = FastOutLinearInEasing)),
 		targetContentZIndex = zIndex,
 		sizeTransform = null,
 	)
+}
 
 /** Slightly slower in than out, so the two overlap rather than leaving a gap of background. */
 private const val ENTER_MILLIS = 280

@@ -69,6 +69,7 @@ import com.bitsycore.cardbrowser.ui.common.sharedSetContainer
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -271,8 +272,16 @@ fun CardGridContent(
 
 	// Scroll position is kept in the view model rather than only in the grid state, so it survives
 	// the trip into card detail and back even though this composable leaves the composition.
-	LaunchedEffect(vGridState) {
-		snapshotFlow { vGridState.firstVisibleItemIndex }
+	//
+	// Both renderers, keyed on the mode. Only the grid was recorded, so browsing in list mode
+	// stored nothing and every return started from whatever the *grid* had last been left at.
+	LaunchedEffect(vGridState, vListState, vState.viewMode) {
+		val vScrolled = if (vState.viewMode == CardViewMode.LIST) {
+			snapshotFlow { vListState.firstVisibleItemIndex }
+		} else {
+			snapshotFlow { vGridState.firstVisibleItemIndex }
+		}
+		vScrolled
 			.distinctUntilChanged()
 			.collect { dispatch(CardGridContract.Intent.ScrollPositionChanged(it)) }
 	}
@@ -285,18 +294,27 @@ fun CardGridContent(
 	// brings it back on any upward scroll, which is the behaviour every Material app has.
 	val vScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
 
-	// Opening the search expands the bar it lives in.
+	// *Opening* the search expands the bar it lives in -- opening it, not being composed with it
+	// already open.
 	//
 	// The field is drawn under the app bar and hidden once the bar has collapsed past halfway --
 	// otherwise it would overlap the grid. That is right while scrolling and wrong the moment the
 	// search button is pressed: after a long scroll the bar is collapsed, so tapping search set the
 	// state and showed nothing at all, which reads as a dead button. Expanding the bar puts the
 	// field where the press was asking for it.
+	//
+	// The previous value is what makes it a *change* rather than a state. Without it this fired on
+	// every arrival, and a game-wide search arrives with the search already open -- so returning
+	// from a card threw the bar back to the top of its travel and the field the user had scrolled
+	// away reappeared. `rememberSaveable`, so the remembered previous value comes back with the
+	// screen; a plain `remember` would be re-seeded and the effect would fire again.
+	var vSearchWasOpen by rememberSaveable { mutableStateOf(vState.isSearchOpen) }
 	LaunchedEffect(vState.isSearchOpen) {
-		if (vState.isSearchOpen) {
+		if (vState.isSearchOpen && !vSearchWasOpen) {
 			vScrollBehavior.state.heightOffset = 0f
 			vScrollBehavior.state.contentOffset = 0f
 		}
+		vSearchWasOpen = vState.isSearchOpen
 	}
 
 	Scaffold(
