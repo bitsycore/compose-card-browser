@@ -1,5 +1,7 @@
 package com.bitsycore.cardbrowser.data
 
+import kotlinx.coroutines.flow.toList
+import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.model.Artwork
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardAttributes
@@ -109,6 +111,66 @@ class InterruptedDownloadTest {
 		}
 	}
 
+	@Test
+	fun `retrying fetches only the pages that are missing`() = runTest {
+		// The point of resuming. A set cut off half way must not cost the whole set again -- pages
+		// already on disk are a prefix, so the retry starts at the boundary page.
+		val vProvider = HalfwayProvider(mProviderId, mFailFromPage = 3, mCards = (1..8).map { card(it) })
+		val vRepository = repositoryFor(vProvider)
+
+		// First attempt: pages 1 and 2 arrive, page 3 refuses. Four of eight cards.
+		val vFirst = vRepository.cards(mSetId, TestGame.id, CardQuery()).toList().last()
+		assertEquals(4, vFirst.value?.cards?.size)
+		assertEquals(false, vFirst.value?.isCompleteSet)
+
+		// Second attempt, with the source answering again.
+		vProvider.stopFailing()
+		val vPagesBefore = vProvider.requestedPages.size
+		vProvider.requestedPages.clear()
+		val vSecond = vRepository.cards(mSetId, TestGame.id, CardQuery()).toList().last()
+
+		assertEquals(8, vSecond.value?.cards?.size, "the set is whole now")
+		assertEquals(true, vSecond.value?.isCompleteSet)
+		assertTrue(
+			vProvider.requestedPages.none { it < 3 },
+			"pages already held were fetched again: ${vProvider.requestedPages}",
+		)
+		assertTrue(
+			vProvider.requestedPages.size < vPagesBefore,
+			"the retry asked for ${vProvider.requestedPages.size} pages, the first run $vPagesBefore",
+		)
+	}
+
+	@Test
+	fun `a resumed set still refuses to call itself complete when cards are missing`() = runTest {
+		// The safety net under the prefix argument. If a source re-orders a set between attempts
+		// the prefix is wrong, and the guard that compares the collection against the provider's
+		// own total is what stops that becoming a "complete" set with holes in it.
+		val vProvider = HalfwayProvider(
+			mProviderId,
+			mFailFromPage = 3,
+			mCards = (1..8).map { card(it) },
+			mUnderReport = true,
+		)
+		val vRepository = repositoryFor(vProvider)
+
+		vRepository.cards(mSetId, TestGame.id, CardQuery()).toList()
+		vProvider.stopFailing()
+		val vSecond = vRepository.cards(mSetId, TestGame.id, CardQuery()).toList().last()
+
+		assertEquals(false, vSecond.value?.isCompleteSet, "short of the stated total is not complete")
+	}
+
+	private fun repositoryFor(provider: CardProvider<TestGame>) = CardRepository(
+		mRegistry = ProviderRegistry(
+			providers = listOf(provider),
+			routes = listOf(ProviderRoute(TestGame.id, provider.id)),
+		),
+		mCache = InMemoryMetadataStore(),
+		mSetStore = InMemorySetRecordStore(),
+		mClock = { 0L },
+	)
+
 	// ==================
 	// MARK: Harness
 	// ==================
@@ -143,7 +205,18 @@ class InterruptedDownloadTest {
 		override val id: ProviderId,
 		private val mFailFromPage: Int?,
 		private val mCards: List<CardPrinting>,
+		/** Reports a total larger than it serves, so the completeness guard has something to catch. */
+		private val mUnderReport: Boolean = false,
 	) : CardProvider<TestGame> {
+
+		/** Every page number asked for, so a test can see what a retry did not re-fetch. */
+		val requestedPages = mutableListOf<Int>()
+
+		private var mFailing = mFailFromPage != null
+
+		fun stopFailing() {
+			mFailing = false
+		}
 
 		override val displayName = "Halfway"
 
@@ -170,15 +243,24 @@ class InterruptedDownloadTest {
 		)
 
 		override suspend fun listCards(request: CardPageRequest): CardPage {
-			if (mFailFromPage != null && request.page >= mFailFromPage) throw ProviderError.Offline()
+			requestedPages += request.page
+			if (mFailing && mFailFromPage != null && request.page >= mFailFromPage) {
+				throw ProviderError.Offline()
+			}
 			val vFrom = (request.page - 1) * request.pageSize
-			val vItems = mCards.drop(vFrom).take(request.pageSize)
+			val vItems = if (mUnderReport) {
+				// Serves a card fewer than it claims, which is what a re-ordered set looks like
+				// from here: the count never reaches the stated total.
+				mCards.drop(vFrom).take(request.pageSize).dropLast(1)
+			} else {
+				mCards.drop(vFrom).take(request.pageSize)
+			}
 			return CardPage(
 				cards = vItems,
 				page = request.page,
 				pageSize = request.pageSize,
 				totalCount = mCards.size,
-				hasMore = vFrom + vItems.size < mCards.size,
+				hasMore = vFrom + request.pageSize < mCards.size,
 			)
 		}
 

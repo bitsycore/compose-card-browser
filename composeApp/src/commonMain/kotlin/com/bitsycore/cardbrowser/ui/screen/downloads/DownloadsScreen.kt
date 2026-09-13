@@ -1,5 +1,7 @@
 package com.bitsycore.cardbrowser.ui.screen.downloads
 
+import com.bitsycore.cardbrowser.data.download.DownloadRequest
+import androidx.compose.material3.Button
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,6 +80,14 @@ fun DownloadsScreen(
 	onCancel: (String) -> Unit,
 	onCancelAll: () -> Unit,
 	onClearFinished: () -> Unit,
+	/**
+	 * Runs a failed job again.
+	 *
+	 * The request, not the id: `enqueue` replaces a finished row for the same set rather than
+	 * appending, so retrying is simply asking for the same thing again. A set that stopped part
+	 * way carries on from where it stopped -- see `CardRepository.emitCompleteSet`.
+	 */
+	onRetry: (DownloadRequest) -> Unit = {},
 ) {
 	val vActive = jobs.count { it.isActive }
 	val vDone = jobs.count { it.status is DownloadStatus.Completed }
@@ -110,10 +120,14 @@ fun DownloadsScreen(
 							failed = vFailed,
 							onCancelAll = onCancelAll.takeIf { vActive > 0 },
 							onClearFinished = onClearFinished.takeIf { vDone + vFailed > 0 },
+							onRetryAll = {
+								jobs.filter { it.status is DownloadStatus.Failed }
+									.forEach { onRetry(it.request) }
+							}.takeIf { vFailed > 0 },
 						)
 					}
 					items(jobs, key = { it.id }) { vJob ->
-						DownloadCard(job = vJob, onCancel = onCancel)
+						DownloadCard(job = vJob, onCancel = onCancel, onRetry = onRetry)
 					}
 				}
 			}
@@ -129,6 +143,7 @@ private fun QueueSummary(
 	failed: Int,
 	onCancelAll: (() -> Unit)?,
 	onClearFinished: (() -> Unit)?,
+	onRetryAll: (() -> Unit)? = null,
 ) {
 	Column(Modifier.padding(bottom = 4.dp)) {
 		Text(
@@ -147,10 +162,13 @@ private fun QueueSummary(
 			style = MaterialTheme.typography.bodySmall,
 			color = MaterialTheme.colorScheme.onSurfaceVariant,
 		)
-		if (onCancelAll != null || onClearFinished != null) {
+		if (onCancelAll != null || onClearFinished != null || onRetryAll != null) {
 			Spacer(Modifier.height(8.dp))
 			Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
 				onCancelAll?.let { OutlinedButton(onClick = it) { Text("Stop all") } }
+				// First of the three when it is there: a failed download is the one thing on this
+				// screen that wants doing something about.
+				onRetryAll?.let { Button(onClick = it) { Text("Retry failed") } }
 				onClearFinished?.let { OutlinedButton(onClick = it) { Text("Clear finished") } }
 			}
 		}
@@ -160,7 +178,11 @@ private fun QueueSummary(
 /** One job, with everything known about it. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun DownloadCard(job: DownloadJob, onCancel: (String) -> Unit) {
+private fun DownloadCard(
+	job: DownloadJob,
+	onCancel: (String) -> Unit,
+	onRetry: (DownloadRequest) -> Unit = {},
+) {
 	Card(
 		modifier = Modifier.fillMaxWidth(),
 		colors = if (job.status is DownloadStatus.Failed) {
@@ -193,6 +215,13 @@ private fun DownloadCard(job: DownloadJob, onCancel: (String) -> Unit) {
 						Icon(
 							AppIcons.Close,
 							contentDescription = "Stop downloading ${job.request.setName}",
+						)
+					}
+				} else if (job.status is DownloadStatus.Failed) {
+					IconButton(onClick = { onRetry(job.request) }) {
+						Icon(
+							AppIcons.Refresh,
+							contentDescription = "Try ${job.request.setName} again",
 						)
 					}
 				}

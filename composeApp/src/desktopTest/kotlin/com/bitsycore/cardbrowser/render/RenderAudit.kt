@@ -40,6 +40,15 @@ class DownloadRenderer {
 		val vOut = File("build/render")
 		vOut.mkdirs()
 
+		renderToPng(vOut, "downloads-queue-failed", width = 700, height = 700, density = 1.65f) {
+			DownloadsScreen(
+				jobs = multilingualJobs().filter { it.status is DownloadStatus.Failed },
+				onBack = {},
+				onCancel = {},
+				onCancelAll = {},
+				onClearFinished = {},
+			)
+		}
 		renderToPng(vOut, "downloads-queue-multilingual", width = 700, height = 900, density = 1.65f) {
 			DownloadsScreen(
 				jobs = multilingualJobs(),

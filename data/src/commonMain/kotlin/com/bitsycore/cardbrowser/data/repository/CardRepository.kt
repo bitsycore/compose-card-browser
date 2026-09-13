@@ -261,7 +261,17 @@ class CardRepository(
 
 		try {
 			if (vNeedsCompleteSet) {
-				emitCompleteSet(vProvider, setId, vLanguage, query, knownSetSize, vCachedComplete?.cards)
+				emitCompleteSet(
+					provider = vProvider,
+					setId = setId,
+					language = vLanguage,
+					query = query,
+					knownSetSize = knownSetSize,
+					previouslyCached = vCachedComplete?.cards,
+					// Only an *incomplete* set is a prefix to carry on from. A complete one being
+					// refetched is a refresh, and a refresh starts at the beginning.
+					resumeFrom = vCachedComplete?.takeIf { !it.isComplete }?.cards,
+				)
 			} else {
 				emitSinglePage(vProvider, setId, vLanguage, query, knownSetSize)
 			}
@@ -328,6 +338,7 @@ class CardRepository(
 		query: CardQuery,
 		knownSetSize: Int?,
 		previouslyCached: List<CardPrinting>?,
+		resumeFrom: List<CardPrinting>? = null,
 	) {
 		val vPageSize = provider.capabilities.maxPageSize
 		var vComplete = true
@@ -366,9 +377,30 @@ class CardRepository(
 		// depend on the worst case.
 		// Skipped entirely for a provider whose own pages are already this small: the extra request
 		// would cost a round trip and save nothing.
-		val vWantsPreview = vPageSize > FIRST_PAGE_SIZE
+		// Where to start, given what a previous attempt already left on disk.
+		//
+		// Pages are requested in order and consumed in order, and collection stops at the first
+		// failure -- so a partial set is a *prefix* of the set, and pages 1..floor(n/size) are
+		// fully covered by it. Re-fetching them would be the whole set again for the sake of the
+		// tail, which is exactly what made a sleep-interrupted download so expensive to put right.
+		//
+		// The boundary page is re-fetched rather than assumed: `n` is rarely a clean multiple of
+		// the page size, because a preview of 24 may be mixed in. Overlap is harmless -- the merge
+		// below de-duplicates by id.
+		//
+		// The prefix argument fails if a source re-orders a set between attempts. That is caught
+		// rather than trusted: the guard further down marks the set incomplete when the collection
+		// is short of the provider's own total, so a bad resume produces a partial set that will be
+		// tried again, not a complete one that is missing cards.
+		val vHeld = resumeFrom.orEmpty()
+		val vStartPage = if (vHeld.isEmpty()) 1 else (vHeld.size / vPageSize) + 1
+		val vIsResuming = vStartPage > 1
+
+		val vWantsPreview = vPageSize > FIRST_PAGE_SIZE && !vIsResuming
 		var vTotal: Int? = null
 		val vCollected = mutableListOf<CardPrinting>()
+		// What is already held goes in first, so page order is preserved across the join.
+		if (vIsResuming) vCollected += vHeld
 		var vPreviewWasWholeSet = false
 		// True when the preview came back as a whole page, so the page-one request is redundant.
 		var vPreviewIsPageOne = false
@@ -418,8 +450,11 @@ class CardRepository(
 				)
 			} else {
 				currentCoroutineContext().ensureActive()
+				// [vStartPage], not 1. When resuming, this is the first page not already held, and
+				// it carries the provider's total like any other page -- so nothing extra has to be
+				// fetched to work out how many pages remain.
 				val vPage = provider.listCards(
-					CardPageRequest(setId = setId, query = CardQuery(), page = 1, pageSize = vPageSize, language = language),
+					CardPageRequest(setId = setId, query = CardQuery(), page = vStartPage, pageSize = vPageSize, language = language),
 				)
 				vCollected += vPage.cards
 				vTotal = vPage.totalCount ?: vTotal
@@ -442,7 +477,7 @@ class CardRepository(
 
 				// Bounded, and small. These are volunteer-run APIs; "as fast as possible" is not a
 				// licence to open a hundred sockets at a stranger's server.
-				outer@ for (vBatch in (2..vLastPage).chunked(MAX_CONCURRENT_PAGE_REQUESTS)) {
+				outer@ for (vBatch in ((vStartPage + 1)..vLastPage).chunked(MAX_CONCURRENT_PAGE_REQUESTS)) {
 					currentCoroutineContext().ensureActive()
 					var vRanOut = false
 

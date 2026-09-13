@@ -397,6 +397,7 @@ fun App() {
 							onCancel = vDownloads::cancel,
 							onCancelAll = vDownloads::cancelAll,
 							onClearFinished = vDownloads::clearFinished,
+							onRetry = { vDownloads.enqueue(it) },
 						)
 					}
 				}
