@@ -40,7 +40,7 @@ fun main() {
 	application {
 		Window(
 			onCloseRequest = ::exitApplication,
-			title = "CardBrowser",
+			title = "Toploader",
 			// The largest one, for the window itself. The taskbar and the title bar are handed the
 			// whole set below, which is what stops them scaling this down badly.
 			icon = windowIcon(),

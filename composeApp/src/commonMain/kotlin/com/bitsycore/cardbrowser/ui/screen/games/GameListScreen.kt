@@ -208,7 +208,7 @@ fun GameListContent(
 						},
 						label = "title",
 					) { vIsEditing ->
-						Text(if (vIsEditing) "Customise list" else "Card Browser")
+						Text(if (vIsEditing) "Customise list" else "Toploader")
 					}
 				},
 				actions = {

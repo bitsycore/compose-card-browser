@@ -1,6 +1,6 @@
 # `:database` — the SQLite card store
 
-Part of CardBrowser. See [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) for where this sits.
+Part of Toploader. See [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) for where this sits.
 
 All card data lives here in one SQLite database: complete sets and everything derived from them —
 pins, labels, card counts, the eviction budget — and, since 2026-09-13, the small metadata scopes

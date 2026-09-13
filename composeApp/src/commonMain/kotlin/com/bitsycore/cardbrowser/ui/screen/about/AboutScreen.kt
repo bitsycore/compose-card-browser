@@ -76,7 +76,12 @@ fun AboutContent(
 				.arrowScroll(vScroll)
 				.padding(horizontal = 20.dp, vertical = 8.dp),
 		) {
-			Text("CardBrowser", style = MaterialTheme.typography.headlineSmall)
+			Text("Toploader", style = MaterialTheme.typography.headlineSmall)
+			Text(
+				text = "The TCG Browser",
+				style = MaterialTheme.typography.titleSmall,
+				color = MaterialTheme.colorScheme.primary,
+			)
 			Text(
 				text = if (state.version.isBlank()) "" else "Version ${state.version}",
 				style = MaterialTheme.typography.bodySmall,

@@ -1,4 +1,4 @@
-rootProject.name = "CardBrowser"
+rootProject.name = "Toploader"
 
 pluginManagement {
 	// Convention plugins, so a module applies them by id rather than with a script `apply`.

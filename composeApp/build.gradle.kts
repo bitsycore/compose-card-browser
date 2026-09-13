@@ -241,7 +241,7 @@ compose.desktop {
 		jvmArgs += "--enable-native-access=ALL-UNNAMED"
 
 		nativeDistributions {
-			packageName = "CardBrowser"
+			packageName = "Toploader"
 			packageVersion = "1.0.0"
 			description = "Browse trading card game sets"
 			// Desktop distribution is later work; an app image is enough to run one locally and

@@ -14,7 +14,7 @@ android {
 	compileSdk = libs.versions.androidCompileSdk.get().toInt()
 
 	defaultConfig {
-		applicationId = "com.bitsycore.cardbrowser"
+		applicationId = "com.bitsycore.toploader"
 		minSdk = libs.versions.androidMinSdk.get().toInt()
 		targetSdk = libs.versions.androidTargetSdk.get().toInt()
 		versionCode = 1

@@ -1,6 +1,6 @@
 # iOS shell
 
-Three files, and none of them contain any of the app. Everything CardBrowser does lives in
+Three files, and none of them contain any of the app. Everything Toploader does lives in
 `:composeApp` and crosses into Swift as a single `UIViewController` from
 [`MainViewController.kt`](../composeApp/src/iosMain/kotlin/com/bitsycore/cardbrowser/MainViewController.kt).
 

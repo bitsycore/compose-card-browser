@@ -1,4 +1,6 @@
-# CardBrowser
+# Toploader
+
+*The TCG Browser.*
 
 A card browser for ten trading card games, written once and running on Android, iOS and desktop.
 
@@ -101,7 +103,7 @@ SQLDelight 2.3.2, Koin 4.2.2, Coil 3.6.2. `minSdk` 24.
 ## Attribution
 
 Every source is credited in the app, on the game list and in Settings, with the wording each source
-asks for. CardBrowser is not affiliated with or endorsed by any game's publisher, and none of these
+asks for. Toploader is not affiliated with or endorsed by any game's publisher, and none of these
 sources is an official one unless it says so.
 
 The ten bundled game logos are the publishers' trademarks, used to identify the publishers' own

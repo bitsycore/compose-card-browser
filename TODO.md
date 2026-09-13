@@ -122,14 +122,15 @@ There are no `TODO`, `FIXME` or `HACK` markers anywhere in the source. *(verifie
 
 ## Naming
 
-- [ ] **Decide the app's name.** Checked on 2026-09-13:
-  - *TCG Browser* collides with `tcgbrowser.com`, a WoW TCG card browser and deckbuilder — dormant
-    since 2019, but the same words doing the same job. Purely descriptive, so hard to own.
-  - *TCG Bro* collides with `tcgbro.com` and several other "TCG Bros" shops and channels. Reads as a
-    storefront rather than a reference.
-  - *TCG Codex* is an existing iOS app covering Pokémon, Lorcana, Magic, One Piece and Star Wars
-    Unlimited — so "Codex" is out.
-  - *Riffle* is taken several times over, including a current iOS app.
-  - **Cardshelf** was searched and is effectively clear: one KLWP theme pack and physical shelves.
-  - *Toploader* and *Playset* were searched and no app surfaced, but both name the wrong thing — a
-    card protector and a set of four copies.
+- [x] **Decide the app's name.** *(2026-09-13)* **Toploader — The TCG Browser**, and
+  `com.bitsycore.toploader`. A toploader is the rigid holder a card worth keeping goes into, which
+  every collector reads instantly.
+
+  Checked and rejected along the way: *TCG Browser* is free on both stores but collides with a
+  dormant WoW TCG site and is unsearchable and unownable; *Cardshelf*, *Cardstock*, *Near Mint*,
+  *Riffle* and *Codex* are all taken. The lesson worth keeping: **anything starting with "Card" is
+  gone** — that namespace is saturated.
+
+  The Kotlin packages are still `com.bitsycore.cardbrowser.*`. That is internal, nobody sees it,
+  and renaming a thousand files before 1.0 buys nothing. Do it when there is a reason to touch
+  them anyway.
