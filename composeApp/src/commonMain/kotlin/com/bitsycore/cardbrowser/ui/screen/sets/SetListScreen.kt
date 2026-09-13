@@ -142,102 +142,15 @@ fun SetListScreen(
 	}
 	val vState by viewModel.collectAsStateWithLifecycle()
 
-	// The queue is application-scoped rather than this screen's, so it is read here and handed down
-	// as plain state -- `SetListContent` stays free of Koin and therefore previewable.
-	val vDownloads = koinInject<DownloadManager>()
-	val vJobs by vDownloads.jobs.collectAsState()
-	val vPreferences = koinInject<PreferencesStore>()
-	// Resolved here rather than in `SetListContent`, so the content stays free of Koin and keeps
-	// previewing. `null` for a game whose module ships no logo, which the title falls back for.
-	val vArtRegistry = koinInject<GameArtRegistry>()
-	val vArt = vState.game?.let(vArtRegistry::forGame)
-
-	// What the routed source will *actually* answer in, not what the user would prefer.
-	//
-	// The two differ more often than they look like they should. Riftcodex serves English only, so
-	// a French-preferring user downloading Riftbound queued a job labelled "French" for records
-	// that come back English -- the repository normalises the language before it builds a cache
-	// key, so the file was right and only the screen was lying. `resolveLanguage` is the same
-	// function the repository uses, asked one layer earlier so the queue can say the truth.
-	val vRegistry = koinInject<ProviderRegistry>()
-	val vProvider = vState.game?.let(vRegistry::resolve)
-	val vPreferred = vPreferences.preferences.value.primaryLanguage
-	val vDownloadLanguage = vState.game?.let { vRegistry.effectiveLanguage(it.id, vPreferred) } ?: vPreferred
+	// The only thing still read here, and it is a Compose resource rather than data: a game's logo
+	// is a painter, which is not a thing to put in a view model's state. `null` for a game whose
+	// module ships no logo, which the title falls back for.
+	val vArt = vState.game?.let(koinInject<GameArtRegistry>()::forGame)
 
 	SetListContent(
 		state = vState,
 		dispatch = viewModel::dispatch,
-		downloads = vJobs,
-		onDownload = { vSet, vKinds, vInfoLanguages, vArtLanguages ->
-			// One job per language, because everything downstream is per language: a cache key
-			// embeds it and so does an image download record. Splitting here is what makes "card
-			// info in every language, thumbnails in the two you read" a thing the queue can
-			// express.
-			//
-			// The two halves are treated differently on purpose. Card records are small and the
-			// whole point of having them is being able to switch language on a card you already
-			// hold, so those are fetched in every language the set states. Thumbnails are a
-			// request per card per language, so they go only where they were asked for.
-			// The source's answer for the user's preference, not the preference itself. See
-			// `vDownloadLanguage` above: a set that states no languages used to be queued under
-			// whatever the user preferred, which for an English-only source was a job labelled
-			// with a language it would never return.
-			val vPrimary = vDownloadLanguage
-			// What the dialog was told to fetch, which is no longer "every language the set
-			// states": that was the rule and the user had no say in it. Empty only when a caller
-			// asks for nothing, and then the preference stands in.
-			val vForInfo = vInfoLanguages.ifEmpty { setOf(vPrimary) }.toList()
-			val vForArt = vArtLanguages.ifEmpty { setOf(vPrimary) }
-				.filter { it in vSet.languages || vSet.languages.isEmpty() }
-
-			val vInfoKinds = vKinds.filterNot { it.isImagery }.toSet()
-			val vArtKinds = vKinds.filter { it.isImagery }.toSet()
-
-			for (vLanguage in vForInfo) {
-				if (vInfoKinds.isEmpty()) break
-				vDownloads.enqueue(
-					DownloadRequest(
-						setId = vSet.id,
-						game = vSet.game,
-						setName = vSet.name,
-						kinds = vInfoKinds,
-						// The user's preferred language, which is what every other caller passes --
-						// not `null`.
-						//
-						// A cache key embeds the language, so a download written under `null` and a
-						// grid or a search reading under `fr` are different files: the set would
-						// come down, and then not be found by the search that was the reason for
-						// downloading it. `CardRepository` normalises this once against what the
-						// provider can really answer in, so passing a language is correct even for
-						// a source that cannot serve it.
-						//
-						// This is the same mistake that once stopped any set ever showing as saved;
-						// see the note in `CardGridViewModel.startLoad`.
-						language = vLanguage,
-					),
-				)
-			}
-			for (vLanguage in vForArt) {
-				if (vArtKinds.isEmpty()) break
-				vDownloads.enqueue(
-					DownloadRequest(
-						setId = vSet.id,
-						game = vSet.game,
-						setName = vSet.name,
-						kinds = vArtKinds,
-						language = vLanguage,
-					),
-				)
-			}
-		},
-		onCancelDownload = vDownloads::cancel,
-		onCancelAllDownloads = vDownloads::cancelAll,
-		onClearFinishedDownloads = vDownloads::clearFinished,
 		gameArt = vArt,
-		preferredLanguage = vDownloadLanguage,
-		isCardDataBundled = vProvider?.capabilities?.data?.bundledCardData == true,
-		isCardInfoBulkOnly = vProvider?.capabilities?.data?.cardInfoFromBulkOnly == true,
-		hasThumbnails = vProvider?.capabilities?.data?.thumbnailImages != false,
 	)
 }
 
@@ -253,41 +166,16 @@ fun SetListScreen(
 fun SetListContent(
 	state: SetListContract.UiState,
 	dispatch: (SetListContract.Intent) -> Unit,
-	downloads: List<DownloadJob> = emptyList(),
-	/**
-	 * @param infoLanguages which editions of the records to fetch, and pictures separately -- the
-	 *   two are chosen apart in the dialog because they cost very differently
-	 */
-	onDownload: (
-		set: CardSet,
-		kinds: Set<DownloadKind>,
-		infoLanguages: Set<CardLanguage>,
-		imageLanguages: Set<CardLanguage>,
-	) -> Unit = { _, _, _, _ -> },
-	/**
-	 * The user's preferred language, ticked by default in the download dialog.
-	 *
-	 * Passed in rather than read here, because this composable stays free of Koin so it can be
-	 * previewed. `null` leaves the set's own first stated language ticked instead.
-	 */
-	preferredLanguage: CardLanguage? = null,
-	/**
-	 * True when this source's records come from its dump -- `DataCapabilities.cardInfoFromBulkOnly`.
-	 *
-	 * Read from the routed provider, like `isCardDataBundled` beside it, and passed down as plain
-	 * state so the content stays free of Koin and keeps previewing.
-	 */
-	isCardInfoBulkOnly: Boolean = false,
-	/** True when this game's records ship with the app -- `DataCapabilities.bundledCardData`. */
-	isCardDataBundled: Boolean = false,
-	/** True when the source publishes a small rendition -- `DataCapabilities.thumbnailImages`. */
-	hasThumbnails: Boolean = true,
-	onCancelDownload: (String) -> Unit = {},
-	onCancelAllDownloads: () -> Unit = {},
-	onClearFinishedDownloads: () -> Unit = {},
 	gameArt: GameArt? = null,
 ) {
 	val vState = state
+
+	// Everything this screen needs now arrives in the state. It used to take the queue, the
+	// preferred language, three capability flags and four callbacks as parameters, all assembled
+	// in the binder above from Koin -- which meant the dialog could only ever be previewed in its
+	// default shape, and the rules that built the jobs sat in a lambda no test could reach.
+	val vDownloads = vState.downloads
+	val vPreferredLanguage = vState.browsingLanguage
 
 	// Which set's download dialog is open, and whether the queue is showing. Local because neither
 	// is worth a trip through the state machine: nothing outside this screen cares.
@@ -400,7 +288,7 @@ fun SetListContent(
 						onOpenSettings = { dispatch(SetListContract.Intent.SettingsRequested) },
 						onOpenStorage = { dispatch(SetListContract.Intent.StorageRequested) },
 						onOpenDownloads = { dispatch(SetListContract.Intent.DownloadsRequested) },
-						activeDownloads = downloads.count { it.isActive },
+						activeDownloads = vDownloads.count { it.isActive },
 					)
 				},
 				scrollBehavior = vScrollBehavior,
@@ -608,7 +496,7 @@ fun SetListContent(
 								sets = vFavourites,
 								state = vState,
 								dispatch = dispatch,
-								downloads = downloads,
+								downloads = vDownloads,
 								onDownload = { vPendingSet = it },
 								reorder = vReorder.takeIf { vState.canReorderFavourites },
 								reorderKeys = vFavouriteKeys,
@@ -625,7 +513,7 @@ fun SetListContent(
 								sets = vState.otherSets,
 								state = vState,
 								dispatch = dispatch,
-								downloads = downloads,
+								downloads = vDownloads,
 								onDownload = { vPendingSet = it },
 								reorder = null,
 								reorderKeys = emptyList(),
@@ -668,7 +556,7 @@ fun SetListContent(
 	// One import at a time per game, and nothing per-set that would write the same records while
 	// it runs. Read off the queue rather than tracked here, so it stays true if the import was
 	// started from another screen -- which it can be, now that it survives leaving this one.
-	val vIsImportingGame = downloads.any {
+	val vIsImportingGame = vDownloads.any {
 		it.isActive && it.request.isWholeGameImport && it.request.game == state.game?.id
 	}
 
@@ -688,15 +576,22 @@ fun SetListContent(
 			// could only ever be downloaded in one.
 			languages = vSet.languages.toList().ifEmpty { state.browsingLanguageOptions.toList() },
 			languagesAreClaimed = vSet.languages.isEmpty(),
-			defaultLanguage = preferredLanguage,
-			isCardDataBundled = isCardDataBundled,
-			isCardInfoBulkOnly = isCardInfoBulkOnly,
-			hasThumbnails = hasThumbnails,
+			defaultLanguage = vPreferredLanguage,
+			isCardDataBundled = vState.isCardDataBundled,
+			isCardInfoBulkOnly = vState.isCardInfoBulkOnly,
+			hasThumbnails = vState.hasThumbnails,
 			infoLanguages = vState.savedLanguages[vSet.id.qualified].orEmpty(),
 			// One set, so no dump is involved and there is nothing to choose: a 78 MB file to
 			// fill one set is far worse than the request it would replace. See `BulkCatalogue`.
 			onConfirm = { vKinds, vInfoLanguages, vArtLanguages, _ ->
-				onDownload(vSet, vKinds, vInfoLanguages, vArtLanguages)
+				dispatch(
+					SetListContract.Intent.DownloadRequested(
+						set = vSet,
+						kinds = vKinds,
+						infoLanguages = vInfoLanguages,
+						artLanguages = vArtLanguages,
+					),
+				)
 				vPendingSet = null
 				// Straight to the queue, so the download is visibly a thing that now exists rather
 				// than a dialog that closed and apparently did nothing.
@@ -732,9 +627,9 @@ fun SetListContent(
 			languages = vSets.flatMap { it.languages }.distinct()
 				.ifEmpty { state.browsingLanguageOptions.toList() },
 			languagesAreClaimed = vSets.none { it.languages.isNotEmpty() },
-			defaultLanguage = preferredLanguage,
-			isCardDataBundled = isCardDataBundled,
-			hasThumbnails = hasThumbnails,
+			defaultLanguage = vPreferredLanguage,
+			isCardDataBundled = vState.isCardDataBundled,
+			hasThumbnails = vState.hasThumbnails,
 			// Only what *every* shown set already holds, for the same reason `alreadyHave` is an
 			// intersection: a language half the list is missing must stay fetchable.
 			infoLanguages = vSets
@@ -766,7 +661,16 @@ fun SetListContent(
 					vKinds
 				}
 				if (vPerSet.isNotEmpty()) {
-					vSets.forEach { vSet -> onDownload(vSet, vPerSet, vInfoLanguages, vArtLanguages) }
+					vSets.forEach { vSet ->
+						dispatch(
+							SetListContract.Intent.DownloadRequested(
+								set = vSet,
+								kinds = vPerSet,
+								infoLanguages = vInfoLanguages,
+								artLanguages = vArtLanguages,
+							),
+						)
+					}
 				}
 				vPendingAll = false
 				dispatch(SetListContract.Intent.DownloadsRequested)

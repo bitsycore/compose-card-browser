@@ -269,10 +269,6 @@ an entry when it stops being true.
 
 **Known debt**
 
-- **`SetListScreen` builds `DownloadRequest`s in the composition layer.** It reads the
-  `DownloadManager` through `koinInject` and enqueues from a lambda — the last side-effecting work
-  outside a view model. It belongs in `SetListViewModel`; it was left because it changes the
-  download path, which cannot be exercised without a device.
 - **The advanced search uses no index for its text half, deliberately.** `name_folded LIKE '%x%'`
   has a leading wildcard, which no B-tree index can serve. The other axes have one each, leading
   with `game`, so choosing any of them shrinks what the text scan looks at. FTS5 would have to work

@@ -89,6 +89,23 @@ class SetListViewModel(
 		// screen and coming back. Keyed on how many jobs are *finished* rather than on the job list
 		// itself, so a progress tick -- which changes the list several times a second -- does not
 		// re-run a file-existence check over every row.
+		// The queue as state, so `SetListContent` is a function of its state and nothing else.
+		viewModelScope.launch {
+			mDownloads.jobs.collect { dispatch(SetListContract.Intent.DownloadsChanged(it)) }
+		}
+
+		// What the routed source can do. Read once here rather than out of the registry in the
+		// composition, which is what kept the download dialog un-previewable in any other state.
+		mRegistry.resolve(mArgs.game)?.capabilities?.data?.let { vData ->
+			dispatch(
+				SetListContract.Intent.CapabilitiesRead(
+					isCardDataBundled = vData.bundledCardData,
+					isCardInfoBulkOnly = vData.cardInfoFromBulkOnly,
+					hasThumbnails = vData.thumbnailImages,
+				),
+			)
+		}
+
 		viewModelScope.launch {
 			mDownloads.jobs
 				.map { vJobs -> vJobs.count { !it.isActive } }
@@ -185,6 +202,14 @@ class SetListViewModel(
 			SetListContract.Intent.SearchRequested ->
 				stateFlow.value.game?.let { emitEffect(SetListContract.Effect.OpenSearch(it)) }
 
+			is SetListContract.Intent.DownloadRequested -> enqueueDownload(intent)
+
+			is SetListContract.Intent.DownloadCancelled -> mDownloads.cancel(intent.jobId)
+
+			SetListContract.Intent.AllDownloadsCancelled -> mDownloads.cancelAll()
+
+			SetListContract.Intent.FinishedDownloadsCleared -> mDownloads.clearFinished()
+
 			// Read back off the reduced state rather than recomputed here: `SetFavourites` has
 			// already been applied by the reducer, and applying it twice is how the two would drift.
 			is SetListContract.Intent.BulkImportRequested -> {
@@ -225,6 +250,67 @@ class SetListViewModel(
 	}
 
 	/** Starts a load for the generation and game the reducer has just moved to. */
+	/**
+	 * Turns "download this set" into queue jobs.
+	 *
+	 * One job per language, because everything downstream is per language: a cache key embeds it
+	 * and so does an image-download record. Splitting here is what makes "card info in every
+	 * language, thumbnails in the two you read" a thing the queue can express.
+	 *
+	 * The two halves differ on purpose. Card records are small and the point of holding them is
+	 * being able to switch language on a card you already have, so they go in every language asked
+	 * for. Thumbnails are a request per card per language, so they go only where they were asked
+	 * for -- and only where the set states that language.
+	 *
+	 * The language is the source's answer for the user's preference, never the preference itself.
+	 * Riftcodex serves English whatever you prefer, so a French-preferring reader downloading
+	 * Riftbound used to queue a job labelled "French" for records that come back English: the
+	 * repository normalises before it builds a key, so the file was right and only the screen lied.
+	 */
+	private fun enqueueDownload(intent: SetListContract.Intent.DownloadRequested) {
+		val vSet = intent.set
+		val vPrimary = mRegistry.effectiveLanguage(
+			mArgs.game,
+			mPreferences.preferences.value.primaryLanguage,
+		)
+		// Empty only when a caller asks for nothing, and then the preference stands in.
+		val vForInfo = intent.infoLanguages.ifEmpty { setOfNotNull(vPrimary) }
+		val vForArt = intent.artLanguages.ifEmpty { setOfNotNull(vPrimary) }
+			.filter { it in vSet.languages || vSet.languages.isEmpty() }
+
+		val vInfoKinds = intent.kinds.filterNot { it.isImagery }.toSet()
+		val vArtKinds = intent.kinds.filter { it.isImagery }.toSet()
+
+		if (vInfoKinds.isNotEmpty()) {
+			for (vLanguage in vForInfo) {
+				mDownloads.enqueue(downloadOf(vSet, vInfoKinds, vLanguage))
+			}
+		}
+		if (vArtKinds.isNotEmpty()) {
+			for (vLanguage in vForArt) {
+				mDownloads.enqueue(downloadOf(vSet, vArtKinds, vLanguage))
+			}
+		}
+	}
+
+	/**
+	 * One job.
+	 *
+	 * The language is passed rather than left null, always. A cache key embeds it, so a download
+	 * written under `null` and a grid reading under `fr` are different records: the set comes down
+	 * and is then not found by the search that was the reason for downloading it. The repository
+	 * normalises once against what the provider can really answer, so passing a language is right
+	 * even for a source that cannot serve it. See the note in `CardGridViewModel.startLoad`.
+	 */
+	private fun downloadOf(set: CardSet, kinds: Set<DownloadKind>, language: CardLanguage?) =
+		DownloadRequest(
+			setId = set.id,
+			game = set.game,
+			setName = set.name,
+			kinds = kinds,
+			language = language,
+		)
+
 	private fun startLoad() {
 		// Read after the reducer ran, so these are the generation and game this load owns.
 		val vState = stateFlow.value

@@ -1,5 +1,7 @@
 package com.bitsycore.cardbrowser.ui.screen.sets
 
+import com.bitsycore.cardbrowser.data.download.DownloadKind
+import com.bitsycore.cardbrowser.data.download.DownloadJob
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.game.GameRegion
 import com.bitsycore.cardbrowser.core.model.CardLanguage
@@ -40,6 +42,23 @@ object SetListContract :
 	 */
 	data class UiState(
 		val sets: List<CardSet> = emptyList(),
+		/**
+		 * The download queue, as state.
+		 *
+		 * Carried here rather than read from Koin by the screen, so `SetListContent` is a function
+		 * of its state and nothing else -- which is what lets it be previewed with a queue mid-flight
+		 * and tested without one.
+		 */
+		val downloads: List<DownloadJob> = emptyList(),
+		/**
+		 * What the routed source can do, resolved once.
+		 *
+		 * The download dialog offers what these permit. They were read out of the registry in the
+		 * composition, which meant the dialog could not be previewed in any state but the default.
+		 */
+		val isCardDataBundled: Boolean = false,
+		val isCardInfoBulkOnly: Boolean = false,
+		val hasThumbnails: Boolean = true,
 		/**
 		 * The game being browsed.
 		 *
@@ -325,6 +344,38 @@ object SetListContract :
 		 */
 		data class BulkImportRequested(val variantId: String?) : Intent
 
+		/**
+		 * Download a set: which kinds, and in which languages.
+		 *
+		 * Everything about *how* that becomes queue jobs -- resolving the language the source will
+		 * really answer in, splitting records from pictures, one job per language -- is the view
+		 * model's. It used to be a lambda in the composition, which put a page of domain rules
+		 * somewhere that could not be tested and could not be previewed.
+		 */
+		data class DownloadRequested(
+			val set: CardSet,
+			val kinds: Set<DownloadKind>,
+			val infoLanguages: Set<CardLanguage>,
+			val artLanguages: Set<CardLanguage>,
+		) : Intent
+
+		/** The queue's own controls, so the screen never touches `DownloadManager`. */
+		data class DownloadCancelled(val jobId: String) : Intent
+
+		data object AllDownloadsCancelled : Intent
+
+		data object FinishedDownloadsCleared : Intent
+
+		/** The queue changed. Reduced into [UiState.downloads]. */
+		data class DownloadsChanged(val jobs: List<DownloadJob>) : Intent
+
+		/** What the routed source can do, once it is known. */
+		data class CapabilitiesRead(
+			val isCardDataBundled: Boolean,
+			val isCardInfoBulkOnly: Boolean,
+			val hasThumbnails: Boolean,
+		) : Intent
+
 		/** A set was pinned to the top, or unpinned. */
 		data class FavouriteToggled(val setId: String) : Intent
 
@@ -537,11 +588,24 @@ object SetListContract :
 		// drawn from it any more -- see `SetRow`.
 		is Intent.SetOpened -> state
 
-		// Navigation changes no state. The view model turns these into effects.
+		is Intent.DownloadsChanged -> state.copy(downloads = intent.jobs)
+
+		is Intent.CapabilitiesRead -> state.copy(
+			isCardDataBundled = intent.isCardDataBundled,
+			isCardInfoBulkOnly = intent.isCardInfoBulkOnly,
+			hasThumbnails = intent.hasThumbnails,
+		)
+
+		// Navigation changes no state, and neither does asking the queue to do something -- the
+		// queue answers through `DownloadsChanged` like any other source of truth.
 		Intent.BackPressed,
 		Intent.SettingsRequested,
 		Intent.StorageRequested,
 		Intent.DownloadsRequested,
+		is Intent.DownloadRequested,
+		is Intent.DownloadCancelled,
+		Intent.AllDownloadsCancelled,
+		Intent.FinishedDownloadsCleared,
 		Intent.SearchRequested,
 		-> state
 

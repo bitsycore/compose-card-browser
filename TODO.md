@@ -85,10 +85,14 @@ Everything below compiles and is desktop-tested. None of it has run where it wil
 ## Cleanup
 
 - [ ] **`CardRepository.kt` is 2057 lines.** The one genuinely oversized file in the tree.
-- [ ] **`SetListScreen.kt` is 1603 lines and builds `DownloadRequest`s in the composition layer.**
-  It reads `DownloadManager` through `koinInject` and enqueues from a lambda — the last
-  side-effecting work outside a view model. It belongs in `SetListViewModel`; it was left because it
-  changes the download path, which cannot be exercised without a device.
+- [x] **`SetListScreen` built `DownloadRequest`s in the composition layer.** *(fixed 2026-09-13)*
+  The rules — resolving the language the source really answers in, splitting records from pictures,
+  one job per language — are in `SetListViewModel`, and the queue reaches the screen as state. The
+  binder reads one thing from Koin now, a game's logo, which is a painter rather than data.
+  `SetListDownloadTest` asserts the rules for the first time; the claim that this "cannot be
+  exercised without a device" was wrong.
+- [ ] **`SetListScreen.kt` is still 1507 lines.** Large, but it is now one composable tree with no
+  logic in it. Split by section if it grows again.
 - [ ] **`CacheUsage.metadataEntries` is computed and displayed nowhere.** *(verified)*
 - [ ] **The Wuthering Waves snapshot goes stale silently.** It is a bundled file, so the game
   gaining cards is invisible until `:providers:wuwa:liveProviderTest` fails. Regenerate with
