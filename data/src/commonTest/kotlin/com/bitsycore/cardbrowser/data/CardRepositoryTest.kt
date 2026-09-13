@@ -30,6 +30,7 @@ import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.Completeness
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.CardSearchFilter
 import com.bitsycore.cardbrowser.data.cache.InMemorySetRecordStore
 import com.bitsycore.cardbrowser.data.cache.SetRecordStore
 import com.bitsycore.cardbrowser.data.repository.CardRepository
@@ -206,6 +207,30 @@ class CardRepositoryTest {
 
 	// ============
 	//  Sets
+
+	@Test
+	fun `a stored search reads the language the source actually answers in`() = runTest {
+		// The bug this pins: a set searched by name returned nothing while the same name was
+		// plainly on screen. The records are written under the language they came back in -- a
+		// provider that serves English serves it to a French-preferring reader too -- and the
+		// search was asking for the reader's preference. Two languages, one store, no matches.
+		val vProvider = FakeProvider(mProviderId, listOf(listOf(card(1))))
+		val vRepository = repositoryFor(vProvider)
+		vRepository.cards(
+			setId = SourceId(mProviderId, "s"),
+			game = TestGame.id,
+			query = CardQuery(),
+			language = CardLanguage.FRENCH,
+		).toList()
+
+		val vHits = vRepository.searchStoredCards(
+			game = TestGame.id,
+			filter = CardSearchFilter(text = "card", language = CardLanguage.FRENCH),
+			knownSets = emptyList(),
+		)
+
+		assertEquals(1, vHits.cards.size, "the stored card was written in the language served")
+	}
 
 	@Test
 	fun `sets come back newest first with undated ones last`() = runTest {

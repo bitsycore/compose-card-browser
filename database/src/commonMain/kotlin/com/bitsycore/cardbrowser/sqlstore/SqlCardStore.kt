@@ -347,6 +347,8 @@ class SqlCardStore(driver: SqlDriver) {
 		domains: Set<String> = emptySet(),
 		/** Artwork treatments by name, as `ArtworkTreatment` declares them. */
 		treatments: Set<String> = emptySet(),
+		/** Qualified set ids to look in, or empty for every set this game has stored. */
+		setIds: Set<String> = emptySet(),
 		limit: Int = 200,
 	): List<CardPrinting> {
 		fun query(domain: String?, treatment: String?): List<CardPrinting> = mQueries.searchPrintings(
@@ -363,6 +365,7 @@ class SqlCardStore(driver: SqlDriver) {
 			maxCost = maxCost?.toLong(),
 			minCost = minCost?.toLong(),
 			domain = domain?.let(::fold),
+			setIds = setIds.takeIf { it.isNotEmpty() }?.let(::delimited),
 			// Standard art is the absence of the field rather than a value of it, so it is asked
 			// for separately. See the statement.
 			treatment = treatment?.takeIf { it != STANDARD_TREATMENT },

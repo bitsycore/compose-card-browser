@@ -176,6 +176,14 @@ class InMemorySetRecordStore(
 		limit: Int,
 	): List<CardPrinting> = mRows.entries
 		.filter { it.value.game == game.value }
+		// Language too, which this fake used to ignore -- and ignoring it is how a real bug lived
+		// through a suite that exercised this path: records are stored under the language the
+		// *source* answered in, so a search for the reader's preferred one matched nothing at all
+		// and every test here passed regardless.
+		.filter { vEntry ->
+			filter.language == null || vEntry.key.language == null ||
+				vEntry.key.language == filter.language.code
+		}
 		.flatMap { it.value.cards }
 		.filter { vCard -> filter.matches(vCard) }
 		.take(limit)
@@ -204,6 +212,7 @@ class InMemorySetRecordStore(
 			return false
 		}
 		if (treatments.isNotEmpty() && card.artwork.treatment !in treatments) return false
+		if (setIds.isNotEmpty() && card.setId.qualified !in setIds) return false
 		// Unknown is not zero, which is the one rule worth keeping in step with the SQL.
 		val vCost = card.attributes.cost
 		if (minCost != null && (vCost == null || vCost < minCost!!)) return false

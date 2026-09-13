@@ -325,6 +325,7 @@ class SqlSetRecordStore(
 			maxCost = filter.maxCost,
 			domains = filter.domains,
 			treatments = filter.treatments.mapTo(mutableSetOf()) { it.name },
+			setIds = filter.setIds,
 			limit = limit,
 		)
 	}

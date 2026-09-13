@@ -649,7 +649,16 @@ class CardRepository(
 				knownSetCount = knownSets.size,
 			)
 		}
-		val vCards = mSetStore.search(game, filter)
+		// The language the routed source actually answers in, not the one the user prefers.
+		//
+		// A record is written under the language it came back in: Riftcodex serves English whoever
+		// is reading, so a French-preferring user's Riftbound cards are stored as `en`. Searching
+		// for `fr` matched nothing at all, and the screen reported an honest-looking empty result
+		// -- the same mismatch the download queue had, in the one place that reads what it wrote.
+		val vLanguage = mRegistry.resolve(game, filter.language)
+			?.let { effectiveLanguage(it, filter.language) }
+			?: filter.language
+		val vCards = mSetStore.search(game, filter.copy(language = vLanguage))
 		return CardSearchResults(
 			cards = vCards,
 			scope = SearchScope.LOCAL_CACHED_SETS,

@@ -158,6 +158,7 @@ WHERE game = :game
   AND (:maxCost IS NULL OR (cost IS NOT NULL AND cost <= :maxCost))
   AND (:minCost IS NULL OR (cost IS NOT NULL AND cost >= :minCost))
   AND (:domain IS NULL OR (domains IS NOT NULL AND domains LIKE '%' || :domain || '%'))
+  AND (:setIds IS NULL OR instr('|' || :setIds || '|', '|' || set_id || '|') > 0)
   AND (:treatment IS NULL OR payload LIKE '%"treatment":"' || :treatment || '"%')
   AND (:standardArt IS NULL OR (:standardArt = 1 AND payload NOT LIKE '%"treatment":%'))
 ORDER BY name_folded
