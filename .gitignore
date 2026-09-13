@@ -29,3 +29,5 @@ xcuserdata/
 # Built APKs kept outside build/ so a clean does not delete them. Binaries stay
 # out of git.
 /dist/
+/androidApp/debug/
+/androidApp/release/
