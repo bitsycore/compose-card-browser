@@ -68,7 +68,6 @@ class SetListViewModel(
 
 			dispatch(SetListContract.Intent.GamesRestored(games = vGames, game = vGame))
 			resolveBrowsingLanguage(vGame.id)
-			dispatch(SetListContract.Intent.LastOpenedSetRestored(vPreferences.lastSetId))
 			dispatch(SetListContract.Intent.FavouritesRestored(vPreferences.favouriteSets))
 			dispatch(SetListContract.Intent.HideEmptyToggled(vPreferences.hideEmptySets))
 			// A 3 KB question asked once, so the download-all dialog can state the size before

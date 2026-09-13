@@ -141,7 +141,10 @@ enum class ThemeMode(val label: String) {
  * separate concern and are deliberately not modelled here: none has been chosen, and a default
  * would be a decision nobody made.
  *
- * @property lastSetId the set to reopen, source-qualified so it survives a provider change
+ * @property lastSetId the set last opened, source-qualified so it survives a provider change.
+ *   Written by both list screens and read by nothing: the set list used to mark it, and that mark
+ *   was removed as meaningless on a touch screen. Kept because it is what a "resume where you left
+ *   off" would read, and because dropping a field from a persisted model is a migration
  * @property preferredLanguages the card-language preference order. A preference, not a claim that
  *   any provider serves all of them
  */

@@ -86,9 +86,18 @@ class ArrangingMotionTest {
 	 * The left edge of the first set's mark, in pixels.
 	 *
 	 * Found by column rather than by coordinate, so it survives the layout above it changing: the
-	 * mark is the only thing on the lower half of the screen with a tall unbroken run of bright
-	 * pixels. The drag handle is bright too and sits further left, but it is a pair of thin bars and
-	 * has no run anywhere near [MARK_RUN].
+	 * mark is the only thing on the lower half of the screen with a tall unbroken run of *coloured*
+	 * pixels. Everything else there is grey -- the surface, the card, the drag handle, the type --
+	 * while a set's monogram is tinted from its own code.
+	 *
+	 * It used to look for brightness instead, which worked only because the first row was the last
+	 * opened one and wore a filled primary monogram for it. That highlight is gone, the monogram is
+	 * a 22% tint on the row like every other, and nothing on this half of the screen is bright any
+	 * more. Colour is the property the mark always had.
+	 *
+	 * The column returned is a few pixels inside the true edge -- the box has a 10dp radius, so its
+	 * first columns are too short to make [MARK_RUN]. That is constant frame to frame, and this
+	 * test measures movement.
 	 */
 	@OptIn(ExperimentalComposeUiApi::class)
 	private fun ImageComposeScene.markLeft(): Int {
@@ -98,10 +107,11 @@ class ArrangingMotionTest {
 			var vRun = 0
 			for (vY in vImage.height / 2 until vImage.height) {
 				val vRgb = vImage.getRGB(vX, vY)
-				val vLuminance = ((vRgb shr 16 and 0xFF) * 299 +
-					(vRgb shr 8 and 0xFF) * 587 +
-					(vRgb and 0xFF) * 114) / 1000
-				vRun = if (vLuminance > BRIGHT) vRun + 1 else 0
+				val vRed = vRgb shr 16 and 0xFF
+				val vGreen = vRgb shr 8 and 0xFF
+				val vBlue = vRgb and 0xFF
+				val vColourfulness = maxOf(vRed, vGreen, vBlue) - minOf(vRed, vGreen, vBlue)
+				vRun = if (vColourfulness >= COLOURED) vRun + 1 else 0
 				if (vRun >= MARK_RUN) return vX
 			}
 		}
@@ -145,7 +155,12 @@ class ArrangingMotionTest {
 	private companion object {
 
 		/** Above the card and the row text, below the set marks, which are solid blocks of colour. */
-		const val BRIGHT = 140
+		/**
+		 * How far apart a pixel's channels must be to count as tinted rather than grey.
+		 *
+		 * The dark theme's own surfaces span about 7; a monogram's 22% tint about 17.
+		 */
+		const val COLOURED = 12
 
 		/** Taller than the drag handle's bars and shorter than a mark. */
 		const val MARK_RUN = 60

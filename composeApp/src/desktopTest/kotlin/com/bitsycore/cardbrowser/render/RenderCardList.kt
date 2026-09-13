@@ -50,6 +50,24 @@ class CardListRenderer {
 			}
 		}
 
+		// The chrome above the grid, on the light theme where its edges can be seen: the bar, the
+		// search field under it and the first row of tiles. What this one is for is the two gaps
+		// either side of the field, which are easy to get unequal and hard to judge by eye.
+		renderToPng(vOut, "card-grid-chrome", 620, 520, density = 1.65f, isDark = false) {
+			CardGridContent(
+				state = CardGridContract.UiState(
+					setName = "Origins",
+					setCode = "OGN",
+					cards = PreviewData.CARDS,
+					isLoading = false,
+					knownSetSize = 352,
+					isSearchOpen = true,
+					game = RiftboundGame,
+				),
+				dispatch = {},
+			)
+		}
+
 		// And the grid's three, which are a minimum tile width rather than a row height -- so what
 		// is worth looking at is how many fit across, not how tall anything is.
 		CardTileSize.entries.forEach { vSize ->

@@ -29,12 +29,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberTopAppBarState
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -74,6 +78,7 @@ import com.bitsycore.cardbrowser.data.settings.ImageDownloadRecord
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -268,8 +273,18 @@ fun SetListContent(
 	var vPendingSet by remember { mutableStateOf<CardSet?>(null) }
 	var vPendingAll by remember { mutableStateOf(false) }
 
+	// `enterAlways`, exactly the card grid's, and for the reason recorded there: both collapse on
+	// the way down, but `exitUntilCollapsed` only expands again at the very top of the list.
+	val vScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
+
 	Scaffold(
+		modifier = Modifier.nestedScroll(vScrollBehavior.nestedScrollConnection),
 		topBar = {
+			// A surface, not a bare Column: the app bar paints its own background and the controls
+			// stacked under it do not, so the list scrolling underneath would show straight
+			// through the search field. The grid learned this first.
+			Surface(color = MaterialTheme.colorScheme.surface) {
+			Column {
 			TopAppBar(
 				navigationIcon = {
 					// The game picker is a real screen above this one now, so this is a genuine
@@ -367,10 +382,8 @@ fun SetListContent(
 						activeDownloads = downloads.count { it.isActive },
 					)
 				},
+				scrollBehavior = vScrollBehavior,
 			)
-		},
-	) { vPadding ->
-		Column(Modifier.padding(vPadding).fillMaxSize()) {
 
 			// Only for a game that really ships more than one line. See `GameProfile.regions`.
 			if (vState.regionOptions.isNotEmpty()) {
@@ -381,36 +394,55 @@ fun SetListContent(
 				)
 			}
 
-			// Arranging sits beside the search rather than in the app bar, which is where it used
-			// to be. It acts on the rows below it, while the bar above holds what acts on the whole
-			// game -- the language, the bulk download, the search across sets. Next to the field it
-			// is in the same band as the list it rearranges.
-			Row(
-				modifier = Modifier
-					.fillMaxWidth()
-					.padding(horizontal = 16.dp, vertical = 8.dp),
-				verticalAlignment = Alignment.CenterVertically,
-			) {
-				OutlinedTextField(
-					value = vState.search,
-					onValueChange = { dispatch(SetListContract.Intent.SearchChanged(it)) },
-					label = { Text("Search sets") },
-					leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
-					singleLine = true,
-					modifier = Modifier.weight(1f),
-				)
-				Spacer(Modifier.size(4.dp))
-				IconButton(onClick = { dispatch(SetListContract.Intent.EditingToggled) }) {
-					Icon(
-						imageVector = if (vState.isEditing) AppIcons.Check else AppIcons.Tune,
-						contentDescription = if (vState.isEditing) {
-							"Done arranging favourites"
-						} else {
-							"Arrange favourites"
-						},
+			// Folds away with the bar, like the grid's. Scrolling down is a request for more list,
+			// and a search field left behind while the bar it belongs to collapses reads as a
+			// leftover. The query is untouched -- the field comes back on the way up with whatever
+			// was typed in it, and the list stays filtered meanwhile.
+			//
+			// Seeded transition state rather than `visible = …`, for the reason recorded on the
+			// grid: `AnimatedVisibility` animates to its target on first composition, so a screen
+			// that is re-composed on every back would replay the box opening under a bar that had
+			// not moved.
+			val vSearchShown = vScrollBehavior.state.collapsedFraction < 0.5f
+			val vSearchTransition = remember { MutableTransitionState(vSearchShown) }
+			vSearchTransition.targetState = vSearchShown
+			AnimatedVisibility(visibleState = vSearchTransition) {
+				// Arranging sits beside the search rather than in the app bar, which is where it
+				// used to be. It acts on the rows below it, while the bar above holds what acts on
+				// the whole game -- the language, the bulk download, the search across sets. Next
+				// to the field it is in the same band as the list it rearranges.
+				Row(
+					modifier = Modifier
+						.fillMaxWidth()
+						.padding(horizontal = 16.dp, vertical = 8.dp),
+					verticalAlignment = Alignment.CenterVertically,
+				) {
+					OutlinedTextField(
+						value = vState.search,
+						onValueChange = { dispatch(SetListContract.Intent.SearchChanged(it)) },
+						label = { Text("Search sets") },
+						leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
+						singleLine = true,
+						modifier = Modifier.weight(1f),
 					)
+					Spacer(Modifier.size(4.dp))
+					IconButton(onClick = { dispatch(SetListContract.Intent.EditingToggled) }) {
+						Icon(
+							imageVector = if (vState.isEditing) AppIcons.Check else AppIcons.Tune,
+							contentDescription = if (vState.isEditing) {
+								"Done arranging favourites"
+							} else {
+								"Arrange favourites"
+							},
+						)
+					}
 				}
 			}
+			}
+			}
+		},
+	) { vPadding ->
+		Column(Modifier.padding(vPadding).fillMaxSize()) {
 
 			// The honesty strip. Shown whenever what is on screen is not a fresh network result.
 			when {
@@ -780,7 +812,6 @@ private fun LazyListScope.setRows(
 			// Badged only while every line is on screen: with one line selected the badge would
 			// repeat the chip on every single row.
 			region = if (state.region != null) null else state.game?.regionFor(vSet.region),
-			isLastOpened = vId == state.lastOpenedSetId,
 			isSaved = vId in state.savedSetIds,
 			isEditing = state.isEditing,
 			// Both halves, because a download is both: the records and the pictures. A set with
@@ -838,14 +869,20 @@ private fun SectionHeading(text: String, note: String? = null) {
 	}
 }
 
-/** One set: name, code, card count and release date, plus a mark for where you left off. */
+/**
+ * One set: name, code, card count and release date.
+ *
+ * It used to also mark where you left off -- a filled monogram, a tinted card and "last opened" in
+ * the subtitle. Removed on the project owner's call: a hover-like highlight means nothing on a
+ * touch screen, and the line was one more thing to read on every row for something the user had
+ * just done and already knew.
+ */
 @Composable
 private fun SetRow(
 	set: CardSet,
 	/** Outlined, because the keyboard is pointing at it. */
 	isSelected: Boolean = false,
 	region: GameRegion?,
-	isLastOpened: Boolean,
 	isSaved: Boolean,
 	/**
 	 * Whether this set has nothing left to fetch: held whole *and* with its thumbnails.
@@ -911,11 +948,6 @@ private fun SetRow(
 		elevation = CardDefaults.cardElevation(
 			defaultElevation = if (isDragging) DRAGGED_ROW_ELEVATION else 0.dp,
 		),
-		colors = if (isLastOpened) {
-			CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-		} else {
-			CardDefaults.cardColors()
-		},
 	) {
 		Row(
 			// Constant, in both modes, for the reason recorded on the game picker's row.
@@ -938,7 +970,7 @@ private fun SetRow(
 			AnimatedVisibility(visible = handleModifier != null) {
 				ReorderHandle(handleModifier ?: Modifier)
 			}
-			SetMark(set, isHighlighted = isLastOpened)
+			SetMark(set)
 			Spacer(Modifier.size(12.dp))
 			Column(Modifier.weight(1f)) {
 				Text(
@@ -959,7 +991,7 @@ private fun SetRow(
 					}
 					LanguagePin(availableLanguages)
 					Text(
-						text = setSubtitle(set, isLastOpened, confirmedCardCount),
+						text = setSubtitle(set, confirmedCardCount),
 						style = MaterialTheme.typography.bodySmall,
 						color = MaterialTheme.colorScheme.onSurfaceVariant,
 						maxLines = 2,
@@ -1231,10 +1263,10 @@ private fun ImageMark(
  * fallback rather than a temporary one.
  */
 @Composable
-private fun SetMark(set: CardSet, isHighlighted: Boolean) {
+private fun SetMark(set: CardSet) {
 	val vSymbol = set.symbol
 	if (vSymbol == null) {
-		SetMonogram(set.code, isHighlighted = isHighlighted)
+		SetMonogram(set.code)
 		return
 	}
 
@@ -1254,8 +1286,8 @@ private fun SetMark(set: CardSet, isHighlighted: Boolean) {
 			},
 			// The monogram, not a spinner and not a gap: a symbol that is slow or missing leaves a
 			// row that still identifies its set.
-			loading = { SetMonogram(set.code, isHighlighted = isHighlighted) },
-			error = { SetMonogram(set.code, isHighlighted = isHighlighted) },
+			loading = { SetMonogram(set.code) },
+			error = { SetMonogram(set.code) },
 		)
 	}
 }
@@ -1269,21 +1301,15 @@ private fun SetMark(set: CardSet, isHighlighted: Boolean) {
  * call it anyway and what is printed on the cards.
  */
 @Composable
-private fun SetMonogram(code: String, isHighlighted: Boolean) {
+private fun SetMonogram(code: String) {
 	val vTint = setColour(code)
 	Box(
 		modifier = Modifier
 			.size(SET_MARK_WIDTH, SET_MARK_HEIGHT)
 			.clip(RoundedCornerShape(10.dp))
-			.background(
-				if (isHighlighted) {
-					MaterialTheme.colorScheme.primary
-				} else {
-					// Tinted rather than saturated, so a screen of these reads as a list rather
-					// than as a paint chart, and the code stays legible on top of it.
-					vTint.copy(alpha = 0.22f)
-				},
-			),
+			// Tinted rather than saturated, so a screen of these reads as a list rather than as a
+			// paint chart, and the code stays legible on top of it.
+			.background(vTint.copy(alpha = 0.22f)),
 		contentAlignment = Alignment.Center,
 	) {
 		Text(
@@ -1295,7 +1321,7 @@ private fun SetMonogram(code: String, isHighlighted: Boolean) {
 			fontWeight = FontWeight.Medium,
 			maxLines = 1,
 			softWrap = false,
-			color = if (isHighlighted) MaterialTheme.colorScheme.onPrimary else vTint,
+			color = vTint,
 		)
 	}
 }
@@ -1401,13 +1427,11 @@ private const val LANGUAGE_PIN_MAX = 3
  */
 private fun setSubtitle(
 	set: CardSet,
-	isLastOpened: Boolean = false,
 	confirmedCardCount: Int? = null,
 ): String = buildList {
 	add(set.code)
 	(confirmedCardCount ?: set.cardCount)?.let { add(if (it == 1) "1 card" else "$it cards") }
 	set.releaseDate?.let { add("${monthName(it.month.ordinal)} ${it.year}") }
-	if (isLastOpened) add("last opened")
 }.joinToString(" · ")
 
 /** Zero-based, matching `Month.ordinal`, so January is 0. */
@@ -1431,7 +1455,6 @@ private fun SetListLoadedPreview() = PreviewFrame {
 			isLoading = false,
 			// Scanned, so the rows may offer a download -- see `UiState.isDownloadStateKnown`.
 			isDownloadStateKnown = true,
-			lastOpenedSetId = PreviewData.ORIGINS.id.qualified,
 		),
 		dispatch = {},
 	)
@@ -1489,7 +1512,6 @@ private fun SetListSavedPreview() = PreviewFrame {
 				PreviewData.ORIGINS.id.qualified,
 				PreviewData.SETS.first().id.qualified,
 			),
-			lastOpenedSetId = PreviewData.ORIGINS.id.qualified,
 		),
 		dispatch = {},
 	)

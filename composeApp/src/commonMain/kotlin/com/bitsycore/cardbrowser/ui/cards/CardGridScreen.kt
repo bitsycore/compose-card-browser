@@ -917,7 +917,12 @@ private fun SearchField(
 				vFocusManager.clearFocus()
 			},
 		),
-		modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+		// Not a symmetric inset, because the field is not symmetric. An `OutlinedTextField` with a
+		// label reserves room above its border for the label to float into, so an equal 8dp either
+		// side put the visible outline 16dp below the app bar and 12dp above whatever follows --
+		// measured at 26px against 20px in `card-grid-chrome.png`. 4dp on top makes the two gaps
+		// the same size on screen, which is what "equal padding" means to someone looking at it.
+		modifier = modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp),
 	)
 }
 

@@ -176,7 +176,6 @@ private fun pokemonState() = SetListContract.UiState(
 	// As it is after the store has been scanned, which is when a row may offer a download.
 	isDownloadStateKnown = true,
 	savedSetIds = setOf(SourceId(TCGDEX, "base1").qualified),
-	lastOpenedSetId = SourceId(TCGDEX, "sv08").qualified,
 )
 
 /**

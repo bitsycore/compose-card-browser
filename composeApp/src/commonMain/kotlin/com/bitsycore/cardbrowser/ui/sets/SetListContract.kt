@@ -37,7 +37,6 @@ object SetListContract :
 	/**
 	 * @property requestGeneration which load the state reflects. Bumped on every refresh so a slow
 	 *   response from an earlier one can be recognised and dropped
-	 * @property lastOpenedSetId remembered across launches, so the list can mark where you were
 	 */
 	data class UiState(
 		val sets: List<CardSet> = emptyList(),
@@ -89,7 +88,6 @@ object SetListContract :
 		val isStale: Boolean = false,
 		val error: ProviderError? = null,
 		val requestGeneration: Int = 0,
-		val lastOpenedSetId: String? = null,
 		/**
 		 * Which sets are already on disk, by qualified id.
 		 *
@@ -389,9 +387,6 @@ object SetListContract :
 		/** The user picked a language from the bar. Becomes the app-wide preference. */
 		data class BrowsingLanguageSelected(val language: CardLanguage) : Intent
 
-		/** Preferences finished loading and told us where the user was. */
-		data class LastOpenedSetRestored(val setId: String?) : Intent
-
 		/** A set was tapped; remembered for next launch. */
 		data class SetOpened(val set: CardSet) : Intent
 
@@ -555,9 +550,9 @@ object SetListContract :
 		is Intent.LoadFinished ->
 			if (intent.generation == state.requestGeneration) state.copy(isLoading = false) else state
 
-		is Intent.LastOpenedSetRestored -> state.copy(lastOpenedSetId = intent.setId)
-
-		is Intent.SetOpened -> state.copy(lastOpenedSetId = intent.set.id.qualified)
+		// Remembered as a preference for whoever wants to resume, but nothing on this screen is
+		// drawn from it any more -- see `SetRow`.
+		is Intent.SetOpened -> state
 
 		// Navigation changes no state. The view model turns these into effects.
 		Intent.BackPressed,
