@@ -68,6 +68,8 @@ class SettingsViewModel(
 			// flow could not be opened again at all until the app was restarted.
 			SettingsContract.Intent.RerunSetup -> emitEffect(SettingsContract.Effect.OpenSetup)
 
+			SettingsContract.Intent.AboutRequested -> emitEffect(SettingsContract.Effect.OpenAbout)
+
 			is SettingsContract.Intent.ImageCacheLimitChosen -> {
 				mPreferences.update { it.copy(imageCacheLimitBytes = intent.bytes) }
 			}

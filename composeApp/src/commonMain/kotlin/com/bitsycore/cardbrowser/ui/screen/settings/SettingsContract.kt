@@ -92,6 +92,9 @@ object SettingsContract :
 		 */
 		data object RerunSetup : Intent
 
+		/** "About this app" -- a screen, not a section. See `AboutContract`. */
+		data object AboutRequested : Intent
+
 		data object BackPressed : Intent
 
 	}
@@ -115,6 +118,8 @@ object SettingsContract :
 		 * mutating one back stack with nothing ordering them. See `App()`.
 		 */
 		data object OpenSetup : Effect
+
+		data object OpenAbout : Effect
 	}
 
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
@@ -123,7 +128,7 @@ object SettingsContract :
 
 		// Neither changes state here. The view model turns one into an effect and the other into
 		// a preferences write that `App` is already watching.
-		Intent.RerunSetup -> state
+		Intent.RerunSetup, Intent.AboutRequested -> state
 
 		Intent.BackPressed -> state
 

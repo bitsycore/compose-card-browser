@@ -49,11 +49,12 @@ Everything below compiles and is desktop-tested. None of it has run where it wil
 
 ## Features
 
-- [ ] **The app no longer states what it is or what it deliberately does not do.** *(verified)*
-  The setup flow's third page was removed on 2026-09-13 on the understanding that its points lived
-  in Settings. They do not: Settings carries the provider attributions and nothing else. "No
-  accounts, no collection tracking, no deckbuilding", "No prices" and "works offline once a set is
-  downloaded" are now in no screen at all. This was a mistake in that change, not a decision.
+- [x] **The app no longer states what it is or what it deliberately does not do.**
+  *(fixed 2026-09-13)* There is an About page now, reached from Settings: what the app does and
+  does not do, every source with the games it answers for and its own required wording, and a
+  trademark notice — which had never existed anywhere. The credits are read off the running
+  provider graph rather than typed out, and `AboutCreditsTest` fails if a routed game has no
+  credited source.
 
 - [ ] **Decide whether a failed download should retry itself.** Retry is manual and resumes from
   where it stopped. Auto-retry after a transient failure — a phone sleeping, a network drop — is a
@@ -93,10 +94,9 @@ There are no `TODO`, `FIXME` or `HACK` markers anywhere in the source. *(verifie
 
 ## UI
 
-- [ ] **Settings still calls its section "Cache"** while it now holds only the image limit. The
-  storage screen already says "Image cache".
-- [ ] **The About / scope statement has nowhere to live.** Same item as under Features; it is a UI
-  decision as much as a content one.
+- [x] **Settings still calls its section "Cache"** while it now holds only the image limit.
+  *(fixed 2026-09-13)* It says "Image cache", matching the storage screen.
+- [x] **The About / scope statement has nowhere to live.** *(fixed 2026-09-13)* See Features.
 
 ---
 

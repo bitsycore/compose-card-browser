@@ -11,6 +11,29 @@ plugins {
 
 val nativeDesktop = providers.gradleProperty("nativeDesktop").map(String::toBoolean).getOrElse(false)
 
+/** Writes `AppBuild.kt` from the version catalogue, so the app can say which build it is. */
+val vGenerateAppBuild by tasks.registering {
+	val vVersion = libs.versions.app.get()
+	val vOut = layout.buildDirectory.dir("generated/appBuild")
+	inputs.property("version", vVersion)
+	outputs.dir(vOut)
+	doLast {
+		val vFile = vOut.get().asFile.resolve("com/bitsycore/cardbrowser/AppBuild.kt")
+		vFile.parentFile.mkdirs()
+		vFile.writeText(
+			"""
+			package com.bitsycore.cardbrowser
+
+			/** Generated from `libs.versions.toml`. Do not edit; change the catalogue instead. */
+			object AppBuild {
+
+				const val VERSION: String = "$vVersion"
+			}
+			""".trimIndent() + System.lineSeparator(),
+		)
+	}
+}
+
 kotlin {
 	jvmToolchain(21)
 
@@ -84,6 +107,12 @@ kotlin {
 	}
 
 	sourceSets {
+		// The version, as a constant the About screen can read.
+		//
+		// Generated rather than typed out, because the alternative is the same string in a build
+		// file and a Kotlin file, and the two would disagree the first time one was bumped alone.
+		commonMain { kotlin.srcDir(vGenerateAppBuild) }
+
 		commonMain.dependencies {
 			api(project(":core"))
 			implementation(project(":data"))

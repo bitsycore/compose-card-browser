@@ -60,6 +60,7 @@ import com.bitsycore.cardbrowser.ui.screen.setup.SetupViewModel
 import com.bitsycore.cardbrowser.ui.screen.sets.SetListArgs
 import com.bitsycore.cardbrowser.ui.screen.sets.SetListViewModel
 import com.bitsycore.cardbrowser.ui.screen.settings.SettingsViewModel
+import com.bitsycore.cardbrowser.ui.screen.about.AboutViewModel
 import com.bitsycore.cardbrowser.ui.screen.storage.StorageViewModel
 import com.bitsycore.cardbrowser.ui.screen.storagedetail.StorageDetailArgs
 import com.bitsycore.cardbrowser.ui.screen.storagedetail.StorageDetailViewModel
@@ -286,6 +287,7 @@ val appModule = module {
 		CardDetailViewModel(get(), get(), get(), get(), get(), vArgs)
 	}
 	viewModel { SettingsViewModel(get(), get(), get(), get()) }
+	viewModel { AboutViewModel(get(), get()) }
 	viewModel { StorageViewModel(get(), get(), get(), get()) }
 	viewModel { (vArgs: StorageDetailArgs) ->
 		StorageDetailViewModel(get(), get(), get(), vArgs)

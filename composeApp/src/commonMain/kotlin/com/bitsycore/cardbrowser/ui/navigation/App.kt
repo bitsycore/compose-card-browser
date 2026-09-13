@@ -42,6 +42,7 @@ import com.bitsycore.cardbrowser.ui.screen.games.GameListScreen
 import com.bitsycore.cardbrowser.ui.screen.sets.SetListScreen
 import com.bitsycore.cardbrowser.ui.screen.settings.SettingsScreen
 import com.bitsycore.cardbrowser.ui.screen.setup.SetupScreen
+import com.bitsycore.cardbrowser.ui.screen.about.AboutScreen
 import com.bitsycore.cardbrowser.ui.screen.storage.StorageScreen
 import com.bitsycore.cardbrowser.ui.screen.storagedetail.StorageDetailArgs
 import com.bitsycore.cardbrowser.ui.screen.storagedetail.StorageDetailScreen
@@ -118,6 +119,10 @@ sealed interface Route : NavKey {
 
 	@Serializable
 	data object Settings : Route
+
+	/** What the app is, where its data comes from, and whose the cards are. */
+	@Serializable
+	data object About : Route
 
 	/** What is on the device, and what can be deleted. Reached from the bar menu. */
 	@Serializable
@@ -368,7 +373,12 @@ fun App() {
 						SettingsScreen(
 						onBack = { vBackStack.popRoute() },
 						onOpenSetup = { vBackStack.add(Route.Setup) },
+						onOpenAbout = { vBackStack.add(Route.About) },
 					)
+					}
+
+					is Route.About -> NavEntry(vRoute) {
+						AboutScreen(onBack = { vBackStack.popRoute() })
 					}
 
 					is Route.Storage -> NavEntry(vRoute) {

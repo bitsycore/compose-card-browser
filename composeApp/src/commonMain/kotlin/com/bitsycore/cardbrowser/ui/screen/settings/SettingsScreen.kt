@@ -1,5 +1,7 @@
 package com.bitsycore.cardbrowser.ui.screen.settings
 
+import androidx.compose.ui.text.style.TextAlign
+import com.bitsycore.cardbrowser.AppBuild
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -60,6 +62,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun SettingsScreen(
 	onBack: () -> Unit,
 	onOpenSetup: () -> Unit,
+	onOpenAbout: () -> Unit = {},
 	viewModel: SettingsViewModel = koinViewModel(),
 ) {
 	// Where navigation is turned back into navigation. The body below dispatches an intent and knows
@@ -68,6 +71,7 @@ fun SettingsScreen(
 		when (vEffect) {
 			SettingsContract.Effect.NavigateBack -> onBack()
 			SettingsContract.Effect.OpenSetup -> onOpenSetup()
+			SettingsContract.Effect.OpenAbout -> onOpenAbout()
 		}
 	}
 	val vState by viewModel.collectAsStateWithLifecycle()
@@ -189,15 +193,16 @@ fun SettingsContent(
 			)
 
 			// ============
-			//  Cache
+			//  Image cache
 
-			// "Cache", not "Storage": every control under it bounds what browsing may accumulate,
-			// and nothing under it can touch a download. What is *stored* -- and what can be
-			// deleted -- is the storage screen's, which is reached from the bar menu.
-			SettingsSection("Cache")
+			// Named for what it holds. It was "Cache" while it governed card data too; card data
+			// is a database now and nothing evicts it, so images are the only cache left and the
+			// storage screen already calls them that. What is *stored* -- and what can be deleted
+			// -- is the storage screen's, which is reached from the bar menu.
+			SettingsSection("Image cache")
 
 			Text(
-				text = "Limits apply to cached data. Downloads are kept until deleted.",
+				text = "Pictures are dropped as needed. Card data is kept until you delete it.",
 				style = MaterialTheme.typography.bodySmall,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
 			)
@@ -261,12 +266,24 @@ fun SettingsContent(
 				)
 			}
 
-			// Last on the screen and the quietest thing on it. Required, not worth reading twice.
-			if (vState.attributions.isNotEmpty()) {
-				Spacer(Modifier.height(20.dp))
-				HorizontalDivider()
-				Spacer(Modifier.height(12.dp))
-				FinePrint(vState.attributions.joinToString("\n") { "${it.source} — ${it.text}" })
+			// ============
+			//  About
+
+			// A row, not prose. What the app is, who supplies its data and whose trademarks the
+			// cards are all belong together on one screen, and none of it is a setting -- so the
+			// attributions moved there too rather than being said twice. See `AboutScreen`.
+			SettingsSection("About")
+
+			TextButton(
+				onClick = { dispatch(SettingsContract.Intent.AboutRequested) },
+				modifier = Modifier.fillMaxWidth(),
+			) {
+				Text(
+					text = "About this app, and its sources",
+					modifier = Modifier.weight(1f),
+					textAlign = TextAlign.Start,
+				)
+				Text("Version ${AppBuild.VERSION}", style = MaterialTheme.typography.labelMedium)
 			}
 			Spacer(Modifier.height(24.dp))
 		}
