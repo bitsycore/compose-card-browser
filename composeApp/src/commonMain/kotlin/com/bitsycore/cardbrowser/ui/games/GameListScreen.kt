@@ -754,10 +754,22 @@ private fun backdropFor(art: GameArt?): Color =
  * is therefore visible whether or not the mark needed rescuing; a halo follows the letterforms, so
  * it separates exactly what would otherwise wash out and disappears into a dark background.
  *
- * Eight offset copies rather than a real blur. `Modifier.blur` is a no-op on Android below API 31,
- * and the one platform this has to work on is a phone -- an effect that silently does nothing on
- * older devices is the same class of bug as a plate that never got drawn. Eight copies of a small
- * bitmap is cheap and looks the same everywhere.
+ * Offset copies rather than a real blur. `Modifier.blur` is a no-op on Android below API 31, and
+ * the one platform this has to work on is a phone -- an effect that silently does nothing on older
+ * devices is the same class of bug as a plate that never got drawn. Copies of a small bitmap are
+ * cheap and look the same everywhere.
+ *
+ * ## Rings, because one ring is an outline
+ *
+ * A single ring of eight copies at one distance and one alpha is a hard edge: every pixel of it is
+ * the same darkness and it stops dead, which reads as a black keyline drawn around the mark rather
+ * than as a shadow. That was the first version and it was visible as a *thing*.
+ *
+ * [HALO_RINGS] casts several at growing radii and falling alpha instead. Where they overlap, near
+ * the letterforms, the alphas compound; further out only the outer ring is left. That is a falloff,
+ * which is the whole difference between a shadow you feel and an outline you see -- and it is why
+ * each individual ring is far fainter than the single one was. The total is what has to be legible,
+ * not any one copy.
  *
  * `matchParentSize` on the copies is what keeps the box the size of the mark: they fill whatever the
  * real one measured to and contribute nothing to the measurement themselves.
@@ -772,27 +784,49 @@ internal fun HaloedLogo(art: GameArt?, image: @Composable (Modifier, ColorFilter
 		return
 	}
 	Box(contentAlignment = Alignment.Center) {
-		val vHalo = ColorFilter.tint(LOGO_HALO_COLOUR)
-		HALO_OFFSETS.forEach { (vX, vY) ->
-			image(Modifier.matchParentSize().offset(x = vX, y = vY), vHalo)
+		HALO_RINGS.forEach { (vRadius, vAlpha) ->
+			// The tint's own alpha is what fades a copy: `ColorFilter.tint` blends `SrcIn`, so a
+			// translucent black lands as a translucent silhouette masked by the artwork.
+			val vTint = ColorFilter.tint(Color.Black.copy(alpha = vAlpha))
+			ringOffsets(vRadius).forEach { (vX, vY) ->
+				image(Modifier.matchParentSize().offset(x = vX, y = vY), vTint)
+			}
 		}
 		image(Modifier, null)
 	}
 }
 
-/** The eight directions the halo is cast in, at the one distance it is cast over. */
-private val HALO_OFFSETS: List<Pair<Dp, Dp>> = listOf(-1f, 0f, 1f)
-	.flatMap { vX -> listOf(-1f, 0f, 1f).map { vY -> vX.dp to vY.dp } }
-	.filterNot { it.first == 0.dp && it.second == 0.dp }
-
 /**
- * The halo's colour: black, and thin enough that it reads as an edge rather than as a shape.
+ * The halo's rings: how far out, and how dark each one is on its own.
  *
- * Fixed rather than a theme colour on purpose. The mark is being separated from a *pale* background,
+ * Three of them, 24 draws of a bitmap that is at most 132dp wide. Tuned by rendering the three
+ * marks that use it on the light theme and looking -- the inner ring does the separating, the outer
+ * two only soften where it ends.
+ *
+ * Black rather than a theme colour on purpose. The mark is being separated from a *pale* background,
  * which is the only case there is -- these are all light artwork -- so a halo that inverted with the
  * theme would turn white on the dark theme and put a glow around a mark that needed nothing.
  */
-private val LOGO_HALO_COLOUR = Color.Black.copy(alpha = 0.55f)
+private val HALO_RINGS: List<Pair<Float, Float>> = listOf(
+	1f to 0.20f,
+	2f to 0.13f,
+	3.25f to 0.08f,
+)
+
+/** The eight directions, at one radius. Diagonals are pulled in so the ring is round, not square. */
+private fun ringOffsets(radius: Float): List<Pair<Dp, Dp>> {
+	val vDiagonal = radius * 0.707f
+	return listOf(
+		radius.dp to 0.dp,
+		(-radius).dp to 0.dp,
+		0.dp to radius.dp,
+		0.dp to (-radius).dp,
+		vDiagonal.dp to vDiagonal.dp,
+		vDiagonal.dp to (-vDiagonal).dp,
+		(-vDiagonal).dp to vDiagonal.dp,
+		(-vDiagonal).dp to (-vDiagonal).dp,
+	)
+}
 
 /**
  * The plate this mark states for the theme in force, or `null` if it states none.
