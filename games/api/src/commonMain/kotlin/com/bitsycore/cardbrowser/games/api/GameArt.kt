@@ -86,10 +86,8 @@ import org.jetbrains.compose.resources.DrawableResource
  * so on a transparent wordmark it draws a blurred rectangle -- which is this plate, less sharply.
  * A plate is the honest version of what the shadow was approximating.
  *
- * **Cyberpunk keeps its light plate**, because it is its own published lockup rather than a
- * workaround -- see below. Its dark one is gone for the same reason as the others: on the dark
- * theme the mark painted its own yellow is the whole lockup, and the near-black slab behind it was
- * a second background over a background.
+ * **Cyberpunk keeps both of its plates**, because both are its own published lockup rather than a
+ * workaround -- see below.
  *
  * ## Artwork that is painted rather than plated
  *
@@ -101,15 +99,16 @@ import org.jetbrains.compose.resources.DrawableResource
  *
  * Its mark is published two ways, black-on-yellow and yellow-on-black, and the brand picks whichever
  * suits what it sits against. The app does the same: on the light theme a yellow plate with the
- * wordmark painted the theme's near-black, and on the dark theme the wordmark painted its own
- * `0xFFFEEC00` on whatever the app's own dark surface is. Both are the publisher's own lockup
- * rather than an invention, and each is drawn against the colour it was drawn for.
+ * wordmark painted the theme's near-black, and on the dark theme a near-black plate with the
+ * wordmark painted its own `0xFFFEEC00`. Both pairs are the publisher's own lockup rather than an
+ * invention, and each is drawn against the colour it was drawn for.
  *
  * That is the case that made both properties theme-aware. It went through a plain yellow plate on
- * both themes, then no plate at all, then a near-black plate on the dark theme before landing here.
- * The near-black plate was the mistake worth recording: it was the right *colour*, which is why it
- * looked reasonable, and a slab of near-black on a near-black surface is a rectangle you can see and
- * no contrast you gain.
+ * both themes, then no plate at all, then this pair, then no dark plate, and back. The dark one
+ * came off on the argument that a near-black slab on a near-black surface is a rectangle you can
+ * see and no contrast you gain -- true of a screen where a mark with no plate had no tile either,
+ * and there is no such screen now. Every mark sits on a tile, so the question is not "a slab or
+ * nothing" but which colour that tile is, and for this brand it is its own near-black.
  *
  * It is also why [tintLogo] and [backdropArgb] are no longer mutually exclusive. The old rule was
  * that a tinted mark on a fixed plate inverts with the theme while its plate stays put, leaving a
