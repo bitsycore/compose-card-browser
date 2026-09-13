@@ -9,6 +9,7 @@ import com.bitsycore.cardbrowser.data.download.DownloadKind
 import com.bitsycore.cardbrowser.data.download.DownloadRequest
 import com.bitsycore.cardbrowser.data.download.DownloadStatus
 import com.bitsycore.cardbrowser.ui.downloads.describe
+import com.bitsycore.cardbrowser.ui.downloads.cardInfoIsElsewhere
 import com.bitsycore.cardbrowser.ui.downloads.defaultInfoLanguages
 import com.bitsycore.cardbrowser.ui.downloads.infoIsComplete
 import kotlin.test.Test
@@ -25,6 +26,57 @@ import kotlin.test.assertTrue
  * was already held when one language of six had finished.
  */
 class DownloadsUiTest {
+
+	// ==================
+	// MARK: Where a source's records come from
+	// ==================
+
+	@Test
+	fun `a bulk-only source offers no card info for one set and offers it for the game`() {
+		// Scryfall's case. 988 sets fetched one at a time rebuilds a file the source publishes as
+		// one, which is the traffic the file exists to prevent.
+		assertTrue(
+			cardInfoIsElsewhere(
+				isCardDataBundled = false,
+				isCardInfoBulkOnly = true,
+				setCount = 1,
+			),
+		)
+		// And the other half, which is the reason this is not a flat refusal: the whole-game
+		// dialog is where the import lives, so it must still offer the row.
+		assertFalse(
+			cardInfoIsElsewhere(
+				isCardDataBundled = false,
+				isCardInfoBulkOnly = true,
+				setCount = 988,
+			),
+		)
+	}
+
+	@Test
+	fun `bundled records are never on offer at any count`() {
+		for (vCount in listOf(1, 42)) {
+			assertTrue(
+				cardInfoIsElsewhere(
+					isCardDataBundled = true,
+					isCardInfoBulkOnly = false,
+					setCount = vCount,
+				),
+				"a set count of $vCount cannot make a bundled catalogue downloadable",
+			)
+		}
+	}
+
+	@Test
+	fun `an ordinary source offers card info per set`() {
+		assertFalse(
+			cardInfoIsElsewhere(
+				isCardDataBundled = false,
+				isCardInfoBulkOnly = false,
+				setCount = 1,
+			),
+		)
+	}
 
 	// ==================
 	// MARK: Which languages a download starts with

@@ -181,6 +181,18 @@ fun DownloadKindDialog(
 	 */
 	isCardDataBundled: Boolean = false,
 	/**
+	 * True when this source's records come from its dump and not set by set --
+	 * `DataCapabilities.cardInfoFromBulkOnly`.
+	 *
+	 * Only changes the *single-set* dialog, where it replaces the card-info row with a line saying
+	 * where the records do come from. The whole-game dialog already routes card info to the import
+	 * wherever a dump exists, so there is nothing there for this to stop.
+	 *
+	 * Said rather than shown disabled, for the same reason "Built in" is: a greyed box with no
+	 * reason reads as broken and invites a second attempt.
+	 */
+	isCardInfoBulkOnly: Boolean = false,
+	/**
 	 * True when the source publishes a small rendition -- `DataCapabilities.thumbnailImages`.
 	 *
 	 * Changes both the label and the figure, because where there is none the app falls back to the
@@ -272,6 +284,11 @@ fun DownloadKindDialog(
 	// with no say in it. Card records are small, so taking them all is still the default where the
 	// set says what it is published in -- but a source that states nothing offers a claim, and
 	// eleven speculative jobs is not a default anybody chose.
+	// Card info is not on offer here at all: either it is already in the app, or it belongs to the
+	// whole-game import. One name for the two, because the row is the same row either way.
+	val vInfoIsElsewhere = cardInfoIsElsewhere(isCardDataBundled, isCardInfoBulkOnly, setCount)
+	val vWantsInfo = vInfo && !vInfoIsElsewhere
+
 	var vInfoLanguages by remember(languages, defaultLanguage, languagesAreClaimed) {
 		mutableStateOf(defaultInfoLanguages(languages, defaultLanguage, languagesAreClaimed))
 	}
@@ -289,13 +306,25 @@ fun DownloadKindDialog(
 			// button stayed enabled: images would be fetched in the default language with no way
 			// to reach the control that changes it.
 			Column(Modifier.verticalScroll(rememberScrollState())) {
-				if (isCardDataBundled) {
+				if (vInfoIsElsewhere) {
 					Text(
-						text = "Card info · Built in",
+						text = if (isCardDataBundled) {
+							"Card info · Built in"
+						} else {
+							"Card info · Whole game only"
+						},
 						style = MaterialTheme.typography.bodyMedium,
 					)
 					Text(
-						text = "Ships with the app. Always available offline.",
+						text = if (isCardDataBundled) {
+							"Ships with the app. Always available offline."
+						} else {
+							// Named as the thing the user can actually go and do, rather than as a
+							// refusal. The control is one screen away, on the download-all dialog.
+							"This source publishes its records as one file. Use “Download " +
+								"all” to take it; fetching them a set at a time would be " +
+								"hundreds of requests for the same data."
+						},
 						style = MaterialTheme.typography.bodySmall,
 						color = MaterialTheme.colorScheme.onSurfaceVariant,
 					)
@@ -383,7 +412,7 @@ fun DownloadKindDialog(
 				// Under this row rather than beside the image chips at the bottom, because it is
 				// about *this* tick box: the two halves of a download are chosen separately and
 				// were being explained as one asymmetry a screenful further down.
-				if (vChoosable && !isCardDataBundled) {
+				if (vChoosable && !vInfoIsElsewhere) {
 					LanguagePicker(
 						title = "Card info languages",
 						note = if (languagesAreClaimed) {
@@ -523,13 +552,16 @@ fun DownloadKindDialog(
 			TextButton(
 				// Nothing ticked is not a download, so the button is not offered as one -- and
 				// neither is imagery in no language at all.
-				enabled = (vInfo || vThumbnails) &&
+				// `vWantsInfo`, not `vInfo`: where the records are elsewhere there is no row to
+				// untick, and the tick's default of "on" would otherwise queue a card-info job
+				// for a kind the dialog just finished saying it does not offer.
+				enabled = (vWantsInfo || vThumbnails) &&
 					(!vThumbnails || !vChoosable || vLanguages.isNotEmpty()) &&
-					(!vInfo || !vChoosable || vInfoLanguages.isNotEmpty()),
+					(!vWantsInfo || !vChoosable || vInfoLanguages.isNotEmpty()),
 				onClick = {
 					onConfirm(
 						buildSet {
-							if (vInfo) add(DownloadKind.CARD_INFO)
+							if (vWantsInfo) add(DownloadKind.CARD_INFO)
 							if (vThumbnails) add(DownloadKind.GRID_THUMBNAILS)
 						},
 						vInfoLanguages,
@@ -676,6 +708,24 @@ fun DownloadsButton(jobs: List<DownloadJob>, onClick: () -> Unit) {
  *
  * [languages] empty means the source states none, and then presence is all there is to go on.
  */
+/**
+ * Whether this dialog offers card info at all, or names where it comes from instead.
+ *
+ * Extracted so the rule can be tested, because it is the one place two different "no" answers meet
+ * and the second one is conditional. Bundled records are never on offer anywhere. Bulk-only records
+ * are not on offer *per set* -- and are very much on offer for the whole game, which is the whole
+ * point of saying so: the user is being pointed at the import, not refused.
+ *
+ * Getting it wrong the other way is worse than it looks. The card-info tick defaults to on, so a
+ * dialog that hides the row without also declining to queue the kind would enqueue a per-set fetch
+ * for a source that has just finished explaining why it must not.
+ */
+internal fun cardInfoIsElsewhere(
+	isCardDataBundled: Boolean,
+	isCardInfoBulkOnly: Boolean,
+	setCount: Int,
+): Boolean = isCardDataBundled || (isCardInfoBulkOnly && setCount == 1)
+
 /**
  * Which languages the records are fetched in when the dialog opens.
  *

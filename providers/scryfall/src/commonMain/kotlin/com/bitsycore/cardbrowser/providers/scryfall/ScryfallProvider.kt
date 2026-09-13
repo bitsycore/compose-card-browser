@@ -150,6 +150,11 @@ class ScryfallProvider(
 			cardmarketProductMapping = true,
 			crossSetSearch = true,
 			thumbnailImages = true,
+			// Scryfall asks clients to take its bulk files rather than page its API for data it
+			// has already packaged, and its catalogue is 988 sets -- so a per-set card-info
+			// download here is 988 downloads that rebuild a file the source publishes as one.
+			// Browsing a set still reads the API, which is what the API is for.
+			cardInfoFromBulkOnly = true,
 		),
 		attribution = Attribution(
 			text = "Magic card data and images from Scryfall. Not affiliated with or endorsed by " +

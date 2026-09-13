@@ -230,6 +230,25 @@ data class DataCapabilities(
 	 * honest size, rather than a promise of a cheap fetch it cannot keep.
 	 */
 	val thumbnailImages: Boolean = false,
+	/**
+	 * True when this source's records are to be taken from its dump and not fetched set by set.
+	 *
+	 * A statement about how the source wants to be used, not about what it can do. A source that
+	 * publishes a bulk file publishes it so that clients stop walking its API for data it has
+	 * already packaged: filling a catalogue one set at a time is hundreds of requests to rebuild a
+	 * file that is one request, and doing it anyway is the kind of traffic that gets an app
+	 * blocked.
+	 *
+	 * So where this is true the per-set download offers no card info at all and says why. It does
+	 * not stop a set being *browsed* -- opening one still asks the API for it, which is a handful
+	 * of requests for something the user is looking at, and is what the app is for. What it stops
+	 * is the bulk case wearing a per-set disguise: 988 sets downloaded one at a time.
+	 *
+	 * False for a source that publishes no dump, where per-set is the only way there is. It is not
+	 * implied by publishing one: a dump that covers part of a catalogue, or that is rebuilt rarely
+	 * enough to be stale, is an option rather than the only route.
+	 */
+	val cardInfoFromBulkOnly: Boolean = false,
 )
 
 // ==================

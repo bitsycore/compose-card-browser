@@ -3,6 +3,7 @@ package com.bitsycore.cardbrowser.di
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
 import com.bitsycore.cardbrowser.core.provider.CardProvider
+import com.bitsycore.cardbrowser.core.provider.BulkCatalogue
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.cache.CacheManager
@@ -254,6 +255,29 @@ class AppModuleTest {
 			.toSet()
 
 		assertEquals(setOf("ucp-wuwa"), vBundled)
+	}
+
+	@Test
+	fun `a source that refuses per-set records is one that publishes a dump`() {
+		// `cardInfoFromBulkOnly` takes the per-set download away, so a source that sets it without
+		// implementing `BulkCatalogue` leaves no way to get records at all: the single-set dialog
+		// points at an import that does not exist. The flag is a redirection, not a refusal, and
+		// this is the assertion that it redirects somewhere.
+		val vRegistry = graph().get<ProviderRegistry>()
+		val vBulkOnly = vRegistry.games
+			.mapNotNull { vRegistry.resolve(it) }
+			.distinctBy { it.id }
+			.filter { it.capabilities.data.cardInfoFromBulkOnly }
+
+		// Scryfall today, and the set is asserted rather than the count so adding a second one is
+		// a deliberate edit here.
+		assertEquals(setOf("scryfall"), vBulkOnly.map { it.id.value }.toSet())
+		vBulkOnly.forEach { vProvider ->
+			assertTrue(
+				vProvider is BulkCatalogue,
+				"${vProvider.id.value} takes card info off the per-set dialog and publishes no dump",
+			)
+		}
 	}
 
 	@Test

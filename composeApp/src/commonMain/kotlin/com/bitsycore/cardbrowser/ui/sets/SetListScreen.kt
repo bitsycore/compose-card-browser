@@ -236,6 +236,7 @@ fun SetListScreen(
 		gameArt = vArt,
 		preferredLanguage = vDownloadLanguage,
 		isCardDataBundled = vProvider?.capabilities?.data?.bundledCardData == true,
+		isCardInfoBulkOnly = vProvider?.capabilities?.data?.cardInfoFromBulkOnly == true,
 		hasThumbnails = vProvider?.capabilities?.data?.thumbnailImages != false,
 	)
 }
@@ -270,6 +271,13 @@ fun SetListContent(
 	 * previewed. `null` leaves the set's own first stated language ticked instead.
 	 */
 	preferredLanguage: CardLanguage? = null,
+	/**
+	 * True when this source's records come from its dump -- `DataCapabilities.cardInfoFromBulkOnly`.
+	 *
+	 * Read from the routed provider, like `isCardDataBundled` beside it, and passed down as plain
+	 * state so the content stays free of Koin and keeps previewing.
+	 */
+	isCardInfoBulkOnly: Boolean = false,
 	/** True when this game's records ship with the app -- `DataCapabilities.bundledCardData`. */
 	isCardDataBundled: Boolean = false,
 	/** True when the source publishes a small rendition -- `DataCapabilities.thumbnailImages`. */
@@ -682,6 +690,7 @@ fun SetListContent(
 			languagesAreClaimed = vSet.languages.isEmpty(),
 			defaultLanguage = preferredLanguage,
 			isCardDataBundled = isCardDataBundled,
+			isCardInfoBulkOnly = isCardInfoBulkOnly,
 			hasThumbnails = hasThumbnails,
 			infoLanguages = vState.savedLanguages[vSet.id.qualified].orEmpty(),
 			// One set, so no dump is involved and there is nothing to choose: a 78 MB file to
