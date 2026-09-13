@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.ui.common
 
+import com.bitsycore.cardbrowser.core.game.RarityLadder
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -63,7 +64,10 @@ fun StatChip(label: String, colour: Color? = null, dense: Boolean = false) {
 @Composable
 fun RarityChip(rarity: String, game: GameProfile?, dense: Boolean = false) {
 	StatChip(
-		label = rarity,
+		// The source's own string, with an all-lower-case one given a capital. See
+		// `RarityLadder.display` -- Scryfall writes `mythic` and every other source writes the
+		// game's own capitalisation.
+		label = RarityLadder.display(rarity),
 		colour = game?.rarityColourFor(rarity)?.let { Color(it.toInt()) },
 		dense = dense,
 	)

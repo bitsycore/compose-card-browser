@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.ui.detail
 
+import com.bitsycore.cardbrowser.core.game.RarityLadder
 import com.bitsycore.cardbrowser.core.cardmarket.CardmarketLink
 import com.bitsycore.cardbrowser.core.cardmarket.CardmarketLinkBuilder
 import com.bitsycore.cardbrowser.core.tcgplayer.TcgplayerLink
@@ -214,7 +215,7 @@ object CardDetailContract :
 				}
 				fact(vWords.cardType, card.classification.type)
 				fact("Supertype", card.classification.supertype)
-				fact("Rarity", card.classification.rarity)
+				fact("Rarity", card.classification.rarity?.let(RarityLadder::display))
 				vWords.domain?.let { vLabel ->
 					// Labels, not keys: this row reads "White, Blue" rather than "W, U".
 					fact(

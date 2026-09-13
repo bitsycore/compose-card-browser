@@ -99,7 +99,7 @@ this wrong is the most common way to put the right value in the wrong place.
 
 ```bash
 ./gradlew build -x lint          # everything, all four targets, including both iOS ones
-./gradlew desktopTest            # the deterministic suite (545 tests on 2026-09-13, 11 skipped)
+./gradlew desktopTest            # the deterministic suite (549 tests on 2026-09-13, 11 skipped)
 ./gradlew :androidApp:assembleDebug
 ./gradlew :composeApp:run        # desktop
 ```
@@ -155,6 +155,16 @@ connection, and a file-backed `JdbcSqliteDriver` opens one per statement, so `fo
 silently off on desktop. `CardStoreFactory.pragma` is the query form and reads the row;
 `DesktopDriverFactory.DURABILITY` sets them as connection properties; `StoreDurabilityTest` reads
 all four back off a fresh connection.
+
+**A range is not a set of values.** The filter sheet built its cost chips by expanding the store's
+`MIN..MAX`, and Magic's Gleemax has a mana value of 1,000,000 — so one card turned a sixteen-value
+axis into a million and the sheet ran out of memory opening. `costsInGame` answers with the values
+that occur. Anything that turns a span into a list wants the same question asked of it.
+
+**A `DropdownMenu` composes every item it is given.** It scrolls, which makes it look lazy and it is
+not; a few thousand items freeze the screen before the menu appears. Magic's card type is the
+printed type line, so a downloaded catalogue has thousands of distinct ones. The filter menus put a
+`LazyColumn` inside, cap their height, and grow a box to narrow themselves past 24 values.
 
 **`LazyVerticalGrid` throws on a duplicate key** rather than degrading, so a provider issuing two
 records with the same id is a crash. Wuthering Waves shipped exactly that. Any new adapter wants a

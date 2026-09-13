@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.ui.cards
 
+import com.bitsycore.cardbrowser.core.game.RarityLadder
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
@@ -982,7 +983,7 @@ private fun CardTile(card: CardPrinting, onClick: () -> Unit, isSelected: Boolea
 /** "042 · Epic · Alternate art", with anything the provider did not state left out. */
 private fun tileSubtitle(card: CardPrinting): String = buildList {
 	add(card.collectorNumber)
-	card.classification.rarity?.let { add(it) }
+	card.classification.rarity?.let { add(RarityLadder.display(it)) }
 	if (card.artwork.treatment != ArtworkTreatment.STANDARD) add(card.artwork.treatment.displayName)
 }.joinToString(" · ")
 

@@ -2,6 +2,7 @@ package com.bitsycore.cardbrowser.games.magic
 
 import com.bitsycore.cardbrowser.core.game.GameDomain
 import com.bitsycore.cardbrowser.core.game.GameProfile
+import com.bitsycore.cardbrowser.core.game.GameRarityColour
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.games.api.GameArt
@@ -33,6 +34,24 @@ object MagicGame : GameProfile {
 	/** As Scryfall spells it. `special` and `bonus` are Scryfall's own trailing tiers. */
 	override val rarityLadder: List<String> =
 		listOf("common", "uncommon", "rare", "mythic", "special", "bonus")
+
+	/**
+	 * The expansion symbol's own colours, which Magic has printed since Exodus.
+	 *
+	 * Not invented: black, silver, gold and the orange-red mythic are what is stamped on the card,
+	 * and a player reads the rarity off that colour before reading any word. `special` and `bonus`
+	 * are Scryfall's buckets for timeshifted and Un-set oddities, which have no printed symbol
+	 * colour of their own, so they state none rather than being given a plausible one.
+	 *
+	 * Matched case-insensitively against Scryfall's lowercase strings -- see
+	 * `GameProfile.rarityColourFor`.
+	 */
+	override val rarityColours: List<GameRarityColour> = listOf(
+		GameRarityColour("common", 0xFF3A3A3E),
+		GameRarityColour("uncommon", 0xFFA8B4BE),
+		GameRarityColour("rare", 0xFFC9A227),
+		GameRarityColour("mythic", 0xFFD1512D),
+	)
 
 	/**
 	 * Cardmarket's path segment for this game.

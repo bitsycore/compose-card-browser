@@ -408,17 +408,25 @@ class CardGridViewModel(
 	 * at all. `CardRepository.searchFacets` existed for exactly this and had no caller: it was the
 	 * deleted search screen's, and moving that screen into the card grid left the call behind.
 	 *
-	 * Once per game rather than per load. The values do not depend on the query, so re-reading them
-	 * on every keystroke is five SQL queries to produce the answer already on screen.
+	 * Once per game rather than per load: the values do not depend on the query, so re-reading them
+	 * on every keystroke is five SQL queries to produce the answer already on screen. But only once
+	 * an answer *arrives* -- an empty read is not remembered. A game whose import is still running
+	 * has nothing stored yet, and caching that emptiness meant the filters never appeared however
+	 * long the user waited, which is what "no filters on Magic until I search" was.
 	 *
 	 * In its own coroutine, and deliberately not `mLoadJob`: that job is cancelled by the next
 	 * keystroke, and the chips would then be cancelled along with a search they do not belong to.
 	 */
 	private fun loadStoredFacets(game: GameId, rarityLadder: List<String>) {
 		if (mStoredFacetGame == game) return
-		mStoredFacetGame = game
 		viewModelScope.launch {
 			val vStored = mRepository.searchFacets(game)
+			if (vStored.cardTypes.isEmpty() && vStored.rarities.isEmpty() &&
+				vStored.domains.isEmpty() && vStored.costs.isEmpty()
+			) {
+				return@launch
+			}
+			mStoredFacetGame = game
 			dispatch(
 				CardGridContract.Intent.FacetsComputed(
 					CardFacets(
@@ -428,10 +436,9 @@ class CardGridViewModel(
 						// alphabetically -- the same treatment `CardFilters.facetsOf` gives the
 						// per-set ones, which is what makes the two sheets look like one control.
 						rarities = RarityLadder.sorted(rarityLadder, vStored.rarities),
-						// Every cost between the lowest and the highest stored. A range rather than
-						// the values actually present: the store answers with the two ends, and
-						// inventing the gaps is cheaper than a query per cost.
-						costs = vStored.costRange?.toList().orEmpty(),
+						// The costs that occur, not the span between the extremes. Expanding a
+						// range was a crash: Magic's Gleemax has a mana value of 1,000,000.
+						costs = vStored.costs,
 						treatments = vStored.treatments.mapNotNull { vName ->
 							ArtworkTreatment.entries.firstOrNull { it.name == vName }
 						},

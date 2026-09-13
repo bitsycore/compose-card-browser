@@ -1,5 +1,11 @@
 package com.bitsycore.cardbrowser.ui.cards
 
+import com.bitsycore.cardbrowser.core.game.RarityLadder
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.CircleShape
@@ -200,8 +206,10 @@ fun FilterSheet(
 				title = "Rarity",
 				// In the game's own colours where it prints them, like the domains above and like
 				// the pill on the card itself.
+				// The key is the source's own string, because that is what the query matches on;
+				// only the label is tidied. See `RarityLadder.display`.
 				options = state.facets.rarities.map {
-					FilterOption(it, it, rarityColourOf(state.game, it))
+					FilterOption(it, RarityLadder.display(it), rarityColourOf(state.game, it))
 				},
 				selected = state.query.rarities,
 				onToggle = { vRarity ->
@@ -414,30 +422,72 @@ private fun FilterValues(
 			}
 		}
 		DropdownMenu(expanded = vIsOpen, onDismissRequest = { vIsOpen = false }) {
-			options.forEach { vOption ->
-				DropdownMenuItem(
-					text = { Text(vOption.label) },
-					onClick = { onToggle(vOption.key) },
-					leadingIcon = vOption.colour?.let { vColour ->
-						{
-							Box(
-								Modifier
-									.size(14.dp)
-									.clip(CircleShape)
-									.background(vColour),
-							)
-						}
-					},
-					trailingIcon = {
-						if (vOption.key in selected) {
-							Icon(AppIcons.Check, contentDescription = "Included")
-						}
-					},
+			// A box to narrow the list, once there are more values than anyone will scroll.
+			//
+			// Magic is the case that forced it. Its card type is the printed type line -- "Legendary
+			// Creature -- Human Wizard" -- so a downloaded catalogue has thousands of distinct
+			// values, and a menu of thousands is not a control whatever its scrolling is like.
+			var vNarrow by remember(vIsOpen) { mutableStateOf("") }
+			if (options.size > SEARCHABLE_MENU) {
+				OutlinedTextField(
+					value = vNarrow,
+					onValueChange = { vNarrow = it },
+					singleLine = true,
+					label = { Text("Narrow") },
+					modifier = Modifier
+						.padding(horizontal = 12.dp, vertical = 4.dp)
+						.widthIn(min = 220.dp),
 				)
+			}
+			val vShown = if (vNarrow.isBlank()) {
+				options
+			} else {
+				options.filter { it.label.contains(vNarrow, ignoreCase = true) }
+			}
+			// Lazy, and capped. `DropdownMenu`'s own column composes every item it is given, so a
+			// few thousand of them is a frozen screen before the menu has even appeared.
+			LazyColumn(modifier = Modifier.heightIn(max = MENU_HEIGHT)) {
+				items(vShown, key = { it.key }) { vOption ->
+					DropdownMenuItem(
+						text = { Text(vOption.label) },
+						onClick = { onToggle(vOption.key) },
+						leadingIcon = vOption.colour?.let { vColour ->
+							{
+								Box(
+									Modifier
+										.size(14.dp)
+										.clip(CircleShape)
+										.background(vColour),
+								)
+							}
+						},
+						trailingIcon = {
+							if (vOption.key in selected) {
+								Icon(AppIcons.Check, contentDescription = "Included")
+							}
+						},
+					)
+				}
+				if (vShown.isEmpty()) {
+					item {
+						Text(
+							text = "Nothing matches \u201c$vNarrow\u201d.",
+							style = MaterialTheme.typography.bodySmall,
+							color = MaterialTheme.colorScheme.onSurfaceVariant,
+							modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+						)
+					}
+				}
 			}
 		}
 	}
 }
+
+/** How tall a filter menu may get before it scrolls. */
+private val MENU_HEIGHT = 360.dp
+
+/** Past this many values a menu grows a box to narrow itself with. */
+private const val SEARCHABLE_MENU = 24
 
 /** Past this many values an axis is a menu rather than a row of chips. */
 private const val CHIP_LIMIT = 10

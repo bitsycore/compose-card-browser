@@ -75,7 +75,7 @@ Generated from the running Koin graph on 2026-09-13.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Riftbound | Riftcodex | Domain | Energy | Type | Might / Power | 7 | 5, **coloured** |
 | Pokémon | TCGdex | Type | *(none)* | Category | HP | 11 | *(none)* |
-| Magic: The Gathering | Scryfall | Colour | Mana value | Type | Power / Toughness | 6 | 6 |
+| Magic: The Gathering | Scryfall | Colour | Mana value | Type | Power / Toughness | 6 | 6, **4 coloured** |
 | One Piece | OPTCG API | Colour | Cost | Type | Power / Life | 6 | 5 |
 | Altered | Altered TCG Card Database | Faction | Hand cost | Type | Reserve cost | 6 | 3 |
 | Yu-Gi-Oh! | YGOPRODeck | Attribute | Level | Type | ATK / DEF | 7 | 6 |
@@ -90,8 +90,50 @@ Two entries worth understanding rather than copying:
   The ladder is empty because TCGdex's rarity strings vary by era — nineteen distinct values across
   thirteen sets from Base Set to Surging Sparks, measured 2026-09-13 — and no ordering of them is a
   fact about the game. Alphabetical and silent beats an invented ladder that looks deliberate.
-- **Riftbound is the only game with rarity colours**, because it is the only one whose publisher
-  prints them.
+- **Two games have rarity colours** — Riftbound's five and Magic's four expansion-symbol colours,
+  both printed facts rather than a chosen palette. Magic's `special` and `bonus` buckets state
+  none, because no symbol colour was ever printed for them.
+
+---
+
+## How complete each game is
+
+Riftbound is the reference, because it is the one every axis was built against. A blank is not a
+bug — it is usually a source that does not publish the thing — but it is what someone asking "why
+does Magic look thinner than Riftbound?" is seeing.
+
+Read the *source* columns from [PROVIDERS.md](PROVIDERS.md) and the *game* columns from the table
+above; this is the two joined, on 2026-09-13.
+
+| | Riftbound | Pokémon | Magic | One Piece | Altered | Yu-Gi-Oh! | Wuwa | Lorcana | Cyberpunk | WoW |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Domain axis | ● | ● | ● | ● | ● | ● | ● | ● | ● | |
+| Cost axis | ● | | ● | ● | ● | ● | ● | ● | ● | ● |
+| Rarity ladder | ● | | ● | ● | ● | ● | ● | ● | ● | ● |
+| Rarity colours | ● | | ● | | | | | | | |
+| Printings linked | ● | | ● | | | | ● | | | |
+| Artwork variants | ● | | ● | | | | ● | | | |
+| Finishes | | ● | ● | | | | | | | |
+| Languages | 1 | 11 | 11 | — | 5 | 7 | 3 | — | — | — |
+| Set symbols | | ● | ● | | | ● | | | | |
+| Thumbnails | ● | ● | ● | | | ● | ● | ● | ● | ● |
+| Server-side search | | ● | ● | ● | | ● | ● | | | |
+| Cardmarket link | ● | ● | ● | ● | n/a | ● | | | | |
+
+What would close the visible gaps, and whether it can be closed:
+
+- **Pokémon has no cost and no rarity ladder**, and neither is closeable — see above. Its rarity
+  chips are alphabetical by design.
+- **Rarity colours are closeable only where a publisher prints them.** Riftbound's five and Magic's
+  four expansion-symbol colours are printed facts. The others are not, and inventing a palette
+  would look deliberate while being wrong.
+- **Printings linked and artwork variants** need the source to say so. Three of ten do.
+- **The four sources that state no languages** — OPTCG and the three TCGCSV categories — publish
+  nothing about printing language, so the app states nothing.
+- **The WoW TCG row is thin because category 13 is thin.** Name, number and rarity is most of what
+  TCGplayer carries for it.
+- **Cardmarket for Lorcana, Cyberpunk, the WoW TCG and Wuthering Waves** is a real gap and is
+  closeable by a human with a browser. Altered's is not a gap: checked, and there is no section.
 
 ### Cardmarket
 

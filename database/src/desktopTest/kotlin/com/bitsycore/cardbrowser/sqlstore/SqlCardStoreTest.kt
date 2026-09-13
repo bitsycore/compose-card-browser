@@ -262,7 +262,23 @@ class SqlCardStoreTest {
 		assertEquals(listOf("Unit"), vFacets.cardTypes)
 		assertEquals(listOf("Common"), vFacets.rarities)
 		assertEquals(listOf("fury"), vFacets.domains, "domains are stored joined and split back")
-		assertEquals(0..4, vFacets.costRange, "the costs that are actually present")
+		assertEquals(0..4, vFacets.costRange, "the lowest and the highest present")
+		assertEquals(listOf(0, 1, 2, 3, 4), vFacets.costs)
+	}
+
+	@Test
+	fun `one absurd cost does not become a million filter values`() {
+		// Magic's Gleemax has a mana value of 1,000,000. The filter sheet used to build its cost
+		// chips by expanding MIN..MAX, so one such card turned a sixteen-value axis into a million
+		// and the sheet ran out of memory opening. The distinct values are the answer to the same
+		// question and there are three of them here.
+		write("s", null, "Set", false, 1L, listOf(card(1, cost = 0), card(2, cost = 3), card(3, cost = 1_000_000)))
+
+		val vFacets = mStore.facetsForGame("test")
+
+		assertEquals(listOf(0, 3, 1_000_000), vFacets.costs)
+		// The range is still the range: it is a different fact and something may still want it.
+		assertEquals(0..1_000_000, vFacets.costRange)
 	}
 
 	@Test
@@ -272,6 +288,7 @@ class SqlCardStoreTest {
 		assertTrue(vFacets.cardTypes.isEmpty())
 		assertTrue(vFacets.rarities.isEmpty())
 		assertNull(vFacets.costRange, "no cost range is not a range of zero")
+		assertTrue(vFacets.costs.isEmpty())
 	}
 
 	@Test

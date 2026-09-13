@@ -29,6 +29,25 @@ object RarityLadder {
 	}
 
 	/**
+	 * A rarity as it should be shown, which is the source's own string with one exception.
+	 *
+	 * A provider's capitalisation is its own business and is usually the game's: TCGdex writes
+	 * "Illustration rare" and "ACE SPEC Rare", Riftcodex "Showcase", and re-casing either would be
+	 * this app editing a name it did not choose. Scryfall is the odd one -- its rarities are
+	 * `common`, `uncommon`, `rare`, `mythic`, all lower case, which is a serialisation convention
+	 * rather than how Magic writes them, and beside every other game's chips it reads as a bug.
+	 *
+	 * So: an all-lower-case string gets its first letter raised, and anything with a capital
+	 * already in it is left exactly as it came.
+	 */
+	fun display(rarity: String): String =
+		if (rarity.none { it.isUpperCase() } && rarity.isNotEmpty()) {
+			rarity.replaceFirstChar { it.uppercaseChar() }
+		} else {
+			rarity
+		}
+
+	/**
 	 * Orders rarity names by [ladder], unknown ones alphabetically at the end.
 	 *
 	 * Used for the filter chips as well as the sort, so the two agree about what "ascending rarity"

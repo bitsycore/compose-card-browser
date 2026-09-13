@@ -173,6 +173,7 @@ class SqlCardStore(driver: SqlDriver) {
 				val vHigh = vRow.high
 				if (vLow == null || vHigh == null) null else vLow.toInt()..vHigh.toInt()
 			},
+			costs = mQueries.costsInGame(game).executeAsList().filterNotNull().map { it.toInt() },
 			treatments = treatmentsForGame(game, treatmentNames),
 		)
 
@@ -510,8 +511,16 @@ data class StoredFacets(
 	val cardTypes: List<String>,
 	val rarities: List<String>,
 	val domains: List<String>,
-	/** The costs actually present, or null where no card in the game publishes one. */
+	/** The lowest and the highest cost present, or null where no card in the game publishes one. */
 	val costRange: IntRange?,
+	/**
+	 * The costs that actually occur, ascending.
+	 *
+	 * Not [costRange] expanded. Magic's Gleemax has a mana value of 1,000,000, so the span between
+	 * the extremes is a million integers -- which crashed the filter sheet when it tried to draw a
+	 * chip for each. The distinct values are sixteen rows and answer the same question.
+	 */
+	val costs: List<Int> = emptyList(),
 	/** Artwork treatments present, by enum name. Empty where every stored card is standard art. */
 	val treatments: List<String> = emptyList(),
 )

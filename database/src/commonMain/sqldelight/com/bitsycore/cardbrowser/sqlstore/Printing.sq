@@ -209,6 +209,16 @@ costRangeInGame:
 SELECT MIN(cost) AS low, MAX(cost) AS high FROM printing
 WHERE game = ? AND cost IS NOT NULL;
 
+-- The costs that actually occur, not the span between the extremes.
+--
+-- A span is not a set of values and expanding one into a list is a trap: Magic's Gleemax has a
+-- mana value of 1,000,000, so `MIN..MAX` is a million integers and building a chip for each of
+-- them is an out-of-memory crash rather than a long list. Sixteen rows answer the same question.
+costsInGame:
+SELECT DISTINCT cost FROM printing
+WHERE game = ? AND cost IS NOT NULL
+ORDER BY cost;
+
 -- ==========================================================================
 -- Eviction, the budget, and what a download left
 -- ==========================================================================

@@ -196,6 +196,7 @@ class InMemorySetRecordStore(
 			rarities = vCards.mapNotNull { it.classification.rarity }.distinct().sorted(),
 			domains = vCards.flatMap { it.classification.domains }.distinct().sorted(),
 			costRange = if (vCosts.isEmpty()) null else vCosts.min()..vCosts.max(),
+			costs = vCosts.distinct().sorted(),
 		)
 	}
 
