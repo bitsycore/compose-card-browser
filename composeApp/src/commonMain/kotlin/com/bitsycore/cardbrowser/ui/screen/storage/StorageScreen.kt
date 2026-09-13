@@ -129,10 +129,10 @@ fun StorageContent(
 
 				Spacer(Modifier.height(8.dp))
 				SectionHeading(
-					title = "Card data",
+					title = "Downloaded",
 					// One line, not a paragraph. The distinction between the sections is the whole
 					// content of this screen, and it survives being said briefly.
-					subtitle = "Kept until you delete it. Tap a game to see what it holds.",
+					subtitle = "Tap a game to see what it holds.",
 					trailing = formatBytes(state.keptBytes + state.unattributedKeptBytes),
 				)
 
