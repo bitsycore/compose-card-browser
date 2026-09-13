@@ -161,10 +161,13 @@ all four back off a fresh connection.
 axis into a million and the sheet ran out of memory opening. `costsInGame` answers with the values
 that occur. Anything that turns a span into a list wants the same question asked of it.
 
-**A `DropdownMenu` composes every item it is given.** It scrolls, which makes it look lazy and it is
-not; a few thousand items freeze the screen before the menu appears. Magic's card type is the
-printed type line, so a downloaded catalogue has thousands of distinct ones. The filter menus put a
-`LazyColumn` inside, cap their height, and grow a box to narrow themselves past 24 values.
+**A `DropdownMenu` composes every item it is given, and a lazy list cannot go inside one.** It
+scrolls, which makes it look lazy and it is not; a few thousand items freeze the screen before the
+menu appears. Magic's card type is the printed type line, so a downloaded catalogue has thousands.
+Putting a `LazyColumn` in the menu fixes the freeze and crashes instead -- a menu's content sits in
+a column that is already vertically scrollable, so a lazy list inside it is a scrollable in a
+scrollable. The filter axes use an `AlertDialog` past ten values: a separate window, so nothing is
+nested, and the right shape for a long multi-select anyway.
 
 **A view model's scope is `Dispatchers.Main.immediate`, which a plain JVM test has not got.**
 Every `handleIntent` is silently dropped and the state never moves, which looks exactly like the bug

@@ -1,5 +1,8 @@
 package com.bitsycore.cardbrowser.ui.cards
 
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.AlertDialog
 import com.bitsycore.cardbrowser.core.game.RarityLadder
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.layout.widthIn
@@ -40,8 +43,6 @@ import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.SortDirection
 import com.bitsycore.cardbrowser.ui.cards.CardGridContract.toggle
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -150,13 +151,14 @@ fun FilterSheet(
 		// which is what the separate search screen used to be. A menu rather than the chips every
 		// other axis uses, because a game has five rarities and Pokemon has 486 sets.
 		if (state.setOptions.isNotEmpty()) {
-			Spacer(Modifier.height(16.dp))
-			SetFilterMenu(
-				options = state.setOptions,
+			// The same control as every other axis, and it has to be: Magic downloads 988 sets, so
+			// this is the longest list in the sheet and had its own menu that composed all of them.
+			FilterValues(
+				title = "Sets",
+				options = state.setOptions.map { FilterOption(it.id, it.name) },
 				selected = state.setIds,
-				onToggle = { vId ->
-					onSetsChanged(state.setIds.toggle(vId))
-				},
+				anyLabel = "Everything downloaded",
+				onToggle = { vId -> onSetsChanged(state.setIds.toggle(vId)) },
 				onClear = { onSetsChanged(emptySet()) },
 			)
 		}
@@ -360,7 +362,7 @@ fun ActiveFilterChips(
  * -- because the control below does not care what an axis is made of, and one control is the point.
  * The call sites convert back, which is three lines and is where the type is known.
  */
-private data class FilterOption(
+internal data class FilterOption(
 	val key: String,
 	val label: String,
 	val colour: Color? = null,
@@ -386,6 +388,8 @@ private fun FilterValues(
 	selected: Set<String>,
 	onToggle: (String) -> Unit,
 	onClear: () -> Unit,
+	/** What "nothing chosen" means on this axis. "Any" for a value, "everything" for a scope. */
+	anyLabel: String = "Any",
 ) {
 	if (options.size <= CHIP_LIMIT) {
 		FilterSection(title) {
@@ -402,15 +406,15 @@ private fun FilterValues(
 	}
 
 	Spacer(Modifier.height(16.dp))
+	var vIsOpen by remember { mutableStateOf(false) }
 	Column(Modifier.fillMaxWidth()) {
 		Text(title, style = MaterialTheme.typography.titleSmall)
 		Spacer(Modifier.height(6.dp))
-		var vIsOpen by remember { mutableStateOf(false) }
 		Row(verticalAlignment = Alignment.CenterVertically) {
 			OutlinedButton(onClick = { vIsOpen = true }) {
 				Text(
 					when (selected.size) {
-						0 -> "Any"
+						0 -> anyLabel
 						1 -> options.firstOrNull { it.key in selected }?.label ?: "1 chosen"
 						else -> "${selected.size} chosen"
 					},
@@ -418,118 +422,123 @@ private fun FilterValues(
 				Icon(AppIcons.ArrowDropDown, contentDescription = null)
 			}
 			if (selected.isNotEmpty()) {
-				TextButton(onClick = onClear) { Text("Any") }
+				TextButton(onClick = onClear) { Text(anyLabel) }
 			}
 		}
-		DropdownMenu(expanded = vIsOpen, onDismissRequest = { vIsOpen = false }) {
-			// A box to narrow the list, once there are more values than anyone will scroll.
-			//
-			// Magic is the case that forced it. Its card type is the printed type line -- "Legendary
-			// Creature -- Human Wizard" -- so a downloaded catalogue has thousands of distinct
-			// values, and a menu of thousands is not a control whatever its scrolling is like.
-			var vNarrow by remember(vIsOpen) { mutableStateOf("") }
-			if (options.size > SEARCHABLE_MENU) {
-				OutlinedTextField(
-					value = vNarrow,
-					onValueChange = { vNarrow = it },
-					singleLine = true,
-					label = { Text("Narrow") },
-					modifier = Modifier
-						.padding(horizontal = 12.dp, vertical = 4.dp)
-						.widthIn(min = 220.dp),
-				)
-			}
-			val vShown = if (vNarrow.isBlank()) {
-				options
-			} else {
-				options.filter { it.label.contains(vNarrow, ignoreCase = true) }
-			}
-			// Lazy, and capped. `DropdownMenu`'s own column composes every item it is given, so a
-			// few thousand of them is a frozen screen before the menu has even appeared.
-			LazyColumn(modifier = Modifier.heightIn(max = MENU_HEIGHT)) {
-				items(vShown, key = { it.key }) { vOption ->
-					DropdownMenuItem(
-						text = { Text(vOption.label) },
-						onClick = { onToggle(vOption.key) },
-						leadingIcon = vOption.colour?.let { vColour ->
-							{
+	}
+	if (vIsOpen) {
+		FilterValueDialog(
+			title = title,
+			options = options,
+			selected = selected,
+			onToggle = onToggle,
+			onDismiss = { vIsOpen = false },
+		)
+	}
+}
+
+/**
+ * The long-axis picker: a dialog, not a menu.
+ *
+ * It was a `DropdownMenu` with a lazy list inside, and that is two problems stacked. A menu puts its
+ * content in a column that is already vertically scrollable, so a lazy list inside it is a
+ * scrollable in a scrollable -- which crashed. And a popup anchored to a chip is the wrong shape for
+ * two thousand values on a phone whatever its scrolling does: it opens over the control that
+ * summoned it, sized by its content.
+ *
+ * A dialog is a separate window, so nothing is nested, the list is an ordinary `LazyColumn`, and
+ * there is room for a title, a box to narrow by, and a Done button. That last matters more than it
+ * sounds: this is multi-select, and a menu that dismisses on the first tap makes choosing three
+ * values three round trips.
+ */
+@Composable
+private fun FilterValueDialog(
+	title: String,
+	options: List<FilterOption>,
+	selected: Set<String>,
+	onToggle: (String) -> Unit,
+	onDismiss: () -> Unit,
+) {
+	var vNarrow by remember { mutableStateOf("") }
+	val vShown = if (vNarrow.isBlank()) {
+		options
+	} else {
+		options.filter { it.label.contains(vNarrow, ignoreCase = true) }
+	}
+	AlertDialog(
+		onDismissRequest = onDismiss,
+		title = { Text(title) },
+		confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+		text = {
+			Column {
+				if (options.size > SEARCHABLE_MENU) {
+					OutlinedTextField(
+						value = vNarrow,
+						onValueChange = { vNarrow = it },
+						singleLine = true,
+						label = { Text("Narrow") },
+						modifier = Modifier.fillMaxWidth(),
+					)
+					Spacer(Modifier.height(8.dp))
+				}
+				// Lazy, because Magic's card type is the printed type line -- "Legendary Creature
+				// -- Human Wizard" -- and a downloaded catalogue has thousands of distinct ones. A
+				// column that composes them all freezes the screen before the dialog appears.
+				//
+				// `distinctBy` is not paranoia: `LazyColumn` throws on a duplicate key rather than
+				// degrading, and these keys come from whatever a provider wrote.
+				LazyColumn(modifier = Modifier.heightIn(max = LIST_HEIGHT)) {
+					items(vShown.distinctBy { it.key }, key = { it.key }) { vOption ->
+						Row(
+							modifier = Modifier
+								.fillMaxWidth()
+								.clickable { onToggle(vOption.key) }
+								.padding(vertical = 10.dp),
+							verticalAlignment = Alignment.CenterVertically,
+						) {
+							Checkbox(
+								checked = vOption.key in selected,
+								onCheckedChange = { onToggle(vOption.key) },
+							)
+							vOption.colour?.let { vColour ->
 								Box(
 									Modifier
 										.size(14.dp)
 										.clip(CircleShape)
 										.background(vColour),
 								)
+								Spacer(Modifier.size(8.dp))
 							}
-						},
-						trailingIcon = {
-							if (vOption.key in selected) {
-								Icon(AppIcons.Check, contentDescription = "Included")
-							}
-						},
-					)
-				}
-				if (vShown.isEmpty()) {
-					item {
-						Text(
-							text = "Nothing matches \u201c$vNarrow\u201d.",
-							style = MaterialTheme.typography.bodySmall,
-							color = MaterialTheme.colorScheme.onSurfaceVariant,
-							modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-						)
+							Text(vOption.label)
+						}
+					}
+					if (vShown.isEmpty()) {
+						item {
+							Text(
+								text = "Nothing matches \u201c$vNarrow\u201d.",
+								style = MaterialTheme.typography.bodySmall,
+								color = MaterialTheme.colorScheme.onSurfaceVariant,
+								modifier = Modifier.padding(vertical = 12.dp),
+							)
+						}
 					}
 				}
 			}
-		}
-	}
+		},
+	)
 }
 
-/** How tall a filter menu may get before it scrolls. */
-private val MENU_HEIGHT = 360.dp
+/** How tall the list inside a filter dialog may get before it scrolls. */
+private val LIST_HEIGHT = 400.dp
 
-/** Past this many values a menu grows a box to narrow itself with. */
+/** Past this many values a dialog grows a box to narrow itself with. */
 private const val SEARCHABLE_MENU = 24
 
-/** Past this many values an axis is a menu rather than a row of chips. */
+/**
+ * Past this many values an axis is a dialog rather than a row of chips.
+ *
+ * Chips show everything at once, which is what makes them worth the space: five rarities are read
+ * in a glance. Past about ten they become five wrapped rows that push the next axis off the screen.
+ */
 private const val CHIP_LIMIT = 10
 
-@Composable
-private fun SetFilterMenu(
-	options: List<CardGridContract.SetChoice>,
-	selected: Set<String>,
-	onToggle: (String) -> Unit,
-	onClear: () -> Unit,
-) {
-	var vIsOpen by remember { mutableStateOf(false) }
-	Column(Modifier.fillMaxWidth()) {
-		Text("Sets", style = MaterialTheme.typography.titleSmall)
-		Spacer(Modifier.height(6.dp))
-		Row(verticalAlignment = Alignment.CenterVertically) {
-			OutlinedButton(onClick = { vIsOpen = true }) {
-				Text(
-					when (selected.size) {
-						0 -> "Everything downloaded"
-						1 -> options.firstOrNull { it.id in selected }?.name ?: "1 set"
-						else -> "${selected.size} sets"
-					},
-				)
-				Icon(AppIcons.ArrowDropDown, contentDescription = null)
-			}
-			if (selected.isNotEmpty()) {
-				TextButton(onClick = onClear) { Text("Everything") }
-			}
-		}
-		DropdownMenu(expanded = vIsOpen, onDismissRequest = { vIsOpen = false }) {
-			options.forEach { vSet ->
-				DropdownMenuItem(
-					text = { Text(vSet.name) },
-					onClick = { onToggle(vSet.id) },
-					trailingIcon = {
-						if (vSet.id in selected) {
-							Icon(AppIcons.Check, contentDescription = "Included")
-						}
-					},
-				)
-			}
-		}
-	}
-}
