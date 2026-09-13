@@ -563,6 +563,54 @@ private fun ActiveSearchFilterChips(
 }
 
 /**
+ * The sets to search, as a menu that stays open while several are ticked.
+ *
+ * Multi-select, like every other axis -- the entries are an OR. It closes on the scrim rather than
+ * on a choice, because choosing one and having to reopen for the second is what makes a menu worse
+ * than chips; this way it is only longer, which is the point of it.
+ */
+@Composable
+private fun SetFilterMenu(
+	options: List<SearchContract.SetChoice>,
+	selected: Set<String>,
+	onToggle: (String) -> Unit,
+	onClear: () -> Unit,
+) {
+	var vIsOpen by remember { mutableStateOf(false) }
+	Column(Modifier.fillMaxWidth()) {
+		Text("Sets", style = MaterialTheme.typography.titleSmall)
+		Spacer(Modifier.height(6.dp))
+		Row(verticalAlignment = Alignment.CenterVertically) {
+			OutlinedButton(onClick = { vIsOpen = true }) {
+				Text(
+					when (selected.size) {
+						0 -> "Every set you have"
+						1 -> options.firstOrNull { it.id in selected }?.name ?: "1 set"
+						else -> "${selected.size} sets"
+					},
+				)
+				Icon(AppIcons.ArrowDropDown, contentDescription = null)
+			}
+			if (selected.isNotEmpty()) {
+				TextButton(onClick = onClear) { Text("Every set") }
+			}
+		}
+		DropdownMenu(expanded = vIsOpen, onDismissRequest = { vIsOpen = false }) {
+			options.forEach { vSet ->
+				val vIsSelected = vSet.id in selected
+				DropdownMenuItem(
+					text = { Text(vSet.name) },
+					onClick = { onToggle(vSet.id) },
+					trailingIcon = {
+						if (vIsSelected) Icon(AppIcons.Check, contentDescription = "Searching this set")
+					},
+				)
+			}
+		}
+	}
+}
+
+/**
  * The filters themselves, in a sheet.
  *
  * A sheet rather than a panel that unfolds in place, which is what this was: six controls pushed in
@@ -597,16 +645,19 @@ private fun SearchFilterSheet(
 		// Which sets to look in. Empty means every set with something stored, which is what a
 		// search from the set list starts as; opening the search from inside a set starts with
 		// that one ticked, and un-ticking it widens the search rather than leaving the screen.
+		//
+		// A menu rather than the chips every other axis uses, because this axis is long: a game
+		// has five rarities and Pokémon has 486 sets, and a chip each would be the whole sheet.
 		if (state.setOptions.isNotEmpty()) {
-			FilterSection("Sets") {
-				state.setOptions.forEach { vSet ->
-					FilterValueChip(vSet.name, vSet.id in state.filter.setIds) {
-						onFilterChanged(
-							state.filter.copy(setIds = state.filter.setIds.toggle(vSet.id)),
-						)
-					}
-				}
-			}
+			Spacer(Modifier.height(16.dp))
+			SetFilterMenu(
+				options = state.setOptions,
+				selected = state.filter.setIds,
+				onToggle = { vId ->
+					onFilterChanged(state.filter.copy(setIds = state.filter.setIds.toggle(vId)))
+				},
+				onClear = { onFilterChanged(state.filter.copy(setIds = emptySet())) },
+			)
 		}
 
 		// Several values on one axis are an OR, as they are in the card grid: tapping adds, tapping

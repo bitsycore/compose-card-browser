@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
+import com.bitsycore.cardbrowser.data.cache.CardSearchFilter
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.cardbrowser.data.repository.SearchScope
@@ -38,6 +39,10 @@ class SearchViewModel(
 ) : PulseViewModel<SearchContract.UiState, SearchContract.Intent, SearchContract.Effect>(
 	initialState = SearchContract.UiState(
 		game = mRegistry.profileFor(mArgs.game),
+		// Ticked from the start rather than dispatched once the sets load: dispatching it started
+		// a second search over the first, and the first frame would otherwise show the search as
+		// covering the whole game when it does not.
+		filter = CardSearchFilter(setIds = setOfNotNull(mArgs.setId)),
 		// Read synchronously from the registry, so the "only searching what you have already
 		// downloaded" notice is right on the first frame rather than appearing a moment later.
 		isProviderSearchable = mRegistry.resolve(mArgs.game)?.capabilities?.data?.crossSetSearch == true,
@@ -63,12 +68,22 @@ class SearchViewModel(
 		mRegistry.resolve(mArgs.game)?.capabilities?.data?.crossSetSearch == true
 
 	init {
+		// The facets first, and in their own coroutine.
+		//
+		// They are one indexed query and they are what the filter sheet is made of, so nothing
+		// slower may come before them. They used to sit behind `loadSets`, which waits for a
+		// catalogue -- network included -- and then checks a file per set; on a game with hundreds
+		// of sets the sheet was empty but for its text field until all of that finished, and a
+		// screen that had been opened once and come back to looked fine because the second pass
+		// had everything warm. That is the whole bug.
+		viewModelScope.launch {
+			mPreferences.load()
+			dispatch(SearchContract.Intent.FacetsLoaded(mRepository.searchFacets(mArgs.game)))
+		}
+
 		viewModelScope.launch {
 			mPreferences.load()
 			loadSets()
-			// What this game's stored cards actually contain, so the filter list offers nothing
-			// that would match nothing.
-			dispatch(SearchContract.Intent.FacetsLoaded(mRepository.searchFacets(mArgs.game)))
 		}
 	}
 
@@ -153,9 +168,9 @@ class SearchViewModel(
 		mSets = vLatest.orEmpty()
 
 		// Which sets the filter may point at: the ones with something stored, because a set nobody
-		// has downloaded cannot match and a chip for it would be a filter that always answers
-		// nothing. Opened from inside a set, that set starts ticked -- a filter rather than a
-		// scope, so it can be removed to widen the search without leaving the screen.
+		// has downloaded cannot match and an entry for it would be a filter that always answers
+		// nothing. A file check per set, which is why nothing on screen waits for it -- the set
+		// this search was opened from is already ticked, from the initial state.
 		val vSaved = mRepository.savedSetIds(mArgs.game, mSets, vLanguage)
 		dispatch(
 			SearchContract.Intent.SetOptionsLoaded(
@@ -163,15 +178,6 @@ class SearchViewModel(
 					.map { SearchContract.SetChoice(it.id.qualified, it.name) },
 			),
 		)
-		mArgs.setId?.takeIf { vId -> mSets.any { it.id.qualified == vId } }?.let { vId ->
-			if (stateFlow.value.filter.setIds.isEmpty()) {
-				dispatch(
-					SearchContract.Intent.FilterChanged(
-						stateFlow.value.filter.copy(setIds = setOf(vId)),
-					),
-				)
-			}
-		}
 	}
 
 	private fun startSearch() {
