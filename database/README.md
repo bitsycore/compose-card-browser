@@ -1,5 +1,7 @@
 # `:database` — the SQLite card store
 
+Part of CardBrowser. See [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) for where this sits.
+
 Complete sets and everything derived from them — pins, labels, card counts, the eviction budget —
 live here in one SQLite database. The small metadata scopes (set lists, card detail, search pages,
 per-set languages) stay in `MetadataCache`'s file cache, because they are few and tiny and the
@@ -89,9 +91,11 @@ made kept records anonymous.
 - **Migrations.** The schema has no version beyond SQLDelight's own. The switchover did not need
   one — a pre-store install is wiped once, by `CacheReconciler` — but the *next* schema change
   will.
-- **Neither phone driver has ever run.** `AndroidSqliteDriver` takes its `Context` from
-  `platformModule()` and `NativeSqliteDriver` compiles for both iOS targets, but the only driver
-  that has opened a real file is the desktop one. That one is covered: `CardStoreRecoveryTest`
-  opens, reopens, corrupts, truncates and recovers an actual database on disk — and the reopen
-  case exists because the first version of the desktop driver called `Schema.create`
-  unconditionally, which works on a fresh install and throws on every launch after it.
+- **The Android driver has opened a real file once, and crashed.** `PRAGMA journal_mode=WAL`
+  returns a row, and Android's `execute` refuses any statement that does — see the pragma trap in
+  [CLAUDE.md](../CLAUDE.md). That is fixed and the fix has **not** been confirmed on a device.
+  `NativeSqliteDriver` compiles for both iOS targets and has never opened anything.
+- **The desktop driver is the one that is covered.** `CardStoreRecoveryTest` opens, reopens,
+  corrupts, truncates and recovers an actual database on disk — and the reopen case exists because
+  the first version of that driver called `Schema.create` unconditionally, which works on a fresh
+  install and throws on every launch after it.

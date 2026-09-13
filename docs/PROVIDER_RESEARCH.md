@@ -6,6 +6,12 @@ response, not from documentation alone. Dates are when the check ran.
 Nothing is added to the app on the strength of a documentation page. Where a check failed, the game
 is not shipped and the reason is recorded here rather than papered over with a stub.
 
+**This is a log, not a statement of current truth.** Every entry is what was true on the date beside
+it; a source can change, and several have. For what the app *declares* today — which is what it
+acts on — see [PROVIDERS.md](PROVIDERS.md), which is generated from the running graph. Where the
+two differ, the declaration is the app's behaviour and this file is the history. Altered is the
+example: measured at two languages here, declared at five after three more were found working.
+
 ## Summary
 
 | Game | Source | Verified | Languages served | Shipped |
@@ -14,7 +20,7 @@ is not shipped and the reason is recorded here rather than papered over with a s
 | Pokémon | TCGdex | 2026-09-08 | all eleven the app knows | yes |
 | Magic: The Gathering | Scryfall | 2026-09-08 | all eleven the app knows | yes |
 | One Piece | OPTCG API | 2026-09-08 | en | yes |
-| Altered | Altered TCG Card Database (community mirror) | 2026-09-08 | fr, en | yes |
+| Altered | Altered TCG Card Database (community mirror) | 2026-09-08 | fr, en (de, es, it found later) | yes |
 | Cyberpunk TCG | TCGCSV category 92 | 2026-09-09 | none stated | yes |
 | Yu-Gi-Oh! | YGOPRODeck | 2026-09-08 | de, en, fr, it, ja, ko, pt | yes |
 | Wuthering Waves TCG | UCP `mc-api.ucp-jp.com` | 2026-09-09 | ja, zh-cn, ko | yes, bundled |

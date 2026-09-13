@@ -1,682 +1,188 @@
 # Architecture
 
-How CardBrowser is laid out, and what it costs to add a provider.
+How CardBrowser is put together. The provider and game contracts have their own documents —
+[PROVIDERS.md](PROVIDERS.md) and [GAMES.md](GAMES.md) — and this one covers everything around them:
+the modules, how data flows from a source to a screen, what is cached where, and the pattern every
+screen follows.
 
 ---
 
 ## Modules
 
-Five, chosen so that each boundary stops something specific from leaking. Not one per class.
+24 Gradle modules. The shape is one module per *thing that can be swapped*: a game, a source, the
+store.
 
 ```
-:core                    domain vocabulary + the provider contract + the GameProfile interface.
-                         Names no game. No Ktor. No Okio. No Compose.
-   ↑
-:data                    HTTP stack, the two caches, preferences, repositories.
-   ↑                     No Compose.
-:games:api               what a game module implements beyond GameProfile: GameArt.
-   ↑                     The one place Compose's resources runtime is allowed below the UI.
-:games:*                 one module per game: its vocabulary, rarity ladder, Cardmarket
-   ↑                     segment, logo and accent. riftbound, pokemon, magic, onepiece,
-                         altered, yugioh, wutheringwaves, lorcana, cyberpunk, wowtcg.
-                         Knows no endpoint.
-:providers:*             one module per adapter: endpoints, DTOs, mapping, its own quirks.
-   ↑                     riftcodex, tcgdex, scryfall, optcg, altered, ygoprodeck, wuwa,
-                         tcgcsv. Each depends on exactly one :games:* module and names it
-                         in its own type -- except :providers:tcgcsv, which is one adapter
-                         over one API serving three games and therefore ships three
-                         CardProvider classes keyed by TCGplayer category. None of them
-                         knows another provider exists.
-:composeApp              Compose screens, Pulse view models, Koin wiring.
-   ↑                     Targets android + desktop + iosArm64/iosSimulatorArm64.
-:androidApp              an Activity and an Application. Nothing else.
+:core         The domain. Cards, sets, languages, availability, the GameProfile and CardProvider
+              contracts. No Ktor, no Okio, no Compose, and no game or provider names.
+
+:data         Everything between a source and a screen: the Ktor stack and its per-source policy,
+              the metadata file cache, preferences, the repository, the download queue. No Compose.
+
+:database     The SQLite card store. Schema, per-platform driver, eviction. No game names.
+
+:games:api    GameArt, and with it the Compose resources dependency that :core must not have.
+:games:*      Ten modules, one per game: a GameProfile, a GameArt, a logo.
+
+:providers:*  Eight modules, ten adapters. Endpoints, DTOs, mapping, and that source's quirks.
+
+:composeApp   Screens, Pulse view models, Koin wiring, navigation.
+:androidApp   An Activity and an Application. Nothing else.
 ```
 
-**Games and providers are different axes, and the module graph says so.** A game is what the *rules*
-call things -- Riftbound's cost axis is Energy whoever supplies the data. A provider is where the
-data comes from. Splitting them is what lets a second Riftbound source inherit the ladder, the
-vocabulary and the marketplace slug for free, and it is why `:core` can hold the mechanisms without
-holding a list of games.
+Dependencies point inwards. `:providers:*` and `:games:*` depend on `:core`; `:composeApp` depends
+on everything; nothing depends on `:composeApp`.
 
-**`:core` names no game.** There is no `Game` enum. A game's identity is a `GameId("riftbound")`
-string declared by its module, and what games *exist* is whatever the routing table routes. That
-replaced four separate tables keyed by a closed enum -- vocabulary, rarity ladders, Cardmarket
-slugs and logos -- living in `:core` and `:composeApp` and all needing to be found when a game was
-added. Three were exhaustive `when`s the compiler enforced; the fourth returned `null` for an
-unknown game and failed silently.
-
-The trade is stated plainly: dropping the enum drops compile-time exhaustiveness. What replaced it
-is that there is nothing left to be exhaustive *over* -- every per-game fact now lives in the game's
-own module, so a game cannot be half-added. The one thing a new module can still be left out of is
-the art list in `AppModule`, and `AppModuleTest` asserts that instead.
-
-`iosApp/` holds the Swift shell; the desktop entry point is `composeApp/src/desktopMain`.
-
-**Why `:core` has no dependencies worth speaking of.** A provider adapter compiles against `:core`
-and therefore inherits none of the app's transport or storage choices. A future adapter that wants a
-different HTTP client is not fighting the module graph to get one.
-
-**Why `:games:api` exists at all.** A game module bundles its own logo, and a bundled asset that
-works on JVM, Android *and* both iOS targets means Compose Multiplatform resources -- Kotlin
-Multiplatform has no standard resource API and a klib carries no files. That would drag the Compose
-runtime into `:core` if `GameProfile` carried a `DrawableResource`, so it does not: `GameProfile` is
-pure rules and lives in `:core`, and `GameArt` is presentation and lives here. It is a small module
-whose entire job is to confine one dependency.
-
-**Why `:androidApp` is separate.** AGP 9 refuses `com.android.application` in the same subproject as
-the Kotlin Multiplatform plugin, and `com.android.library` is deprecated for KMP and slated for
-removal in AGP 10. The shared modules use `com.android.kotlin.multiplatform.library`.
+`LayeringTest` scans `:core` and `:data` with comments stripped and fails if either mentions a game
+or a source by name.
 
 ---
 
-## The five concepts the model keeps apart
+## The five distinctions the model keeps apart
 
-Conflating any two of these is how a card browser starts lying to people.
+These are in `:core` and everything else follows from them.
 
-| Concept | Type | Note |
-|---|---|---|
-| Game and regional release | `Game`, `CardSet` | Regional releases stay separate unless a provider states an explicit mapping. |
-| Card identity | `CardIdentity?` | **Nullable.** Present only when a provider states which printings are the same card. Never inferred from a name. |
-| Set printing + collector number | `CardPrinting` | The unit the grid and detail screen show. Collector numbers are **strings**. |
-| Artwork / treatment | `Artwork`, `ArtworkTreatment` | One tile per distinct artwork. |
-| Finish | `Finish`, `FinishCoverage` | A choice inside detail, never a separate tile. |
-| Printing language | `CardLanguage`, `LanguageCoverage` | Also a choice inside detail. |
+**A claim is not a confirmation.** `ProviderCapabilities.data.languages` is what a source says it
+can serve. `CardPrinting.languages.confirmed` is what it actually served. A menu built from the
+first is a menu of things worth asking for; a list built from the second is a fact.
 
-### Availability is three-valued, and this is load-bearing
+**Availability is three-valued.** `LanguageCoverage` and `FinishCoverage` carry `confirmed` and
+`absent` sets, and anything in neither is *unknown*. A source with no language field is not telling
+you a French printing does not exist. Collapsing this to a boolean is how a browser starts lying.
 
-```kotlin
-enum class Availability { AVAILABLE, UNAVAILABLE, UNKNOWN }
-```
+**Ids carry their provider.** `SourceId(ProviderId("scryfall"), "vow")` renders as
+`scryfall:vow`. Every id in the app — sets, cards, cache keys, store rows — is source-qualified, so
+two sources can never collide and any id can be routed back to the adapter that issued it without a
+lookup table.
 
-`UNKNOWN` is the whole reason the type exists. A provider with no language field is not telling us a
-French printing does not exist — it is telling us nothing. Collapsing `UNKNOWN` into `UNAVAILABLE`
-would have the app assert something it cannot know; collapsing it into `AVAILABLE` would offer a
-selection it cannot honour. `LanguageCoverage` and `FinishCoverage` therefore carry *confirmed* and
-*absent* sets separately, and anything in neither is unknown.
+**A game fact is not a source fact.** See [GAMES.md](GAMES.md).
 
-The UI reads this directly: only `AVAILABLE` is selectable, `UNAVAILABLE` shows as "not printed",
-and `UNKNOWN` shows as "unknown" with a sentence explaining that the database does not record it.
-
-### Ids carry their provider
-
-```kotlin
-SourceId(provider = ProviderId("riftcodex"), local = "OGN").qualified  // "riftcodex:OGN"
-```
-
-Two providers may both call a set `OGN`. Nothing in this app compares ids across providers, and this
-type is what makes that enforceable rather than merely intended — a bare provider-local string never
-escapes an adapter. There is no global or cross-provider identity anywhere.
-
----
-
-## The provider contract
-
-[`CardProvider`](../core/src/commonMain/kotlin/com/bitsycore/cardbrowser/core/provider/CardProvider.kt)
-is small, and the game it serves is in its **type** rather than in a parameter:
-
-```kotlin
-interface CardProvider<out G : GameProfile> {
-    val id: ProviderId
-    val displayName: String
-    val game: G
-    val capabilities: ProviderCapabilities
-
-    suspend fun listSets(language: CardLanguage?): List<CardSet>
-    suspend fun listCards(request: CardPageRequest): CardPage
-    suspend fun cardDetail(id: SourceId, language: CardLanguage?): CardPrinting?
-
-    // Both defaulted, so an adapter implements one only when its source can do better
-    // than the default. See § "Adding a provider".
-    suspend fun confirmLanguages(setId: SourceId, candidates: Set<CardLanguage>): Set<CardLanguage>
-    suspend fun searchAllSets(request: CardSearchRequest): CardPage
-}
-```
-
-A source that can hand over its whole catalogue in one download additionally implements
-[`BulkCatalogue`](../core/src/commonMain/kotlin/com/bitsycore/cardbrowser/core/provider/BulkCatalogue.kt),
-which is optional and separate for exactly that reason: two of the eight sources have one.
-
-### Capabilities describe the source, coverage describes the fact
-
-`ProviderCapabilities` is the ceiling: what this provider *can* supply, stated once. Whether a given
-printing actually exists in French is `LanguageCoverage` on that printing. The UI uses capabilities
-to decide which controls to draw at all, and coverage to decide what each one may claim.
-
-The most consequential field is the filtering split:
-
-```kotlin
-FilterSupport(
-    remote    = emptySet(),                                  // the provider does these
-    localOnly = setOf(TEXT, DOMAIN, CARD_TYPE, RARITY, COST),  // the app does these, in memory
-)
-```
-
-A field in neither set is **not offered by the UI at all**. That is how a source with no finish
-data ends up with no finish filter, without a single `if (provider is ...)` anywhere.
-
-**No shipped adapter declares a remote filter**, and every one of them writes `remote = emptySet()`.
-The mechanism is kept for a source that can genuinely narrow server-side, but the repository fetches
-and caches a set whole for offline use, and filtering that in memory is instant where a round trip
-per filter chip is not.
-
-### Errors, and cancellation
-
-`ProviderError` is a closed set — `Offline`, `Timeout`, `RateLimited`, `ServerError`, `BadRequest`,
-`MalformedResponse`, `Unknown` — with an `isTransient` flag that governs both retries and whether
-the UI offers a "try again" button.
-
-**Cancellation is deliberately not in that set.** `mapProviderErrors` rethrows
-`CancellationException` first and untouched. A cancelled request is not a failed one: when the user
-changes set, the in-flight load for the previous set unwinds through there, and turning that into an
-error would paint a failure over the screen they just opened.
-
----
-
-## Adding a provider
-
-Four things. Nothing else, and in particular no change to any screen.
-
-### 0. The game, if it is new
-
-A game with no `:games:*` module gets one first: `settings.gradle.kts`, a build file copied from a
-sibling, and one object.
-
-```kotlin
-object RiftboundGame : GameProfile {
-	override val id = GameId("riftbound")
-	override val displayName = "Riftbound"
-	override val vocabulary = GameVocabulary(domain = "Domain", cost = "Energy", …)
-	override val rarityLadder = listOf("Common", "Uncommon", "Rare", "Epic", "Showcase")
-	override val cardmarketSlug = "Riftbound"
-}
-```
-
-Every default is a real answer rather than a placeholder. `rarityLadder` defaults to empty, which
-means "no honest order is known" -- Pokémon declares exactly that, and says why. `cardmarketSlug`
-defaults to `null`, which suppresses the marketplace link rather than shipping a guessed URL.
-
-A source that already serves an existing game skips this step entirely.
-
-### 1. The adapter
-
-A new module under `providers/`, applying the same three plugins as
-`providers/riftcodex/build.gradle.kts`, depending on `:core` (api) and `:data` (implementation).
-
-Inside it: DTOs, a mapper, and a `CardProvider`. **DTOs never leave the module** — nothing above it
-should know a field is called `riftbound_id`. Use `mapProviderErrors` so its failures speak the same
-vocabulary as everything else.
-
-Declare capabilities honestly. If the provider has no finish field, `finishes = false` and every
-printing gets `FinishCoverage()`. Do not invent a non-foil default.
-
-### 2. Koin registration
-
-One line in [`AppModule.kt`](../composeApp/src/commonMain/kotlin/com/bitsycore/cardbrowser/di/AppModule.kt):
-
-```kotlin
-single { ScryfallProvider(mClient = get()) } bind CardProvider::class
-```
-
-`ProviderRegistry` is built from `getAll<CardProvider>()`, so it picks the new one up.
-
-**Use `bind`, not `single<CardProvider> { … }`.** The latter gives every adapter the same primary
-type and no qualifier, so Koin keeps only the last one registered — `getAll` then returns a single
-provider and the registry throws at startup with *"routing table names providers that are not
-registered"*. This is not hypothetical: it is how the seven-provider build first crashed. It
-compiles, every unit test passes, and every adapter works in isolation, because nothing about it is
-visible until the graph is assembled. `AppModuleTest` assembles the real graph and asserts the
-wiring for exactly this reason.
-
-### 3. A routing entry
-
-In the same file:
-
-```kotlin
-val providerRoutes = listOf(
-    ProviderRoute(game = RiftboundGame.id, provider = RiftcodexProvider.PROVIDER_ID),
-    ProviderRoute(game = MagicGame.id,     provider = ScryfallProvider.PROVIDER_ID),
-)
-```
-
-The game is named by its profile's `GameId`, not by an enum constant — there is no enum. The
-registry checks at construction that each route's game matches the profile the named provider
-actually declares, so a route pointing at the wrong adapter fails at startup rather than serving the
-wrong catalogue.
-
-A second source for a game that already has one, filling a language gap, is the same shape with a
-`language`:
-
-```kotlin
-ProviderRoute(RiftboundGame.id, SomeKoreanSource.PROVIDER_ID, language = CardLanguage.KOREAN)
-```
-
-Resolution picks a language-specific route when one matches and the game-wide route otherwise.
-**One route wins and that is the answer.** There is no merging of two sources into one result list
-and no failover when the first errors — either would make it impossible to say honestly where a
-record came from, and a failover would quietly change the meaning of every id on screen.
-
-`ProviderRegistry.games` is derived from the routing table, so a game with no route never appears in
-the UI. There are no dead menu entries.
-
-### 4. Contract and mapping checks
-
-Copy the shape of `RiftcodexProviderTest`: real captured JSON, id distinctness, coverage claims
-matching what the provider actually sends, pagination, and the error mapping. Add a
-`*LiveSmokeTest` under `desktopTest` plus a `liveProviderTest` task; the ordinary test run excludes
-them by name.
-
-Two assertions have earned their place in every adapter's tests, because each caught a real bug:
-
-- **Ids must be unique across a page.** `LazyVerticalGrid` throws outright on a repeated key rather
-  than degrading, so a provider that issues one is a crash rather than a cosmetic problem. The
-  worked example is Wuthering Waves, whose printed codes are not unique -- see `WuwaCatalogueTest`
-  for the assertion and CLAUDE.md for the trap. No count here on purpose: the snapshot grows, and
-  the last two numbers written down went stale within a fortnight.
-- **Omitting a language gets the app's *first preference*, not English.** `resolveLanguage(null)`
-  walks `CardLanguage.PREFERENCE_ORDER`, so a source that carries French answers in French. A test
-  written without an explicit language gets French names back and looks broken when it is not.
-- **A provider's own tag for a language is the provider's business.** `CardLanguage.code` is this
-  app's tag; where a source disagrees — Scryfall writes Chinese `zhs`/`zht` — the adapter maps it and
-  `CardLanguage.fromCode` reads the source's spelling back through `aliases`. Nothing about one
-  source's spelling reaches the enum.
-
-### What a provider no longer has to do
-
-Three things went away when the game moved into the type:
-
-- **`capabilities.games`.** A provider serves the game in its own type argument. The registry checks
-  the routing table agrees with it at construction, so a route pointing a game at the wrong adapter
-  is a startup failure with a clear message rather than a screen that loads forever.
-- **`require(game == …)` at the top of every method.** Around twenty of those, all restating
-  something the compiler already knew. The `game` parameter they checked is gone from `listSets`,
-  and `CardSearchRequest` no longer carries one either.
-- **Its own rarity ladder or vocabulary.** Those belong to the game, not the source.
-
-### What you do *not* have to touch
-
-`SetListScreen`, `CardGridScreen`, `CardDetailScreen`, `FilterSheet`, `CardRepository`,
-`MetadataCache`. A second provider for an existing game reaches the screens through the same
-`CardPrinting` and the same capabilities, and the filter sheet redraws itself from what the new
-provider declares.
-
-A **new game** needs a `:games:*` module and an entry in the art list. Nothing shared changes, and
-there is no table anywhere to forget to extend — every per-game fact is in that one module.
-
-The *fields* stay shared. `CardFilterField` has one `DOMAIN`, not seven, and `CardAttributes` has
-three deliberately unnamed numeric slots rather than a type per game, because only the *label*
-differs and a per-game field would have to be threaded through the query type, the cache format and
-the filter engine for no gain. `GameVocabulary` supplies the word; a game with no such axis leaves
-it `null` and the sheet omits the section.
-
-Six games were added before this split, each touching four files across two modules. The seventh
-would touch one module.
-
----
-
-## Branding: what belongs to a game, and what belongs to a provider
-
-Two kinds of artwork, and they live in different places on purpose.
-
-**A game's logo belongs to the game.** Scryfall is not Magic, and TCGdex is not Pokémon; if a second
-provider started serving Pokémon, the logo would not change. So it lives in that game's own module,
-as a `GameArt` beside its `GameProfile`, with the image file next to both — the same place its
-rarity ladder and its vocabulary live, for the same reason.
-
-`GameArt` is declared in `:games:api` rather than `:core` only because it holds a
-`DrawableResource`, and `:core` has no Compose in it — which is what lets a provider adapter be
-written without inheriting the app's UI stack. `:composeApp` reaches the art through
-`GameArtRegistry`, and never enumerates games itself.
-
-**A set's symbol belongs to the provider**, because it is part of the set record. `CardSet.symbol`
-is populated by whichever mapper has one to give, and three of the eight do. That field carries an
-`isMonochrome` flag alongside the URL, because whether an asset has a colour of its own is a fact
-about the asset that only the provider knows: Scryfall's SVGs have no `fill` and default to black,
-while TCGdex's logos are full-colour wordmarks that must never be recoloured.
-
-The test for which side a thing falls on is simple: if swapping the provider would change the
-image, it belongs to the provider.
-
----
-
-## Cross-set search, and why its scope is part of the answer
-
-`CardRepository.searchAllSets` returns a `CardSearchResults` carrying a `SearchScope`, and the
-screen shows which one it got. There are two:
-
-- `REMOTE_ALL_SETS` — the provider searched its whole catalogue.
-- `LOCAL_CACHED_SETS` — only the sets already on this device were searched, because the provider
-  declares `crossSetSearch = false`.
-
-Collapsing these into one "results" list would be the app's most quietly damaging lie. An empty
-remote search means the card does not exist. An empty local search almost always means the user has
-never opened the set it is in — and on a fresh install, *every* local search is empty. The screen
-says which happened, and how many of the game's sets were actually looked at.
-
-A search page **is** cached, under its own `CacheScope.Search` — the normalised needle, the
-provider, the language and the page — with the same TTL as card data. Its own scope, and that is
-the point: a slice of many sets under one query must never be reachable where a complete set is
-expected, and a sealed scope makes that a type error rather than a convention.
+**A page is not a set.** `CardPage` is one response. `CardSet` plus a complete card list is a set.
+Only the second is cached, and only the second can be filtered honestly.
 
 ---
 
 ## Data flow
 
 ```
-CardProvider ──► CardRepository ──► DataSnapshot<T> ──► PulseViewModel ──► Screen
-                      │
-                      ├─ MetadataCache  (Okio, LRU, bounded, atomic writes)
-                      └─ Coil DiskCache (separate, separately bounded)
+CardProvider  ──▶  CardRepository  ──▶  PulseViewModel  ──▶  XContent
+   (a source)        (cache + store)       (UiState)          (Compose)
 ```
 
-### `DataSnapshot`, and why it is not a `Result`
+`CardRepository` is the only thing that knows both a provider and a cache exist. It returns
+`DataSnapshot<T>` rather than `Result<T>`:
 
 ```kotlin
-data class DataSnapshot<T>(
-    val value: T?, val origin: DataOrigin, val completeness: Completeness,
-    val fetchedAtEpochMillis: Long?, val isStale: Boolean, val error: ProviderError?,
-)
+data class DataSnapshot<T>(val value: T?, val origin: DataOrigin, val isStale: Boolean, val error: ProviderError?)
 ```
 
-The state this app spends most of its time in is *"here is cached data **and** the refresh failed"*.
-A type that forces a choice between a value and an error cannot express it, and collapsing it either
-throws away usable data or hides a failure.
+A `Result` cannot express the case this app is full of — **here is a cached answer and the refresh
+failed** — which is two facts the screen has to show at once: the data, and a banner saying it is
+not fresh. Origin is `NONE`, `CACHE` or `NETWORK`.
 
-`setList()` emits **at most twice**: the cached value, then the network result. `cards()` emits
-more than that on purpose — the cached value first, then one emission per page batch as a set is
-walked, and a final one carrying the complete set. See § Progressive loading. Either way a failed
-refresh re-emits the cached value with the error attached rather than replacing it.
+Reads are progressive. A cached set emits immediately, then the network answer replaces it if one
+arrives. A view model guards on a generation counter so a slow response from an earlier request
+cannot overwrite a newer one.
 
-### The completeness rule
+### Completeness
 
-The single most important behaviour in `CardRepository`.
+`CardCollection.isCompleteSet` is true only when every card of the set is present. It gates:
 
-No provider here filters remotely — every adapter declares `remote = emptySet()`. So every filter
-runs locally, and running one against a single page would produce results a user would reasonably
-read as "the whole set", which they are not.
+- whether filters can be applied honestly, or the results must be labelled partial;
+- whether the facets that fill the filter sheet are computed at all;
+- whether the set counts as downloaded.
 
-So when a query needs a filter the provider cannot apply, the repository fetches **every page** of
-the set, caches it as `CacheScope.CompleteSet`, and filters that. When it cannot finish, it returns
-what it has with `isCompleteSet = false` and the real set size beside it, and the grid says:
+`FilterSupport.requiresCompleteSet(query)` answers whether the query needs it.
 
-> Filtered from 200 of 352 downloaded cards — not the whole set.
+---
 
-**A page is never cached.** Only the complete set is, under `CacheScope.CompleteSet` with no query
-at all. There used to be a `CacheScope.CardPage` carrying a query fingerprint and nothing ever wrote
-one — a page is only ever a step towards the complete set, so caching it would mean holding the same
-cards twice under two different rules about how complete they are. Filing a filtered page where a
-complete set is expected is exactly the bug that would make every later filter silently wrong, which
-is why the scopes are a sealed type rather than a string.
+## Storage: two caches and a store
 
-### Progressive loading
-
-Fetching every page before drawing anything is correct and was also unusable: Origins is four pages,
-and four sequential round trips measured between 7 and 16 seconds of spinner over cards that had
-arrived in the first second.
-
-So page one is emitted on its own, marked partial, before the remaining pages are even requested;
-those then go out together, bounded to four at a time, and a second emission carries the complete
-set. Measured against the live API: first cards at ~0.9 s, complete at ~2.1 s, against ~16 s before.
-
-This does not weaken the completeness rule — the first emission is `isCompleteSet = false` and the
-grid labels it, exactly as a genuinely partial set is labelled. Concurrent pages are reassembled in
-page order rather than completion order, so what lands in the cache does not depend on which request
-happened to answer first.
-
-There is one further guard, added after a real failure: if the provider reports a total and the
-collected cards fall short of it, the result is marked partial no matter how cleanly the paging
-ended. A wrong `set_id` once produced `200 OK` with zero cards and `hasMore = false`, which paged
-"successfully" to nothing and was cached as a complete empty set.
-
-### Storage: two caches and a store
-
-Three places, separate on purpose.
-
-- **The card store** (`:database`, reached through `SetRecordStore`) holds complete sets. They are
-  the only records that are large, the only ones a user downloads deliberately, and the only ones
-  anything wants to search across.
-- **`MetadataCache`** holds everything else a provider says: set lists, card detail, search pages,
-  per-set language probes. Kilobytes apiece, always evictable, never kept on purpose.
-- **The image cache** is Coil's directory, bounded separately.
-
-Preferences live under a **different root entirely**, so "clear cache" cannot take the user's
-choices with it. So does the database file -- Android and iOS may purge a cache directory whenever
-they want the space back, and a downloaded catalogue is not theirs to discard.
-
-`MetadataCache` guarantees:
-
-- **Interrupted writes cannot corrupt a good record.** Write to a temp file, then `atomicMove`. A
-  process killed mid-write leaves a stray temp file, which the next `trim()` removes; the previous
-  record is untouched.
-- **A corrupt or incompatible record reads as a miss, never a crash.** Truncated, unparseable, or
-  written by an older `schemaVersion` -- all three delete the file and report absent, so the app
-  refetches. Bumping `CURRENT_SCHEMA_VERSION` *is* the migration.
-- **Disk use is bounded**, evicting least-recently-*used*.
-
-Every record carries source, language, query/pagination scope, fetch time, schema version and
-completeness -- see `CacheEnvelope`. A cache that stores only the data cannot answer "is this stale",
-"did this come from the provider I am now asking", or "was this the whole set".
-
-### The card store
-
-One SQLite database, through SQLDelight, for complete sets. It replaced a file-per-set cache on
-2026-09-11. Measured head to head in one process over 1000 sets x 150 printings:
-
-| | file cache | the store |
+| | What | Where |
 | --- | --- | --- |
-| Write the catalogue | **1.5 s** | 12.6 s |
-| On disk | **99.1 MB** | 139.8 MB |
-| Open one set | **10.7 ms** | 16.7 ms |
-| Storage screen counts | 2456 ms | **14.4 ms** |
-| Filtered cross-set search | *not possible* | **15.0 ms** |
+| **Metadata cache** | Set lists, card detail, per-set language confirmations. Small, many scopes, each with a TTL. | JSON files via Okio, `MetadataCache` |
+| **Card store** | Complete sets and everything derived from them: pins, counts, the eviction budget, cross-set search. | SQLite via SQLDelight, `:database` |
+| **Image cache** | Card art and thumbnails. | Coil's own disk cache, LRU |
 
-Writing got 8.4x worse and that is the price of everything else: a set is one file write there and
-150 `INSERT`s inside a transaction here. It sits inside a bulk import whose *download* is minutes,
-so it is not what a user waits on -- but it is a real cost and is recorded rather than glossed.
+The split is measured, not assumed — [database/README.md](../database/README.md) has the benchmark
+that decided it. The short version: the store is 8× slower to write a catalogue and 170× faster to
+count one, and cross-set search is not possible without it.
 
-What was bought is the storage screen, which was a directory walk over three files per cached set
-and is now a handful of counts, and the cross-set search: the file cache could only match a name
-over whatever happened to be loaded, and `searchPrintings` narrows on type, rarity, cost range,
-domain and a "does not contain" exclusion in one statement.
+Both are per-language. A cache key embeds the language, so records fetched as `fr` and read as `en`
+are different files — which is a bug this codebase has had, and the reason `CardRepository`
+normalises the language once, for every caller, against what the provider will really answer in.
 
-**A local search is still local.** SQLite made it fast; it did not put one extra card on the device.
-`SearchScope.LOCAL_CACHED_SETS`, its set count and `isLimitedByCache` are unchanged, and an empty
-result still means "not in what you have downloaded" rather than "does not exist". This was the
-single most likely thing to lose in the migration, because a fast complete-feeling search *feels*
-authoritative.
+Eviction is a budget over the store's unpinned bytes. Pinning a set exempts it.
 
-Five rules the schema holds, each of which cost a bug somewhere first:
-
-1. **Language is part of a set's identity.** `(provider, set, language)` is the primary key, as it
-   is everywhere else in this app. Collapsing it into a column would make an English import
-   overwrite a French one.
-2. **Unknown stays distinct from absent.** `cost` is NULL both for a card with no cost and for a
-   source that publishes none, so `maxCost` tests `IS NOT NULL` explicitly -- a filter must not
-   sweep up what it could not measure. That is `Availability`'s third state, in schema form.
-3. **Pinned sets are outside the eviction budget**, not merely evicted last, and `unpinnedBytes` is
-   what the ceiling is measured against. Counting a bulk import against a browsing ceiling meant
-   every write afterwards evicted records that together came nowhere near it.
-4. **A pin can land before the set does, and survives the write.** The download queue pins first so
-   that a set large enough to breach the ceiling is not evicted by its own write. `setPinned` was an
-   `UPDATE`, which silently did nothing for a set not yet cached; it inserts a placeholder row now,
-   and `SqlCardStoreTest` pins that.
-5. **A downloaded set stays nameable after everything else is cleared.** `label` and `game` are
-   columns. They used to be a tab-joined string smuggled through a marker file's contents, parsed
-   back apart in two places.
-
-**Corruption is answered, not hoped away.** A file cache's blast radius is one record; a database's
-is all of them, and that was the argument against migrating at all. So:
-
-- `journal_mode=WAL`, so a process killed mid-transaction leaves that transaction unapplied and
-  everything before it intact -- the property atomic file replacement gave for free.
-- `synchronous=FULL`, not `NORMAL`. Under WAL, `NORMAL` is durable against a process crash but not
-  against the device losing power, which on a phone is an ordinary Tuesday.
-- `PRAGMA integrity_check` once at startup. It reads every page, which is why it runs once.
-- A store that will not open or will not verify is **deleted and recreated**, not repaired. Every
-  row in it is re-fetchable; a half-salvaged database is a store nobody can characterise.
-- The caller is told. `OpenedStore.wasRecovered` reaches `CacheReconciler`, which clears
-  `bulkImports` and `imageDownloads` -- records that describe a catalogue that no longer exists.
-  The same path runs once for an install that predates the store.
-
-`SqlStoreBench` re-measures; `SqlCardStoreTest` and `CardStoreRecoveryTest` hold the rules.
-
-### A bulk import is not a catalogue
-
-`BulkCatalogue` is optional and additive — a `CardProvider` implements it *as well as* the ordinary
-contract. Only Scryfall does today.
-
-Three rules the import obeys, each of which was a bug first:
-
-1. **Nothing holds the file.** 598 MB of JSON streams one card at a time into 64 hash-sharded
-   scratch files, which are then grouped and written a shard at a time. A sink per set was ~1100
-   open descriptors against iOS's 256; a map of set to cards was the whole catalogue on the heap.
-2. **Each card is filed under the language its own record states**, never under one asked for.
-   `streamAll` deliberately has no language parameter: a dump contains what it contains, and
-   `resolveLanguage(null)` walks the preference order — so an overwhelmingly English file was once
-   imported, cached and reported as French.
-3. **Cards whose set the catalogue does not list are skipped.** `listSets` drops digital-only and
-   empty sets, so those cards have no row to open. Guarded on the catalogue being non-empty:
-   `listSets` is one request and it can fail, and an empty answer must not be read as "skip
-   everything". Skipped cards are counted and reported.
+A **bulk import** is a different path: `BulkCatalogue.streamAll` reads a source's own dump and
+writes complete sets straight into the store, skipping the per-set API entirely. It is not a
+catalogue — a dump carries digital-only products a `listSets` drops, so counting sets from a file
+against sets from a catalogue compares two different populations.
 
 ---
 
 ## Presentation: Pulse MVI
 
-Each screen is a `ContainerContract` object plus a `PulseViewModel`.
+Every screen is a `ContainerContract` (a pure `reduce(state, intent)`) plus a `PulseViewModel`
+(side effects, and `emitEffect` for one-shot events).
 
-- **The reducer lives on the contract** — `ContainerContract.reduce(state, intent)`. Pure, total,
-  synchronous. (The library README shows it on the view model; the published source has it here.)
-- **Async work lives in `handleIntent`** on the view model.
-- **State is `stateFlow`**, collected with `collectAsStateWithLifecycle()`.
-- Effects are one-shot, via `emitEffect` / `collectEffect`.
-
-Because the reducer is a pure function, the awkward cases are tested directly rather than by
-orchestrating coroutines and hoping a race reproduces — see `CardGridContractTest`.
-
-### Every screen is a Screen and a Content
+**Every screen is a `Screen` and a `Content`:**
 
 ```kotlin
-@Composable fun XScreen(..., viewModel: XViewModel = koinViewModel()) {
-    val state by viewModel.collectAsStateWithLifecycle()
-    XContent(state, viewModel::dispatch, ...)
+@Composable
+fun XScreen(onBack: () -> Unit, viewModel: XViewModel = koinViewModel()) {
+    viewModel.collectEffect { effect -> /* the only place that knows a back stack exists */ }
+    XContent(viewModel.collectAsStateWithLifecycle().value, viewModel::dispatch)
 }
 
-@Composable fun XContent(state: X.UiState, dispatch: (X.Intent) -> Unit, ...)
+@Composable
+fun XContent(state: XState, dispatch: (XIntent) -> Unit) { /* pure */ }
 ```
 
-`XScreen` is the only half allowed to touch Koin, view models or effects. `XContent` takes
-everything as arguments and is therefore previewable — and `@Preview` is unforgiving about this: a
-preview has no Koin graph, so a stray `koinInject` inside a Content throws
-`KoinApplication has not been started` and the preview shows a stack trace instead of a screen.
+A `Content` takes a state and a dispatch and nothing else. No Koin — a preview has no graph and
+`koinInject` throws. **Navigation is dispatched, not called**: threading an `onBack` through a body
+splits one interaction across two mechanisms, which is exactly how opening a set once both
+remembered the set and navigated, by two different routes.
 
-That is why the grid's focused-card id and the detail screen's prefetch radius are *parameters*
-rather than injections, even though both are read from a singleton one function up.
+Navigation is Navigation 3: a `SnapshotStateList<Route>` of `@Serializable` routes, with
+`rememberSaveableStateHolderNavEntryDecorator` and `rememberViewModelStoreNavEntryDecorator` so a
+screen's view model and saved state survive a trip into a detail and back.
 
-Navigation is an intent and arrives back as an effect. A tap dispatches `BackPressed` or
-`SetOpened(set)`; the view model emits `Effect.NavigateBack` or `Effect.OpenSet(set)`; `XScreen`
-collects it and calls the lambda the composition root gave it. So `XContent` really does take a
-state and a dispatch and nothing else, and no reducer knows about a route -- the effect names a
-destination in the screen's own vocabulary and `App.kt` decides what that is.
+Screens: game list, set list, card grid, card detail, downloads, storage, settings, first-launch
+setup.
 
-This used to be the opposite: navigation stayed as a callback threaded through `XContent`, on the
-grounds that where the app goes next is the caller's business. It still is, but the *body* was the
-wrong place to hold it, and it split single interactions across two mechanisms -- opening a set both
-dispatched `SetOpened`, which remembers the last set, and called `onOpenSet`, which navigated.
+### Transitions
 
-### Two effects that drive each other need a tiebreaker
-
-The card pager reports its settled page to the state, and the state drives the pager when something
-else moves the selection. Those two are a loop, and the state alone cannot say which direction a
-change came from.
-
-Without a tiebreaker the failure is specific and confusing: a settled swipe reports its page, that
-becomes `currentIndex`, and that lands back in the follow effect — by which time the user may have
-started the *next* swipe, so `currentIndex` no longer matches `targetPage` and the pager animates
-back to the page just left. Quick successive swipes appear to cancel each other at random.
-
-`vLastReportedByPager` records what the pager itself last said, and the follow effect ignores an
-echo of it. A tap on the preview strip is not an echo, so it still moves the pager.
-
-### Stale responses cannot overwrite a newer selection
-
-Three mechanisms, because none alone is enough:
-
-1. **Debounce** — text input waits 300 ms, so typing "Annie" is one load, not five.
-2. **Cancellation** — starting a load cancels the previous job; `collectLatest` does the same within
-   a flow.
-3. **Generation tagging** — every state change that starts a load bumps `requestGeneration`, and
-   every response carries the generation it was started for. The reducer discards anything from a
-   superseded generation.
-
-The third is the one that actually guarantees correctness: a response already past the point of
-cancellation still arrives, and without a generation tag it would repopulate a grid the user has
-just cleared.
+- **Sets → cards** stands its screen transition down entirely, because a shared container grows out
+  of the tapped row and a cross-fade over the top of that reads as two unrelated animations that
+  happen to overlap.
+- **A lateral slide is the app's answer for "went deeper with no shared element"** — games → sets,
+  and the global search, which opens the card grid from a bar button with no row to grow out of.
+- **Everything else** cross-fades, with `sizeTransform = null` — the default live `SizeTransform`
+  clips its content and cuts a shared element's flight in half.
 
 ---
 
-## What the app knows about a set's languages
-
-Three different questions, three different answers, and conflating any two of them has produced a
-user-visible bug:
-
-| Question | Answered by | Strength |
-|---|---|---|
-| What could this source serve at all? | `ProviderCapabilities.data.languages` | a **capability**, measured per provider |
-| What does the source say about *this set*? | `CardSet.languages` | a **claim**, and sources over-claim |
-| What has the source actually served or confirmed? | `CardRepository.confirmedLanguagesFor` | a **fact** |
-
-`confirmedLanguagesFor` is the union of a confirmation record (`languagesFor` asked and the source
-answered) and every language whose cards are on disk — cards are there only because they were
-served, which is the strongest evidence available.
-
-**A menu lists facts. A claim only decides whether the menu is worth offering.** The card grid's
-language menu used to list the claim and then narrow to the confirmed set when the probe landed,
-which is the app showing something it had not checked. It now lists `confirmedLanguages` plus what
-is on screen, with an explicit "checking" row while the probe runs and an explicit "could not check"
-row when it fails — *could not check* and *there are none* being opposite facts that a short list
-expressed identically.
-
-`knownLanguagesFor` still returns claim-or-confirmation and is what the **detail** screen offers,
-deliberately: narrowing that one to on-disk languages is a bug this codebase has already had, where
-detail listed two languages while the grid beside it offered eleven.
-
-### Opening a set in a language nobody asked for
-
-`openingLanguageFor` returns an `OpeningLanguage`, not a bare language, because "you are reading
-English" is not the whole answer. Its steps, cheapest first:
-
-1. the wanted language is on disk — no request at all;
-2. it is not, but the set was **downloaded** in another (pinned records only) — open that one,
-   `LanguageSubstitution.NOT_DOWNLOADED`;
-3. one probe for the wanted language;
-4. the full confirmation, and if the source has no such edition, `NOT_PUBLISHED`.
-
-The two substitutions are different facts and the grid says different things about them: one offers
-to fetch, the other offers nothing because there is nothing to fetch. Step 2 is what makes a
-one-language bulk import usable — records are cached per language, so an English import under a
-French preference otherwise left 988 sets on disk that every read missed.
-
-Pinned-only is the load-bearing part of step 2: a set browsed in English last week is not a request
-to stop showing French today, and treating incidental cache as a preference would make the app's
-language drift with its history.
-
----
-
-## Where each brief-critical behaviour lives
+## Where the load-bearing behaviours live
 
 | Behaviour | File |
-|---|---|
-| Unknown ≠ unavailable | `core/model/Identity.kt`, `core/model/Language.kt` |
-| French request → English shown, labelled | `ui/detail/CardDetailContract.kt` (`languageResolution`) |
-| Collector numbers as strings, natural sort | `core/model/Card.kt` (`CollectorNumberComparator`) |
-| Remote vs local filtering | `core/provider/CardProvider.kt` (`FilterSupport`) |
-| Partial-set honesty | `data/repository/CardRepository.kt`, `ui/cards/CardGridContract.kt` (`coverageNotice`) |
-| Stale response suppression | `ui/cards/CardGridContract.kt` (`requestGeneration`) |
-| Corruption recovery, LRU, atomic writes | `data/cache/MetadataCache.kt` |
-| Downloads outliving the cache ceiling | `data/cache/MetadataCache.kt` (`pin`, `trimLocked`) |
-| What is on disk, and what may be deleted | `data/repository/CardRepository.kt` (`keptByGame`), `ui/storage/` |
-| Claim vs confirmed languages | `data/repository/CardRepository.kt` (`confirmedLanguagesFor`, `knownLanguagesFor`) |
-| Opening a set in a substituted language | `data/repository/CardRepository.kt` (`openingLanguageFor`), `data/repository/DataSnapshot.kt` (`OpeningLanguage`) |
-| Streaming a whole catalogue without holding it | `data/repository/CardRepository.kt` (`importBulk`) |
-| Cardmarket URLs | `core/cardmarket/CardmarketLinks.kt` |
-| Provider routing | `core/provider/ProviderRegistry.kt`, `di/AppModule.kt` |
+| --- | --- |
+| Three-valued availability | `core/…/model/Card.kt` — `LanguageCoverage`, `FinishCoverage` |
+| Language resolution and preference order | `core/…/model/Language.kt`, `CardProvider.resolveLanguage` |
+| Which filters a source can honour | `core/…/provider/CardProvider.kt` — `FilterSupport` |
+| Cached-plus-failed-refresh | `data/…/repository/DataSnapshot.kt` |
+| Language normalisation before a cache key | `data/…/repository/CardRepository.kt` |
+| Complete sets, search, eviction | `database/…/SqlCardStore.kt` |
+| The download queue | `data/…/download/DownloadManager.kt` |
+| Partial-result and coverage notices | `composeApp/…/ui/cards/CardGridContract.kt` |
+| Filter sheet, chips and menus | `composeApp/…/ui/cards/FilterSheet.kt` |
+| Cardmarket URLs | `core/…/cardmarket/CardmarketLinks.kt` |
+
+---
+
+## Adding things
+
+- A provider: [PROVIDERS.md § Adding a provider](PROVIDERS.md#adding-a-provider).
+- A game: [GAMES.md § Adding a game](GAMES.md#adding-a-game).
+- Artwork: a game's logo belongs to the game module; a set's symbol comes from the provider. The
+  test is whether swapping the provider would change the image.
