@@ -67,8 +67,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import com.bitsycore.cardbrowser.games.api.GameArt
 import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
-import com.bitsycore.cardbrowser.ui.games.HaloedLogo
-import com.bitsycore.cardbrowser.ui.games.logoBackdropFor
+import com.bitsycore.cardbrowser.ui.games.backdropFor
 import com.bitsycore.cardbrowser.ui.games.logoTintFor
 import org.jetbrains.compose.resources.painterResource
 import com.bitsycore.cardbrowser.data.settings.ImageDownloadRecord
@@ -292,59 +291,39 @@ fun SetListContent(
 						// A game whose module ships no logo, and the state before one loads.
 						Text(vState.game?.shortName.orEmpty())
 					} else {
-						val vLogoImage = @Composable {
-							// Exactly the picker's halo, from the same function -- a mark that needs
-							// separating from a pale background needs it on both screens, and the
-							// two drawing it their own way is how three of them ended up correct
-							// here and invisible there.
-							HaloedLogo { vModifier, vTint ->
-								Image(
-									painter = painterResource(vLogo),
-									// The title *is* the game name, so the real mark carries it for a
-									// screen reader. The halo copies are the same picture eight more
-									// times and must stay silent.
-									contentDescription = vState.game?.displayName
-										.takeIf { vTint == null },
-									contentScale = ContentScale.Fit,
-									// Bounded both ways. Height is what normally binds, but these
-									// are wordmarks of wildly different aspect -- One Piece is 149
-									// dp wide at 30 dp tall against Pokémon's 59 -- and without a
-									// width cap the widest of them crowds the three action buttons
-									// on a narrow phone. `Fit` then scales by whichever limit binds.
-									modifier = vModifier
-										.heightIn(max = 30.dp)
-										.widthIn(max = 132.dp),
-									// Exactly the picker's rule, from the same function.
-									colorFilter = vTint ?: logoTintFor(gameArt),
-								)
-							}
-						}
-
-						// Artwork that declares a plate gets it here too, not only in the picker.
-						// Without it such a mark is drawn straight onto the app bar, which is the
-						// one background it was never designed for: Altered's near-white wordmark,
-						// Riftbound's white subtitle and Lorcana's gold all vanish on the light
-						// theme. The picker had a tile and this did not, so those three were
-						// correct on one screen and invisible on the other.
+						// The mark always sits on a tile, exactly as it does in the picker, and from
+						// the same function so the two cannot drift. This screen used to give one
+						// only to artwork that declared a plate, which meant most marks were drawn
+						// straight onto the app bar -- the one background none of them was designed
+						// for. Altered's near-white wordmark, Riftbound's white subtitle and
+						// Lorcana's gold all vanish there on the light theme.
 						//
-						// A mark that can be *painted* never gets here, and should not: a plate
-						// behind a recolourable wordmark is a saturated block in the app bar for no
-						// reason. Cyberpunk is the case that proved it -- it wore a yellow pill
-						// until it was pointed out that the mark alone, painted its own yellow, is
-						// what belongs on a dark bar.
-						val vBackdrop = logoBackdropFor(gameArt)
-						if (vBackdrop == null) {
-							vLogoImage()
-						} else {
-							Box(
-								modifier = Modifier
-									.clip(RoundedCornerShape(8.dp))
-									.background(vBackdrop)
-									.padding(horizontal = 8.dp, vertical = 4.dp),
-								contentAlignment = Alignment.Center,
-							) {
-								vLogoImage()
-							}
+						// `backdropFor` answers with the artwork's own plate where it states one
+						// -- Cyberpunk's yellow -- and otherwise a wash of the game's accent, which
+						// is dark enough on the light theme to hold a white mark and pale enough on
+						// the dark one to disappear into the bar.
+						Box(
+							modifier = Modifier
+								.clip(RoundedCornerShape(8.dp))
+								.background(backdropFor(gameArt))
+								.padding(horizontal = 8.dp, vertical = 4.dp),
+							contentAlignment = Alignment.Center,
+						) {
+							Image(
+								painter = painterResource(vLogo),
+								// The title *is* the game name, so this carries it for a screen
+								// reader rather than being decorative.
+								contentDescription = vState.game?.displayName,
+								contentScale = ContentScale.Fit,
+								// Bounded both ways. Height is what normally binds, but these are
+								// wordmarks of wildly different aspect -- One Piece is 149 dp wide
+								// at 30 dp tall against Pokémon's 59 -- and without a width cap the
+								// widest of them crowds the three action buttons on a narrow phone.
+								// `Fit` then scales by whichever limit binds first.
+								modifier = Modifier.heightIn(max = 30.dp).widthIn(max = 132.dp),
+								// Exactly the picker's rule, from the same function.
+								colorFilter = logoTintFor(gameArt),
+							)
 						}
 					}
 				},

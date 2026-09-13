@@ -94,6 +94,10 @@ object LorcanaArt : GameArt {
 	// The gold wordmark washes out on a pale tile: 33% of its visible pixels fall below a 2:1
 	// contrast ratio, and the loss is not spread evenly -- by fifths of the image it runs 0%, 0%,
 	// 36%, 48%, 2%. Those middle bands are "LORCANA" itself, so what disappears is the name, while
-	// the "Disney" script above it is fine. Exactly the shape of the Riftbound case, and it used to
-	// get the same answer: `GameArt.DARK_BACKDROP` behind the whole tile. The halo replaced it.
+	// the "Disney" script above it is fine. Exactly the shape of the Riftbound case, and it gets
+	// the same answer.
+	override val backdropArgb: Long = GameArt.DARK_BACKDROP
+
+	// Light only, like Altered's: gold filigree on a dark bar is what this mark is for.
+	override val backdropDarkArgb: Long? = null
 }

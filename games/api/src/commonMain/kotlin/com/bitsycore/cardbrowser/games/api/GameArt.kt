@@ -72,18 +72,19 @@ import org.jetbrains.compose.resources.DrawableResource
  * subtitle, and Lorcana's runs 0/0/36/48/2% by fifths of the image, the middle bands being the word
  * LORCANA itself. In each case what vanishes is the part that names the game.
  *
- * **None of the three carries a plate any more.** Altered and Lorcana set [backdropArgb] to
- * [DARK_BACKDROP] and Riftbound had nothing at all; the plate solved the contrast and cost a
- * coloured slab behind the mark on every screen it appears on, which the project owner did not want
- * on any of the three.
+ * **All three set [backdropArgb] to [DARK_BACKDROP]**, so the artwork sits on something like what
+ * it was drawn for, and all three set [backdropDarkArgb] to `null`, because a plate belongs to a
+ * theme rather than to a mark: on the dark theme the artwork already has the background it wants.
  *
- * The UI draws a soft dark halo under *every* mark instead, and it is not a property here. It
- * follows the artwork's own shape rather than its bounding box, so what it separates from the
- * background is the letterform; it is faint enough to read as depth rather than as an outline; and
- * where a mark needs nothing -- a black wordmark, or any of them on the dark theme -- there is
- * nothing to see. A flag saying which marks get one was tried and removed: the three that needed it
- * were the three that had it, and the other seven were not harmed by it, so the flag was a table of
- * games in exchange for nothing. See `HaloedLogo`.
+ * That is the third answer, and the other two are worth recording because both looked right on the
+ * way past. The tile's ordinary fill -- a wash of the game's accent at 18% -- is not enough: it is
+ * a pale colour on the light theme and white-on-white is still white-on-white. And a *shadow* under
+ * the mark was built and tuned and then removed. It worked, and the objection to it stands: nothing
+ * in Compose blurs an image's own alpha on every target, so it had to be faked with offset copies,
+ * which only read as a blur while they overlap and cannot be diffused past about 3dp without
+ * becoming visible ghosts of the wordmark. `Modifier.dropShadow` blurs a `Shape`, not the content,
+ * so on a transparent wordmark it draws a blurred rectangle -- which is this plate, less sharply.
+ * A plate is the honest version of what the shadow was approximating.
  *
  * **Cyberpunk keeps its light plate**, because it is its own published lockup rather than a
  * workaround -- see below. Its dark one is gone for the same reason as the others: on the dark

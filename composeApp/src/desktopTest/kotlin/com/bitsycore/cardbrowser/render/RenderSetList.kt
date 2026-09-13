@@ -5,6 +5,7 @@ import com.bitsycore.cardbrowser.core.model.CardSet
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
+import com.bitsycore.cardbrowser.games.riftbound.RiftboundArt
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.data.settings.ImageDownloadRecord
 import com.bitsycore.cardbrowser.ui.sets.SetImageStatus
@@ -85,6 +86,21 @@ class SetListRenderer {
 		}
 		renderToPng(vOut, "sets-single-line-game", width = 660, height = 1100, density = 1.65f, isDark = false) {
 			SetListContent(riftboundState(), {})
+		}
+
+		// The title bar carrying a real mark, on both themes. The logo in the bar is the part of
+		// this screen that has been got wrong most often, and always by checking one theme.
+		for (vDark in listOf(true, false)) {
+			renderToPng(
+				vOut,
+				"sets-title-" + if (vDark) "dark" else "light",
+				width = 660,
+				height = 200,
+				density = 1.65f,
+				isDark = vDark,
+			) {
+				SetListContent(riftboundState(), {}, gameArt = RiftboundArt)
+			}
 		}
 
 		// Short enough that the footer is on screen: the tally and the option that moves it.

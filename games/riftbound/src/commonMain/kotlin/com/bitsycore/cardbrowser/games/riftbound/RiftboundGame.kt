@@ -87,9 +87,12 @@ object RiftboundArt : GameArt {
 
 	override val accentArgb: Long = 0xFF7C6BF5
 
-	// No plate, and the measurement that once put one here stands: 31% of this mark's visible pixels
-	// fall below a 2:1 contrast ratio on a light tile, all of it the white "LEAGUE OF LEGENDS"
-	// subtitle. A plate fixed that and was visible on every screen the logo appears on; nothing at
-	// all left the subtitle to vanish. The halo the UI draws under every mark is paid only where the
-	// subtitle is -- see `GameArt`.
+	// 31% of this mark's visible pixels fall below a 2:1 contrast ratio on a light tile, all of it
+	// the white "LEAGUE OF LEGENDS" subtitle. This went round three times -- a plate, then nothing,
+	// then a halo -- and landed back on the plate, which is the one thing that reliably holds white
+	// on white. See `GameArt`.
+	override val backdropArgb: Long = GameArt.DARK_BACKDROP
+
+	// Light only. An orange title and a white subtitle on a dark bar is what this mark is for.
+	override val backdropDarkArgb: Long? = null
 }

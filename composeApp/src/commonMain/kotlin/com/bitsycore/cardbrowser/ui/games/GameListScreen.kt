@@ -23,10 +23,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.offset
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import com.bitsycore.cardbrowser.ui.common.arrowSelection
@@ -724,20 +720,16 @@ internal fun GameMark(art: GameArt?, width: Dp = 72.dp, height: Dp = 48.dp) {
 		} else {
 			// `Fit` rather than `Crop`: these are wordmarks of every aspect ratio -- the Magic one
 			// is 960x275 -- and cropping one is far worse than letterboxing it.
-			HaloedLogo { vModifier, vTint ->
-				Image(
-					painter = painterResource(vLogo),
-					contentDescription = null,
-					contentScale = ContentScale.Fit,
-					modifier = vModifier
-						.fillMaxSize()
-						.padding(horizontal = 8.dp, vertical = 10.dp),
-					// A monochrome wordmark is painted rather than left as drawn -- see
-					// [logoTintFor]. Deliberately never the row accent: a teal Wuthering Waves logo
-					// is not its logo, and colour artwork is not tinted at all.
-					colorFilter = vTint ?: logoTintFor(art),
-				)
-			}
+			Image(
+				painter = painterResource(vLogo),
+				contentDescription = null,
+				contentScale = ContentScale.Fit,
+				modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 10.dp),
+				// A monochrome wordmark is painted rather than left as drawn -- see [logoTintFor].
+				// Deliberately never the row accent: a teal Wuthering Waves logo is not its logo,
+				// and colour artwork is not tinted at all.
+				colorFilter = logoTintFor(art),
+			)
 		}
 	}
 }
@@ -754,107 +746,9 @@ internal fun GameMark(art: GameArt?, width: Dp = 72.dp, height: Dp = 48.dp) {
  * column read as one list rather than as a paint chart.
  */
 @Composable
-private fun backdropFor(art: GameArt?): Color =
+internal fun backdropFor(art: GameArt?): Color =
 	art?.let { logoBackdropFor(it) }
 		?: (art?.accent ?: MaterialTheme.colorScheme.primary).copy(alpha = 0.18f)
-
-/**
- * Draws a mark over a soft dark halo of its own shape. Every mark, not a chosen few.
- *
- * The alternative to a plate, which is what the three logos with no dark outline used to wear. A
- * plate is a rectangle and is therefore visible whether or not the mark needed rescuing; a halo
- * follows the letterforms, so it separates exactly what would otherwise wash out and disappears
- * into a dark background.
- *
- * `GameArt` carried a flag for which marks got one, and it is gone. At this weight the halo is a
- * hint of depth under anything and a rescue under the three that need it; the other seven were not
- * hurt by it, so the flag was a table of games in exchange for nothing.
- *
- * ## Why a fake blur and not a wide one
- *
- * The copies have to *overlap*. Pushed out to 9dp they stop being a gradient and become legible
- * ghosts of the wordmark -- "LEAGUE OF LEGENDS" repeated four times in a fan below itself, which is
- * unmistakable once seen and was the state of this for one render. So the rings stay inside about
- * 3dp, roughly a stroke width, and the softness is bought with more rings and lower alpha rather
- * than with distance.
- *
- * `Modifier.dropShadow` is the API that ought to do this -- one draw, a real blur, an exact radius,
- * colour, spread and offset -- and it does not, because its geometry is a `Shape` rather than the
- * content. On a mostly-transparent wordmark it draws a blurred black rectangle, which is the plate
- * this replaced. `DropShadowProbe` renders exactly that so the question does not have to be
- * re-argued from the signature.
- *
- * Nothing else in the toolkit blurs an image's own alpha on every target either: `Modifier.blur` is
- * a `RenderEffect` on Android, which is API 31, and this app's `minSdk` is 24.
- *
- * Offset copies rather than a real blur. `Modifier.blur` is a no-op on Android below API 31, and
- * the one platform this has to work on is a phone -- an effect that silently does nothing on older
- * devices is the same class of bug as a plate that never got drawn. Copies of a small bitmap are
- * cheap and look the same everywhere.
- *
- * ## Rings, because one ring is an outline
- *
- * A single ring of eight copies at one distance and one alpha is a hard edge: every pixel of it is
- * the same darkness and it stops dead, which reads as a black keyline drawn around the mark rather
- * than as a shadow. That was the first version and it was visible as a *thing*.
- *
- * [HALO_RINGS] casts several at growing radii and falling alpha instead. Where they overlap, near
- * the letterforms, the alphas compound; further out only the outer ring is left. That is a falloff,
- * which is the whole difference between a shadow you feel and an outline you see -- and it is why
- * each individual ring is far fainter than the single one was. The total is what has to be legible,
- * not any one copy.
- *
- * `matchParentSize` on the copies is what keeps the box the size of the mark: they fill whatever the
- * real one measured to and contribute nothing to the measurement themselves.
- *
- * @param image draws the mark. The `ColorFilter` it is handed is the halo's, or `null` for the real
- *   one, which then applies its own -- a copy must be a silhouette whatever the mark normally is
- */
-@Composable
-internal fun HaloedLogo(image: @Composable (Modifier, ColorFilter?) -> Unit) {
-	Box(contentAlignment = Alignment.Center) {
-		HALO_RINGS.forEach { (vRadius, vAlpha, vCount) ->
-			// The tint's own alpha is what fades a copy: `ColorFilter.tint` blends `SrcIn`, so a
-			// translucent black lands as a translucent silhouette masked by the artwork.
-			val vTint = ColorFilter.tint(Color.Black.copy(alpha = vAlpha))
-			ringOffsets(vRadius, vCount).forEach { (vX, vY) ->
-				image(Modifier.matchParentSize().offset(x = vX, y = vY), vTint)
-			}
-		}
-		image(Modifier, null)
-	}
-}
-
-/**
- * The halo's rings: how far out each is, how dark it is alone, and how many copies draw it.
- *
- * Five of them reaching 9dp, 52 draws of a bitmap that is at most 132dp wide. The spread is what
- * makes it read as a blur: three tight rings gave a falloff, but one that was over within 3dp, so it
- * still had a findable edge. Reaching three times as far with each ring correspondingly fainter puts
- * the edge somewhere nobody can point at, which is the whole request.
- *
- * The outer two carry twelve copies rather than eight. Eight points on a 9dp circle are 7dp apart
- * and the ring shows its corners; on a 1.5dp one they overlap and it does not.
- *
- * Black rather than a theme colour on purpose. The mark is being separated from a *pale* background,
- * which is the only case there is -- so a halo that inverted with the theme would turn white on the
- * dark theme and put a glow around a mark that needed nothing.
- */
-private val HALO_RINGS: List<Triple<Float, Float, Int>> = listOf(
-	Triple(0.8f, 0.05f, 8),
-	Triple(1.6f, 0.045f, 8),
-	Triple(2.4f, 0.035f, 12),
-	Triple(3.2f, 0.025f, 12),
-)
-
-/** [count] copies evenly around a circle of [radius], so a ring is round rather than square. */
-private fun ringOffsets(radius: Float, count: Int): List<Pair<Dp, Dp>> =
-	(0 until count).map { vStep ->
-		val vAngle = TWO_PI * vStep / count
-		(radius * cos(vAngle)).dp to (radius * sin(vAngle)).dp
-	}
-
-private const val TWO_PI = 2f * PI.toFloat()
 
 /**
  * The plate this mark states for the theme in force, or `null` if it states none.
