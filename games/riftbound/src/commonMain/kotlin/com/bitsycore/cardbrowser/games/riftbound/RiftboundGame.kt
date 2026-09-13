@@ -87,6 +87,10 @@ object RiftboundArt : GameArt {
 
 	override val accentArgb: Long = 0xFF7C6BF5
 
-	// The white "LEAGUE OF LEGENDS" subtitle disappears entirely on a light tile.
-	override val backdropArgb: Long = GameArt.DARK_BACKDROP
+	// No plate, by the project owner's call after looking at both themes.
+	//
+	// The measurement that put one here stands: 31% of this mark's visible pixels fall below a 2:1
+	// contrast ratio on a light tile, and all of it is the white "LEAGUE OF LEGENDS" subtitle. What
+	// changed is the judgement on the trade -- a plate is visible on every screen the logo appears
+	// on, and it was being paid for a subtitle.
 }

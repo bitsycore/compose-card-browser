@@ -101,4 +101,7 @@ object LorcanaArt : GameArt {
 	 * shape of the Riftbound case.
 	 */
 	override val backdropArgb: Long = GameArt.DARK_BACKDROP
+
+	// Light only, like Altered's: gold filigree on a dark row is what this mark is for.
+	override val backdropDarkArgb: Long? = null
 }

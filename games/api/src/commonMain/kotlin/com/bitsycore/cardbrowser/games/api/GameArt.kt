@@ -72,9 +72,21 @@ import org.jetbrains.compose.resources.DrawableResource
  * subtitle, and Lorcana's runs 0/0/36/48/2% by fifths of the image, the middle bands being the word
  * LORCANA itself. In each case what vanishes is the part that names the game.
  *
- * Those three set [backdropArgb] to [DARK_BACKDROP], so the artwork sits on something like what it
- * was drawn for. All three are full-colour artwork, which is the reason they need a plate at all:
- * a mark that cannot be recoloured has to have its background changed instead.
+ * **Altered and Lorcana** set [backdropArgb] to [DARK_BACKDROP], so the artwork sits on something
+ * like what it was drawn for. Both are full-colour artwork, which is the reason they need a plate
+ * at all: a mark that cannot be recoloured has to have its background changed instead.
+ *
+ * **A plate belongs to a theme, not to a mark.** Both of those set [backdropDarkArgb] to `null`:
+ * a near-white wordmark and gold filigree are drawn for a dark background, so on the dark theme
+ * the plate was covering the one case the artwork already handled. `backdropDarkArgb` defaults to
+ * whatever [backdropArgb] says, which is how it came to be carried onto both.
+ *
+ * **Riftbound has none at all**, by the project owner's call after looking at both themes. Its 31%
+ * is the subtitle alone; the measurement still says what it said, and the judgement is that a plate
+ * on every screen the logo appears on is too much to pay for it.
+ *
+ * **Cyberpunk keeps both**, because both are its own published lockup rather than a workaround --
+ * see below.
  *
  * ## Artwork that is painted rather than plated
  *
