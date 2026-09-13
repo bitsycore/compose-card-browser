@@ -10,6 +10,7 @@ import com.bitsycore.cardbrowser.games.magic.MagicGame
 import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.ui.cards.CardGridContract
+import com.bitsycore.cardbrowser.ui.preview.PreviewData
 import com.bitsycore.cardbrowser.ui.cards.CardGridContract.Intent
 import com.bitsycore.cardbrowser.ui.cards.CardGridContract.UiState
 import kotlin.test.Test
@@ -27,6 +28,18 @@ import kotlin.test.assertTrue
  * orchestrating coroutines and hoping the race reproduces.
  */
 class CardGridContractTest {
+
+	@Test
+	fun `opening a card closes the filter sheet`() {
+		val vOpen = reduce(UiState(), Intent.FilterSheetToggled(true))
+		assertTrue(vOpen.isFilterSheetOpen)
+
+		// The grid is still tappable behind the sheet, so this is reachable -- and it leaves two
+		// things on screen that both answer Back.
+		val vAfter = reduce(vOpen, Intent.CardOpened(PreviewData.CARDS.first()))
+
+		assertFalse(vAfter.isFilterSheetOpen)
+	}
 
 	// ==================
 	// MARK: The browse key

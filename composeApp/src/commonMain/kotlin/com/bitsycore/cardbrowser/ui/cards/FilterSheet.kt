@@ -236,10 +236,23 @@ fun FilterSheet(
 			)
 		}
 
-		if (state.facets.isEmpty && !state.isCompleteSet) {
+		// Two different silences, said differently, because they are opposite facts.
+		//
+		// The second one had no message at all: a complete set whose records carry no type, rarity
+		// or category drew an empty sheet that looked identical to a sheet still loading. It is
+		// reachable and not rare -- records saved before this app started asking a source for
+		// those fields have none, so one set filters and the set below it does not, which is
+		// exactly how it was reported.
+		if (state.facets.isEmpty) {
 			Spacer(Modifier.height(16.dp))
 			Text(
-				text = "Filters appear once the whole set is downloaded.",
+				text = if (!state.isCompleteSet) {
+					"Filters appear once the whole set is downloaded."
+				} else {
+					"Nothing to filter on: the saved cards carry no type, rarity or category. " +
+						"If they were downloaded a while ago, downloading the set again may " +
+						"fill them in."
+				},
 				style = MaterialTheme.typography.bodySmall,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
 			)

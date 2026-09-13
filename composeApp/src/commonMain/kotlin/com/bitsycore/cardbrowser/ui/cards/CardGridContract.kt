@@ -393,9 +393,14 @@ object CardGridContract :
 	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
 
 		// Navigation changes no state. The view model turns these into effects.
-		Intent.BackPressed, is Intent.CardOpened, Intent.DownloadsRequested,
-		Intent.FullSearchRequested,
-		-> state
+		Intent.BackPressed, Intent.DownloadsRequested, Intent.FullSearchRequested -> state
+
+		// Opening a card closes the sheet, which is the one navigation that can happen while it is
+		// up: the grid is still tappable behind a bottom sheet. Leaving it open puts two things on
+		// screen that both answer Back -- the sheet's own dismiss and the back stack -- and which
+		// one gets the gesture depends on what is composed where. The card is what was asked for,
+		// so the sheet goes.
+		is Intent.CardOpened -> state.copy(isFilterSheetOpen = false)
 
 		is Intent.ViewModeChanged -> state.copy(viewMode = intent.mode)
 
