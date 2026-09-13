@@ -233,6 +233,31 @@ class CardRepositoryTest {
 	}
 
 	@Test
+	fun `browsing one set fills the game-wide filter values`() = runTest {
+		// The global search draws its chips from what the whole game has stored, and the store is
+		// written by *browsing* as well as by downloading -- opening one set is enough. This is the
+		// half of "no filters in the global search" that lives below the view model.
+		val vProvider = FakeProvider(mProviderId, listOf(listOf(card(1))))
+		val vRepository = repositoryFor(vProvider)
+
+		assertTrue(
+			vRepository.searchFacets(TestGame.id).rarities.isEmpty(),
+			"nothing stored, nothing to offer",
+		)
+
+		vRepository.cards(
+			setId = SourceId(mProviderId, "s"),
+			game = TestGame.id,
+			query = CardQuery(),
+			language = CardLanguage.ENGLISH,
+		).toList()
+
+		val vFacets = vRepository.searchFacets(TestGame.id)
+		assertTrue(vFacets.rarities.isNotEmpty(), "a browsed set leaves rarities behind")
+		assertTrue(vFacets.cardTypes.isNotEmpty(), "and card types")
+	}
+
+	@Test
 	fun `sets come back newest first with undated ones last`() = runTest {
 		val vProvider = FakeProvider(
 			id = mProviderId,

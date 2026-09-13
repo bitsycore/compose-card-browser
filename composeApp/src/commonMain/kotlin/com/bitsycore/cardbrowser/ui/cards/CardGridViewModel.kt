@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.ui.cards
 
+import com.bitsycore.cardbrowser.core.model.CardPrinting
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.game.RarityLadder
@@ -372,6 +373,18 @@ class CardGridViewModel(
 			if (stateFlow.value.requestGeneration == vGeneration) {
 				mSession.publish(snapshot.browseKey, vResults.cards)
 			}
+			// And top the filter values up if this result knows something they do not.
+			//
+			// They are read once per game, which is right -- five DISTINCT queries over a hundred
+			// thousand rows is not a per-keystroke cost. But "once" was also once *ever*, so values
+			// that arrived after the read -- the rest of an import, a set downloaded since -- were
+			// invisible until the screen was recreated. Comparing what just came back against what
+			// the sheet is offering is a pass over a page already in memory, and it is the only
+			// evidence available that the store has grown.
+			if (vResults.cards.any { it.isOutside(stateFlow.value.facets) }) {
+				mStoredFacetGame = null
+				loadStoredFacets(vGame, snapshot.game?.rarityLadder.orEmpty())
+			}
 		}
 	}
 
@@ -417,6 +430,13 @@ class CardGridViewModel(
 	 * In its own coroutine, and deliberately not `mLoadJob`: that job is cancelled by the next
 	 * keystroke, and the chips would then be cancelled along with a search they do not belong to.
 	 */
+	/** True when this card carries a filterable value the sheet is not currently offering. */
+	private fun CardPrinting.isOutside(facets: CardFacets): Boolean =
+		classification.rarity?.let { it !in facets.rarities } == true ||
+			classification.type?.let { it !in facets.cardTypes } == true ||
+			classification.domains.any { it !in facets.domains } ||
+			attributes.cost?.let { it !in facets.costs } == true
+
 	private fun loadStoredFacets(game: GameId, rarityLadder: List<String>) {
 		if (mStoredFacetGame == game) return
 		viewModelScope.launch {

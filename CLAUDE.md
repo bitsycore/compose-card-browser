@@ -99,7 +99,7 @@ this wrong is the most common way to put the right value in the wrong place.
 
 ```bash
 ./gradlew build -x lint          # everything, all four targets, including both iOS ones
-./gradlew desktopTest            # the deterministic suite (549 tests on 2026-09-13, 11 skipped)
+./gradlew desktopTest            # the deterministic suite (553 tests on 2026-09-13, 11 skipped)
 ./gradlew :androidApp:assembleDebug
 ./gradlew :composeApp:run        # desktop
 ```
@@ -165,6 +165,11 @@ that occur. Anything that turns a span into a list wants the same question asked
 not; a few thousand items freeze the screen before the menu appears. Magic's card type is the
 printed type line, so a downloaded catalogue has thousands of distinct ones. The filter menus put a
 `LazyColumn` inside, cap their height, and grow a box to narrow themselves past 24 values.
+
+**A view model's scope is `Dispatchers.Main.immediate`, which a plain JVM test has not got.**
+Every `handleIntent` is silently dropped and the state never moves, which looks exactly like the bug
+you are chasing. `Dispatchers.setMain(StandardTestDispatcher())` in a `@BeforeTest` — this cost an
+hour and produced a false reproduction of a bug that was already fixed.
 
 **`LazyVerticalGrid` throws on a duplicate key** rather than degrading, so a provider issuing two
 records with the same id is a crash. Wuthering Waves shipped exactly that. Any new adapter wants a
