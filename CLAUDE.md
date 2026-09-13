@@ -3,16 +3,16 @@
 Orientation for an agent picking this project up. The code is heavily commented and the documents
 linked below explain the design; this file is the part that is not obvious from reading a file.
 
-| Document | What it covers |
-| --- | --- |
-| [README.md](README.md) | What the app is and does, for a human |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Modules, data flow, caching, the screen pattern |
-| [docs/PROVIDERS.md](docs/PROVIDERS.md) | The provider contract, every capability, what each source can do |
-| [docs/GAMES.md](docs/GAMES.md) | What a `GameProfile` and a `GameArt` declare, and what each game declares |
-| [docs/PROVIDER_RESEARCH.md](docs/PROVIDER_RESEARCH.md) | Dated measurements of each source's API |
-| [database/README.md](database/README.md) | Why the card store is SQLite, with the benchmark |
-| [docs/NATIVE_DESKTOP.md](docs/NATIVE_DESKTOP.md) | The experimental Kotlin/Native desktop target |
-| [iosApp/README.md](iosApp/README.md) | The iOS shell, and why there is no `.xcodeproj` |
+| Document                                               | What it covers                                                            |
+|--------------------------------------------------------|---------------------------------------------------------------------------|
+| [README.md](README.md)                                 | What the app is and does, for a human                                     |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)           | Modules, data flow, caching, the screen pattern                           |
+| [docs/PROVIDERS.md](docs/PROVIDERS.md)                 | The provider contract, every capability, what each source can do          |
+| [docs/GAMES.md](docs/GAMES.md)                         | What a `GameProfile` and a `GameArt` declare, and what each game declares |
+| [docs/PROVIDER_RESEARCH.md](docs/PROVIDER_RESEARCH.md) | Dated measurements of each source's API                                   |
+| [database/README.md](database/README.md)               | Why the card store is SQLite, with the benchmark                          |
+| [docs/NATIVE_DESKTOP.md](docs/NATIVE_DESKTOP.md)       | The experimental Kotlin/Native desktop target                             |
+| [iosApp/README.md](iosApp/README.md)                   | The iOS shell, its Xcode target, and what is actually verified            |
 
 ---
 
@@ -161,6 +161,15 @@ silently off on desktop. `CardStoreFactory.pragma` is the query form and reads t
 `DesktopDriverFactory.DURABILITY` sets them as connection properties; `StoreDurabilityTest` reads
 all four back off a fresh connection.
 
+**SQLiter takes a database name, not a path, and quietly relocates the file if you let it.** iOS
+reaches the system sqlite3 through SQLiter, which rejects a name containing `/` — so handing it
+`AppStorage.databaseFile` threw "contains a path separator" on first launch on a phone. The check
+runs in `DatabaseConfiguration`'s `init`, *before* `onConfiguration`, so the name has to be clean
+going in and the directory goes in `extendedConfig.basePath`. Leaving `basePath` unset is the worse
+half: the file lands under Application Support/databases, which `IosDriverFactory.delete` does not
+look at, so the recovery path in `CardStoreFactory.open` would delete nothing, reopen the same
+damaged file and throw on a store it had just been told to discard.
+
 **A range is not a set of values.** The filter sheet built its cost chips by expanding the store's
 `MIN..MAX`, and Magic's Gleemax has a mana value of 1,000,000 — so one card turned a sixteen-value
 axis into a million and the sheet ran out of memory opening. `costsInGame` answers with the values
@@ -251,11 +260,13 @@ an entry when it stops being true.
 
 **Unverified, and why**
 
-- **iOS has never been linked or run.** Kotlin compiles for both iOS targets in every build; the
-  framework, the Swift shell and a simulator run need a Mac.
+- **iOS links and launches, and has never drawn a screen.** `iosApp.xcodeproj` exists as of
+  2026-09-14; the simulator build succeeds and a device build runs far enough to start composing.
+  Two fatal startup bugs found that day are fixed and **not** re-run — the plist key and the
+  SQLiter name, both in [iosApp/README.md](iosApp/README.md).
 - **The card store has been opened on Android once, and it crashed** — the pragma trap above. That
   is fixed and the fix is *not* confirmed on a device, nor is the one-off cleanup of a pre-store
-  install. iOS has never opened it at all.
+  install. On iOS it has been reached and has never successfully opened.
 - **Everything changed on 2026-09-13 is desktop-verified only.** The project owner's phone is
   deliberately not used for testing; headless renderers are the substitute for anything visual.
 - **Scryfall's live suite has not had a clean run** since it tripped its own rate limit: 12 checks

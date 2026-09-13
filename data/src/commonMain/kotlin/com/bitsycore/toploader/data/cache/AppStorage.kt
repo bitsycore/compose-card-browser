@@ -40,8 +40,8 @@ class AppStorage(
 	 * space back. Browsing records in it are evictable by our own budget, which is a decision this
 	 * app makes rather than one the OS makes for it.
 	 *
-	 * Android and iOS ignore the path and use their own per-app database location, which has the
-	 * same property. Desktop honours it.
+	 * Desktop and iOS honour this path. Android keeps only the file name and lets the framework
+	 * place the file, in a per-app location with the same property.
 	 */
 	val databaseFile: Path get() = preferencesRoot / DATABASE_FILE
 

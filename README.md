@@ -76,7 +76,7 @@ Requires JDK 21 and the Android SDK. On Windows, `local.properties` needs forwar
 ./gradlew desktopTest              # the test suite
 ```
 
-iOS compiles in every build but has never been linked or run — see
+iOS links and launches as of 2026-09-14, and has not yet reached a screen — see
 [iosApp/README.md](iosApp/README.md). An experimental Kotlin/Native desktop target exists and is off
 by default: [docs/NATIVE_DESKTOP.md](docs/NATIVE_DESKTOP.md).
 
@@ -91,7 +91,9 @@ SQLDelight 2.3.2, Koin 4.2.2, Coil 3.6.2. `minSdk` 24.
 
 ## Known limitations
 
-- **iOS is unverified.** The Kotlin compiles; nothing has ever been linked or run.
+- **iOS is barely verified.** It links, and it launches on a device far enough to start composing.
+  It has not yet drawn a screen, and two fatal startup bugs found on 2026-09-14 are fixed but not
+  re-run. See [iosApp/README.md](iosApp/README.md).
 - **Only three sources publish set symbols** — Scryfall, TCGdex and YGOPRODeck. Every other set row
   shows its code in a tinted tile, which is a fallback and not a logo.
 - **Card art is whatever the source publishes.** There is no higher-resolution fetch, because most

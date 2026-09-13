@@ -29,8 +29,9 @@ import app.cash.sqldelight.db.SqlDriver
 interface DriverFactory {
 
 	/**
-	 * @param path where to put the file, or `null` for an in-memory database. Desktop honours the
-	 *   path; Android and iOS use their own per-app locations and ignore it
+	 * @param path where to put the file, or `null` for an in-memory database. Desktop and iOS
+	 *   honour it; Android keeps the file name and lets the framework place the file, because
+	 *   `AndroidSqliteDriver` has its own opinion about the directory and two is one too many
 	 */
 	fun create(path: String?): SqlDriver
 

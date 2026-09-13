@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "73A9EE9DC7F4E42557AF3BE3"
-               BuildableName = ".app"
+               BuildableName = "Toploader.app"
                BlueprintName = "Toploader"
                ReferencedContainer = "container:iosApp.xcodeproj">
             </BuildableReference>
@@ -44,7 +44,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "73A9EE9DC7F4E42557AF3BE3"
-            BuildableName = ".app"
+            BuildableName = "Toploader.app"
             BlueprintName = "Toploader"
             ReferencedContainer = "container:iosApp.xcodeproj">
          </BuildableReference>

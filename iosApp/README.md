@@ -8,54 +8,85 @@ Three files, and none of them contain any of the app. Everything Toploader does 
 - `iosApp/ContentView.swift` — wraps the Compose view controller for SwiftUI.
 - `iosApp/Info.plist` — bundle metadata.
 
-## There is no `.xcodeproj` in this repository, on purpose
+## Status, as of 2026-09-14
 
-It was developed on Windows, where no part of the iOS build can be run: Kotlin/Native cannot
-produce Apple binaries off a Mac, and Xcode does not exist here. A `project.pbxproj` is a large
-generated file with build-phase references that are easy to get subtly wrong and impossible to
-check without Xcode, so shipping an unverified one would be worse than shipping none — it would
-look finished and fail on first open.
+`iosApp.xcodeproj` exists. It was absent for the whole of the project's history before this, and
+the reason was good at the time: the app was developed on Windows, where no part of the iOS build
+can be run, and an unverified `project.pbxproj` would have looked finished and failed on first open.
 
-**What this means concretely: the iOS target compiles nowhere in this repository's history. It is
-unverified.** The Kotlin is written and the Swift is written; whether they link has not been
-demonstrated.
+What is confirmed:
 
-## Creating the project on a Mac
+- **The simulator build links.** `xcodebuild -project iosApp/iosApp.xcodeproj -scheme Toploader
+  -sdk iphonesimulator -configuration Debug build` succeeded and produced `Toploader.app`. This is
+  the first time the iOS target has linked at all.
+- **A device build installs and launches.** The app got as far as Compose's composition and Koin's
+  graph on a physical iPhone, and threw there twice. Both are fixed below.
 
-1. Confirm the shared framework builds at all — this is the first thing to check, and the first
-   thing that will fail if something is wrong:
+What is not:
 
-   ```bash
-   ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64
-   ```
+- **The app has never reached a screen.** Neither fix below has been re-run.
+- Everything under "What to check first" remains unlooked-at.
 
-   The framework lands in
-   `composeApp/build/bin/iosSimulatorArm64/debugFramework/ComposeApp.framework`.
+## Three things the copied project got wrong
 
-2. In Xcode, create a new iOS App named `iosApp` in the `iosApp/` directory (SwiftUI lifecycle,
-   Swift). Replace the generated `ContentView.swift` and `iosAppApp.swift` with the two files
-   already here, and point the target at the `Info.plist` here.
+`project.pbxproj` was adapted from another app's and arrived carrying three of its settings.
 
-3. Add a Run Script build phase *before* "Compile Sources", so Gradle builds the framework
-   whenever Xcode does:
+- **`PRODUCT_NAME` was unset.** Xcode then builds a bundle with an empty name, and
+  `EXECUTABLE_PATH` collapses onto the bundle directory, so the task that creates the wrapper and
+  the task that links the executable claim the same path:
 
-   ```bash
-   cd "$SRCROOT/.."
-   ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode
-   ```
+  ```
+  Multiple commands produce '…/Build/Products/Debug-iphoneos/.app'
+  ```
 
-4. Set `Framework Search Paths` to
-   `$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)` and add
-   `ComposeApp.framework` to "Frameworks, Libraries, and Embedded Content" as *Do Not Embed*
-   (the framework is static — see `isStatic = true` in `composeApp/build.gradle.kts`).
+  The empty name in the message is the tell. The fix is `PRODUCT_NAME` in both target
+  configurations, and `Toploader.app` for the product reference and the scheme's two
+  `BuildableName` entries.
+- **`OTHER_LDFLAGS` carried `-framework "MapLibre"`.** This app has no map.
+- **`DEVELOPMENT_ASSET_PATHS` named a `Preview Content` folder** that does not exist here.
 
-5. Build and run on an **Apple Silicon** simulator or a device. `iosX64` is not a declared target:
-   Compose Multiplatform 1.12.0 does not publish an Intel-simulator artifact, so an Intel Mac
-   cannot run this in a simulator at all.
+## Insets belong to Compose, not to SwiftUI
 
-## What to check first when it does run
+`ContentView` uses `.ignoresSafeArea()`. That is the counterpart to `enableEdgeToEdge()` in
+`MainActivity` — iOS has no edge-to-edge flag to set, so the only way to hand Compose the whole
+screen is to stop SwiftUI shrinking the view.
 
-The three things most likely to differ from desktop:
+It was `.ignoresSafeArea(.keyboard)`, which is what the JetBrains template ships, and on an iPhone
+SE
+that put a status bar's worth of empty space above the top bar: SwiftUI inset the hosting view and
+Compose then inset the content inside it again. Nothing in `commonMain` overrides
+`contentWindowInsets` or a top bar's `windowInsets`, so the Material 3 defaults are the app's single
+source of insets, on both platforms.
+
+## Two runtime traps, both fatal, neither a build error
+
+- **Compose Multiplatform requires `CADisableMinimumFrameDurationOnPhone`.** Without `<true/>` in
+  `Info.plist`, its own sanity check throws `IllegalStateException` during composition: the app
+  launches, shows nothing and dies. The key is iOS's opt-in to refresh rates above 60 Hz.
+- **SQLiter takes a database *name*, not a path** — see `IosDriverFactory`. It rejects a name
+  containing a separator, so handing it `AppStorage.databaseFile` threw *"contains a path
+  separator"* up through four layers of Koin. The directory belongs in `basePath`, and putting it
+  there also keeps `create` and `delete` pointing at the same file.
+
+## Settings that matter
+
+Everything else in the target is Xcode's default. These are not.
+
+| Setting                                  | Value                                                                          | Why                                                                                                                                                                         |
+|------------------------------------------|--------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Run Script phase, before Compile Sources | `./gradlew :composeApp:embedAndSignAppleFrameworkForXcode`                     | Builds the Kotlin framework whenever Xcode builds                                                                                                                           |
+| `FRAMEWORK_SEARCH_PATHS`                 | `$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)` | Where that task leaves the framework                                                                                                                                        |
+| `ENABLE_USER_SCRIPT_SANDBOXING`          | `NO`                                                                           | Gradle writes outside the sandbox                                                                                                                                           |
+| `OTHER_LDFLAGS`                          | `-ObjC -l"c++" -lsqlite3 -framework "ComposeApp"`                              | `ComposeApp` is static (`isStatic = true`), so it is linked rather than embedded. SQLiter is a cinterop wrapper over the system sqlite3, which is what `-lsqlite3` supplies |
+| `EXCLUDED_ARCHS[sdk=iphonesimulator*]`   | `x86_64`                                                                       | `iosX64` is not a declared target: Compose Multiplatform 1.12.0 publishes no Intel-simulator artifact, so an Intel Mac cannot run this in a simulator at all                |
+
+`IPHONEOS_DEPLOYMENT_TARGET` is 15.0, Xcode's default, and is probably too low: the simulator link
+warned that Compose's bundled ICU object is built for iOS 18.5. It linked anyway, and it has not
+been changed.
+
+## What to check first
+
+The three things most likely to differ from desktop, none of them yet looked at:
 
 - The card grid's `GridCells.Adaptive` column count at phone widths.
 - Japanese and Korean glyphs, if a provider ever supplies them — desktop and iOS resolve fonts
@@ -64,10 +95,10 @@ The three things most likely to differ from desktop:
 
 ## App icon
 
-`iosApp/Assets.xcassets/AppIcon.appiconset/` holds the icon set and its `Contents.json`, in the
-layout Xcode expects. It is already in the right place: when a project is generated here, add
-`Assets.xcassets` to the target's resources and set **App Icons Source** to `AppIcon`, and nothing
-else is needed.
+`iosApp/Assets.xcassets/AppIcon.appiconset/` holds the icon set and its `Contents.json`. The
+synchronised folder group picks the catalogue up on its own and `ASSETCATALOG_COMPILER_APPICON_NAME`
+is set, so nothing else was needed: the simulator build produced `Assets.car` and
+`AppIcon60x60@2x.png` in the bundle, with `CFBundleIconName` in its `Info.plist`.
 
-Like everything else under `iosApp/`, this has **not** been verified in Xcode -- there is no Mac on
-the machine this was built on. The files are the icon kit's own output, unmodified.
+`ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME` names an `AccentColor` the catalogue does not
+contain. Another leftover, and harmless.

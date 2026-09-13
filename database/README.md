@@ -44,10 +44,10 @@ filtering in memory. `searchPrintings` does contains, *not*-contains, type, rari
 and domain in one indexed query, in 15 ms across 150,000 rows. There is no version of that on a
 filesystem.
 
-**iOS compiles.** `iosArm64` and `iosSimulatorArm64` both build with `native-driver` referenced
-from `iosMain`, not merely declared. That is compilation, not linking — the framework has still
-never been linked and this does not change that, but the dependency resolves and the Kotlin
-compiles, which is the part that could have failed outright.
+**iOS links.** `iosArm64` and `iosSimulatorArm64` both build with `native-driver` referenced from
+`iosMain`, not merely declared, and as of 2026-09-14 the framework links into an app that runs on a
+phone. SQLite reaches it through SQLiter, a cinterop wrapper over the system `libsqlite3`, which is
+what `-lsqlite3` in the Xcode target supplies.
 
 ## One database, not one per game
 
@@ -113,7 +113,9 @@ made kept records anonymous.
 - **The Android driver has opened a real file once, and crashed.** `PRAGMA journal_mode=WAL`
   returns a row, and Android's `execute` refuses any statement that does — see the pragma trap in
   [CLAUDE.md](../CLAUDE.md). That is fixed and the fix has **not** been confirmed on a device.
-  `NativeSqliteDriver` compiles for both iOS targets and has never opened anything.
+- **The iOS driver has been reached once, and has never opened anything.** `IosDriverFactory` handed
+  SQLiter a full path, which it rejects — see the SQLiter trap in [CLAUDE.md](../CLAUDE.md). Fixed,
+  and **not** re-run on a device.
 - **The desktop driver is the one that is covered.** `CardStoreRecoveryTest` opens, reopens,
   corrupts, truncates and recovers an actual database on disk — and the reopen case exists because
   the first version of that driver called `Schema.create` unconditionally, which works on a fresh

@@ -17,13 +17,19 @@ struct ComposeView: UIViewControllerRepresentable {
 /*
  The root view.
 
- The keyboard safe area is ignored because Compose insets its own text fields; the
- rest is left alone so the top bar sits under the status bar rather than behind it.
+ The whole safe area is ignored, and that is iOS's half of `enableEdgeToEdge()` in MainActivity --
+ there is no edge-to-edge flag to set on iOS, only a layout to decline to shrink. Compose owns the
+ insets from here: all ten screens use the Material 3 Scaffold defaults, and FullscreenCardViewer
+ wants the whole screen and pads its own controls with `WindowInsets.safeDrawing`.
+
+ Insetting here as well left a status bar's worth of empty space above the top bar on an iPhone SE:
+ SwiftUI shrank the view, then Compose inset the content inside it again. `.ignoresSafeArea()`
+ covers every region including the keyboard, which is the one this used to name.
  */
 struct ContentView: View {
 
 	var body: some View {
 		ComposeView()
-			.ignoresSafeArea(.keyboard)
+            .ignoresSafeArea()
 	}
 }

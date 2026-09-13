@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		A2EE6660564CD05DB9B8D622 /* .app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = .app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2EE6660564CD05DB9B8D622 /* Toploader.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Toploader.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -45,7 +45,7 @@
 		05F8443FDADD06A21D40B68B /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A2EE6660564CD05DB9B8D622 /* .app */,
+				A2EE6660564CD05DB9B8D622 /* Toploader.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -81,7 +81,7 @@
 			packageProductDependencies = (
 			);
 			productName = iosApp;
-			productReference = A2EE6660564CD05DB9B8D622 /* .app */;
+			productReference = A2EE6660564CD05DB9B8D622 /* Toploader.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -169,7 +169,6 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"iosApp/Preview Content\"";
 				DEVELOPMENT_TEAM = P78Y665PAT;
 				ENABLE_PREVIEWS = YES;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
@@ -197,9 +196,8 @@
 					"-lsqlite3",
 					"-framework",
 					"\"ComposeApp\"",
-					"-framework",
-					"\"MapLibre\"",
 				);
+				PRODUCT_NAME = Toploader;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -278,7 +276,6 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"iosApp/Preview Content\"";
 				DEVELOPMENT_TEAM = P78Y665PAT;
 				ENABLE_PREVIEWS = YES;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
@@ -306,9 +303,8 @@
 					"-lsqlite3",
 					"-framework",
 					"\"ComposeApp\"",
-					"-framework",
-					"\"MapLibre\"",
 				);
+				PRODUCT_NAME = Toploader;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
