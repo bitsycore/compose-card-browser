@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.data
 
+import com.bitsycore.cardbrowser.data.cache.InMemoryMetadataStore
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.model.ProviderId
@@ -320,16 +321,7 @@ class DownloadManagerTest {
 				providers = emptyList(),
 				routes = emptyList(),
 			),
-			mCache = com.bitsycore.cardbrowser.data.cache.MetadataCache(
-				mStorage = com.bitsycore.cardbrowser.data.cache.AppStorage(
-					okio.fakefilesystem.FakeFileSystem(),
-					"/cache".toPath(),
-					"/prefs".toPath(),
-				).also { it.prepare() },
-				mJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true },
-				mIoDispatcher = kotlinx.coroutines.Dispatchers.Unconfined,
-				mClock = { 0L },
-			),
+			mCache = InMemoryMetadataStore(),
 			mSetStore = com.bitsycore.cardbrowser.data.cache.InMemorySetRecordStore(),
 			mClock = { 0L },
 		)

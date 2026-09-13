@@ -126,7 +126,15 @@ object StorageContract :
 		/** Ask before deleting: this is hundreds of megabytes and a long re-download. */
 		data class DeleteRequested(val game: KeptGame?) : Intent
 
-		data object DeleteConfirmed : Intent
+		/**
+		 * Carries its target rather than reading `pendingDelete` back.
+		 *
+		 * The reducer runs before `handleIntent`, so by the time the view model looks, the dialog
+		 * has already been closed and `pendingDelete` is null -- the delete did nothing and
+		 * `isDeleting` stayed true, greying every trash icon on the screen until it was left.
+		 * `PulseDispatchOrderTest` pins the ordering.
+		 */
+		data class DeleteConfirmed(val game: KeptGame) : Intent
 
 		data object DeleteFinished : Intent
 
@@ -166,7 +174,7 @@ object StorageContract :
 
 		// The dialog closes on confirm rather than when the work finishes: leaving it up over a
 		// progress state invites a second tap on a button that has already been pressed.
-		Intent.DeleteConfirmed -> state.copy(pendingDelete = null, isDeleting = true)
+		is Intent.DeleteConfirmed -> state.copy(pendingDelete = null, isDeleting = true)
 
 		Intent.DeleteFinished -> state.copy(isDeleting = false, isLoading = true)
 

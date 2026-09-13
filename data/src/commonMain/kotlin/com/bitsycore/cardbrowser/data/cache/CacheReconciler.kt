@@ -31,7 +31,7 @@ import com.bitsycore.cardbrowser.data.settings.PreferencesStore
  * codebase will not ship.
  */
 class CacheReconciler(
-	private val mMetadataCache: MetadataCache,
+	private val mMetadataStore: MetadataStore,
 	private val mPreferences: PreferencesStore,
 ) {
 
@@ -49,7 +49,7 @@ class CacheReconciler(
 		// The whole metadata directory, not a selective sweep. An old install's complete-set
 		// records are hashed filenames indistinguishable from a set list's, so there is nothing to
 		// select on -- and everything in here is one request away, which is why it is a cache.
-		if (vIsOldGeneration) mMetadataCache.clear()
+		if (vIsOldGeneration) mMetadataStore.clear()
 
 		val vHadClaims = vPreferences.bulkImports.isNotEmpty() || vPreferences.imageDownloads.isNotEmpty()
 		mPreferences.update { vCurrent ->

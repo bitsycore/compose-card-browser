@@ -119,6 +119,40 @@ class CardStoreFactory(private val mDriverFactory: DriverFactory) {
 		if (vResult != "ok") {
 			throw IllegalStateException("integrity_check said: ${vResult ?: "nothing"}")
 		}
+		verifyShape(driver)
+	}
+
+	/**
+	 * Fails when the file is sound but older than the schema the code expects.
+	 *
+	 * This project ships no migrations before 1.0: a table added to `Printing.sq` keeps schema
+	 * version 1, so SQLDelight sees a matching version and runs nothing, and the first query
+	 * against the new table throws "no such table" somewhere deep in a screen. Checking the shape
+	 * up front turns that into the discard-and-recreate path that already exists, which is the
+	 * intended answer -- everything in the store is re-fetchable.
+	 */
+	private fun verifyShape(driver: SqlDriver) {
+		val vMissing = REQUIRED_TABLES.filter { vTable ->
+			driver.executeQuery(
+				identifier = null,
+				sql = "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
+				mapper = { vCursor ->
+					vCursor.next()
+					app.cash.sqldelight.db.QueryResult.Value(vCursor.getLong(0) ?: 0L)
+				},
+				parameters = 1,
+				binders = { bindString(0, vTable) },
+			).value == 0L
+		}
+		if (vMissing.isNotEmpty()) {
+			throw IllegalStateException("the card store is missing ${vMissing.joinToString()}")
+		}
+	}
+
+	private companion object {
+
+		/** Every table the code queries. A store without one of them is an older store. */
+		val REQUIRED_TABLES = listOf("printing", "cached_set", "game_facets", "metadata")
 	}
 }
 

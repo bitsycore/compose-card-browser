@@ -159,7 +159,7 @@ class StorageContractTest {
 		var vState = StorageContract.reduce(UiState(), Intent.DeleteRequested(game("magic", 100)))
 		assertTrue(vState.pendingDelete != null)
 
-		vState = StorageContract.reduce(vState, Intent.DeleteConfirmed)
+		vState = StorageContract.reduce(vState, Intent.DeleteConfirmed(vState.pendingDelete!!))
 
 		assertNull(vState.pendingDelete)
 		assertTrue(vState.isDeleting)

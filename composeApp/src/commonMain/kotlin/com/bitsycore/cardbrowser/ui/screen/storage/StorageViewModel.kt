@@ -28,9 +28,8 @@ class StorageViewModel(
 		when (intent) {
 			StorageContract.Intent.Refresh -> load()
 
-			StorageContract.Intent.DeleteConfirmed -> {
-				// Read before the reducer clears it: confirming closes the dialog.
-				val vTarget = stateFlow.value.pendingDelete ?: return
+			is StorageContract.Intent.DeleteConfirmed -> {
+				val vTarget = intent.game
 				viewModelScope.launch {
 					val vRemoved = mRepository.deleteKept(vTarget.game)
 					// The import record goes with the records it describes. Leaving it would have

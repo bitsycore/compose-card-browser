@@ -7,7 +7,7 @@ import com.bitsycore.cardbrowser.core.provider.BulkCatalogue
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.cache.CacheManager
-import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.MetadataStore
 import com.bitsycore.cardbrowser.data.download.DownloadManager
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.repository.SetCatalogueWarmer
@@ -67,6 +67,10 @@ class AppModuleTest {
 				// nothing asks for them once something else answers for `SetRecordStore`.
 				single<com.bitsycore.cardbrowser.data.cache.SetRecordStore> {
 					com.bitsycore.cardbrowser.data.cache.InMemorySetRecordStore()
+				}
+				// Metadata lives in the same database, so it is overridden on the same terms.
+				single<com.bitsycore.cardbrowser.data.cache.MetadataStore> {
+					com.bitsycore.cardbrowser.data.cache.InMemoryMetadataStore()
 				}
 				single<com.bitsycore.cardbrowser.platform.LinkOpener> {
 					object : com.bitsycore.cardbrowser.platform.LinkOpener {
@@ -354,7 +358,7 @@ class AppModuleTest {
 
 		assertNotNull(vKoin.get<CardRepository>())
 		assertNotNull(vKoin.get<CacheManager>())
-		assertNotNull(vKoin.get<MetadataCache>())
+		assertNotNull(vKoin.get<MetadataStore>())
 		assertNotNull(vKoin.get<DownloadManager>())
 		assertNotNull(vKoin.get<SetCatalogueWarmer>())
 		assertNotNull(vKoin.get<PreferencesStore>())

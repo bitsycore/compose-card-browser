@@ -220,6 +220,42 @@ WHERE game = ? AND cost IS NOT NULL
 ORDER BY cost;
 
 -- ==========================================================================
+-- The small records: set lists, card detail, per-set language answers
+-- ==========================================================================
+
+-- Everything a provider told us that is not a card row.
+--
+-- These lived in one JSON file each under the cache directory, with their own atomic-replace, their
+-- own LRU and their own byte budget -- a whole storage subsystem for three kinds of record. They
+-- are here now, so the app has exactly one place card data lives.
+--
+-- The key is opaque: `CacheKey` joins schema version, provider, scope and language, and only the
+-- repository knows how to build one. The payload is the same JSON envelope that used to be the
+-- file's contents, so nothing about staleness or schema compatibility changed.
+CREATE TABLE metadata (
+    key     TEXT NOT NULL PRIMARY KEY,
+    payload TEXT NOT NULL
+);
+
+readMetadata:
+SELECT payload FROM metadata WHERE key = ?;
+
+putMetadata:
+INSERT OR REPLACE INTO metadata (key, payload) VALUES (?, ?);
+
+deleteMetadata:
+DELETE FROM metadata WHERE key = ?;
+
+clearMetadata:
+DELETE FROM metadata;
+
+metadataBytes:
+SELECT COALESCE(SUM(LENGTH(payload)), 0) FROM metadata;
+
+metadataCount:
+SELECT COUNT(*) FROM metadata;
+
+-- ==========================================================================
 -- The filter values, remembered
 -- ==========================================================================
 

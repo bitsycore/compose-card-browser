@@ -234,7 +234,7 @@ fun StorageContent(
 				)
 			},
 			confirmButton = {
-				TextButton(onClick = { dispatch(StorageContract.Intent.DeleteConfirmed) }) {
+				TextButton(onClick = { dispatch(StorageContract.Intent.DeleteConfirmed(vGame)) }) {
 					Text("Delete")
 				}
 			},

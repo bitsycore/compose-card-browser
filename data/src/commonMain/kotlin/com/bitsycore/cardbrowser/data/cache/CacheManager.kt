@@ -19,7 +19,7 @@ import okio.Path
  */
 class CacheManager(
 	private val mStorage: AppStorage,
-	private val mMetadataCache: MetadataCache,
+	private val mMetadataStore: MetadataStore,
 	/**
 	 * Where the bytes actually are.
 	 *
@@ -29,7 +29,7 @@ class CacheManager(
 	 */
 	private val mSetStore: SetRecordStore,
 	private val mIoDispatcher: CoroutineDispatcher,
-	private val mMetadataLimitBytes: () -> Long = { MetadataCache.DEFAULT_MAX_BYTES },
+	private val mMetadataLimitBytes: () -> Long = { DEFAULT_CARD_DATA_MAX_BYTES },
 	private val mImageCacheMaxBytes: () -> Long = { DEFAULT_IMAGE_CACHE_MAX_BYTES },
 ) {
 
@@ -46,7 +46,7 @@ class CacheManager(
 			// The image directory is the only walk left, and it is the expensive one -- thousands
 			// of files after a full browse of Magic. Started first so the two counts overlap.
 			val vImages = async { directorySize(mStorage.imageCacheDir) }
-			val vMetadata = mMetadataCache.snapshot()
+			val vMetadata = mMetadataStore.snapshot()
 			// Counts, not a directory walk. This is what the migration bought the storage screen:
 			// measured on 2026-09-11, the same figures took 2456 ms out of the file cache and
 			// 14.4 ms out of the store.
@@ -72,7 +72,7 @@ class CacheManager(
 
 	/** Empties every card record, downloads included. Preferences are untouched. */
 	suspend fun clearMetadata() {
-		mMetadataCache.clear()
+		mMetadataStore.clear()
 		mSetStore.clear()
 	}
 
@@ -88,8 +88,8 @@ class CacheManager(
 		// Everything in the metadata cache is browsing data now -- nothing in it is ever kept on
 		// purpose -- and the sets that *are* kept are rows with a `pinned` flag rather than files
 		// that had to be told apart from their neighbours.
-		val vSnapshot = mMetadataCache.snapshot()
-		mMetadataCache.clear()
+		val vSnapshot = mMetadataStore.snapshot()
+		mMetadataStore.clear()
 		return vSnapshot.entryCount + mSetStore.trim(ceilingBytes = 0L)
 	}
 
@@ -128,7 +128,7 @@ class CacheManager(
 	 * than drifting under it over the next few writes.
 	 */
 	suspend fun trimMetadata() {
-		mMetadataCache.trim()
+		// Only the sets. The metadata table is unbounded on purpose -- see `MetadataStore`.
 		mSetStore.trim(mMetadataLimitBytes())
 	}
 
@@ -165,6 +165,9 @@ class CacheManager(
 		 * precisely why a disposable cache is the right place to be generous.
 		 */
 		const val DEFAULT_IMAGE_CACHE_MAX_BYTES: Long = 1024L * 1024 * 1024
+
+		/** The card store's default ceiling, for callers that do not read the user's. */
+		const val DEFAULT_CARD_DATA_MAX_BYTES: Long = 2L * 1024 * 1024 * 1024
 	}
 }
 

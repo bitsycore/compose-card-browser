@@ -100,6 +100,39 @@ class SqlCardStore(driver: SqlDriver) {
 	}
 
 	// ==================
+	// MARK: Provider metadata
+	// ==================
+
+	/**
+	 * The small records a provider serves that are not cards: set lists, card detail, search pages
+	 * and language probes.
+	 *
+	 * Opaque on purpose. The key is built by the repository and the payload is a JSON envelope it
+	 * owns, so this layer stores strings and nothing here needs to know what a set list is. They
+	 * are here rather than in files so that card data lives in exactly one place.
+	 */
+	fun readMetadata(key: String): String? = mQueries.readMetadata(key).executeAsOneOrNull()
+
+	fun writeMetadata(key: String, payload: String) = mQueries.putMetadata(key, payload)
+
+	fun removeMetadata(key: String) = mQueries.deleteMetadata(key)
+
+	fun hasMetadata(key: String): Boolean = mQueries.readMetadata(key).executeAsOneOrNull() != null
+
+	fun clearMetadata() = mQueries.clearMetadata()
+
+	/**
+	 * What the metadata occupies, and how many records there are.
+	 *
+	 * Payload length rather than page size, matching how [writeSet] measures a set: a figure that
+	 * changes when the database is vacuumed is one nobody can reason about.
+	 */
+	fun metadataSnapshot(): Pair<Long, Int> =
+		mQueries.metadataBytes().executeAsOne().let { vBytes ->
+			(vBytes ?: 0L) to mQueries.metadataCount().executeAsOne().toInt()
+		}
+
+	// ==================
 	// MARK: Pins and the budget
 	// ==================
 

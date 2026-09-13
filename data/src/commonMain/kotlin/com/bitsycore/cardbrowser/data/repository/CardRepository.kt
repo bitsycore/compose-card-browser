@@ -29,7 +29,7 @@ import com.bitsycore.cardbrowser.data.cache.CacheEnvelope
 import com.bitsycore.cardbrowser.data.cache.CacheKey
 import com.bitsycore.cardbrowser.data.cache.CacheScope
 import com.bitsycore.cardbrowser.data.cache.Completeness
-import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.MetadataStore
 import com.bitsycore.cardbrowser.data.cache.CardSearchFilter
 import com.bitsycore.cardbrowser.data.cache.SetRecordStore
 import com.bitsycore.cardbrowser.sqlstore.StoredFacets
@@ -66,7 +66,7 @@ import kotlinx.serialization.serializer
  */
 class CardRepository(
 	private val mRegistry: ProviderRegistry,
-	private val mCache: MetadataCache,
+	private val mCache: MetadataStore,
 	/**
 	 * Where complete sets live.
 	 *

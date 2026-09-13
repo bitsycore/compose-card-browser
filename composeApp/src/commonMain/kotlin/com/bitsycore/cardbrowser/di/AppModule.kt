@@ -7,7 +7,8 @@ import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.cache.CacheManager
 import com.bitsycore.cardbrowser.data.cache.CacheReconciler
-import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.MetadataStore
+import com.bitsycore.cardbrowser.data.cache.SqlMetadataStore
 import com.bitsycore.cardbrowser.data.cache.SetRecordStore
 import com.bitsycore.cardbrowser.data.cache.SqlSetRecordStore
 import com.bitsycore.cardbrowser.sqlstore.CardStoreFactory
@@ -103,20 +104,6 @@ val appModule = module {
 
 	single { PreferencesStore(get(), get(), Dispatchers.Default) }
 
-	single {
-		MetadataCache(
-			mStorage = get(),
-			mJson = get(),
-			mIoDispatcher = Dispatchers.Default,
-			// Not the user's limit. This cache holds only small, always-evictable records now --
-			// set lists, card detail, search pages, language probes -- and the ceiling the settings
-			// screen shows governs the card store, which is where the bytes are. Two ceilings
-			// dividing one number between them is a limit that means neither thing.
-			mMaxBytes = { MetadataCache.DEFAULT_MAX_BYTES },
-			mClock = { nowEpochMillis() },
-		)
-	}
-
 	// The card store, in three bindings because the middle one can fail and has to say so.
 	//
 	// `open` verifies the database and recreates it if it is damaged, so this is where a corrupt
@@ -131,13 +118,18 @@ val appModule = module {
 		val vOpened: OpenedStore = get()
 		SqlSetRecordStore(vOpened.store, Dispatchers.Default, wasRecovered = vOpened.wasRecovered)
 	}
-	single { CacheReconciler(mMetadataCache = get(), mPreferences = get()) }
+	// Set lists, card detail, search pages and language probes -- the same database, so there is
+	// one place card data lives and one set of numbers describing it.
+	single<MetadataStore> {
+		SqlMetadataStore(get<OpenedStore>().store, get(), Dispatchers.Default)
+	}
+	single { CacheReconciler(mMetadataStore = get(), mPreferences = get()) }
 
 	single {
 		val vPreferences: PreferencesStore = get()
 		CacheManager(
 			mStorage = get(),
-			mMetadataCache = get(),
+			mMetadataStore = get(),
 			mSetStore = get(),
 			mIoDispatcher = Dispatchers.Default,
 			mMetadataLimitBytes = { vPreferences.preferences.value.metadataCacheLimitBytes },

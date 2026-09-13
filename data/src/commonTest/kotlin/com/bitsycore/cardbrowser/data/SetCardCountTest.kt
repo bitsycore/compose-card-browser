@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.data
 
+import com.bitsycore.cardbrowser.data.cache.CacheManager
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.game.GameVocabulary
 import com.bitsycore.cardbrowser.core.model.Artwork
@@ -27,7 +28,7 @@ import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.AppStorage
-import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.InMemoryMetadataStore
 import com.bitsycore.cardbrowser.data.cache.InMemorySetRecordStore
 import com.bitsycore.cardbrowser.data.cache.SetRecordStore
 import com.bitsycore.cardbrowser.data.repository.CardRepository
@@ -528,7 +529,7 @@ class SetCardCountTest {
 	 * `FakeFileSystem`. Complete sets are not files any more, so the store has to be shared on the
 	 * same terms or every such test reads an empty disk and looks like a cache that forgot.
 	 */
-		maxBytes: Long = MetadataCache.DEFAULT_MAX_BYTES,
+		maxBytes: Long = CacheManager.DEFAULT_CARD_DATA_MAX_BYTES,
 	): CardRepository {
 		val vProvider = PartlyTranslatedProvider(
 			id = mProviderId,
@@ -542,13 +543,7 @@ class SetCardCountTest {
 				providers = listOf(vProvider),
 				routes = listOf(ProviderRoute(CountTestGame.id, vProvider.id)),
 			),
-			mCache = MetadataCache(
-				mStorage = vStorage,
-				mJson = Json { ignoreUnknownKeys = true },
-				mIoDispatcher = Dispatchers.Unconfined,
-				mMaxBytes = { maxBytes },
-				mClock = { mNow },
-			),
+			mCache = InMemoryMetadataStore(),
 			mSetStore = mStores.getOrPut(fileSystem) { InMemorySetRecordStore() },
 			mClock = { mNow },
 		)

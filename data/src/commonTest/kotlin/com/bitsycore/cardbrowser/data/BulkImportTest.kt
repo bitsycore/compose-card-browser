@@ -22,7 +22,7 @@ import com.bitsycore.cardbrowser.core.provider.ProviderCapabilities
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.AppStorage
-import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.InMemoryMetadataStore
 import com.bitsycore.cardbrowser.data.cache.InMemorySetRecordStore
 import com.bitsycore.cardbrowser.data.cache.SetRecordStore
 import com.bitsycore.cardbrowser.data.repository.BulkImportProgress
@@ -180,12 +180,7 @@ class BulkImportTest {
 				providers = listOf(provider),
 				routes = listOf(ProviderRoute(game = TestGameProfile.id, provider = provider.id)),
 			),
-			mCache = MetadataCache(
-				mStorage = vStorage,
-				mJson = Json { ignoreUnknownKeys = true },
-				mIoDispatcher = Dispatchers.Unconfined,
-				mClock = { 0L },
-			),
+			mCache = InMemoryMetadataStore(),
 			mSetStore = mStores.getOrPut(fileSystem) { InMemorySetRecordStore() },
 			mClock = { 0L },
 			mStorage = vStorage,
@@ -311,12 +306,7 @@ class BulkImportTest {
 			.also { it.prepare() }
 		val vRepository = CardRepository(
 			mRegistry = ProviderRegistry(providers = emptyList(), routes = emptyList()),
-			mCache = MetadataCache(
-				mStorage = vStorage,
-				mJson = Json { ignoreUnknownKeys = true },
-				mIoDispatcher = Dispatchers.Unconfined,
-				mClock = { 0L },
-			),
+			mCache = InMemoryMetadataStore(),
 			mSetStore = InMemorySetRecordStore(),
 			mClock = { 0L },
 			mStorage = vStorage,

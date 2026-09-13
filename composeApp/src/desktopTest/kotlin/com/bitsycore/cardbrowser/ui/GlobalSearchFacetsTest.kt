@@ -31,7 +31,7 @@ import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.cache.InMemorySetRecordStore
-import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.InMemoryMetadataStore
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.controller.BrowseSession
@@ -86,7 +86,7 @@ class GlobalSearchFacetsTest {
 			.also { it.prepare() }
 		val vRepository = CardRepository(
 			mRegistry = vRegistry,
-			mCache = MetadataCache(vStorage, Json { ignoreUnknownKeys = true }, Dispatchers.Unconfined) { 0L },
+			mCache = InMemoryMetadataStore(),
 			mSetStore = InMemorySetRecordStore(),
 			mClock = { 0L },
 		)
@@ -128,7 +128,7 @@ class GlobalSearchFacetsTest {
 			.also { it.prepare() }
 		val vRepository = CardRepository(
 			mRegistry = vRegistry,
-			mCache = MetadataCache(vStorage, Json { ignoreUnknownKeys = true }, Dispatchers.Unconfined) { 0L },
+			mCache = InMemoryMetadataStore(),
 			mSetStore = InMemorySetRecordStore(),
 			mClock = { 0L },
 		)
@@ -175,7 +175,7 @@ class GlobalSearchFacetsTest {
 		val vStore = InMemorySetRecordStore()
 		val vRepository = CardRepository(
 			mRegistry = vRegistry,
-			mCache = MetadataCache(vStorage, Json { ignoreUnknownKeys = true }, Dispatchers.Unconfined) { 0L },
+			mCache = InMemoryMetadataStore(),
 			mSetStore = vStore,
 			mClock = { 0L },
 		)

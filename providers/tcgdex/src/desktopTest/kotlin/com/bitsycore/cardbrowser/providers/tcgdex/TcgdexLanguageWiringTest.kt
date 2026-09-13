@@ -5,7 +5,7 @@ import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.AppStorage
-import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.InMemoryMetadataStore
 import com.bitsycore.cardbrowser.data.cache.SqlSetRecordStore
 import com.bitsycore.cardbrowser.sqlstore.DesktopDriverFactory
 import com.bitsycore.cardbrowser.sqlstore.SqlCardStore
@@ -66,12 +66,7 @@ class TcgdexLanguageWiringTest {
 				providers = listOf(vProvider),
 				routes = listOf(ProviderRoute(PokemonGame.id, TcgdexProvider.PROVIDER_ID)),
 			),
-			mCache = MetadataCache(
-				mStorage = vStorage,
-				mJson = Json { ignoreUnknownKeys = true },
-				mIoDispatcher = Dispatchers.IO,
-				mClock = { 0L },
-			),
+			mCache = InMemoryMetadataStore(),
 			mClock = { 0L },
 		)
 	}

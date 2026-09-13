@@ -8,7 +8,7 @@ import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.AppStorage
-import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.InMemoryMetadataStore
 import com.bitsycore.cardbrowser.data.cache.SqlSetRecordStore
 import com.bitsycore.cardbrowser.sqlstore.DesktopDriverFactory
 import com.bitsycore.cardbrowser.sqlstore.SqlCardStore
@@ -156,12 +156,7 @@ class RiftcodexLiveSmokeTest {
 		).also { it.prepare() }
 
 		try {
-			val vCache = MetadataCache(
-				mStorage = vStorage,
-				mJson = HttpClientFactory.json,
-				mIoDispatcher = Dispatchers.IO,
-				mClock = { Clock.System.now().toEpochMilliseconds() },
-			)
+			val vCache = InMemoryMetadataStore()
 			val vRegistry = ProviderRegistry(
 				providers = listOf(provider()),
 				routes = listOf(
@@ -224,12 +219,7 @@ class RiftcodexLiveSmokeTest {
 						),
 					),
 				),
-				mCache = MetadataCache(
-					mStorage = vStorage,
-					mJson = HttpClientFactory.json,
-					mIoDispatcher = Dispatchers.IO,
-					mClock = { Clock.System.now().toEpochMilliseconds() },
-				),
+				mCache = InMemoryMetadataStore(),
 				mClock = { Clock.System.now().toEpochMilliseconds() },
 			)
 
@@ -270,12 +260,7 @@ class RiftcodexLiveSmokeTest {
 					providers = listOf(provider()),
 					routes = listOf(ProviderRoute(RiftboundGame.id, RiftcodexProvider.PROVIDER_ID)),
 				),
-				mCache = MetadataCache(
-					mStorage = vStorage,
-					mJson = HttpClientFactory.json,
-					mIoDispatcher = Dispatchers.IO,
-					mClock = { Clock.System.now().toEpochMilliseconds() },
-				),
+				mCache = InMemoryMetadataStore(),
 				mClock = { Clock.System.now().toEpochMilliseconds() },
 			)
 

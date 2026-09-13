@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.data
 
+import com.bitsycore.cardbrowser.data.cache.MetadataStore
 import com.bitsycore.cardbrowser.core.model.Artwork
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardAttributes
@@ -29,7 +30,7 @@ import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.core.provider.ProviderRoute
 import com.bitsycore.cardbrowser.data.cache.Completeness
 import com.bitsycore.cardbrowser.data.cache.AppStorage
-import com.bitsycore.cardbrowser.data.cache.MetadataCache
+import com.bitsycore.cardbrowser.data.cache.InMemoryMetadataStore
 import com.bitsycore.cardbrowser.data.cache.CardSearchFilter
 import com.bitsycore.cardbrowser.data.cache.InMemorySetRecordStore
 import com.bitsycore.cardbrowser.data.cache.SetRecordStore
@@ -183,23 +184,20 @@ class CardRepositoryTest {
 	 */
 	private val mStores = mutableMapOf<okio.FileSystem, SetRecordStore>()
 
+	/** The metadata, shared on the same terms and for the same reason -- it is in the store now. */
+	private val mMetadata = mutableMapOf<okio.FileSystem, MetadataStore>()
+
 	private fun repositoryFor(
 		provider: CardProvider<GameProfile>,
 		fileSystem: FakeFileSystem = FakeFileSystem(),
 	): CardRepository {
 		val vStorage = AppStorage(fileSystem, "/cache".toPath(), "/prefs".toPath()).also { it.prepare() }
-		val vCache = MetadataCache(
-			mStorage = vStorage,
-			mJson = Json { ignoreUnknownKeys = true },
-			mIoDispatcher = Dispatchers.Unconfined,
-			mClock = { mNow },
-		)
 		return CardRepository(
 			mRegistry = ProviderRegistry(
 				providers = listOf(provider),
 				routes = listOf(ProviderRoute(TestGame.id, provider.id)),
 			),
-			mCache = vCache,
+			mCache = mMetadata.getOrPut(fileSystem) { InMemoryMetadataStore() },
 			mSetStore = mStores.getOrPut(fileSystem) { InMemorySetRecordStore() },
 			mClock = { mNow },
 		)
@@ -382,7 +380,7 @@ class CardRepositoryTest {
 		val vStorage = AppStorage(FakeFileSystem(), "/cache".toPath(), "/prefs".toPath()).also { it.prepare() }
 		val vRepository = CardRepository(
 			mRegistry = vRegistry,
-			mCache = MetadataCache(vStorage, Json, Dispatchers.Unconfined, mClock = { mNow }),
+			mCache = InMemoryMetadataStore(),
 			mSetStore = InMemorySetRecordStore(),
 			mClock = { mNow },
 		)
