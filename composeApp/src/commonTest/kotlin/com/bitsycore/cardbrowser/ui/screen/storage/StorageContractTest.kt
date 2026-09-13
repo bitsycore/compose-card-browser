@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.ui.screen.storage
 
+import com.bitsycore.cardbrowser.data.repository.Completion
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.data.cache.CacheUsage
 import com.bitsycore.cardbrowser.ui.screen.storage.StorageContract
@@ -107,7 +108,8 @@ class StorageContractTest {
 			thumbnailSets = 2,
 		)
 
-		assertEquals("2/8 sets · Thumbnails 2", vGame.summary)
+		assertEquals("2/8 sets", vGame.summary, "pictures are said separately now, in their own unit")
+		assertEquals("2/8 sets", vGame.artSummary)
 	}
 
 	@Test
@@ -123,6 +125,43 @@ class StorageContractTest {
 		)
 
 		assertEquals("2 sets", vGame.summary)
+	}
+
+	@Test
+	fun `cards and pictures are measured in different units and each says which`() {
+		// The percentage is a fraction of the game's *cards*; pictures are recorded one marker per
+		// *set*, so they are counted in sets. Printing both as bare percentages would put two
+		// differently counted numbers side by side, which is this project's oldest mistake.
+		val vGame = KeptGame(
+			game = GameId("riftbound"),
+			displayName = "Riftbound",
+			sets = 2,
+			bytes = 21_000_000,
+			knownSets = 8,
+			thumbnailSets = 2,
+			completion = Completion(heldCards = 376, totalCards = 1451, isEstimate = false),
+		)
+
+		assertEquals("25%", vGame.completion?.label, "376 of 1451 is 25.9%, and rounding is down")
+		assertEquals("2/8 sets", vGame.artSummary, "pictures name their unit")
+		assertEquals(0.25f, vGame.artFraction)
+	}
+
+	@Test
+	fun `a game with no pictures says nothing about them`() {
+		// Not "0/8 sets". Nobody asked for art here, so there is nothing to report.
+		val vGame = KeptGame(GameId("g"), "G", sets = 2, bytes = 1, knownSets = 8)
+
+		assertNull(vGame.artSummary)
+		assertNull(vGame.artFraction)
+	}
+
+	@Test
+	fun `pictures with no known set count are shown without a denominator`() {
+		val vGame = KeptGame(GameId("g"), "G", sets = 2, bytes = 1, thumbnailSets = 2)
+
+		assertEquals("2 sets", vGame.artSummary)
+		assertNull(vGame.artFraction, "no denominator, no bar")
 	}
 
 	@Test

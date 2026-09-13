@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -321,23 +322,7 @@ private fun KeptGameRow(
 			verticalAlignment = Alignment.CenterVertically,
 		) {
 			Column(Modifier.weight(1f)) {
-				Row(verticalAlignment = Alignment.CenterVertically) {
-					Text(
-						text = game.displayName,
-						style = MaterialTheme.typography.titleMedium,
-						modifier = Modifier.weight(1f, fill = false),
-					)
-					// The headline number. How much of the game is here answers the question a
-					// person opening this screen actually has, which a byte count does not.
-					game.completion?.let { vCompletion ->
-						Spacer(Modifier.size(8.dp))
-						Text(
-							text = vCompletion.label,
-							style = MaterialTheme.typography.titleMedium,
-							color = MaterialTheme.colorScheme.primary,
-						)
-					}
-				}
+				Text(game.displayName, style = MaterialTheme.typography.titleMedium)
 				Spacer(Modifier.height(2.dp))
 				Text(
 					text = buildList {
@@ -349,12 +334,21 @@ private fun KeptGameRow(
 					style = MaterialTheme.typography.bodySmall,
 					color = MaterialTheme.colorScheme.onSurfaceVariant,
 				)
+				// Two measures, each naming its own unit. Cards are a fraction of the game's
+				// cards; pictures are counted in sets, because that is what an image download
+				// records. Printing them as two bare percentages would put two differently
+				// counted numbers side by side, which is this project's oldest mistake.
 				game.completion?.let { vCompletion ->
-					Spacer(Modifier.height(6.dp))
-					LinearProgressIndicator(
-						progress = { vCompletion.fraction },
-						modifier = Modifier.fillMaxWidth(),
+					Spacer(Modifier.height(8.dp))
+					MeasureLine(
+						label = "Card info",
+						value = vCompletion.label,
+						fraction = vCompletion.fraction,
 					)
+				}
+				game.artSummary?.let { vArt ->
+					Spacer(Modifier.height(6.dp))
+					MeasureLine(label = "Pictures", value = vArt, fraction = game.artFraction)
 				}
 			}
 			Spacer(Modifier.size(4.dp))
@@ -365,6 +359,33 @@ private fun KeptGameRow(
 				)
 			}
 		}
+	}
+}
+
+/** One labelled measure and its bar. The label is the unit, so two of these cannot be confused. */
+@Composable
+private fun MeasureLine(label: String, value: String, fraction: Float?) {
+	Row(verticalAlignment = Alignment.CenterVertically) {
+		Text(
+			text = label,
+			style = MaterialTheme.typography.labelMedium,
+			color = MaterialTheme.colorScheme.onSurfaceVariant,
+			modifier = Modifier.width(72.dp),
+		)
+		if (fraction != null) {
+			LinearProgressIndicator(
+				progress = { fraction },
+				modifier = Modifier.weight(1f),
+			)
+			Spacer(Modifier.size(10.dp))
+		} else {
+			Spacer(Modifier.weight(1f))
+		}
+		Text(
+			text = value,
+			style = MaterialTheme.typography.labelLarge,
+			color = MaterialTheme.colorScheme.primary,
+		)
 	}
 }
 

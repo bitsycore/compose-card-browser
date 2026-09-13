@@ -456,7 +456,7 @@ class DownloadManager(
 			// 1. The card records. Needed even for an images-only download, because the image URLs
 			//    are on them -- but for images-only this is nearly always already a cache hit, so
 			//    it costs nothing beyond the read.
-			val vCards = mRepository
+			val vSnapshot = mRepository
 				.cards(
 					setId = vSetId,
 					game = vRequest.game,
@@ -465,11 +465,35 @@ class DownloadManager(
 				)
 				.toList()
 				.lastOrNull()
-				?.value
-				?.cards
-				.orEmpty()
+			val vCards = vSnapshot?.value?.cards.orEmpty()
 
 			currentCoroutineContext().ensureActive()
+
+			// A set that stopped part-way is not a finished download.
+			//
+			// The flow's last emission after a mid-fetch failure is a *partial* set: pages already
+			// collected are kept and written, marked incomplete, which is the right thing to do
+			// with them. This read only took its card count, so a set cut off half way reported
+			// `Completed` with however many cards had arrived -- and the queue moved on. A phone
+			// going to sleep during a multi-set download therefore left one set half here and
+			// nothing anywhere saying so.
+			//
+			// Only when card info was actually asked for. An images-only job runs against whatever
+			// is already stored and has no business failing because that happens to be partial.
+			if (vPinsRecords && vCards.isNotEmpty() && vSnapshot?.value?.isCompleteSet != true) {
+				val vKnown = vSnapshot?.value?.knownSetSize
+				update(job.id) {
+					DownloadStatus.Failed(
+						vSnapshot?.error?.message
+							?: if (vKnown != null) {
+								"Stopped at ${vCards.size} of $vKnown cards"
+							} else {
+								"Stopped at ${vCards.size} cards"
+							},
+					)
+				}
+				return
+			}
 
 			if (vCards.isEmpty()) {
 				// Not a failure. A set with no cards is a real thing a source can hold: a

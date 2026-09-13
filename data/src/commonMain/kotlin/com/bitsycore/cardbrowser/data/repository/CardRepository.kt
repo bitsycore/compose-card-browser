@@ -1691,8 +1691,10 @@ class CardRepository(
 
 		// The fullest edition of each set. A partial French copy of a set held whole in English
 		// says nothing extra about how much of the game is here.
-		val vBestBySet = held.groupBy { it.setId }.mapValues { (_, vRows) -> vRows.maxOf { it.cardCount } }
-		val vHeldCards = vBestBySet.values.sum()
+		val vBySet = held.groupBy { it.setId }
+		val vHeldBySet = vBySet.mapValues { (_, vRows) -> vRows.maxOf { it.cardCount } }
+		val vCompleteSets = vBySet.filterValues { vRows -> vRows.any { it.isComplete } }.keys
+		val vHeldCards = vHeldBySet.values.sum()
 
 		val vStatedSizes = catalogue.mapNotNull { it.cardCount?.takeIf { vCount -> vCount > 0 } }
 		// Failing that, what complete sets on disk actually turned out to hold.
@@ -1701,17 +1703,32 @@ class CardRepository(
 		if (vSample.isEmpty()) return null
 
 		val vMean = vSample.sum() / vSample.size
+		var vGuessedSets = 0
 		val vTotal = catalogue.sumOf { vSet ->
-			(vSet.cardCount?.takeIf { it > 0 } ?: vMean).toLong()
+			val vId = vSet.id.qualified
+			val vStated = vSet.cardCount
+			when {
+				// A set the source served every page of contributes exactly what it turned out to
+				// hold, on both sides of the ratio. Otherwise a game whose every set is complete
+				// could still read 97% -- against a set list that counts variants differently, or
+				// one that has gone stale -- while each of its sets reads 100% on the screen one
+				// tap away. The two rules have to agree, and this is the one that is measured.
+				vId in vCompleteSets -> vHeldBySet.getValue(vId).toLong()
+				vStated != null && vStated > 0 -> vStated.toLong()
+				else -> {
+					vGuessedSets++
+					vMean.toLong()
+				}
+			}
 		}
 		if (vTotal <= 0L) return null
 
 		return Completion(
 			heldCards = vHeldCards,
 			totalCards = vTotal.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
-			// Exact only when every set in the catalogue stated its own size. One guessed set makes
-			// the whole total a guess, and saying so is the point.
-			isEstimate = vStatedSizes.size < catalogue.size,
+			// A guess only where a set had to be guessed at. A complete set is measured and a
+			// stated one is quoted; neither is an estimate.
+			isEstimate = vGuessedSets > 0,
 		)
 	}
 

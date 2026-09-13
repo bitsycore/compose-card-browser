@@ -328,7 +328,31 @@ class CardRepositoryTest {
 		val vCompletion = vRepository.keptByGame().single().completion
 
 		assertEquals(50, vCompletion?.heldCards, "50 cards held, not 100 because it is stored twice")
-		assertEquals(100, vCompletion?.totalCards)
+	}
+
+	@Test
+	fun `a game whose every set is complete reads a hundred percent`() {
+		// The rule that makes the screen agree with itself. A set the source served every page of
+		// shows 100% on the breakdown, so the game row above it must not read 95% because the set
+		// list counts variants differently or has gone stale. What the source served is the
+		// confirmation; the catalogue's count is a claim -- the same distinction as everywhere
+		// else here -- and a shortfall nobody can ever clear is not a useful number.
+		//
+		// This was the reported symptom: a fully downloaded game stuck short of 100%.
+		val vProvider = FakeProvider(
+			id = mProviderId,
+			mPages = listOf(List(50) { card(it) }),
+			// The set list claims 100. The source serves 50 and says that is all of them.
+			mSets = listOf(CardSet(SourceId(mProviderId, "a"), TestGame.id, "A", "One", 100, null)),
+			mMaxPageSize = 100,
+		)
+		runTest {
+			val vRepository = repositoryFor(vProvider)
+			vRepository.setList(TestGame.id).toList()
+			vRepository.cards(SourceId(mProviderId, "a"), TestGame.id, CardQuery()).toList()
+
+			assertEquals(100, vRepository.keptByGame().single().completion?.percent)
+		}
 	}
 
 	@Test
@@ -1146,7 +1170,8 @@ class CardRepositoryTest {
  * that only passed because Riftbound's ladder happened to suit it would not be testing the
  * repository. The profile is the contract; this is an implementation of it.
  */
-private object TestGame : GameProfile {
+/** Shared across this source set, so two tests cannot end up with two games called "test". */
+internal object TestGame : GameProfile {
 
 	override val id: GameId = GameId("test-game")
 

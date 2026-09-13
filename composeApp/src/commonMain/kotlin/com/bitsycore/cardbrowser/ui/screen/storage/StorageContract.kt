@@ -92,13 +92,39 @@ object StorageContract :
 		val importedVariant: BulkImportRecord? = null,
 	) {
 
-		/** "988/988 sets · English · Thumbnails 2" -- only the parts that are there. */
+		/** "988/988 sets · English" -- only the parts that are there. Pictures are said separately. */
 		val summary: String
 			get() = buildList {
 				add(if (knownSets != null) "$sets/$knownSets sets" else "$sets sets")
 				if (infoLanguages.isNotEmpty()) add(languageSummary)
-				if (thumbnailSets > 0) add("Thumbnails $thumbnailSets")
 			}.joinToString(" · ")
+
+		/**
+		 * How many sets have their pictures, counted in *sets* and said so.
+		 *
+		 * Deliberately not folded into [completion], and deliberately not a bare percentage beside
+		 * it. That figure is a fraction of the game's **cards**; this is a fraction of its
+		 * **sets**, because that is the unit images are recorded in -- one marker per set, not a
+		 * count of files. Two percentages side by side counting different populations is the trap
+		 * this project has fallen into four times, so the noun is printed.
+		 *
+		 * Null when no pictures are held at all, so a game nobody downloaded art for says nothing
+		 * rather than "0/8 sets".
+		 */
+		val artSummary: String?
+			get() = when {
+				thumbnailSets <= 0 -> null
+				knownSets != null -> "$thumbnailSets/$knownSets sets"
+				else -> "$thumbnailSets sets"
+			}
+
+		/** The bar beside [artSummary]. Null where there is no denominator to draw against. */
+		val artFraction: Float?
+			get() {
+				val vKnown = knownSets ?: return null
+				if (vKnown <= 0 || thumbnailSets <= 0) return null
+				return (thumbnailSets.toFloat() / vKnown).coerceIn(0f, 1f)
+			}
 
 		/**
 		 * How the sets here were come by, when it is worth saying.
