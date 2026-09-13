@@ -1,6 +1,7 @@
 package com.bitsycore.cardbrowser.ui.cards
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -138,7 +139,7 @@ fun CardGridScreen(
 	 */
 	gameId: String? = null,
 	onBack: () -> Unit,
-	onOpenCard: (CardPrinting) -> Unit,
+	onOpenCard: (CardPrinting, String) -> Unit,
 	onOpenDownloads: () -> Unit = {},
 	viewModel: CardGridViewModel = koinViewModel(),
 ) {
@@ -156,7 +157,7 @@ fun CardGridScreen(
 
 			CardGridContract.Effect.NavigateBack -> onBack()
 
-			is CardGridContract.Effect.OpenCard -> onOpenCard(vEffect.card)
+			is CardGridContract.Effect.OpenCard -> onOpenCard(vEffect.card, vEffect.browseKey)
 
 			CardGridContract.Effect.OpenDownloads -> onOpenDownloads()
 		}
@@ -424,9 +425,17 @@ fun CardGridContent(
 				// request for more grid, and a search field that stays behind while the bar it
 				// belongs to collapses reads as a leftover. The query itself is untouched -- it
 				// survives as a chip, and the field returns on the way back up.
-				AnimatedVisibility(
-					visible = vState.isSearchOpen && vScrollBehavior.state.collapsedFraction < 0.5f,
-				) {
+				// Its own transition state, seeded with wherever the bar already is, rather than
+				// `visible = …`. `AnimatedVisibility` starts invisible and animates to its target
+				// on first composition, and this screen is re-composed every time a card detail is
+				// closed -- so returning from a card replayed the whole box sliding open, under a
+				// bar that had never changed. Seeding the initial state means the first frame is
+				// the resting one and only a real toggle animates.
+				val vSearchShown = vState.isSearchOpen &&
+					vScrollBehavior.state.collapsedFraction < 0.5f
+				val vSearchTransition = remember { MutableTransitionState(vSearchShown) }
+				vSearchTransition.targetState = vSearchShown
+				AnimatedVisibility(visibleState = vSearchTransition) {
 					Row(
 						modifier = Modifier.fillMaxWidth().padding(end = 8.dp),
 						verticalAlignment = Alignment.CenterVertically,

@@ -66,7 +66,9 @@ class CardGridViewModel(
 				emitEffect(CardGridContract.Effect.NavigateBack)
 
 			is CardGridContract.Intent.CardOpened ->
-				emitEffect(CardGridContract.Effect.OpenCard(intent.card))
+				emitEffect(
+					CardGridContract.Effect.OpenCard(intent.card, stateFlow.value.browseKey),
+				)
 
 			is CardGridContract.Intent.SetFilterChanged -> startLoad(debounce = false)
 
@@ -235,8 +237,7 @@ class CardGridViewModel(
 		// at all. Across sets there is no such request to make -- no source here answers "every
 		// Riftbound card matching this" -- so the only honest answer is what this device holds,
 		// and the screen says so.
-		val vSelected = vSnapshot.setIds
-		if (vSelected.size != 1 || vSelected.single() != vSnapshot.setId) {
+		if (vSnapshot.isStoredBrowse) {
 			startStoredLoad(vSnapshot, debounce)
 			return
 		}
@@ -360,7 +361,7 @@ class CardGridViewModel(
 				),
 			)
 			if (stateFlow.value.requestGeneration == vGeneration) {
-				mSession.publish(storedBrowseKey(snapshot), vResults.cards)
+				mSession.publish(snapshot.browseKey, vResults.cards)
 			}
 		}
 	}
@@ -386,10 +387,6 @@ class CardGridViewModel(
 			)
 		}
 	}
-
-	/** The key the detail screen swipes this list under, when the list is not one set. */
-	private fun storedBrowseKey(snapshot: CardGridContract.UiState): String =
-		"stored:" + snapshot.setIds.sorted().joinToString(",")
 
 	private fun gameOf(qualifiedSetId: String): GameProfile? =
 		SourceId.parse(qualifiedSetId)?.let { mRegistry.gameFor(it.provider) }

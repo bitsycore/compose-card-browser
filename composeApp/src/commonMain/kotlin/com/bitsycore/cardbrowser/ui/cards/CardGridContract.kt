@@ -175,6 +175,26 @@ object CardGridContract :
 		val activeFilterCount: Int get() = query.activeCount
 
 		/**
+		 * Whether this screen is reading the store rather than one set's provider.
+		 *
+		 * The axis the whole screen turns on, and it lives here because two places need the same
+		 * answer: the view model, to pick which load to start, and [browseKey], to name the list it
+		 * publishes. It was a condition written out in the view model and a string built next to
+		 * it, which is two copies of one rule.
+		 */
+		val isStoredBrowse: Boolean get() = setIds.size != 1 || setIds.single() != setId
+
+		/**
+		 * The name the detail screen swipes this list under.
+		 *
+		 * A set browse is the set. Anything else is the set of sets being searched, which is what
+		 * makes a card opened from a game-wide search carry that search's results into its top bar
+		 * rather than arriving alone.
+		 */
+		val browseKey: String
+			get() = if (isStoredBrowse) "stored:" + setIds.sorted().joinToString(",") else setId
+
+		/**
 		 * The sentence that keeps the screen honest, or `null` when nothing needs saying.
 		 *
 		 * Three cases, in order of how misleading their absence would be:
@@ -360,7 +380,11 @@ object CardGridContract :
 
 		data object NavigateBack : Effect
 
-		data class OpenCard(val card: CardPrinting) : Effect
+		/**
+		 * @param browseKey the list the detail should swipe, which is this grid as the user left
+		 *   it -- see [UiState.browseKey]
+		 */
+		data class OpenCard(val card: CardPrinting, val browseKey: String) : Effect
 
 		data object OpenDownloads : Effect
 

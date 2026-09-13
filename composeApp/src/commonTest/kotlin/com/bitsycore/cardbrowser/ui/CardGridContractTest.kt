@@ -28,6 +28,55 @@ import kotlin.test.assertTrue
  */
 class CardGridContractTest {
 
+	// ==================
+	// MARK: The browse key
+	// ==================
+
+	@Test
+	fun `a set browse is keyed on the set`() {
+		val vState = reduce(UiState(), Intent.SetSelected("scryfall:set:vow", "Crimson Vow", "VOW"))
+
+		assertFalse(vState.isStoredBrowse, "opening a set reads that set, not the store")
+		// The same string the detail screen falls back to, so opening a card from a set does not
+		// have to be told anything: the key and the card's set are one value.
+		assertEquals("scryfall:set:vow", vState.browseKey)
+	}
+
+	@Test
+	fun `a game-wide search is keyed on the sets it searched`() {
+		// What the set list's search button opens: this screen with no set ticked.
+		val vState = reduce(UiState(), Intent.GameSelected(MagicGame))
+
+		assertTrue(vState.isStoredBrowse, "with no set ticked there is no set to read")
+		assertEquals("stored:", vState.browseKey)
+	}
+
+	@Test
+	fun `widening a set browse changes the key -- and narrowing back restores it`() {
+		val vOpened = reduce(UiState(), Intent.SetSelected("scryfall:set:vow", "Crimson Vow", "VOW"))
+
+		// Two sets ticked is a search across both, and the key has to say which two -- a card
+		// opened from it swipes those results, not one set's.
+		val vWidened = reduce(
+			vOpened,
+			Intent.SetFilterChanged(setOf("scryfall:set:vow", "scryfall:set:mid")),
+		)
+		assertTrue(vWidened.isStoredBrowse)
+		assertEquals("stored:scryfall:set:mid,scryfall:set:vow", vWidened.browseKey)
+
+		// Sorted, so the same pair ticked in the other order is the same list and not a second one.
+		val vOtherOrder = reduce(
+			vOpened,
+			Intent.SetFilterChanged(setOf("scryfall:set:mid", "scryfall:set:vow")),
+		)
+		assertEquals(vWidened.browseKey, vOtherOrder.browseKey)
+
+		assertEquals(
+			vOpened.browseKey,
+			reduce(vWidened, Intent.SetFilterChanged(setOf("scryfall:set:vow"))).browseKey,
+		)
+	}
+
 	private fun reduce(state: UiState, vararg intents: Intent): UiState =
 		intents.fold(state) { vState, vIntent -> CardGridContract.reduce(vState, vIntent) }
 

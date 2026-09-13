@@ -325,9 +325,18 @@ fun App() {
 							setCode = vRoute.setCode,
 							gameId = vRoute.game,
 							onBack = { vBackStack.popRoute() },
-							onOpenCard = { vCard ->
+							// The card's *own* set, not the route's -- a game-wide search has no set
+							// and its cards come from many. That is what a fallback load reads and
+							// where "go to set" goes. The browse key is the grid as the user left
+							// it, filtered and sorted, so the detail's top bar carries the search
+							// it was opened from rather than one set.
+							onOpenCard = { vCard, vBrowseKey ->
 								vBackStack.add(
-									Route.Detail(cardId = vCard.id.qualified, setId = vRoute.setId),
+									Route.Detail(
+										cardId = vCard.id.qualified,
+										setId = vCard.setId.qualified,
+										browseKey = vBrowseKey,
+									),
 								)
 							},
 							onOpenDownloads = { vBackStack.add(Route.Downloads) },
