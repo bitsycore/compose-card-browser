@@ -12,8 +12,9 @@ plugins {
 val nativeDesktop = providers.gradleProperty("nativeDesktop").map(String::toBoolean).getOrElse(false)
 
 /** Writes `AppBuild.kt` from the version catalogue, so the app can say which build it is. */
-val vGenerateAppBuild by tasks.registering {
-	val vVersion = libs.versions.app.get()
+val vGenerateAppBuild = tasks.register("generateAppBuild") {
+	description = "Generates a Kotlin file with the app's version, so the About screen can read it."
+    val vVersion = libs.versions.app.get()
 	val vOut = layout.buildDirectory.dir("generated/appBuild")
 	inputs.property("version", vVersion)
 	outputs.dir(vOut)
