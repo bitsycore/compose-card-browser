@@ -109,41 +109,53 @@ class DownloadsUiTest {
 	// ==================
 
 	@Test
-	fun `a set that states its editions is downloaded in all of them`() {
+	fun `one language is downloaded by default whether the editions are stated or not`() {
 		val vStated = listOf(CardLanguage.ENGLISH, CardLanguage.FRENCH, CardLanguage.GERMAN)
 
-		// A record is a few kilobytes and switching language on a card already held is most of the
-		// reason for holding it, so all three are taken -- which is what the dialog always did and
-		// what the language chips must not quietly change.
+		// It used to take all three where the source stated them. That is a fine trade for one
+		// user's one set and a poor one across a catalogue -- three times the jobs and three times
+		// the traffic for a source, mostly for languages nobody reads.
 		assertEquals(
-			vStated.toSet(),
+			setOf(CardLanguage.FRENCH),
 			defaultInfoLanguages(vStated, CardLanguage.FRENCH, languagesAreClaimed = false),
 		)
-	}
-
-	@Test
-	fun `a source that states nothing starts on the preference alone`() {
-		val vClaimed = CardLanguage.PREFERENCE_ORDER
-
-		// The other half, and the reason the two are not one rule. This list is what the *source*
-		// serves, offered because it said nothing about the set -- ticking all eleven would queue
-		// eleven jobs for a set that may be printed in one.
+		// And the claimed case answers the same. The flag still changes the note beside the chips;
+		// it no longer changes what is ticked.
 		assertEquals(
 			setOf(CardLanguage.GERMAN),
-			defaultInfoLanguages(vClaimed, CardLanguage.GERMAN, languagesAreClaimed = true),
+			defaultInfoLanguages(
+				CardLanguage.PREFERENCE_ORDER,
+				CardLanguage.GERMAN,
+				languagesAreClaimed = true,
+			),
 		)
 	}
 
 	@Test
-	fun `a preference the offer does not contain falls back to the first offered`() {
-		// An English-only source with a French-preferring user. Ticking nothing would leave the
-		// Download button refusing to do anything, with no indication why.
+	fun `a preference the offer does not contain falls back to English`() {
+		// A French-preferring user and a source that serves no French. English rather than the
+		// first of the list, because it is the language a source is most likely to actually hold:
+		// a poor guess that returns cards beats a good one that returns none.
 		assertEquals(
 			setOf(CardLanguage.ENGLISH),
 			defaultInfoLanguages(
-				listOf(CardLanguage.ENGLISH),
+				listOf(CardLanguage.JAPANESE, CardLanguage.ENGLISH),
 				CardLanguage.FRENCH,
 				languagesAreClaimed = true,
+			),
+		)
+	}
+
+	@Test
+	fun `an offer with neither the preference nor English still ticks something`() {
+		// Nothing ticked leaves the Download button refusing with no indication why, so the first
+		// of whatever there is wins.
+		assertEquals(
+			setOf(CardLanguage.JAPANESE),
+			defaultInfoLanguages(
+				listOf(CardLanguage.JAPANESE, CardLanguage.KOREAN),
+				CardLanguage.FRENCH,
+				languagesAreClaimed = false,
 			),
 		)
 	}

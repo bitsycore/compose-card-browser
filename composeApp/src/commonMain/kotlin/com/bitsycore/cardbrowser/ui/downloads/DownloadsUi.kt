@@ -428,12 +428,17 @@ fun DownloadKindDialog(
 				if (vInfoLanguageChoosable) {
 					LanguagePicker(
 						title = "Card info languages",
+						// One by default either way -- see `defaultInfoLanguages`. What differs is
+						// whether the list is this set's editions or a menu of what the source
+						// serves, and that is worth saying because it changes what adding one
+						// means: a confirmed edition, or a request that may come back empty.
 						note = if (languagesAreClaimed) {
-							"This source has not said which editions this set has. These are the " +
-								"languages it serves; one that was never printed simply arrives " +
-								"empty."
+							"One language by default. This source has not said which editions " +
+								"this set has, so these are the ones it serves -- add any, and " +
+								"one that was never printed simply arrives empty."
 						} else {
-							"Records are small, so all ${languages.size} are taken by default."
+							"One language by default. Add any you want to be able to switch to " +
+								"offline; each is fetched separately."
 						},
 						languages = languages,
 						selected = vInfoLanguages,
@@ -760,29 +765,33 @@ internal fun cardInfoLanguageIsChosen(
 ): Boolean = !cardInfoIsElsewhere(isCardDataBundled, isCardInfoBulkOnly, setCount) && !hasBulkVariants
 
 /**
- * Which languages the records are fetched in when the dialog opens.
+ * Which languages the records are fetched in when the dialog opens: one.
  *
- * Extracted so the rule can be tested, like [infoIsComplete] beside it, because it is a rule rather
- * than a default: the two cases answer differently and getting them the wrong way round is either
- * a silently incomplete download or eleven speculative jobs.
+ * Extracted so the rule can be tested, like [infoIsComplete] beside it. It used to depend on
+ * whether the source *stated* a set's editions -- all of them if so -- on the reasoning that a
+ * record is a few kilobytes and switching language on a card already held is most of the reason for
+ * holding it. That reasoning is about one user's one set. Across a catalogue it is eleven jobs and
+ * eleven times the traffic for a source, almost all of it for languages nobody will read, and the
+ * project owner's call is that a download takes one language unless it is asked for more.
  *
- * A **stated** list is this set's editions. All of them, because a record is a few kilobytes and
- * being able to switch language on a card already held is most of the reason for holding it -- this
- * is what the dialog always did, and it is preserved.
+ * The one is the user's own preference where the offer contains it. English next, because it is the
+ * language a source is most likely to actually hold and a poor guess that returns cards beats a
+ * good one that returns none. Then whatever is first, so the Download button is never left refusing
+ * with nothing ticked.
  *
- * A **claimed** list is what the source serves in general, offered because the source said nothing
- * about this set. Ticking all of it would queue a job per language for a set that may be printed in
- * one, so only the preference starts on and the rest are there to add.
+ * [languagesAreClaimed] no longer changes the answer -- it did when a stated list meant "take them
+ * all" -- and is kept because it still changes what the note beside the chips says, which is a
+ * different question: whether the app knows these editions exist or is only offering to look.
  */
 internal fun defaultInfoLanguages(
 	languages: List<CardLanguage>,
 	defaultLanguage: CardLanguage?,
 	languagesAreClaimed: Boolean,
-): Set<CardLanguage> = if (languagesAreClaimed) {
-	setOfNotNull(defaultLanguage?.takeIf { it in languages } ?: languages.firstOrNull())
-} else {
-	languages.toSet()
-}
+): Set<CardLanguage> = setOfNotNull(
+	defaultLanguage?.takeIf { it in languages }
+		?: CardLanguage.ENGLISH.takeIf { it in languages }
+		?: languages.firstOrNull(),
+)
 
 internal fun infoIsComplete(
 	alreadyHave: Set<DownloadKind>,
