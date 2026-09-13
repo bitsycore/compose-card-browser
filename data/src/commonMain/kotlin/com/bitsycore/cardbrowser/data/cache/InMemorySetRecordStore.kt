@@ -240,8 +240,9 @@ class InMemorySetRecordStore(
 		if (setIds.isNotEmpty() && card.setId.qualified !in setIds) return false
 		// Unknown is not zero, which is the one rule worth keeping in step with the SQL.
 		val vCost = card.attributes.cost
-		if (minCost != null && (vCost == null || vCost < minCost!!)) return false
-		if (maxCost != null && (vCost == null || vCost > maxCost!!)) return false
+		// Exact membership, exactly as `searchPrintings` does it. A card with no cost at all
+		// matches nothing once a cost is chosen, which is what the SQL's `cost IS NOT NULL` says.
+		if (costs.isNotEmpty() && (vCost == null || vCost !in costs)) return false
 		return true
 	}
 

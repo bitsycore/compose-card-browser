@@ -157,6 +157,8 @@ WHERE game = :game
   AND (:rarities IS NULL OR (rarity IS NOT NULL AND instr('|' || :rarities || '|', '|' || rarity || '|') > 0))
   AND (:maxCost IS NULL OR (cost IS NOT NULL AND cost <= :maxCost))
   AND (:minCost IS NULL OR (cost IS NOT NULL AND cost >= :minCost))
+  AND (:cost IS NULL OR cost = :cost)
+  AND (:costs IS NULL OR (cost IS NOT NULL AND instr('|' || :costs || '|', '|' || cost || '|') > 0))
   AND (:domain IS NULL OR (domains IS NOT NULL AND domains LIKE '%' || :domain || '%'))
   AND (:setIds IS NULL OR instr('|' || :setIds || '|', '|' || set_id || '|') > 0)
   AND (:treatment IS NULL OR payload LIKE '%"treatment":"' || :treatment || '"%')

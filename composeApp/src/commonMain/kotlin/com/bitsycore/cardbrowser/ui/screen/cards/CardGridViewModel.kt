@@ -347,8 +347,8 @@ class CardGridViewModel(
 					rarities = vQuery.rarities,
 					domains = vQuery.domains,
 					treatments = vQuery.treatments,
-					minCost = vQuery.costs.minOrNull(),
-					maxCost = vQuery.costs.maxOrNull(),
+					// The chosen values, not the span between them. See `CardSearchFilter.costs`.
+					costs = vQuery.costs.toSet(),
 					setIds = snapshot.setIds,
 					language = vLanguage,
 				),

@@ -473,6 +473,14 @@ class SqlCardStore(driver: SqlDriver) {
 		rarities: Set<String> = emptySet(),
 		minCost: Int? = null,
 		maxCost: Int? = null,
+		/**
+		 * The costs to match, exactly -- "any of these", like every other chip axis.
+		 *
+		 * Separate from [minCost] and [maxCost], which are a span. The filter sheet offers values
+		 * and not a range, and collapsing its chips to `min..max` is how choosing 1 and 5 came back
+		 * with 2, 3 and 4 as well.
+		 */
+		costs: Set<Int> = emptySet(),
 		domains: Set<String> = emptySet(),
 		/** Artwork treatments by name, as `ArtworkTreatment` declares them. */
 		treatments: Set<String> = emptySet(),
@@ -493,6 +501,10 @@ class SqlCardStore(driver: SqlDriver) {
 			rarities = rarities.takeIf { it.size > 1 }?.let(::delimited),
 			maxCost = maxCost?.toLong(),
 			minCost = minCost?.toLong(),
+			// One value is an equality and uses the index; several is a delimited list, exactly as
+			// the card-type and rarity axes above.
+			cost = costs.singleOrNull()?.toLong(),
+			costs = costs.takeIf { it.size > 1 }?.let { vValues -> delimited(vValues.map { it.toString() }.toSet()) },
 			domain = domain?.let(::fold),
 			setIds = setIds.takeIf { it.isNotEmpty() }?.let(::delimited),
 			// Standard art is the absence of the field rather than a value of it, so it is asked

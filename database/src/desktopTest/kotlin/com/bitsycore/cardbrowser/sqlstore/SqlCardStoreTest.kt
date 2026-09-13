@@ -1,5 +1,7 @@
 package com.bitsycore.cardbrowser.sqlstore
 
+import com.bitsycore.cardbrowser.core.provider.CardQuery
+import com.bitsycore.cardbrowser.core.filter.CardFilterEngine
 import com.bitsycore.cardbrowser.core.model.Artwork
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.CardAttributes
@@ -329,6 +331,59 @@ class SqlCardStoreTest {
 	 * Positional on purpose: the point of each test is the argument it varies, and named arguments
 	 * for the five it does not would bury that.
 	 */
+	@Test
+	fun `chosen costs are matched exactly, not as the span between them`() {
+		// The reported-shaped bug: the filter sheet offers values, and the search collapsed them to
+		// `min..max`. Choosing 1 and 5 then returned 2, 3 and 4 as well -- while the same chips
+		// inside a set matched exactly, so one control meant two things.
+		write("s", null, "Set", true, 1L, (1..6).map { card(it, cost = it) })
+
+		val vHits = mStore.search(game = "test", costs = setOf(1, 5))
+
+		assertEquals(listOf(1, 5), vHits.mapNotNull { it.attributes.cost }.sorted())
+	}
+
+	@Test
+	fun `one chosen cost is an equality`() {
+		write("s", null, "Set", true, 1L, (1..4).map { card(it, cost = it) })
+
+		assertEquals(listOf(3), mStore.search(game = "test", costs = setOf(3)).mapNotNull { it.attributes.cost })
+	}
+
+	@Test
+	fun `a card with no cost matches nothing once a cost is chosen`() {
+		// `cost IS NOT NULL` in the statement. A Leader with no cost is not "cost 0".
+		write("s", null, "Set", true, 1L, listOf(card(1, cost = 2), card(2, cost = null)))
+
+		assertEquals(1, mStore.search(game = "test", costs = setOf(2)).size)
+		assertEquals(2, mStore.search(game = "test").size, "and is still there when no cost is asked for")
+	}
+
+	@Test
+	fun `the store and the filter engine answer the same chips the same way`() {
+		// The guard that actually matters, and the one that was missing.
+		//
+		// The same cost chips are applied by two different things: `CardFilterEngine` inside a set,
+		// this statement across a game. They disagreed -- the engine matched exact values, the
+		// search matched the span between them -- and nothing compared them, so the screen said two
+		// things depending on which path you arrived by. Both are real here: real SQLite, and the
+		// real engine over the same cards.
+		val vCards = (1..6).map { card(it, cost = it) }
+		write("s", null, "Set", true, 1L, vCards)
+
+		for (vChosen in listOf(setOf(1, 5), setOf(3), setOf(2, 3, 4), setOf(6), emptySet())) {
+			val vFromStore = mStore.search(game = "test", costs = vChosen)
+				.mapNotNull { it.attributes.cost }
+				.sorted()
+			val vFromEngine = CardFilterEngine
+				.apply(vCards, CardQuery(costs = vChosen), listOf("Common"))
+				.mapNotNull { it.attributes.cost }
+				.sorted()
+
+			assertEquals(vFromEngine, vFromStore, "the two disagree on $vChosen")
+		}
+	}
+
 	// ==================
 	// MARK: Removing part of a game
 	// ==================

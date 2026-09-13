@@ -191,8 +191,16 @@ data class CardSearchFilter(
 	/** Any of these, not all: chips on one axis are an OR, as they are in the card grid. */
 	val cardTypes: Set<String> = emptySet(),
 	val rarities: Set<String> = emptySet(),
-	val minCost: Int? = null,
-	val maxCost: Int? = null,
+	/**
+	 * The costs to match, exactly. Empty means every cost.
+	 *
+	 * A set and not a `min..max` span, because the filter sheet offers values rather than a range.
+	 * It *was* a span, filled by collapsing the chosen chips to their extremes -- so choosing 1 and
+	 * 5 searched 1 through 5 and returned 2, 3 and 4 as well, while the same chips inside a set
+	 * matched exactly. One control, two meanings. The span is still on `SqlCardStore.search`, which
+	 * is a real thing to be able to ask; nothing asks it through here.
+	 */
+	val costs: Set<Int> = emptySet(),
 	val domains: Set<String> = emptySet(),
 	/** Artwork treatments, as `ArtworkTreatment` names them. Alternate art, and its relatives. */
 	val treatments: Set<ArtworkTreatment> = emptySet(),
@@ -204,7 +212,7 @@ data class CardSearchFilter(
 	/** True when nothing is set, which is a request to show nothing rather than everything. */
 	val isEmpty: Boolean
 		get() = text.isNullOrBlank() && excludeText.isNullOrBlank() && cardTypes.isEmpty() &&
-			rarities.isEmpty() && minCost == null && maxCost == null && domains.isEmpty() &&
+			rarities.isEmpty() && costs.isEmpty() && domains.isEmpty() &&
 			treatments.isEmpty()
 }
 
@@ -338,8 +346,7 @@ class SqlSetRecordStore(
 			excludeText = filter.excludeText?.takeIf { it.isNotBlank() },
 			cardTypes = filter.cardTypes,
 			rarities = filter.rarities,
-			minCost = filter.minCost,
-			maxCost = filter.maxCost,
+			costs = filter.costs,
 			domains = filter.domains,
 			treatments = filter.treatments.mapTo(mutableSetOf()) { it.name },
 			setIds = filter.setIds,
