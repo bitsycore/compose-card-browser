@@ -38,12 +38,12 @@ androidxNavigationEvent = "1.1.0"
 pulse = "0.3.7"
 
 # Data / IO
-okio = "3.18.1"
+okio = "3.18.2"
 
 # Desktop only, and for one call. Windows has no AWT or Compose route to a dark title bar -- it is
 # `DwmSetWindowAttribute`, which needs a native call from the JVM. The alternative was the FFM API,
 # which is final in JDK 22 and preview in the 21 this project's toolchain targets.
-jna = "5.17.0"
+jna = "5.19.1"
 
 # Experimental: Compose Desktop on Kotlin/Native. See docs/NATIVE_DESKTOP.md.
 composeDesktopNative = "1.12.0-3"
@@ -55,7 +55,6 @@ ktor = "3.5.2"
 
 # Images. Coil 3 is the only mainstream image loader that targets Android, iOS and JVM desktop from
 # one API, and it accepts a Ktor engine so the app keeps a single HTTP stack.
-materialIconsCore = "1.7.3"
 coil = "3.6.2"
 
 # DI
