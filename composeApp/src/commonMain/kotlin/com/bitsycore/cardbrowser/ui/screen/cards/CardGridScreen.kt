@@ -455,8 +455,16 @@ fun CardGridContent(
 				val vSearchTransition = remember { MutableTransitionState(vSearchShown) }
 				vSearchTransition.targetState = vSearchShown
 				AnimatedVisibility(visibleState = vSearchTransition) {
+					// The inset belongs to the row, not to the field inside it.
+					//
+					// With the field carrying its own padding the row centred the button against a
+					// *padded* box, so the button sat below the outline it is meant to line up
+					// with -- and the field's own end inset pushed it further right than the set
+					// list's. Same shape as the set list now: one inset, shared.
 					Row(
-						modifier = Modifier.fillMaxWidth().padding(end = 8.dp),
+						modifier = Modifier
+							.fillMaxWidth()
+							.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
 						verticalAlignment = Alignment.CenterVertically,
 					) {
 						SearchField(
@@ -920,9 +928,9 @@ private fun SearchField(
 				vFocusManager.clearFocus()
 			},
 		),
-		// 12dp to the bar above, and 8dp here plus the 4dp of whatever follows below it. Measured
-		// rather than assumed, in `card-grid-chrome.png`.
-		modifier = modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
+		// No inset of its own: the row it sits in carries one for the field and the filter button
+		// together, which is what keeps the two centred against each other.
+		modifier = modifier,
 	)
 }
 

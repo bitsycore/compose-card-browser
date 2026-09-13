@@ -159,6 +159,7 @@ fun FilterSheet(
 				options = state.setOptions.map { FilterOption(it.id, it.name) },
 				selected = state.setIds,
 				anyLabel = "Everything downloaded",
+				alwaysMenu = true,
 				onToggle = { vId -> onSetsChanged(state.setIds.toggle(vId)) },
 				onClear = { onSetsChanged(emptySet()) },
 			)
@@ -397,8 +398,16 @@ private fun FilterValues(
 	onClear: () -> Unit,
 	/** What "nothing chosen" means on this axis. "Any" for a value, "everything" for a scope. */
 	anyLabel: String = "Any",
+	/**
+	 * True to use the dialog however few values there are.
+	 *
+	 * For the sets axis. Its length depends on what the user has downloaded, so left to the count
+	 * it would be chips today and a dialog next week -- and it is the axis whose values are long
+	 * names rather than one word, so even three of them wrap.
+	 */
+	alwaysMenu: Boolean = false,
 ) {
-	if (options.size <= CHIP_LIMIT) {
+	if (!alwaysMenu && options.size <= CHIP_LIMIT) {
 		FilterSection(title) {
 			options.forEach { vOption ->
 				FilterValueChip(
