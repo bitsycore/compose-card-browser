@@ -509,10 +509,7 @@ class SqlCardStore(driver: SqlDriver) {
 			costs = costs.takeIf { it.size > 1 }?.let { vValues -> delimited(vValues.map { it.toString() }.toSet()) },
 			domain = domain?.let(::fold),
 			setIds = setIds.takeIf { it.isNotEmpty() }?.let(::delimited),
-			// Standard art is the absence of the field rather than a value of it, so it is asked
-			// for separately. See the statement.
-			treatment = treatment?.takeIf { it != STANDARD_TREATMENT },
-			standardArt = if (treatment == STANDARD_TREATMENT) 1L else null,
+			treatment = treatment,
 			limit = limit.toLong(),
 		).executeAsList().map { JSON.decodeFromString(CardPrinting.serializer(), it) }
 
@@ -563,7 +560,6 @@ class SqlCardStore(driver: SqlDriver) {
 	private companion object {
 
 		/** The one treatment the serialiser omits, because it is the default. */
-		const val STANDARD_TREATMENT = "STANDARD"
 
 		/** Matches the file cache's parser: a record carries fields this build has no DTO for. */
 		val JSON = Json { ignoreUnknownKeys = true; explicitNulls = false }

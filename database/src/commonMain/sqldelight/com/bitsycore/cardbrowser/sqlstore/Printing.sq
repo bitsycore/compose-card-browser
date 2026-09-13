@@ -151,8 +151,12 @@ SELECT language, COUNT(*) AS total FROM cached_set GROUP BY language ORDER BY to
 -- Artwork treatment is read out of the payload rather than from a column of its own. It is the one
 -- axis with no projection beside it, and adding one would be a schema change to every install's
 -- downloaded cards for the sake of a filter. The payload is the serialised printing, and the only
--- field in it called `treatment` is the artwork's, so the substring is exact. Standard art carries
--- no such field at all -- the serialiser omits a default -- which is what `:standardArt` looks for.
+-- field in it called `treatment` is the artwork's, so the substring is exact.
+--
+-- Standard art was once looked for as the *absence* of the field, on the reasoning that the
+-- serialiser omits a default. `Artwork.treatment` has no default, so it is always written -- and
+-- the standard-art chip therefore matched nothing at all, in every game. It is a value like any
+-- other here now.
 --
 -- Domains have no multi form here. The column is itself a delimited list, so "any of these" is a
 -- set intersection and SQL cannot iterate both sides in one predicate -- see `SqlCardStore.search`,
@@ -178,7 +182,6 @@ WHERE game = :game
   AND (:domain IS NULL OR (domains IS NOT NULL AND domains LIKE '%' || :domain || '%'))
   AND (:setIds IS NULL OR instr('|' || :setIds || '|', '|' || set_id || '|') > 0)
   AND (:treatment IS NULL OR payload LIKE '%"treatment":"' || :treatment || '"%')
-  AND (:standardArt IS NULL OR (:standardArt = 1 AND payload NOT LIKE '%"treatment":%'))
 ORDER BY name_folded
 LIMIT :limit;
 

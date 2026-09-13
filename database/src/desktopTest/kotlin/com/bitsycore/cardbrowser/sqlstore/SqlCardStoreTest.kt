@@ -434,6 +434,58 @@ class SqlCardStoreTest {
 		}
 	}
 
+	@Test
+	fun `standard artwork can be filtered for like any other treatment`() {
+		// `Artwork.treatment` has no default, so it is always written into the payload. The store
+		// asked for standard art by looking for a payload with *no* treatment field, which no card
+		// has -- so the chip matched nothing at all, in every game.
+		write("s", null, "Set", true, 1L, listOf(
+			card(1, treatment = ArtworkTreatment.STANDARD),
+			card(2, treatment = ArtworkTreatment.ALTERNATE_ART),
+			card(3, treatment = ArtworkTreatment.STANDARD),
+		))
+
+		val vStandard = mStore.search(game = "test", treatments = setOf("STANDARD"))
+
+		assertEquals(listOf(1, 3), vStandard.map { it.collectorNumber.toInt() }.sorted())
+		assertEquals(
+			listOf(2),
+			mStore.search(game = "test", treatments = setOf("ALTERNATE_ART"))
+				.map { it.collectorNumber.toInt() },
+			"and the other treatments still work",
+		)
+	}
+
+	@Test
+	fun `every treatment the sheet is offered actually matches something`() {
+		// The worst pairing of the two, and the one that shipped: `gameHasTreatment` reads the
+		// payload and so *did* see standard art, while the search looked for the field's absence
+		// and saw none -- an offered chip that returns nothing. They read the payload the same way
+		// now, and this says so rather than trusting that they do.
+		write("s", null, "Set", true, 1L, listOf(
+			card(1, treatment = ArtworkTreatment.STANDARD),
+			card(2, treatment = ArtworkTreatment.ALTERNATE_ART),
+			card(3, treatment = ArtworkTreatment.FULL_ART),
+		))
+
+		val vOffered = mStore.treatmentsForGame(
+			game = "test",
+			candidates = ArtworkTreatment.entries.map { it.name },
+		)
+
+		assertEquals(
+			listOf("STANDARD", "ALTERNATE_ART", "FULL_ART").sorted(),
+			vOffered.sorted(),
+			"the sheet is offered exactly the treatments that are stored",
+		)
+		for (vTreatment in vOffered) {
+			assertTrue(
+				mStore.search(game = "test", treatments = setOf(vTreatment)).isNotEmpty(),
+				"$vTreatment is offered as a filter and matches nothing",
+			)
+		}
+	}
+
 	// ==================
 	// MARK: Removing part of a game
 	// ==================
@@ -532,6 +584,7 @@ class SqlCardStoreTest {
 		domains: List<String> = listOf("Fury"),
 		/** Overridable so a text test can use a name with no digits in it. */
 		name: String = "Card $number",
+		treatment: ArtworkTreatment = ArtworkTreatment.STANDARD,
 	): CardPrinting {
 		val vProvider = ProviderId("p")
 		return CardPrinting(
@@ -549,7 +602,7 @@ class SqlCardStoreTest {
 				imageUrl = "https://example.test/$number.png",
 				thumbnailUrl = null,
 				artist = null,
-				treatment = ArtworkTreatment.STANDARD,
+				treatment = treatment,
 				language = language,
 			),
 			attributes = CardAttributes(cost = cost),

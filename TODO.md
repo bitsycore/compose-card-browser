@@ -26,9 +26,12 @@ no entry, for the same reason it is in [CLAUDE.md](CLAUDE.md).
   `SqlCardStoreTest` runs the real engine and the real database over the same needles and asserts
   they agree.
 
-- [ ] **`ArtworkTreatment.STANDARD` cannot be filtered for in a stored browse.** *(unverified)*
-  The store has a `:standardArt` flag keyed on the payload *not* containing a treatment, which is a
-  different question from the treatment being `STANDARD`. Check what the adapters actually write.
+- [x] **`ArtworkTreatment.STANDARD` cannot be filtered for in a stored browse.**
+  *(fixed 2026-09-13)* Confirmed and worse than described: `Artwork.treatment` has no default, so
+  it is always serialised, and the `:standardArt` predicate looked for the field's *absence* — so
+  the chip matched nothing in every game, while `gameHasTreatment` read the payload and cheerfully
+  offered it. Standard art is a value like any other now, and a test asserts every treatment the
+  sheet is offered actually matches something.
 
 ---
 
