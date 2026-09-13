@@ -18,7 +18,10 @@ import com.bitsycore.lib.pulse.container.ContainerContract
  * Cache ceilings, prefetching, theme. Those are real settings and they live in Settings -- but
  * they are the settings *least* meaningful before the app has been used once, and a setup flow
  * that asks how many megabytes of card data you want is asking a question nobody can answer yet.
- * The last page points at Settings instead.
+ *
+ * It also no longer explains itself. A page of prose about what the app is and does not do stood
+ * between the last choice and the app; anyone who wants it can read the same points in Settings,
+ * and everyone else was tapping past it.
  *
  * ## Skipping is a choice, not a deferral
  *
@@ -53,11 +56,11 @@ object SetupContract : ContainerContract<SetupContract.UiState, SetupContract.In
 		val canAdvance: Boolean
 			get() = page != SetupPage.GAMES || selected.isNotEmpty()
 
-		val isLastPage: Boolean get() = page == SetupPage.ABOUT
+		val isLastPage: Boolean get() = page == SetupPage.entries.last()
 	}
 
-	/** The three pages, in order. */
-	enum class SetupPage { GAMES, LANGUAGE, ABOUT }
+	/** The two pages, in order. */
+	enum class SetupPage { GAMES, LANGUAGE }
 
 	sealed interface Intent {
 

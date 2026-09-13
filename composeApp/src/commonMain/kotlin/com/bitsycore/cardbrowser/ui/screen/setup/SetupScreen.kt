@@ -129,7 +129,6 @@ fun SetupContent(
 				when (state.page) {
 					SetupContract.SetupPage.GAMES -> GamesPage(state, dispatch, artFor)
 					SetupContract.SetupPage.LANGUAGE -> LanguagePage(state, dispatch)
-					SetupContract.SetupPage.ABOUT -> AboutPage()
 				}
 			}
 
@@ -254,37 +253,6 @@ private fun LanguagePage(state: SetupContract.UiState, dispatch: (SetupContract.
 	}
 }
 
-@Composable
-private fun AboutPage() {
-	Column(Modifier.verticalScroll(rememberScrollState())) {
-		PageHeading(
-			title = "What this app is",
-			body = "A browser for trading card games. Pick a game, browse its sets, and read a card.",
-		)
-		Spacer(Modifier.height(16.dp))
-		// Stated up front because each one is a thing someone will otherwise go looking for and
-		// conclude is broken. Saying so once here is cheaper than a support answer per user.
-		AboutPoint(
-			"No accounts, no collection tracking, no deckbuilding.",
-			"There is nothing to sign in to and nothing is sent anywhere.",
-		)
-		AboutPoint(
-			"No prices.",
-			"Some sources publish them; they carry no currency or timestamp, so they are not " +
-				"shown. Links out to Cardmarket and TCGplayer are on each card.",
-		)
-		AboutPoint(
-			"Card data comes from public community databases.",
-			"One per game, credited on every screen that uses it. This app is not affiliated " +
-				"with any publisher.",
-		)
-		AboutPoint(
-			"It works offline once a set is downloaded.",
-			"Browsing caches as you go; Settings has the storage limits and a way to clear them.",
-		)
-	}
-}
-
 // ==================
 // MARK: Parts
 // ==================
@@ -360,19 +328,7 @@ private fun PageHeading(title: String, body: String) {
 	}
 }
 
-@Composable
-private fun AboutPoint(title: String, body: String) {
-	Column(Modifier.padding(bottom = 14.dp)) {
-		Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-		Text(
-			text = body,
-			style = MaterialTheme.typography.bodySmall,
-			color = MaterialTheme.colorScheme.onSurfaceVariant,
-		)
-	}
-}
-
-/** Where you are in three pages, without a number to read. */
+/** Where you are in the flow, without a number to read. */
 @Composable
 private fun PageDots(current: Int, count: Int) {
 	Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -424,15 +380,6 @@ private fun SetupLanguagePreview() = PreviewFrame {
 			page = SetupContract.SetupPage.LANGUAGE,
 			language = CardLanguage.FRENCH,
 		),
-		dispatch = {},
-	)
-}
-
-@Preview
-@Composable
-private fun SetupAboutPreview() = PreviewFrame(isDark = false) {
-	SetupContent(
-		state = SetupContract.UiState(page = SetupContract.SetupPage.ABOUT),
 		dispatch = {},
 	)
 }

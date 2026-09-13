@@ -60,12 +60,12 @@ class SetupContractTest {
 	fun `a language page never blocks`() {
 		// Every language has a working default, and the fallback chain behind it means even a
 		// language a source cannot serve resolves to one it can. Nothing here is worth a wall.
-		val vLanguage = SetupContract.reduce(
-			loaded().copy(page = SetupContract.SetupPage.LANGUAGE, selected = emptySet()),
-			SetupContract.Intent.Advanced,
+		val vLanguage = loaded().copy(
+			page = SetupContract.SetupPage.LANGUAGE,
+			selected = emptySet(),
 		)
 
-		assertEquals(SetupContract.SetupPage.ABOUT, vLanguage.page)
+		assertTrue(vLanguage.canAdvance, "the language page has nothing worth blocking on")
 	}
 
 	@Test
@@ -73,11 +73,12 @@ class SetupContractTest {
 		val vFirst = SetupContract.reduce(loaded(), SetupContract.Intent.WentBack)
 		assertEquals(SetupContract.SetupPage.GAMES, vFirst.page)
 
+		val vEnd = SetupContract.SetupPage.entries.last()
 		val vLast = SetupContract.reduce(
-			loaded().copy(page = SetupContract.SetupPage.ABOUT),
+			loaded().copy(page = vEnd),
 			SetupContract.Intent.Advanced,
 		)
-		assertEquals(SetupContract.SetupPage.ABOUT, vLast.page)
+		assertEquals(vEnd, vLast.page)
 		assertTrue(vLast.isLastPage)
 	}
 

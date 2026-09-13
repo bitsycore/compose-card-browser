@@ -68,7 +68,7 @@ class SetupRenderer {
 		}
 		// The other two pages at one width, because what is being looked at there is the centring
 		// and the measure of the prose rather than a grid that changes shape.
-		for (vPage in listOf(SetupContract.SetupPage.LANGUAGE, SetupContract.SetupPage.ABOUT)) {
+		for (vPage in listOf(SetupContract.SetupPage.LANGUAGE)) {
 			renderToPng(vOut, "setup-${vPage.name.lowercase()}", 1100, 1200, density = 1.65f) {
 				SetupContent(state = SetupContract.UiState(page = vPage), dispatch = {})
 			}
