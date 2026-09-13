@@ -180,7 +180,25 @@ data class Artwork(
 	val treatment: ArtworkTreatment,
 	val language: CardLanguage?,
 	val accessibilityText: String? = null,
-)
+) {
+
+	/**
+	 * True when the source published any rendition of this art.
+	 *
+	 * False is a real answer and not a failure: TCGdex has whole sets it holds no scan of -- the
+	 * Japanese MEGA line, measured in [docs/PROVIDER_RESEARCH.md] -- and a screen must be able to
+	 * say "no image" rather than drawing the same broken-image mark it uses for a fetch that went
+	 * wrong.
+	 *
+	 * Any rendition, deliberately. `ImageVariant.chainFor` asks a narrower question -- which
+	 * renditions *this view* can use -- and a card with only a thumbnail has no display rendition
+	 * while plainly having a picture.
+	 */
+	val hasImage: Boolean
+		get() = imageUrl.isNotBlank() ||
+			!thumbnailUrl.isNullOrBlank() ||
+			!displayUrl.isNullOrBlank()
+}
 
 /** A physical finish. Which of these a printing actually exists in is [FinishCoverage]. */
 @Serializable

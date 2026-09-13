@@ -39,6 +39,9 @@ object AppIcons {
 
 	val ArrowUpward: ImageVector by lazy { symbol("ArrowUpward", "M440-160v-487L216-423l-56-57 320-320 320 320-56 57-224-224v487h-80Z") }
 
+	/** A picture frame with a line through it: there is no image, as opposed to a broken one. */
+	val HideImage: ImageVector by lazy { symbol("HideImage", "M792-56 686-160H200q-33 0-56.5-23.5T120-240v-486L56-790l56-56 736 736-56 54ZM240-320h366L486-440l-60 60-80-80-106 140Zm600 15-80-80v-375H385l-80-80h455q33 0 56.5 23.5T840-760v455ZM531-531Zm-95 95Z") }
+
 	val BrokenImage: ImageVector by lazy { symbol("BrokenImage", "M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm40-337 160-160 160 160 160-160 40 40v-183H200v263l40 40Zm-40 257h560v-264l-40-40-160 160-160-160-160 160-40-40v184Zm0 0v-264 80-376 560Z") }
 
 	val Check: ImageVector by lazy { symbol("Check", "M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z") }

@@ -50,6 +50,58 @@ class CardListRenderer {
 			}
 		}
 
+		// A set the source has no scans of at all -- the Japanese MEGA line on TCGdex. What this
+		// one is for is whether "No image" reads as a stated fact rather than as a failure.
+		renderToPng(vOut, "card-grid-no-artwork-small", 620, 700, density = 1.65f) {
+			CardGridContent(
+				state = CardGridContract.UiState(
+					setName = "インフェルノX",
+					setCode = "M2",
+					cards = PreviewData.CARDS.map {
+						it.copy(
+							artwork = it.artwork.copy(
+								imageUrl = "",
+								thumbnailUrl = null,
+								displayUrl = null,
+							),
+						)
+					},
+					isLoading = false,
+					isCompleteSet = true,
+					cachedCardCount = 10,
+					knownSetSize = 10,
+					tileSize = CardTileSize.entries.first(),
+					game = RiftboundGame,
+				),
+				dispatch = {},
+			)
+		}
+
+		renderToPng(vOut, "card-grid-no-artwork", 620, 700, density = 1.65f) {
+			CardGridContent(
+				state = CardGridContract.UiState(
+					setName = "インフェルノX",
+					setCode = "M2",
+					cards = PreviewData.CARDS.map {
+						it.copy(
+							artwork = it.artwork.copy(
+								imageUrl = "",
+								thumbnailUrl = null,
+								displayUrl = null,
+							),
+						)
+					},
+					isLoading = false,
+					// A whole set, so the only notice is the one about pictures.
+					isCompleteSet = true,
+					cachedCardCount = 10,
+					knownSetSize = 10,
+					game = RiftboundGame,
+				),
+				dispatch = {},
+			)
+		}
+
 		// The chrome above the grid, on the light theme where its edges can be seen: the bar, the
 		// search field under it and the first row of tiles. What this one is for is the two gaps
 		// either side of the field, which are easy to get unequal and hard to judge by eye.

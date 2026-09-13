@@ -534,6 +534,10 @@ fun CardGridContent(
 					}
 				}
 
+				vState.artworkNotice?.let { vNotice ->
+					NoticeBanner(text = vNotice, onAction = null)
+				}
+
 				vState.coverageNotice?.let { vNotice ->
 					NoticeBanner(
 						text = vNotice,

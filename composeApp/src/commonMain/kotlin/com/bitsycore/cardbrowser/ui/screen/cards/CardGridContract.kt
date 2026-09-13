@@ -231,6 +231,25 @@ object CardGridContract :
 		 * 2. Holding part of a set with no filter on. Less dangerous, still worth stating.
 		 * 3. Showing a saved copy while a refresh runs, or after one failed.
 		 */
+		/**
+		 * Said when the source has no picture of anything here.
+		 *
+		 * Its own notice rather than a branch of [coverageNotice], because it is a different fact
+		 * and both can be true at once -- a partly downloaded set with no scans needs to say both
+		 * things, and a `when` chain would pick one.
+		 *
+		 * All or nothing on purpose. Individual cards without art are ordinary -- TCGdex's own
+		 * `ja/sv8` has 32 of 138 -- and each already says "No image" on its tile. A whole set with
+		 * none is the case a reader reads as the app being broken, and it is the one worth a
+		 * sentence.
+		 */
+		val artworkNotice: String?
+			get() = if (cards.isNotEmpty() && cards.none { it.artwork.hasImage }) {
+				"This source has no card images for this set."
+			} else {
+				null
+			}
+
 		val coverageNotice: String?
 			get() = when {
 				!isCompleteSet && knownSetSize != null && cachedCardCount < knownSetSize ->

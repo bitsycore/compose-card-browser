@@ -195,6 +195,60 @@ class CardGridContractTest {
 		isFinal = true,
 	)
 
+	// ============
+	//  When the source has no pictures
+
+	@Test
+	fun `a set the source has no pictures of says so once`() {
+		// The reported confusion: TCGdex has no scans for the Japanese MEGA sets, so every tile
+		// drew a broken-image mark and the screen said nothing. A reader cannot tell that from an
+		// app that is failing to load, and assumed the second.
+		val vState = UiState(
+			cards = listOf(card("001"), card("002")).map { it.withoutArtwork() },
+			isLoading = false,
+		)
+
+		assertEquals("This source has no card images for this set.", vState.artworkNotice)
+	}
+
+	@Test
+	fun `one card without a picture is not worth a sentence`() {
+		// Ordinary: TCGdex's own `ja/sv8` has 32 of 138 without art. The tile says "No image" and
+		// that is the whole story -- a banner for it would cry wolf on most sets.
+		val vState = UiState(
+			cards = listOf(card("001").withoutArtwork(), card("002")),
+			isLoading = false,
+		)
+
+		assertNull(vState.artworkNotice)
+	}
+
+	@Test
+	fun `an empty grid says nothing about pictures`() {
+		// Nothing loaded is not evidence about what the source holds.
+		assertNull(UiState(cards = emptyList(), isLoading = false).artworkNotice)
+	}
+
+	@Test
+	fun `the picture notice and the coverage notice are both said`() {
+		// Two different facts, and a `when` chain would have picked one. A partly downloaded set
+		// with no scans has to say both.
+		val vState = UiState(
+			cards = listOf(card("001")).map { it.withoutArtwork() },
+			isLoading = false,
+			isCompleteSet = false,
+			cachedCardCount = 1,
+			knownSetSize = 116,
+		)
+
+		assertNotNull(vState.artworkNotice)
+		assertNotNull(vState.coverageNotice)
+	}
+
+	/** The same card with every rendition stripped, as a source with no scan of it returns. */
+	private fun com.bitsycore.cardbrowser.core.model.CardPrinting.withoutArtwork() =
+		copy(artwork = artwork.copy(imageUrl = "", thumbnailUrl = null, displayUrl = null))
+
 	private fun card(number: String, rarity: String = "Common") =
 		com.bitsycore.cardbrowser.core.model.CardPrinting(
 			id = com.bitsycore.cardbrowser.core.model.SourceId(

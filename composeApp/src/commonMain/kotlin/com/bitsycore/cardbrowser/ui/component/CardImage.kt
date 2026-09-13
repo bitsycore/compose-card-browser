@@ -1,5 +1,11 @@
 package com.bitsycore.cardbrowser.ui.component
 
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -102,8 +108,11 @@ fun CardImage(
 	val vChain = remember(artwork, variant) { variant.chainFor(artwork) }
 
 	if (vChain.isEmpty()) {
-		// Nothing to retry: the provider supplied no image at all.
-		ImagePlaceholder(modifier, isError = true, onRetry = null)
+		// Not an error. The source published no scan of this card -- TCGdex has whole sets like
+		// that, the Japanese MEGA line among them -- and saying so is different from failing to
+		// fetch something that exists. Drawing both as a broken-image icon left a reader to guess
+		// which, and the guess was always "the app is broken".
+		ImagePlaceholder(modifier, state = ImageAbsence.NOT_PUBLISHED, onRetry = null)
 		return
 	}
 
@@ -180,7 +189,7 @@ fun CardImage(
 					// sign that a better one is on the way.
 					LoadingOverlay()
 				} else {
-					ImagePlaceholder(Modifier.fillMaxSize(), isError = false, onRetry = null)
+					ImagePlaceholder(Modifier.fillMaxSize(), state = ImageAbsence.LOADING, onRetry = null)
 				}
 			},
 			error = {
@@ -206,7 +215,7 @@ fun CardImage(
 				}
 				ImagePlaceholder(
 					modifier = Modifier.fillMaxSize(),
-					isError = true,
+					state = ImageAbsence.FAILED,
 					// Offered only once every rendition has been spent, so the button is never a
 					// no-op and never pre-empts an escalation that is still coming.
 					onRetry = if (allowManualRetry && vUrl in vFailed) vRetry else null,
@@ -254,36 +263,92 @@ private fun evictCachedImage(context: PlatformContext, url: String) {
 	vLoader.diskCache?.remove(url)
 }
 
-/** A flat block the shape of the tile it fills. */
+/**
+ * Why there is no picture here.
+ *
+ * Three states, not two, because "the source never published one" and "this did not load" are
+ * opposite facts about whether anything is wrong -- and they used to draw the same broken-image
+ * icon. See the class doc.
+ */
+enum class ImageAbsence {
+
+	/** Still coming. Draws nothing but the block, so a grid does not flicker as tiles fill. */
+	LOADING,
+
+	/** The source has no scan of this card. Nothing is wrong and nothing will fix it. */
+	NOT_PUBLISHED,
+
+	/** There is a picture and it did not arrive. Worth retrying. */
+	FAILED,
+}
+
+/**
+ * A flat block the shape of the tile it fills.
+ *
+ * The label is drawn only where it fits. A grid tile on a phone is under a hundred pixels wide and
+ * "No image" in it is a smear; the icon alone carries the meaning there, and the content
+ * description carries it for a screen reader at every size.
+ */
 @Composable
 private fun ImagePlaceholder(
 	modifier: Modifier,
-	isError: Boolean,
+	state: ImageAbsence,
 	onRetry: (() -> Unit)?,
 ) {
-	Box(
+	BoxWithConstraints(
 		modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
 		contentAlignment = Alignment.Center,
 	) {
-		if (!isError) return@Box
+		if (state == ImageAbsence.LOADING) return@BoxWithConstraints
 
-		if (onRetry != null) {
-			Icon(
-				imageVector = AppIcons.Refresh,
-				contentDescription = "Image unavailable. Tap to try again.",
-				modifier = Modifier.size(32.dp).clickable(onClick = onRetry),
-				tint = MaterialTheme.colorScheme.onSurfaceVariant,
-			)
-		} else {
-			Icon(
-				imageVector = AppIcons.BrokenImage,
-				contentDescription = "Image unavailable",
-				modifier = Modifier.size(24.dp),
-				tint = MaterialTheme.colorScheme.onSurfaceVariant,
-			)
+		val vHasRoom = maxWidth >= LABEL_MIN_WIDTH && maxHeight >= LABEL_MIN_HEIGHT
+		Column(
+			horizontalAlignment = Alignment.CenterHorizontally,
+			verticalArrangement = Arrangement.Center,
+		) {
+			when {
+				onRetry != null -> Icon(
+					imageVector = AppIcons.Refresh,
+					contentDescription = "Image did not load. Tap to try again.",
+					modifier = Modifier.size(32.dp).clickable(onClick = onRetry),
+					tint = MaterialTheme.colorScheme.onSurfaceVariant,
+				)
+
+				state == ImageAbsence.NOT_PUBLISHED -> Icon(
+					imageVector = AppIcons.HideImage,
+					contentDescription = "No image: this source has no picture of this card",
+					modifier = Modifier.size(24.dp),
+					tint = MaterialTheme.colorScheme.onSurfaceVariant,
+				)
+
+				else -> Icon(
+					imageVector = AppIcons.BrokenImage,
+					contentDescription = "Image did not load",
+					modifier = Modifier.size(24.dp),
+					tint = MaterialTheme.colorScheme.onSurfaceVariant,
+				)
+			}
+			if (vHasRoom) {
+				Spacer(Modifier.size(6.dp))
+				Text(
+					text = when {
+						onRetry != null -> "Tap to retry"
+						state == ImageAbsence.NOT_PUBLISHED -> "No image"
+						else -> "Did not load"
+					},
+					style = MaterialTheme.typography.labelSmall,
+					color = MaterialTheme.colorScheme.onSurfaceVariant,
+					textAlign = TextAlign.Center,
+				)
+			}
 		}
 	}
 }
+
+/** Below this a label is a smear, so the icon carries it alone. */
+private val LABEL_MIN_WIDTH = 96.dp
+
+private val LABEL_MIN_HEIGHT = 72.dp
 
 /**
  * Which of a provider's renditions of one artwork to load.
