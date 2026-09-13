@@ -42,6 +42,7 @@ class CardListRenderer {
 						knownSetSize = 352,
 						viewMode = CardViewMode.LIST,
 						rowHeight = vHeight,
+						isSearchOpen = true,
 						// So a domain chip is drawn in the game's own colour rather than as its key.
 						game = RiftboundGame,
 					),

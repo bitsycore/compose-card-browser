@@ -5,6 +5,7 @@ import com.bitsycore.cardbrowser.core.game.GameProfile
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
+import com.bitsycore.cardbrowser.data.cache.CardSearchFilter
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
@@ -67,6 +68,8 @@ class CardGridViewModel(
 			is CardGridContract.Intent.CardOpened ->
 				emitEffect(CardGridContract.Effect.OpenCard(intent.card))
 
+			is CardGridContract.Intent.SetFilterChanged -> startLoad(debounce = false)
+
 			CardGridContract.Intent.FullSearchRequested ->
 				stateFlow.value.game?.let {
 					emitEffect(CardGridContract.Effect.OpenSearch(it.id.value))
@@ -95,6 +98,7 @@ class CardGridViewModel(
 				// that into a game. No game argument has to be threaded through navigation.
 				val vGame = gameOf(intent.setId)
 				val vProvider = vGame?.let { mRegistry.resolve(it) }
+				if (vGame != null) loadSetOptions(vGame)
 				if (vGame != null && vProvider != null) {
 					// What *this set* is published in, not what the source can serve in general.
 					// Those are different claims, and using the second one for a language menu is
@@ -224,6 +228,18 @@ class CardGridViewModel(
 	 */
 	private fun startLoad(debounce: Boolean) {
 		val vSnapshot = stateFlow.value
+		// One set selected reads that set; anything else reads the store.
+		//
+		// The two are not interchangeable and the difference is the point. A set is read through
+		// the cache from its provider, which is what lets a set nobody has downloaded be browsed
+		// at all. Across sets there is no such request to make -- no source here answers "every
+		// Riftbound card matching this" -- so the only honest answer is what this device holds,
+		// and the screen says so.
+		val vSelected = vSnapshot.setIds
+		if (vSelected.size != 1 || vSelected.single() != vSnapshot.setId) {
+			startStoredLoad(vSnapshot, debounce)
+			return
+		}
 		val vSetId = SourceId.parse(vSnapshot.setId) ?: return
 		val vGeneration = vSnapshot.requestGeneration
 		val vQuery = vSnapshot.query
@@ -296,6 +312,85 @@ class CardGridViewModel(
 	 * `null` when the id will not parse or names a provider this build does not route -- both of
 	 * which are reachable from a restored back stack, and neither of which should crash.
 	 */
+	/**
+	 * The other source: the store, across whatever sets the filter names.
+	 *
+	 * This is what the separate search screen used to be, and it is the same query -- the grid's
+	 * `CardQuery` translated into the store's filter. What it cannot do is see a card this device
+	 * has never downloaded, which is why a single set still goes to the provider.
+	 */
+	private fun startStoredLoad(snapshot: CardGridContract.UiState, debounce: Boolean) {
+		val vGame = snapshot.game?.id ?: gameOf(snapshot.setId)?.id ?: return
+		val vGeneration = snapshot.requestGeneration
+		val vQuery = snapshot.query
+		val vLanguage = snapshot.language ?: mPreferences.preferences.value.primaryLanguage
+
+		mLoadJob?.cancel()
+		mLoadJob = viewModelScope.launch {
+			if (debounce) delay(TEXT_DEBOUNCE_MILLIS.milliseconds)
+
+			val vResults = mRepository.searchStoredCards(
+				game = vGame,
+				filter = CardSearchFilter(
+					text = vQuery.text?.takeIf { it.isNotBlank() },
+					cardTypes = vQuery.cardTypes,
+					rarities = vQuery.rarities,
+					domains = vQuery.domains,
+					treatments = vQuery.treatments,
+					minCost = vQuery.costs.minOrNull(),
+					maxCost = vQuery.costs.maxOrNull(),
+					setIds = snapshot.setIds,
+					language = vLanguage,
+				),
+				knownSets = emptyList(),
+			)
+			dispatch(
+				CardGridContract.Intent.Loaded(
+					generation = vGeneration,
+					cards = vResults.cards,
+					// Never a set, so never complete: "all of this set is here" is not a claim
+					// this branch is in a position to make about anything.
+					isCompleteSet = false,
+					cachedCardCount = vResults.cards.size,
+					knownSetSize = null,
+					origin = DataOrigin.CACHE,
+					isStale = false,
+					error = null,
+					isFinal = true,
+				),
+			)
+			if (stateFlow.value.requestGeneration == vGeneration) {
+				mSession.publish(storedBrowseKey(snapshot), vResults.cards)
+			}
+		}
+	}
+
+	/**
+	 * Which sets this game has anything stored for, so the filter can widen beyond this one.
+	 *
+	 * In its own coroutine: it is a catalogue read and a file check per set, and nothing on screen
+	 * waits for it -- the set that was opened is already ticked. The same lesson the search screen
+	 * learned the hard way.
+	 */
+	private fun loadSetOptions(game: GameProfile) {
+		viewModelScope.launch {
+			val vLanguage = mPreferences.preferences.value.primaryLanguage
+			val vSets = mRepository.cachedSetList(game.id, vLanguage).orEmpty()
+			if (vSets.isEmpty()) return@launch
+			val vSaved = mRepository.savedSetIds(game.id, vSets, vLanguage)
+			dispatch(
+				CardGridContract.Intent.SetOptionsLoaded(
+					vSets.filter { it.id.qualified in vSaved }
+						.map { CardGridContract.SetChoice(it.id.qualified, it.name) },
+				),
+			)
+		}
+	}
+
+	/** The key the detail screen swipes this list under, when the list is not one set. */
+	private fun storedBrowseKey(snapshot: CardGridContract.UiState): String =
+		"stored:" + snapshot.setIds.sorted().joinToString(",")
+
 	private fun gameOf(qualifiedSetId: String): GameProfile? =
 		SourceId.parse(qualifiedSetId)?.let { mRegistry.gameFor(it.provider) }
 

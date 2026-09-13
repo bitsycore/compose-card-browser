@@ -335,30 +335,6 @@ fun CardGridContent(
 								},
 							)
 						}
-						// Search is a button beside filters rather than a field permanently occupying a
-						// strip of a screen whose whole job is showing pictures.
-						IconButton(
-							onClick = {
-								dispatch(
-									CardGridContract.Intent.SearchToggled(!vState.isSearchOpen),
-								)
-							},
-						) {
-							Icon(
-								imageVector = if (vState.isSearchOpen) {
-									AppIcons.SearchOff
-								} else {
-									AppIcons.Search
-								},
-								contentDescription = if (vState.isSearchOpen) "Hide search" else "Search",
-								// Tinted while a search is active, so a hidden field is never a hidden filter.
-								tint = if (!vState.query.text.isNullOrBlank()) {
-									MaterialTheme.colorScheme.primary
-								} else {
-									LocalContentColor.current
-								},
-							)
-						}
 						// The same search the set list offers, confined to this set: the inline
 						// field above filters what is loaded, this one asks the store and brings the
 						// filter sheet with it.
@@ -370,21 +346,6 @@ fun CardGridContent(
 									imageVector = AppIcons.TravelExplore,
 									contentDescription = "Search this set",
 								)
-							}
-						}
-						BadgedBox(
-							badge = {
-								if (vState.activeFilterCount > 0) {
-									Badge { Text("${vState.activeFilterCount}") }
-								}
-							},
-						) {
-							IconButton(
-								onClick = {
-									dispatch(CardGridContract.Intent.FilterSheetToggled(true))
-								},
-							) {
-								Icon(AppIcons.FilterList, contentDescription = "Filters")
 							}
 						}
 						ViewModeButton(
@@ -405,23 +366,43 @@ fun CardGridContent(
 					scrollBehavior = vScrollBehavior,
 				)
 
-				// Folds away with the bar. Scrolling down is a request for more grid, and a search
-				// field that stays behind while the bar it belongs to collapses reads as a leftover.
-				// The query itself is untouched -- it survives as a chip and the field returns on the
-				// way back up.
-				AnimatedVisibility(
-					visible = vState.isSearchOpen && vScrollBehavior.state.collapsedFraction < 0.5f,
-				) {
-					SearchField(
-						text = vState.query.text.orEmpty(),
-						onTextChanged = { vText ->
-							dispatch(
-								CardGridContract.Intent.QueryChanged(
-									vState.query.copy(text = vText.takeIf { it.isNotBlank() }),
-								),
-							)
-						},
-					)
+				// Folds away with the bar, and only with the bar. Scrolling down is a request for
+				// more grid; the search itself is not a mode any more -- it is what this screen is,
+				// which is why there is no button to turn it on.
+				AnimatedVisibility(visible = vScrollBehavior.state.collapsedFraction < 0.5f) {
+					Row(
+						modifier = Modifier.fillMaxWidth().padding(end = 8.dp),
+						verticalAlignment = Alignment.CenterVertically,
+					) {
+						SearchField(
+							text = vState.query.text.orEmpty(),
+							onTextChanged = { vText ->
+								dispatch(
+									CardGridContract.Intent.QueryChanged(
+										vState.query.copy(text = vText.takeIf { it.isNotBlank() }),
+									),
+								)
+							},
+							modifier = Modifier.weight(1f),
+						)
+						// Beside the box rather than up in the bar: the filters are the rest of
+						// the same question, and this is where the hand already is.
+						BadgedBox(
+							badge = {
+								if (vState.activeFilterCount > 0) {
+									Badge { Text("${vState.activeFilterCount}") }
+								}
+							},
+						) {
+							IconButton(
+								onClick = {
+									dispatch(CardGridContract.Intent.FilterSheetToggled(true))
+								},
+							) {
+								Icon(AppIcons.FilterList, contentDescription = "Filters")
+							}
+						}
+					}
 				}
 
 				// Controls, not content: these stay put while the grid scrolls underneath.
@@ -559,6 +540,7 @@ fun CardGridContent(
 			FilterSheet(
 				state = vState,
 				onQueryChanged = { dispatch(CardGridContract.Intent.QueryChanged(it)) },
+				onSetsChanged = { dispatch(CardGridContract.Intent.SetFilterChanged(it)) },
 				onClearAll = { dispatch(CardGridContract.Intent.ClearFilters) },
 			)
 		}
@@ -818,9 +800,14 @@ private const val SEPARATOR = "  ·  "
  * gesture they already made.
  */
 @Composable
-private fun SearchField(text: String, onTextChanged: (String) -> Unit) {
-	val vFocusRequester = remember { FocusRequester() }
-	LaunchedEffect(Unit) { vFocusRequester.requestFocus() }
+private fun SearchField(
+	text: String,
+	onTextChanged: (String) -> Unit,
+	modifier: Modifier = Modifier,
+) {
+	// No focus request. The field used to appear on a tap and focusing it saved the user a second
+	// one; it is always here now, and taking the focus on arrival would open the keyboard over the
+	// cards every time a set is opened.
 	// The grid filters as you type, so Enter has nothing to submit -- what it is for here is
 	// getting the keyboard out of the way of the results it just produced.
 	val vKeyboard = LocalSoftwareKeyboardController.current
@@ -846,10 +833,7 @@ private fun SearchField(text: String, onTextChanged: (String) -> Unit) {
 				vFocusManager.clearFocus()
 			},
 		),
-		modifier = Modifier
-			.fillMaxWidth()
-			.padding(horizontal = 16.dp, vertical = 8.dp)
-			.focusRequester(vFocusRequester),
+		modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp),
 	)
 }
 

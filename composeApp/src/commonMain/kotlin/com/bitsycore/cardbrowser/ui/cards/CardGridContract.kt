@@ -32,8 +32,30 @@ object CardGridContract :
 	 * @property cachedCardCount how many cards of the set the app holds, for the partial notice
 	 * @property knownSetSize the provider's own count for the set
 	 */
+	/** One set the filter can be pointed at. */
+	data class SetChoice(val id: String, val name: String)
+
 	data class UiState(
+		/**
+		 * The set this screen was opened for, or empty when it was opened for a whole game.
+		 *
+		 * Both are the same screen. What changes is where the cards come from: one set is read from
+		 * the provider through the cache, which is what lets a set nobody has downloaded be browsed
+		 * at all; a game is read from the store, which is the only thing that can answer across
+		 * sets. The filter decides which -- see `setIds`.
+		 */
 		val setId: String = "",
+
+		/**
+		 * The sets the filter is pointed at, and the axis that switches the source above.
+		 *
+		 * Opening a set preselects it. Removing it widens the search to everything downloaded,
+		 * which is what the old separate search screen was, and adding others narrows it back.
+		 */
+		val setIds: Set<String> = emptySet(),
+
+		/** The sets the filter may offer: those with something stored. */
+		val setOptions: List<SetChoice> = emptyList(),
 		val setName: String = "",
 		val setCode: String = "",
 		/**
@@ -220,6 +242,12 @@ object CardGridContract :
 		/** The set this grid is for. Dispatched once, from the navigation argument. */
 		data class SetSelected(val setId: String, val setName: String, val setCode: String) : Intent
 
+		/** The sets the filter points at. Empty is every set with something stored. */
+		data class SetFilterChanged(val setIds: Set<String>) : Intent
+
+		/** Which sets the filter may offer, from what is stored. */
+		data class SetOptionsLoaded(val sets: List<SetChoice>) : Intent
+
 		/** Any change to the query. Bumps the generation, superseding anything in flight. */
 		data class QueryChanged(val query: CardQuery) : Intent
 
@@ -361,7 +389,21 @@ object CardGridContract :
 			setId = intent.setId,
 			setName = intent.setName,
 			setCode = intent.setCode,
+			// Preselected, so opening a set is a search already pointed at it -- and the way out
+			// of that set is to untick it rather than to leave the screen.
+			setIds = setOfNotNull(intent.setId.takeIf { it.isNotBlank() }),
 		)
+
+		is Intent.SetFilterChanged -> state.copy(
+			setIds = intent.setIds,
+			isLoading = true,
+			error = null,
+			// A different set of sets is a different question, and may be a different source
+			// entirely -- see `UiState.setId`.
+			requestGeneration = state.requestGeneration + 1,
+		)
+
+		is Intent.SetOptionsLoaded -> state.copy(setOptions = intent.sets)
 
 		is Intent.QueryChanged -> state.copy(
 			query = intent.query,

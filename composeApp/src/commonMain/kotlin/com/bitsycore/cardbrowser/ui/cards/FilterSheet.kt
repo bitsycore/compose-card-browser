@@ -30,6 +30,13 @@ import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.core.provider.CardQuery
 import com.bitsycore.cardbrowser.core.provider.SortDirection
 import com.bitsycore.cardbrowser.ui.cards.CardGridContract.toggle
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.bitsycore.cardbrowser.ui.common.AppIcons
 import com.bitsycore.cardbrowser.ui.common.FilterSection
 import com.bitsycore.cardbrowser.ui.common.FilterValueChip
@@ -54,6 +61,7 @@ import com.bitsycore.cardbrowser.ui.common.RemovableFilterChip
 fun FilterSheet(
 	state: CardGridContract.UiState,
 	onQueryChanged: (CardQuery) -> Unit,
+	onSetsChanged: (Set<String>) -> Unit,
 	onClearAll: () -> Unit,
 ) {
 	Column(
@@ -127,6 +135,21 @@ fun FilterSheet(
 			style = MaterialTheme.typography.labelSmall,
 			color = MaterialTheme.colorScheme.onSurfaceVariant,
 		)
+
+		// Which sets this list covers. One is the set you opened; none is everything downloaded,
+		// which is what the separate search screen used to be. A menu rather than the chips every
+		// other axis uses, because a game has five rarities and Pokemon has 486 sets.
+		if (state.setOptions.isNotEmpty()) {
+			Spacer(Modifier.height(16.dp))
+			SetFilterMenu(
+				options = state.setOptions,
+				selected = state.setIds,
+				onToggle = { vId ->
+					onSetsChanged(state.setIds.toggle(vId))
+				},
+				onClear = { onSetsChanged(emptySet()) },
+			)
+		}
 
 		if (CardFilterField.DOMAIN in state.supportedFilters && state.facets.domains.isNotEmpty()) {
 			// The word for this axis is the game's, not the app's: Riftbound has domains, Magic
@@ -281,5 +304,54 @@ fun ActiveFilterChips(
 			RemovableFilterChip("\"${vQuery.text}\"") { onQueryChanged(vQuery.copy(text = null)) }
 		}
 		TextButton(onClick = onClearAll) { Text("Clear all") }
+	}
+}
+
+/**
+ * The sets this list covers, as a menu that stays open while several are ticked.
+ *
+ * Multi-select, like every other axis -- the entries are an OR. It closes on the scrim rather than
+ * on a choice, because choosing one and having to reopen for the second is what makes a menu worse
+ * than chips; this way it is only longer, which is the point of it.
+ */
+@Composable
+private fun SetFilterMenu(
+	options: List<CardGridContract.SetChoice>,
+	selected: Set<String>,
+	onToggle: (String) -> Unit,
+	onClear: () -> Unit,
+) {
+	var vIsOpen by remember { mutableStateOf(false) }
+	Column(Modifier.fillMaxWidth()) {
+		Text("Sets", style = MaterialTheme.typography.titleSmall)
+		Spacer(Modifier.height(6.dp))
+		Row(verticalAlignment = Alignment.CenterVertically) {
+			OutlinedButton(onClick = { vIsOpen = true }) {
+				Text(
+					when (selected.size) {
+						0 -> "Everything downloaded"
+						1 -> options.firstOrNull { it.id in selected }?.name ?: "1 set"
+						else -> "${selected.size} sets"
+					},
+				)
+				Icon(AppIcons.ArrowDropDown, contentDescription = null)
+			}
+			if (selected.isNotEmpty()) {
+				TextButton(onClick = onClear) { Text("Everything") }
+			}
+		}
+		DropdownMenu(expanded = vIsOpen, onDismissRequest = { vIsOpen = false }) {
+			options.forEach { vSet ->
+				DropdownMenuItem(
+					text = { Text(vSet.name) },
+					onClick = { onToggle(vSet.id) },
+					trailingIcon = {
+						if (vSet.id in selected) {
+							Icon(AppIcons.Check, contentDescription = "Included")
+						}
+					},
+				)
+			}
+		}
 	}
 }
