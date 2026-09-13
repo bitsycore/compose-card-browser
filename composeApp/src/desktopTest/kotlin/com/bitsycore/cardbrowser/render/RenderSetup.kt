@@ -20,9 +20,9 @@ import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesArt
 import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesGame
 import com.bitsycore.cardbrowser.games.yugioh.YuGiOhArt
 import com.bitsycore.cardbrowser.games.yugioh.YuGiOhGame
-import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
-import com.bitsycore.cardbrowser.ui.setup.SetupContent
-import com.bitsycore.cardbrowser.ui.setup.SetupContract
+import com.bitsycore.cardbrowser.ui.art.GameArtRegistry
+import com.bitsycore.cardbrowser.ui.screen.setup.SetupContent
+import com.bitsycore.cardbrowser.ui.screen.setup.SetupContract
 import java.io.File
 import kotlin.test.Ignore
 import kotlin.test.Test

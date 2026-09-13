@@ -1,0 +1,997 @@
+package com.bitsycore.cardbrowser.ui.screen.downloads
+
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
+import com.bitsycore.cardbrowser.core.provider.BulkSummary
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import com.bitsycore.cardbrowser.core.model.CardLanguage
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import com.bitsycore.cardbrowser.core.model.GameId
+import com.bitsycore.cardbrowser.core.model.ProviderId
+import com.bitsycore.cardbrowser.core.model.SourceId
+import com.bitsycore.cardbrowser.data.download.DownloadJob
+import com.bitsycore.cardbrowser.data.download.DownloadKind
+import com.bitsycore.cardbrowser.data.download.DownloadRequest
+import com.bitsycore.cardbrowser.data.download.DownloadStatus
+import com.bitsycore.cardbrowser.data.download.ProgressUnit
+import com.bitsycore.cardbrowser.ui.preview.PreviewFrame
+import com.bitsycore.cardbrowser.ui.component.AppIcons
+
+// ==================
+// MARK: Choosing what to download
+// ==================
+
+/**
+ * A dialog width that does not depend on what is inside it.
+ *
+ * Left to itself an `AlertDialog` is measured from its content, so the window it lives in is sized
+ * after the content has composed -- and on the first frames that content is still settling, most
+ * visibly where a `LazyColumn` is measuring its items. The dialog is laid out small, positioned,
+ * then re-measured larger, which is seen as it growing out of its top-left corner.
+ *
+ * Stating the width removes the dependency: the dialog is the same size on the first frame as the
+ * last, so there is nothing to animate. Capped rather than fixed, so it still looks right on a
+ * phone and does not stretch across a desktop window.
+ */
+@Composable
+private fun dialogWidth(): Modifier = Modifier
+	.fillMaxWidth()
+	.padding(horizontal = 24.dp)
+	.widthIn(max = MAX_DIALOG_WIDTH)
+
+/** Paired with [dialogWidth]: the platform's own width would override it. */
+private val STABLE_DIALOG = DialogProperties(usePlatformDefaultWidth = false)
+
+/** Wide enough for the longest of the three download descriptions, narrow enough to read. */
+private val MAX_DIALOG_WIDTH = 420.dp
+
+/** Material's touch target, which is what a `Checkbox` occupies. See `KindRow`. */
+private val CONTROL_SLOT = 48.dp
+
+/**
+ * Asks which parts of a set to put on disk.
+ *
+ * Two checkboxes rather than one button, because the two cost very different amounts and the
+ * dialog says so in the same breath as offering them. Card records are a handful of small requests;
+ * images are one per card against a CDN, which for a large set is hundreds of them.
+ *
+ * Card info is pre-selected and images are not: the cheap, useful half is the default, and the
+ * expensive half is opted into.
+ */
+@Composable
+fun DownloadKindDialog(
+	setName: String,
+	cardCount: Int?,
+	onDismiss: () -> Unit,
+	/**
+	 * @param variantId which bulk file to import, by `BulkSummary.id`, or `null` when this game's
+	 *   source publishes none and card info is fetched per set
+	 */
+	onConfirm: (
+		kinds: Set<DownloadKind>,
+		infoLanguages: Set<CardLanguage>,
+		imageLanguages: Set<CardLanguage>,
+		variantId: String?,
+	) -> Unit,
+	/**
+	 * How many sets this covers. 1 for a single row; more for "download all".
+	 *
+	 * Above one the dialog stops pretending to be about a set and starts warning, because "download
+	 * all" on Magic is 988 sets and tens of thousands of images.
+	 */
+	setCount: Int = 1,
+	/**
+	 * Kinds already on disk for this set.
+	 *
+	 * Offered as done rather than as a choice: re-downloading what you already have is almost never
+	 * what the tap meant. A "Download again" button unlocks them, because a re-download is
+	 * occasionally exactly what is wanted -- the image cache is an LRU and can be evicted from
+	 * underneath a record that still says the images came down.
+	 *
+	 * Only *complete* kinds belong here. A part-finished download is still worth offering.
+	 */
+	alreadyHave: Set<DownloadKind> = emptySet(),
+	/**
+	 * The languages on offer: this set's editions where its provider states them, otherwise what
+	 * the source says it serves at all. [languagesAreClaimed] says which.
+	 *
+	 * It used to be the first only, and a source that says nothing about languages -- which is most
+	 * of them -- offered no choice at all. That is the right default for a *claim about this set*
+	 * and the wrong one for a download: the user is choosing what to fetch, not being told what
+	 * exists, and "we could not check" is a reason to offer rather than to refuse.
+	 */
+	languages: List<CardLanguage> = emptyList(),
+	/**
+	 * True when [languages] is what the source serves in general rather than what this set states.
+	 *
+	 * The two are drawn differently and default differently, because they are different facts. A
+	 * stated list is this set's editions, so every one of them is worth fetching and all are
+	 * ticked. A claimed list is a menu of what is worth *asking* for -- ticking eleven of them
+	 * would queue eleven jobs for a set that may be printed in one -- so only the preferred
+	 * language starts ticked and the note says the app has not checked.
+	 */
+	languagesAreClaimed: Boolean = false,
+	/** Ticked when the dialog opens. The user's own preference, where the set has it. */
+	defaultLanguage: CardLanguage? = null,
+	/**
+	 * Which languages already have their card records on disk.
+	 *
+	 * Named separately from [alreadyHave] because card info is not one purchase: it is fetched in
+	 * every language a set states, so a set can be half held. Shown, so the answer to "what have I
+	 * already got?" is a list of languages rather than a tick that means "some of them".
+	 */
+	infoLanguages: Set<CardLanguage> = emptySet(),
+	/**
+	 * The size of a one-file import of this game's card records, when its source offers one.
+	 *
+	 * Offered only on the whole-game dialog, because that is the only case it improves: the file
+	 * is the entire catalogue, so using it to fetch a single set transfers far more than the
+	 * request it would replace. `null` hides the option rather than showing a disabled one.
+	 */
+	/**
+	 * The dumps this game's source publishes, cheapest first, or empty when it publishes none.
+	 *
+	 * More than one is a real choice rather than a detail: Scryfall's cheap file is 78 MB and is
+	 * 97% English despite being described as "the printed language", and its every-language file
+	 * is 393 MB. Someone downloading a game in French needs to know which of those they are
+	 * getting, and the first one silently was.
+	 */
+	bulkVariants: List<BulkSummary> = emptyList(),
+	/**
+	 * True when this game's card records ship inside the app -- `DataCapabilities.bundledCardData`.
+	 *
+	 * The row is replaced by a line saying so rather than shown disabled. A greyed checkbox reads
+	 * as "not yet" and invites a second attempt; "Built in" is the actual state and closes the
+	 * question. Nothing is fetched, nothing is kept, and nothing appears in storage to delete.
+	 */
+	isCardDataBundled: Boolean = false,
+	/**
+	 * True when this source's records come from its dump and not set by set --
+	 * `DataCapabilities.cardInfoFromBulkOnly`.
+	 *
+	 * Only changes the *single-set* dialog, where it replaces the card-info row with a line saying
+	 * where the records do come from. The whole-game dialog already routes card info to the import
+	 * wherever a dump exists, so there is nothing there for this to stop.
+	 *
+	 * Said rather than shown disabled, for the same reason "Built in" is: a greyed box with no
+	 * reason reads as broken and invites a second attempt.
+	 */
+	isCardInfoBulkOnly: Boolean = false,
+	/**
+	 * True when the source publishes a small rendition -- `DataCapabilities.thumbnailImages`.
+	 *
+	 * Changes both the label and the figure, because where there is none the app falls back to the
+	 * full image and the row was describing something the download would not do. Wuthering Waves
+	 * has one rendition at 196 KB a card, against the ~32 KB a thumbnail averages: a 123-card set
+	 * is 24 MB, not the 3.9 MB the thumbnail estimate promised.
+	 */
+	hasThumbnails: Boolean = true,
+	/**
+	 * True while a whole-game import is running for this game.
+	 *
+	 * Card info is the one thing it collides with: the import is already writing exactly those
+	 * records, so queueing them per set would fetch what is arriving anyway and race it to the
+	 * same cache keys. Thumbnails are untouched -- an import carries no pictures -- and other
+	 * games are untouched, since an import is scoped to one.
+	 */
+	isImportingGame: Boolean = false,
+	/**
+	 * Which dumps have already been imported at their current edition, by `BulkSummary.id`.
+	 *
+	 * Checked against whichever one is *selected*, so importing the English file does not lock
+	 * away the every-language file -- they are different purchases and the second is exactly what
+	 * someone would come back for.
+	 *
+	 * Separate from [alreadyHave], which is an intersection over the sets on screen and can never
+	 * reach card info for a game served by a dump: the file holds nothing for the sets a
+	 * catalogue lists but nothing has been printed in, so one such set keeps the intersection
+	 * empty and the dialog offers an import that would fetch nothing.
+	 */
+	importedVariantIds: Set<String> = emptySet(),
+	/**
+	 * Asks the source whether it has rebuilt the dump since it was imported, or `null` where the
+	 * question does not arise.
+	 *
+	 * A manifest request -- a few kilobytes -- not the file. It exists because "already imported"
+	 * is a claim with a date on it: Scryfall rebuilds daily, and the app only knows what it knew
+	 * the last time it looked. Without this the row could only be re-enabled by leaving the screen
+	 * and coming back, which is a strange thing to have to discover.
+	 */
+	onCheckForUpdate: (() -> Unit)? = null,
+	/** True while that check is in flight, so the button says so rather than looking inert. */
+	isCheckingForUpdate: Boolean = false,
+) {
+	// Ticking is a fresh decision each time the dialog opens, so it is keyed on what is already
+	// held: reopening after a download must not restore a tick for something now on disk.
+	var vRedownload by remember(alreadyHave) { mutableStateOf(false) }
+	// The cheapest, which for Scryfall is English. The expensive one is opted into, the same way
+	// images are: a default that costs 393 MB is not a default.
+	var vVariant by remember(bulkVariants) { mutableStateOf(bulkVariants.firstOrNull()) }
+	val vBulkBytes = vVariant?.compressedBytes
+	val vInfoComplete = infoIsComplete(alreadyHave, languages, infoLanguages)
+	val vLocked: (DownloadKind) -> Boolean = { vKind ->
+		when {
+			// Before `vRedownload`, like the in-flight check: an import that has already run
+			// fetches nothing, and "Download again" should not spend 78 MB proving it. Only the
+			// selected file counts -- the other one has not been taken.
+			vKind == DownloadKind.CARD_INFO && vVariant?.id in importedVariantIds -> true
+			// Before the re-download escape hatch, because this one is not about what is held --
+			// it is about what is in flight, and "Download again" must not start a second writer
+			// against the records an import is in the middle of laying down.
+			vKind == DownloadKind.CARD_INFO && isImportingGame -> true
+			vRedownload -> false
+			// Held in *every* language, not merely in one. See [infoIsComplete].
+			vKind == DownloadKind.CARD_INFO -> vInfoComplete
+			else -> vKind in alreadyHave
+		}
+	}
+
+	val vInfoMissing = languages.filterNot { it in infoLanguages }
+	var vInfo by remember(alreadyHave, infoLanguages) { mutableStateOf(!vInfoComplete) }
+	// The only imagery on offer. Full-size art was here and was deliberately removed: bulk-fetching
+	// every card's full rendition is roughly four times the bytes for pictures almost none of which
+	// are looked at, against a CDN this project does not own. It arrives on demand instead, when a
+	// card is opened. See `DownloadKind`. Not pre-ticked.
+	var vThumbnails by remember(alreadyHave) { mutableStateOf(false) }
+
+	// Which languages the thumbnails are wanted in. Card info is not part of this: text records
+	// are small and a card is not much use in a language you cannot read *and* cannot switch to,
+	// so info is fetched in every language the set states. Images are a request per card per
+	// language against someone else's CDN, so those are chosen.
+	val vChoosable = languages.size > 1
+	var vLanguages by remember(languages, defaultLanguage) {
+		mutableStateOf(
+			setOfNotNull(defaultLanguage?.takeIf { it in languages } ?: languages.firstOrNull()),
+		)
+	}
+
+	// And which languages the *records* are wanted in, which used to be every one the set stated
+	// with no say in it. Card records are small, so taking them all is still the default where the
+	// set says what it is published in -- but a source that states nothing offers a claim, and
+	// eleven speculative jobs is not a default anybody chose.
+	// Card info is not on offer here at all: either it is already in the app, or it belongs to the
+	// whole-game import. One name for the two, because the row is the same row either way.
+	val vInfoIsElsewhere = cardInfoIsElsewhere(isCardDataBundled, isCardInfoBulkOnly, setCount)
+	val vWantsInfo = vInfo && !vInfoIsElsewhere
+	// Whether the *language* of the records is this dialog's to choose.
+	//
+	// It is not, whenever they arrive as a dump. A file's languages are the file's -- Scryfall
+	// publishes a cheap one that is 97% English and an every-language one four times the size --
+	// so the control that picks them is the variant selector, and a row of language chips beside
+	// it is a second control for the same fact that cannot honour what it is set to.
+	val vInfoLanguageChoosable = vChoosable &&
+		cardInfoLanguageIsChosen(
+			isCardDataBundled = isCardDataBundled,
+			isCardInfoBulkOnly = isCardInfoBulkOnly,
+			setCount = setCount,
+			hasBulkVariants = bulkVariants.isNotEmpty(),
+		)
+
+	var vInfoLanguages by remember(languages, defaultLanguage, languagesAreClaimed) {
+		mutableStateOf(defaultInfoLanguages(languages, defaultLanguage, languagesAreClaimed))
+	}
+
+	AlertDialog(
+		onDismissRequest = onDismiss,
+		modifier = dialogWidth(),
+		properties = STABLE_DIALOG,
+		title = { Text(if (setCount > 1) "Download $setCount sets" else "Download $setName") },
+		text = {
+			// Scrollable, because this content is not a fixed height and the dialog is not
+			// resizable. With eleven languages -- Pokémon and Magic both reach that -- the chips
+			// alone are five rows, and on a short viewport (landscape, a small handset, or a large
+			// system font) the whole "Image languages" block was clipped away while the Download
+			// button stayed enabled: images would be fetched in the default language with no way
+			// to reach the control that changes it.
+			Column(Modifier.verticalScroll(rememberScrollState())) {
+				if (vInfoIsElsewhere) {
+					Text(
+						text = if (isCardDataBundled) {
+							"Card info · Built in"
+						} else {
+							"Card info · Whole game only"
+						},
+						style = MaterialTheme.typography.bodyMedium,
+					)
+					Text(
+						text = if (isCardDataBundled) {
+							"Ships with the app. Always available offline."
+						} else {
+							// Named as the thing the user can actually go and do, rather than as a
+							// refusal. The control is one screen away, on the download-all dialog.
+							"This source publishes its records as one file. Use “Download " +
+								"all” to take it; fetching them a set at a time would be " +
+								"hundreds of requests for the same data."
+						},
+						style = MaterialTheme.typography.bodySmall,
+						color = MaterialTheme.colorScheme.onSurfaceVariant,
+					)
+					Spacer(Modifier.height(14.dp))
+				} else {
+				KindRow(
+					checked = vInfo && !vLocked(DownloadKind.CARD_INFO),
+					onCheckedChange = { vInfo = it },
+					enabled = !vLocked(DownloadKind.CARD_INFO),
+					// The mark means "nothing left to fetch", so it follows completeness rather
+					// than presence -- otherwise a set held in one language of six looks finished.
+					done = vInfoComplete,
+					title = "Card info",
+					// Said rather than left as an unexplained grey row: a disabled control with no
+					// reason is indistinguishable from a broken one.
+					note = when {
+						isImportingGame -> "Already downloading for the whole game"
+						// Short, because the row is already ticked and disabled: the question a
+						// reader has here is "what have I got, and is it current?", and the answer
+						// is the language plus the button beside it. It used to be two sentences of
+						// explanation for a state that needs none.
+						//
+						// The languages are named only where they are known -- the intersection
+						// over every set shown -- and an import that left a set holding nothing
+						// makes that empty. Empty prints no language rather than guessing at one.
+						vVariant?.id in importedVariantIds -> buildString {
+							append("Imported")
+							if (infoLanguages.isNotEmpty()) {
+								append(" · ")
+								append(
+									CardLanguage.PREFERENCE_ORDER
+										.filter { it in infoLanguages }
+										.joinToString(", ") { it.displayName },
+								)
+							}
+						}
+						else -> null
+					},
+					// Deliberately not "small": the honest thing is to say what it is, since a set
+					// with an unknown card count cannot be sized at all.
+					detail = buildString {
+						append(
+							when {
+								// A dump is one transfer, so it carries none of the per-set
+								// pacing cost the row below has to warn about. Two rows, two
+								// different costs, each said where it applies.
+								// Names the file, because the two differ by more than size and
+								// the difference is the thing a user gets wrong: Scryfall's cheap
+								// dump is described as "the printed language" and is 97% English.
+								vBulkBytes != null && setCount > 1 ->
+									"One file, about ${vBulkBytes / 1_000_000} MB" +
+										vVariant?.let { " (${it.label.lowercase()})" }.orEmpty() +
+										"."
+								setCount > 1 && cardCount != null ->
+									"About $cardCount cards across $setCount sets, one set at a " +
+										"time."
+								cardCount != null -> "$cardCount cards."
+								else -> "Names, numbers, rarities and rules text."
+							},
+						)
+						// What is already here, by name. "We don't see what language is
+						// downloaded" was the report; a tick cannot answer it and a list can.
+						//
+						// Not repeated for an import: the row above already names the file and the
+						// set list's own language control says what is being browsed in, so
+						// spelling the same fact out a third time here was noise.
+						if (infoLanguages.isNotEmpty() && vVariant?.id !in importedVariantIds) {
+							append("\nAlready have: ")
+							append(
+								CardLanguage.PREFERENCE_ORDER
+									.filter { it in infoLanguages }
+									.joinToString(", ") { it.displayName },
+							)
+							append(".")
+							if (vInfoMissing.isNotEmpty()) {
+								append(" Missing ")
+								append(vInfoMissing.joinToString(", ") { it.displayName })
+								append(".")
+							}
+						}
+					},
+				)
+				// Which languages the records come in, which the user used to have no say over.
+				//
+				// Under this row rather than beside the image chips at the bottom, because it is
+				// about *this* tick box: the two halves of a download are chosen separately and
+				// were being explained as one asymmetry a screenful further down.
+				if (vInfoLanguageChoosable) {
+					LanguagePicker(
+						title = "Card info languages",
+						// One by default either way -- see `defaultInfoLanguages`. What differs is
+						// whether the list is this set's editions or a menu of what the source
+						// serves, and that is worth saying because it changes what adding one
+						// means: a confirmed edition, or a request that may come back empty.
+						note = if (languagesAreClaimed) {
+							"One language by default. This source has not said which editions " +
+								"this set has, so these are the ones it serves -- add any, and " +
+								"one that was never printed simply arrives empty."
+						} else {
+							"One language by default. Add any you want to be able to switch to " +
+								"offline; each is fetched separately."
+						},
+						languages = languages,
+						selected = vInfoLanguages,
+						enabled = vInfo && !vLocked(DownloadKind.CARD_INFO),
+						emptyWarning = vInfo && vInfoLanguages.isEmpty(),
+						onToggle = { vLanguage ->
+							vInfoLanguages = if (vLanguage in vInfoLanguages) {
+								vInfoLanguages - vLanguage
+							} else {
+								vInfoLanguages + vLanguage
+							}
+						},
+					)
+				}
+				// Shown whenever there is a choice, and deliberately *not* gated on the lock.
+				//
+				// It used to be `&& !vLocked(CARD_INFO)`, which hid the chooser precisely when it was
+				// needed: the selection defaults to the cheapest file, taking that file locks card
+				// info, and the lock then hid the only control that could select the other one. So
+				// after importing Scryfall's English dump the 393 MB every-language dump was
+				// unreachable -- the view model was still offering it, and nothing could pick it.
+				if (bulkVariants.size > 1 && vInfo) {
+					Spacer(Modifier.height(6.dp))
+					Column(Modifier.padding(start = 44.dp)) {
+						for (vOption in bulkVariants) {
+							Row(
+								verticalAlignment = Alignment.CenterVertically,
+								modifier = Modifier.clickable { vVariant = vOption },
+							) {
+								RadioButton(
+									selected = vOption.id == vVariant?.id,
+									onClick = { vVariant = vOption },
+								)
+								Spacer(Modifier.width(4.dp))
+								Text(
+									// The size in the label, because it is the whole difference:
+									// one of these is five times the other.
+									text = "${vOption.label} \u2014 ${vOption.compressedBytes / 1_000_000} MB",
+									style = MaterialTheme.typography.bodyMedium,
+								)
+							}
+						}
+						Text(
+							// Said plainly, because the cheap file's own description does not.
+							// Scryfall calls it "English or the printed language", which reads as
+							// multilingual: sampled, it is 8780 English records against 92
+							// Spanish, 47 Japanese, 27 French and 1 German.
+							text = "The smaller file is almost entirely English.",
+							style = MaterialTheme.typography.bodySmall,
+							color = MaterialTheme.colorScheme.onSurfaceVariant,
+						)
+						// "Is what I have still current?", asked of the source rather than assumed.
+						if (vVariant?.id in importedVariantIds && onCheckForUpdate != null) {
+							TextButton(
+								onClick = onCheckForUpdate,
+								enabled = !isCheckingForUpdate,
+							) {
+								Text(
+									if (isCheckingForUpdate) "Checking…" else "Check for update",
+								)
+							}
+						}
+
+						// The warning that used to be here -- "you browse in French, this file may
+						// leave every set still to fetch" -- is gone on purpose. The set list now
+						// names the browsing language in its own bar, a set opened in a language
+						// it was not downloaded in says so with a way to fetch it, and the line
+						// above already says the smaller file is English. Three statements of the
+						// same fact, two of them in places the user was not looking.
+					}
+				}
+				}
+
+				Spacer(Modifier.height(8.dp))
+				KindRow(
+					checked = vThumbnails && !vLocked(DownloadKind.GRID_THUMBNAILS),
+					onCheckedChange = { vThumbnails = it },
+					enabled = !vLocked(DownloadKind.GRID_THUMBNAILS),
+					done = DownloadKind.GRID_THUMBNAILS in alreadyHave,
+					// Named for what is actually fetched. A source with no small rendition serves
+					// its full image to the grid, and calling that a thumbnail understates it by
+					// about six times.
+					title = if (hasThumbnails) "Thumbnails" else "Card images",
+					detail = buildString {
+						val vPerCard = if (hasThumbnails) THUMBNAIL_BYTES else FULL_IMAGE_BYTES
+						append(
+							cardCount
+								?.let { "About ${megabytes(it, vPerCard)} MB. Enough to browse offline." }
+								?: if (hasThumbnails) {
+									"The small rendition the grid draws."
+								} else {
+									"This source publishes one size only."
+								},
+						)
+						// The pacing warning lives here rather than under the whole dialog,
+						// because it is only true of this row: images are a request per card and
+						// the queue runs one set at a time, while card info above may arrive as a
+						// single file that costs none of that.
+						if (setCount > 1) {
+							append(" $setCount sets, one at a time -- this takes a while.")
+						}
+					},
+				)
+				if (vChoosable) {
+					LanguagePicker(
+						title = if (hasThumbnails) "Thumbnail languages" else "Image languages",
+						// Why this one is not all of them by default. Records are a few kilobytes;
+						// pictures are a request per card per language against someone else's CDN.
+						note = "A picture per card, per language. Pick as few as you will look at.",
+						languages = languages,
+						selected = vLanguages,
+						// Only meaningful for the kinds that fetch pictures. Greyed rather than
+						// hidden, so the choice does not appear and vanish as the tick boxes above
+						// are used.
+						enabled = vThumbnails,
+						emptyWarning = vThumbnails && vLanguages.isEmpty(),
+						onToggle = { vLanguage ->
+							vLanguages = if (vLanguage in vLanguages) {
+								vLanguages - vLanguage
+							} else {
+								vLanguages + vLanguage
+							}
+						},
+					)
+				}
+			}
+		},
+		confirmButton = {
+			TextButton(
+				// Nothing ticked is not a download, so the button is not offered as one -- and
+				// neither is imagery in no language at all.
+				// `vWantsInfo`, not `vInfo`: where the records are elsewhere there is no row to
+				// untick, and the tick's default of "on" would otherwise queue a card-info job
+				// for a kind the dialog just finished saying it does not offer.
+				enabled = (vWantsInfo || vThumbnails) &&
+					(!vThumbnails || !vChoosable || vLanguages.isNotEmpty()) &&
+					(!vWantsInfo || !vInfoLanguageChoosable || vInfoLanguages.isNotEmpty()),
+				onClick = {
+					onConfirm(
+						buildSet {
+							if (vWantsInfo) add(DownloadKind.CARD_INFO)
+							if (vThumbnails) add(DownloadKind.GRID_THUMBNAILS)
+						},
+						vInfoLanguages,
+						vLanguages,
+						vVariant?.id,
+					)
+				},
+			) { Text("Download") }
+		},
+		dismissButton = {
+			Row {
+				// Only where it can do something. The image cache is an LRU and can be evicted
+				// from under a record that still says the images came down, so re-downloading is
+				// a real need rather than a theoretical one.
+				if (alreadyHave.isNotEmpty() && !vRedownload) {
+					TextButton(onClick = { vRedownload = true }) { Text("Download again") }
+				}
+				TextButton(onClick = onDismiss) { Text("Cancel") }
+			}
+		},
+	)
+}
+
+@Composable
+private fun KindRow(
+	checked: Boolean,
+	onCheckedChange: (Boolean) -> Unit,
+	title: String,
+	detail: String,
+	/** Why this row is disabled, when the reason is not "you already have it". */
+	note: String? = null,
+	enabled: Boolean = true,
+	done: Boolean = false,
+) {
+	Row(verticalAlignment = Alignment.CenterVertically) {
+		// One fixed slot for both, so the titles line up whichever a row happens to show.
+		//
+		// They did not. A `Checkbox` carries Material's 48 dp touch target, while the tick was a
+		// 24 dp icon plus an 18 dp spacer -- about 42 dp -- so a row that was already downloaded
+		// sat ten points left of the one below it. Centring both in a box the size of the larger
+		// makes the alignment a property of the layout rather than of two hand-tuned spacers.
+		Box(Modifier.size(CONTROL_SLOT), contentAlignment = Alignment.Center) {
+			if (done && !enabled) {
+				// A tick rather than a ticked checkbox: this is a statement about what is already
+				// there, not a control that happens to be on.
+				Icon(
+					imageVector = AppIcons.CheckCircle,
+					contentDescription = null,
+					tint = MaterialTheme.colorScheme.primary,
+					modifier = Modifier.size(24.dp),
+				)
+			} else {
+				Checkbox(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+			}
+		}
+		Spacer(Modifier.width(4.dp))
+		// Weighted, so a long detail wraps inside the row instead of pushing past its edge.
+		Column(Modifier.weight(1f)) {
+			Text(
+				text = title,
+				style = MaterialTheme.typography.bodyLarge,
+				color = if (enabled) {
+					MaterialTheme.colorScheme.onSurface
+				} else {
+					MaterialTheme.colorScheme.onSurfaceVariant
+				},
+			)
+			Text(
+				// A stated reason wins over both. What is already held says so instead of quoting
+				// a size again -- the cost of a thing you already have is not the useful fact
+				// about it -- and a row disabled for any other reason has to say which.
+				text = note ?: if (done && !enabled) "Already downloaded" else detail,
+				style = MaterialTheme.typography.bodySmall,
+				color = MaterialTheme.colorScheme.onSurfaceVariant,
+			)
+		}
+	}
+}
+
+/** A rough size, so the choice is informed rather than blind. Always labelled "about". */
+private fun megabytes(cardCount: Int, bytesPerCard: Int): Int =
+	((cardCount.toLong() * bytesPerCard) / 1_000_000).toInt().coerceAtLeast(1)
+
+/**
+ * The per-card thumbnail size, measured rather than guessed.
+ *
+ * Sampled on 2026-09-09 across three providers: TCGdex 19.5 KB thumbnail against 63 KB full,
+ * Scryfall 47 against 67, YGOPRODeck 28 against 153. The means are about 32 KB and 94 KB, so a
+ * thumbnail is roughly a quarter of the full image -- which is why the thumbnail is the only
+ * rendition bulk-fetched at all. See `DownloadKind`.
+ *
+ * The spread is wide, so this is an order of magnitude and not a promise: Scryfall's two
+ * renditions barely differ, and a provider with no small rendition at all fetches nothing.
+ */
+private const val THUMBNAIL_BYTES = 32_000
+
+/**
+ * The per-card cost where a source publishes no small rendition, measured rather than guessed.
+ *
+ * Three of the sources here -- Wuthering Waves, One Piece and Altered -- map `thumbnailUrl` to
+ * null, so the grid draws the full image and a bulk fetch downloads that. Sampled 2026-09-11, a
+ * Wuthering Waves card is 196 KB of WebP and it is the only rendition offered; the full images
+ * behind the three sources that do publish thumbnails run 63 to 153 KB. 150 KB is the middle of
+ * that and deliberately not the largest: an estimate that overstates is as unhelpful as one that
+ * understates, and this row is a caution rather than a quote.
+ */
+private const val FULL_IMAGE_BYTES = 150_000
+
+// ==================
+// MARK: The queue
+// ==================
+
+/**
+ * The top-bar button, badged with how many downloads are outstanding.
+ *
+ * Hidden entirely when nothing has ever been queued: a control that does nothing is worse than no
+ * control, and this screen has two buttons already.
+ */
+@Composable
+fun DownloadsButton(jobs: List<DownloadJob>, onClick: () -> Unit) {
+	if (jobs.isEmpty()) return
+	val vActive = jobs.count { it.isActive }
+
+	BadgedBox(
+		badge = { if (vActive > 0) Badge { Text(vActive.toString()) } },
+	) {
+		IconButton(onClick = onClick) {
+			Icon(
+				imageVector = if (vActive > 0) AppIcons.Download else AppIcons.DownloadDone,
+				contentDescription = if (vActive > 0) "$vActive downloads in progress" else "Downloads",
+			)
+		}
+	}
+}
+
+/**
+ * Whether there is any card info left to fetch for this set.
+ *
+ * The rule that was wrong, extracted so it can be tested. A download splits into one job per
+ * language and fetches card info in *every* language a set states, so "already have card info" is
+ * not a yes/no about the set -- it is a question about several editions. Locking the checkbox on
+ * presence meant one finished language read as done and the other five could be reached only
+ * through "Download again".
+ *
+ * [languages] empty means the source states none, and then presence is all there is to go on.
+ */
+/**
+ * Whether this dialog offers card info at all, or names where it comes from instead.
+ *
+ * Extracted so the rule can be tested, because it is the one place two different "no" answers meet
+ * and the second one is conditional. Bundled records are never on offer anywhere. Bulk-only records
+ * are not on offer *per set* -- and are very much on offer for the whole game, which is the whole
+ * point of saying so: the user is being pointed at the import, not refused.
+ *
+ * Getting it wrong the other way is worse than it looks. The card-info tick defaults to on, so a
+ * dialog that hides the row without also declining to queue the kind would enqueue a per-set fetch
+ * for a source that has just finished explaining why it must not.
+ */
+internal fun cardInfoIsElsewhere(
+	isCardDataBundled: Boolean,
+	isCardInfoBulkOnly: Boolean,
+	setCount: Int,
+): Boolean = isCardDataBundled || (isCardInfoBulkOnly && setCount == 1)
+
+/**
+ * Whether the *language* of the records is this dialog's to choose.
+ *
+ * Only where they are fetched per set. A dump's languages are the dump's -- Scryfall publishes a
+ * cheap file that is 97% English and an every-language one four times the size -- so the control
+ * that picks them is the variant selector, and a row of language chips beside it is a second
+ * control for the same fact that cannot honour what it is set to. The whole-game dialog offered
+ * both at once, which is what this removes.
+ *
+ * Separate from [cardInfoIsElsewhere] because the answers differ exactly where it matters: on the
+ * whole-game dialog for a source with a dump, the card-info *row* is very much offered -- it is how
+ * the import is started -- and its language is not a choice.
+ */
+internal fun cardInfoLanguageIsChosen(
+	isCardDataBundled: Boolean,
+	isCardInfoBulkOnly: Boolean,
+	setCount: Int,
+	hasBulkVariants: Boolean,
+): Boolean = !cardInfoIsElsewhere(isCardDataBundled, isCardInfoBulkOnly, setCount) && !hasBulkVariants
+
+/**
+ * Which languages the records are fetched in when the dialog opens: one.
+ *
+ * Extracted so the rule can be tested, like [infoIsComplete] beside it. It used to depend on
+ * whether the source *stated* a set's editions -- all of them if so -- on the reasoning that a
+ * record is a few kilobytes and switching language on a card already held is most of the reason for
+ * holding it. That reasoning is about one user's one set. Across a catalogue it is eleven jobs and
+ * eleven times the traffic for a source, almost all of it for languages nobody will read, and the
+ * project owner's call is that a download takes one language unless it is asked for more.
+ *
+ * The one is the user's own preference where the offer contains it. English next, because it is the
+ * language a source is most likely to actually hold and a poor guess that returns cards beats a
+ * good one that returns none. Then whatever is first, so the Download button is never left refusing
+ * with nothing ticked.
+ *
+ * [languagesAreClaimed] no longer changes the answer -- it did when a stated list meant "take them
+ * all" -- and is kept because it still changes what the note beside the chips says, which is a
+ * different question: whether the app knows these editions exist or is only offering to look.
+ */
+internal fun defaultInfoLanguages(
+	languages: List<CardLanguage>,
+	defaultLanguage: CardLanguage?,
+	languagesAreClaimed: Boolean,
+): Set<CardLanguage> = setOfNotNull(
+	defaultLanguage?.takeIf { it in languages }
+		?: CardLanguage.ENGLISH.takeIf { it in languages }
+		?: languages.firstOrNull(),
+)
+
+internal fun infoIsComplete(
+	alreadyHave: Set<DownloadKind>,
+	languages: List<CardLanguage>,
+	infoLanguages: Set<CardLanguage>,
+): Boolean = DownloadKind.CARD_INFO in alreadyHave &&
+	(languages.isEmpty() || languages.all { it in infoLanguages })
+
+/**
+ * A titled row of language chips: one half of a download, and which languages it is wanted in.
+ *
+ * Two of these now, because card info and pictures are two purchases with different costs and the
+ * user chooses both. It was one control for the pictures, and a sentence a screenful below the
+ * card-info row explaining that records came in every language whether they were wanted or not.
+ *
+ * @param enabled false when the kind this chooses for is not ticked. Greyed rather than hidden, so
+ *   the control does not appear and vanish as the boxes above are used
+ * @param emptyWarning true when the kind *is* ticked and nothing is chosen, which is the one state
+ *   the Download button refuses -- said here rather than left as a button that does nothing
+ */
+@Composable
+private fun LanguagePicker(
+	title: String,
+	note: String,
+	languages: List<CardLanguage>,
+	selected: Set<CardLanguage>,
+	enabled: Boolean,
+	emptyWarning: Boolean,
+	onToggle: (CardLanguage) -> Unit,
+) {
+	Spacer(Modifier.height(14.dp))
+	HorizontalDivider()
+	Spacer(Modifier.height(10.dp))
+	Text(text = title, style = MaterialTheme.typography.labelLarge)
+	Text(
+		text = note,
+		style = MaterialTheme.typography.bodySmall,
+		color = MaterialTheme.colorScheme.onSurfaceVariant,
+	)
+	Spacer(Modifier.height(8.dp))
+	FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+		for (vLanguage in languages) {
+			FilterChip(
+				selected = vLanguage in selected,
+				onClick = { onToggle(vLanguage) },
+				enabled = enabled,
+				label = { Text(vLanguage.displayName) },
+			)
+		}
+	}
+	if (emptyWarning) {
+		Spacer(Modifier.height(6.dp))
+		Text(
+			text = "Choose at least one language.",
+			style = MaterialTheme.typography.bodySmall,
+			color = MaterialTheme.colorScheme.error,
+		)
+	}
+}
+
+/**
+ * One line saying exactly where a job stands, and which edition it is.
+ *
+ * The language is not decoration here. A download splits into one job per language -- card info in
+ * every language a set states, art in the ones picked -- so a single tap on one set can put six
+ * jobs in this queue whose set name is identical. Without the language, four of them read
+ * "Base Set / Waiting · info" and there was no way to tell which was German and which Italian, nor
+ * which of them the failed one was.
+ *
+ * Omitted when the source states no language at all, which is most of them: naming one there would
+ * be inventing it.
+ */
+private fun progressText(status: DownloadStatus.Running): String = when (status.unit) {
+	// No denominator yet. For a set that means the card list has not landed, so the image count
+	// is genuinely unknown; for the read phase of an import there is no total to have.
+	ProgressUnit.IMAGES ->
+		if (status.total <= 0) "Fetching card list" else "${status.completed} of ${status.total} images"
+	ProgressUnit.KILOBYTES ->
+		if (status.total <= 0) {
+			"${status.completed / 1024} MB downloaded"
+		} else {
+			"${status.completed / 1024} of ${status.total / 1024} MB"
+		}
+	ProgressUnit.CARDS -> "Reading ${status.completed} cards"
+	ProgressUnit.SETS -> "Saving ${status.completed} of ${status.total} sets"
+}
+
+internal fun describe(job: DownloadJob): String {
+	val vWhat = job.request.kinds.sortedBy { it.ordinal }.joinToString(" + ") {
+		when (it) {
+			DownloadKind.CARD_INFO -> "info"
+			DownloadKind.GRID_THUMBNAILS -> "thumbnails"
+		}
+	}
+	val vWhere = job.request.language?.displayName
+	val vSuffix = if (vWhere == null) vWhat else "$vWhat · $vWhere"
+	return when (val vStatus = job.status) {
+		is DownloadStatus.Queued -> "Waiting · $vSuffix"
+		is DownloadStatus.Running -> "${progressText(vStatus)} · $vSuffix"
+		is DownloadStatus.Completed -> buildString {
+			// Zero is a real answer, not a failure, and says which of the two it is. A source can
+			// list a set and hold no singles for it -- a marketplace catalogue filing a booster box
+			// under a set name is the common case -- and calling that "0 cards" beside a tick reads
+			// as a mistake somewhere.
+			if (vStatus.cards == 0) {
+				append("No single cards in this set")
+				return@buildString
+			}
+			append("${vStatus.cards} cards")
+			// What the file held and this app cannot show. Left out on purpose -- see
+			// `DownloadStatus.Completed.skippedCards` -- and therefore worth one clause.
+			if (vStatus.skippedCards > 0) {
+				append(", ${vStatus.skippedCards} skipped (digital-only sets)")
+			}
+			if (vStatus.imagesFetched > 0) append(", ${vStatus.imagesFetched} images")
+			// Never rounded up to "done". A set that is four images short is not complete, and the
+			// user should find that out here rather than offline.
+			if (vStatus.imagesFailed > 0) append(" · ${vStatus.imagesFailed} failed")
+			if (vWhere != null) append(" · $vWhere")
+		}
+		// A failure needs it most: this is where the user finds out that the Italian art did not
+		// come down while the French did.
+		is DownloadStatus.Failed -> if (vWhere == null) vStatus.reason else "${vStatus.reason} · $vWhere"
+		DownloadStatus.Cancelled -> if (vWhere == null) "Stopped" else "Stopped · $vWhere"
+	}
+}
+
+// ==================
+// MARK: Previews
+// ==================
+
+private fun previewJob(
+	id: String,
+	name: String,
+	status: DownloadStatus,
+	kinds: Set<DownloadKind> = setOf(DownloadKind.CARD_INFO, DownloadKind.GRID_THUMBNAILS),
+) = DownloadJob(
+	id = id,
+	request = DownloadRequest(
+		setId = SourceId(ProviderId("riftcodex"), id),
+		game = GameId("riftbound"),
+		setName = name,
+		kinds = kinds,
+	),
+	status = status,
+)
+
+@Preview
+@Composable
+private fun DownloadKindDialogPreview() = PreviewFrame {
+	DownloadKindDialog(setName = "Origins", cardCount = 352, onDismiss = {}, onConfirm = { _, _, _, _ -> })
+}
+
+@Preview
+@Composable
+private fun DownloadKindDialogUnknownSizePreview() = PreviewFrame {
+	// No card count, so no size estimate is offered rather than a made-up one.
+	DownloadKindDialog(setName = "Promos", cardCount = null, onDismiss = {}, onConfirm = { _, _, _, _ -> })
+}
+
+@Preview
+@Composable
+private fun DownloadAllDialogPreview() = PreviewFrame {
+	// The bulk case, which warns rather than reassures.
+	DownloadKindDialog(
+		setName = "",
+		cardCount = 21_450,
+		setCount = 88,
+		onDismiss = {},
+		onConfirm = { _, _, _, _ -> },
+	)
+}
+
+@Preview
+@Composable
+private fun DownloadKindDialogPartlyHeldPreview() = PreviewFrame {
+	// The state the `alreadyHave` parameter exists for: records are on disk and are shown as done
+	// rather than offered again, leaving thumbnails as the one thing still worth asking for.
+	DownloadKindDialog(
+		setName = "Origins",
+		cardCount = 352,
+		alreadyHave = setOf(DownloadKind.CARD_INFO),
+		onDismiss = {},
+		onConfirm = { _, _, _, _ -> },
+	)
+}
+
+@Preview
+@Composable
+private fun DownloadKindDialogPartlyTranslatedPreview() = PreviewFrame(isDark = false) {
+	// Card info half held: French came down and the other two did not. The row has to say so and
+	// stay tickable, because it used to read as finished and lock the rest away.
+	DownloadKindDialog(
+		setName = "Base Set",
+		cardCount = 102,
+		alreadyHave = setOf(DownloadKind.CARD_INFO),
+		languages = listOf(CardLanguage.ENGLISH, CardLanguage.FRENCH, CardLanguage.GERMAN),
+		defaultLanguage = CardLanguage.FRENCH,
+		infoLanguages = setOf(CardLanguage.FRENCH),
+		onDismiss = {},
+		onConfirm = { _, _, _, _ -> },
+	)
+}

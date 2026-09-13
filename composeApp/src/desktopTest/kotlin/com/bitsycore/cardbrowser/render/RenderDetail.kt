@@ -7,8 +7,8 @@ import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.Finish
 import com.bitsycore.cardbrowser.core.model.FinishCoverage
 import com.bitsycore.cardbrowser.core.model.SourceId
-import com.bitsycore.cardbrowser.ui.detail.CardDetailContent
-import com.bitsycore.cardbrowser.ui.detail.CardDetailContract
+import com.bitsycore.cardbrowser.ui.screen.detail.CardDetailContent
+import com.bitsycore.cardbrowser.ui.screen.detail.CardDetailContract
 import com.bitsycore.cardbrowser.ui.preview.PreviewData
 import java.io.File
 import kotlin.test.Ignore

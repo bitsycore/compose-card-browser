@@ -8,9 +8,9 @@ import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundArt
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.data.settings.ImageDownloadRecord
-import com.bitsycore.cardbrowser.ui.sets.SetImageStatus
-import com.bitsycore.cardbrowser.ui.sets.SetListContent
-import com.bitsycore.cardbrowser.ui.sets.SetListContract
+import com.bitsycore.cardbrowser.ui.screen.sets.SetImageStatus
+import com.bitsycore.cardbrowser.ui.screen.sets.SetListContent
+import com.bitsycore.cardbrowser.ui.screen.sets.SetListContract
 import kotlinx.datetime.LocalDate
 import java.io.File
 import kotlin.test.Ignore

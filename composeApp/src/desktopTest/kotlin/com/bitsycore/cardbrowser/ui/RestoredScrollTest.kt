@@ -8,8 +8,8 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Density
 import com.bitsycore.cardbrowser.core.model.SourceId
-import com.bitsycore.cardbrowser.ui.cards.CardGridContent
-import com.bitsycore.cardbrowser.ui.cards.CardGridContract
+import com.bitsycore.cardbrowser.ui.screen.cards.CardGridContent
+import com.bitsycore.cardbrowser.ui.screen.cards.CardGridContract
 import com.bitsycore.cardbrowser.ui.preview.PreviewData
 import com.bitsycore.cardbrowser.ui.theme.CardBrowserTheme
 import javax.swing.SwingUtilities

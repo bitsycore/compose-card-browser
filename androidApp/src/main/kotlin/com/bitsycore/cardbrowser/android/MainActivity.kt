@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.bitsycore.cardbrowser.ui.App
+import com.bitsycore.cardbrowser.ui.navigation.App
 
 /**
  * The Android entry point.

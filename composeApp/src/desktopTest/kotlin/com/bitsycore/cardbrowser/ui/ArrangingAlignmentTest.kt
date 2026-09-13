@@ -8,7 +8,7 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Density
 import com.bitsycore.cardbrowser.render.pokemonArrangingState
-import com.bitsycore.cardbrowser.ui.sets.SetListContent
+import com.bitsycore.cardbrowser.ui.screen.sets.SetListContent
 import com.bitsycore.cardbrowser.ui.theme.CardBrowserTheme
 import java.io.ByteArrayInputStream
 import javax.imageio.ImageIO

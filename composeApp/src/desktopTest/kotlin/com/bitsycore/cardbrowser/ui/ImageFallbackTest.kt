@@ -17,8 +17,8 @@ import com.bitsycore.cardbrowser.core.model.Artwork
 import com.bitsycore.cardbrowser.core.model.ArtworkTreatment
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
-import com.bitsycore.cardbrowser.ui.common.CardImage
-import com.bitsycore.cardbrowser.ui.common.ImageVariant
+import com.bitsycore.cardbrowser.ui.component.CardImage
+import com.bitsycore.cardbrowser.ui.component.ImageVariant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.CopyOnWriteArrayList

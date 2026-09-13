@@ -34,9 +34,9 @@ import com.bitsycore.cardbrowser.data.cache.InMemorySetRecordStore
 import com.bitsycore.cardbrowser.data.cache.MetadataCache
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
-import com.bitsycore.cardbrowser.ui.browse.BrowseSession
-import com.bitsycore.cardbrowser.ui.cards.CardGridContract
-import com.bitsycore.cardbrowser.ui.cards.CardGridViewModel
+import com.bitsycore.cardbrowser.controller.BrowseSession
+import com.bitsycore.cardbrowser.ui.screen.cards.CardGridContract
+import com.bitsycore.cardbrowser.ui.screen.cards.CardGridViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest

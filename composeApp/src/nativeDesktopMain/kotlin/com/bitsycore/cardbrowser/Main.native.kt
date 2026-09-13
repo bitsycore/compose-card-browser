@@ -2,7 +2,7 @@ package com.bitsycore.cardbrowser
 
 import com.bitsycore.cardbrowser.di.appModule
 import com.bitsycore.cardbrowser.di.platformModule
-import com.bitsycore.cardbrowser.ui.App
+import com.bitsycore.cardbrowser.ui.navigation.App
 import com.compose.sdl.nativeComposeWindow
 import org.koin.core.context.startKoin
 

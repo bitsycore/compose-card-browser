@@ -20,9 +20,9 @@ import com.bitsycore.cardbrowser.games.pokemon.PokemonArt
 import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundArt
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
-import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
-import com.bitsycore.cardbrowser.ui.games.GameListContent
-import com.bitsycore.cardbrowser.ui.games.GameListContract
+import com.bitsycore.cardbrowser.ui.art.GameArtRegistry
+import com.bitsycore.cardbrowser.ui.screen.games.GameListContent
+import com.bitsycore.cardbrowser.ui.screen.games.GameListContract
 import java.io.File
 import kotlin.test.Ignore
 import kotlin.test.Test

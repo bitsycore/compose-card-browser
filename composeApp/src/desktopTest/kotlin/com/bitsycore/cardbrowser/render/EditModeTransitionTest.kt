@@ -13,8 +13,8 @@ import androidx.compose.ui.unit.Density
 import com.bitsycore.cardbrowser.games.magic.MagicGame
 import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
-import com.bitsycore.cardbrowser.ui.games.GameListContent
-import com.bitsycore.cardbrowser.ui.games.GameListContract
+import com.bitsycore.cardbrowser.ui.screen.games.GameListContent
+import com.bitsycore.cardbrowser.ui.screen.games.GameListContract
 import com.bitsycore.cardbrowser.ui.theme.CardBrowserTheme
 import java.io.ByteArrayInputStream
 import javax.imageio.ImageIO

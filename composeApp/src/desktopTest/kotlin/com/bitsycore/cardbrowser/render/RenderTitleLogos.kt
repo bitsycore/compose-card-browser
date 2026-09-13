@@ -8,8 +8,8 @@ import com.bitsycore.cardbrowser.games.lorcana.LorcanaArt
 import com.bitsycore.cardbrowser.games.onepiece.OnePieceArt
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundArt
 import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesArt
-import com.bitsycore.cardbrowser.ui.sets.SetListContent
-import com.bitsycore.cardbrowser.ui.sets.SetListContract
+import com.bitsycore.cardbrowser.ui.screen.sets.SetListContent
+import com.bitsycore.cardbrowser.ui.screen.sets.SetListContract
 import java.io.File
 import kotlin.test.Ignore
 import kotlin.test.Test

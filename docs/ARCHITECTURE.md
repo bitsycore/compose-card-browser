@@ -149,7 +149,20 @@ Navigation is Navigation 3: a `SnapshotStateList<Route>` of `@Serializable` rout
 screen's view model and saved state survive a trip into a detail and back.
 
 Screens: game list, set list, card grid, card detail, downloads, storage, settings, first-launch
-setup.
+setup. Each is one package under `ui/screen/` holding its `XScreen`, `XContract` and `XViewModel`
+and nothing else; anything two screens share is a `ui/component`, a `ui/image` or a `ui/art`, and
+the cross-screen state that belongs to no screen is `controller/`.
+
+```
+ui/navigation/   App.kt: the back stack, the routes, the transitions
+ui/screen/<x>/   one package per screen: XScreen, XContract, XViewModel
+ui/component/    shared composables: chips, state views, the fast scroller, keyboard navigation
+ui/image/        Coil's loader and the prefetcher
+ui/art/          a game's mark: the registry, and how to draw one
+ui/theme/        colours, motion, the system bars
+ui/preview/      fixtures the @Previews draw
+controller/      BrowseSession: the list the detail screen swipes, owned by no screen
+```
 
 ### Transitions
 
@@ -174,8 +187,8 @@ setup.
 | Language normalisation before a cache key | `data/…/repository/CardRepository.kt` |
 | Complete sets, search, eviction | `database/…/SqlCardStore.kt` |
 | The download queue | `data/…/download/DownloadManager.kt` |
-| Partial-result and coverage notices | `composeApp/…/ui/cards/CardGridContract.kt` |
-| Filter sheet, chips and menus | `composeApp/…/ui/cards/FilterSheet.kt` |
+| Partial-result and coverage notices | `composeApp/…/ui/screen/cards/CardGridContract.kt` |
+| Filter sheet, chips and menus | `composeApp/…/ui/screen/cards/FilterSheet.kt` |
 | Cardmarket URLs | `core/…/cardmarket/CardmarketLinks.kt` |
 
 ---

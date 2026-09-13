@@ -11,8 +11,8 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.unit.Density
-import com.bitsycore.cardbrowser.ui.detail.CardDetailContent
-import com.bitsycore.cardbrowser.ui.detail.CardDetailContract
+import com.bitsycore.cardbrowser.ui.screen.detail.CardDetailContent
+import com.bitsycore.cardbrowser.ui.screen.detail.CardDetailContract
 import com.bitsycore.cardbrowser.ui.preview.PreviewData
 import com.bitsycore.cardbrowser.ui.theme.CardBrowserTheme
 import javax.swing.SwingUtilities

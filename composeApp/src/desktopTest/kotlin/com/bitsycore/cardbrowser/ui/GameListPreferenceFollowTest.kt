@@ -3,7 +3,7 @@ package com.bitsycore.cardbrowser.ui
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
 import com.bitsycore.cardbrowser.data.cache.AppStorage
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
-import com.bitsycore.cardbrowser.ui.games.GameListViewModel
+import com.bitsycore.cardbrowser.ui.screen.games.GameListViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain

@@ -2,8 +2,8 @@ package com.bitsycore.cardbrowser.render
 
 import com.bitsycore.cardbrowser.data.settings.BrowsingPreferences
 import com.bitsycore.cardbrowser.data.settings.ThemeMode
-import com.bitsycore.cardbrowser.ui.settings.SettingsContent
-import com.bitsycore.cardbrowser.ui.settings.SettingsContract
+import com.bitsycore.cardbrowser.ui.screen.settings.SettingsContent
+import com.bitsycore.cardbrowser.ui.screen.settings.SettingsContract
 import java.io.File
 import kotlin.test.Ignore
 import kotlin.test.Test

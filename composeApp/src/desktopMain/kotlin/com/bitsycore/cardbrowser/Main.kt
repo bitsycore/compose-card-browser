@@ -17,7 +17,7 @@ import com.bitsycore.cardbrowser.di.appModule
 import com.bitsycore.cardbrowser.di.platformModule
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
 import com.bitsycore.cardbrowser.platform.WindowChrome
-import com.bitsycore.cardbrowser.ui.App
+import com.bitsycore.cardbrowser.ui.navigation.App
 import org.koin.compose.koinInject
 import org.jetbrains.compose.resources.decodeToImageBitmap
 import org.koin.core.context.startKoin

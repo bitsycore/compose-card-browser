@@ -17,8 +17,8 @@ import com.bitsycore.cardbrowser.data.download.DownloadJob
 import com.bitsycore.cardbrowser.data.download.DownloadKind
 import com.bitsycore.cardbrowser.data.download.DownloadRequest
 import com.bitsycore.cardbrowser.data.download.DownloadStatus
-import com.bitsycore.cardbrowser.ui.downloads.DownloadKindDialog
-import com.bitsycore.cardbrowser.ui.downloads.DownloadsScreen
+import com.bitsycore.cardbrowser.ui.screen.downloads.DownloadKindDialog
+import com.bitsycore.cardbrowser.ui.screen.downloads.DownloadsScreen
 import com.bitsycore.cardbrowser.ui.theme.CardBrowserTheme
 import java.io.File
 import kotlin.test.Ignore
@@ -127,8 +127,8 @@ class DownloadRenderer {
 		// The other half of the same report: the set opens in the language that *was* downloaded,
 		// and the banner says so with the way out.
 		renderPhone(vOut, "grid-language-substituted") {
-			com.bitsycore.cardbrowser.ui.cards.CardGridContent(
-				state = com.bitsycore.cardbrowser.ui.cards.CardGridContract.UiState(
+			com.bitsycore.cardbrowser.ui.screen.cards.CardGridContent(
+				state = com.bitsycore.cardbrowser.ui.screen.cards.CardGridContract.UiState(
 					setId = "scryfall:blb",
 					setName = "Bloomburrow",
 					setCode = "BLB",
@@ -222,8 +222,8 @@ class DownloadRenderer {
 		}
 
 		renderPhone(vOut, "storage-screen") {
-			com.bitsycore.cardbrowser.ui.storage.StorageContent(
-				state = com.bitsycore.cardbrowser.ui.storage.StorageContract.UiState(
+			com.bitsycore.cardbrowser.ui.screen.storage.StorageContent(
+				state = com.bitsycore.cardbrowser.ui.screen.storage.StorageContract.UiState(
 					usage = com.bitsycore.cardbrowser.data.cache.CacheUsage(
 						metadataBytes = 486_000_000,
 						metadataEntries = 1_240,
@@ -233,7 +233,7 @@ class DownloadRenderer {
 						imageLimitBytes = 1_000_000_000,
 					),
 					kept = listOf(
-						com.bitsycore.cardbrowser.ui.storage.StorageContract.KeptGame(
+						com.bitsycore.cardbrowser.ui.screen.storage.StorageContract.KeptGame(
 							game = GameId("magic"),
 							displayName = "Magic: The Gathering",
 							sets = 988,
@@ -253,7 +253,7 @@ class DownloadRenderer {
 								"2026-09-10T09:14:00Z",
 							),
 						),
-						com.bitsycore.cardbrowser.ui.storage.StorageContract.KeptGame(
+						com.bitsycore.cardbrowser.ui.screen.storage.StorageContract.KeptGame(
 							game = GameId("pokemon"),
 							displayName = "Pokémon",
 							sets = 486,
@@ -266,7 +266,7 @@ class DownloadRenderer {
 								CardLanguage.GERMAN to 120,
 							),
 						),
-						com.bitsycore.cardbrowser.ui.storage.StorageContract.KeptGame(
+						com.bitsycore.cardbrowser.ui.screen.storage.StorageContract.KeptGame(
 							game = GameId("riftbound"),
 							displayName = "Riftbound",
 							sets = 2,

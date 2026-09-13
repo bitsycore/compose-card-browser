@@ -4,8 +4,8 @@ import com.bitsycore.cardbrowser.core.filter.CardFacets
 import com.bitsycore.cardbrowser.core.provider.CardFilterField
 import com.bitsycore.cardbrowser.games.pokemon.PokemonGame
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
-import com.bitsycore.cardbrowser.ui.cards.CardGridContract
-import com.bitsycore.cardbrowser.ui.cards.FilterSheet
+import com.bitsycore.cardbrowser.ui.screen.cards.CardGridContract
+import com.bitsycore.cardbrowser.ui.screen.cards.FilterSheet
 import java.io.File
 import kotlin.test.Ignore
 import kotlin.test.Test

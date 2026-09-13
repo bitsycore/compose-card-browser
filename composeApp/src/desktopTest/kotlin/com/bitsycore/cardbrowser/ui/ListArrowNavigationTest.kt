@@ -20,8 +20,8 @@ import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.games.wowtcg.WowTcgGame
 import com.bitsycore.cardbrowser.games.wutheringwaves.WutheringWavesGame
 import com.bitsycore.cardbrowser.games.yugioh.YuGiOhGame
-import com.bitsycore.cardbrowser.ui.games.GameListContent
-import com.bitsycore.cardbrowser.ui.games.GameListContract
+import com.bitsycore.cardbrowser.ui.screen.games.GameListContent
+import com.bitsycore.cardbrowser.ui.screen.games.GameListContract
 import com.bitsycore.cardbrowser.ui.theme.CardBrowserTheme
 import javax.swing.SwingUtilities
 import kotlin.test.Ignore

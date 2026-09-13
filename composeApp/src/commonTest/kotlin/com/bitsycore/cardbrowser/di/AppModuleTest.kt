@@ -1,7 +1,7 @@
 package com.bitsycore.cardbrowser.di
 
 import com.bitsycore.cardbrowser.core.game.GameProfile
-import com.bitsycore.cardbrowser.ui.games.GameArtRegistry
+import com.bitsycore.cardbrowser.ui.art.GameArtRegistry
 import com.bitsycore.cardbrowser.core.provider.CardProvider
 import com.bitsycore.cardbrowser.core.provider.BulkCatalogue
 import com.bitsycore.cardbrowser.core.provider.ProviderRegistry
@@ -12,7 +12,7 @@ import com.bitsycore.cardbrowser.data.download.DownloadManager
 import com.bitsycore.cardbrowser.data.repository.CardRepository
 import com.bitsycore.cardbrowser.data.repository.SetCatalogueWarmer
 import com.bitsycore.cardbrowser.data.settings.PreferencesStore
-import com.bitsycore.cardbrowser.ui.browse.BrowseSession
+import com.bitsycore.cardbrowser.controller.BrowseSession
 import kotlin.test.AfterTest
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame

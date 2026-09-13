@@ -3,8 +3,8 @@ package com.bitsycore.cardbrowser.render
 import com.bitsycore.cardbrowser.data.settings.CardRowHeight
 import com.bitsycore.cardbrowser.data.settings.CardTileSize
 import com.bitsycore.cardbrowser.data.settings.CardViewMode
-import com.bitsycore.cardbrowser.ui.cards.CardGridContent
-import com.bitsycore.cardbrowser.ui.cards.CardGridContract
+import com.bitsycore.cardbrowser.ui.screen.cards.CardGridContent
+import com.bitsycore.cardbrowser.ui.screen.cards.CardGridContract
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
 import com.bitsycore.cardbrowser.ui.preview.PreviewData
 import java.io.File

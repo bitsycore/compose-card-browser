@@ -9,8 +9,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Density
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.games.riftbound.RiftboundGame
-import com.bitsycore.cardbrowser.ui.detail.CardDetailContent
-import com.bitsycore.cardbrowser.ui.detail.CardDetailContract
+import com.bitsycore.cardbrowser.ui.screen.detail.CardDetailContent
+import com.bitsycore.cardbrowser.ui.screen.detail.CardDetailContract
 import com.bitsycore.cardbrowser.ui.preview.PreviewData
 import com.bitsycore.cardbrowser.ui.theme.CardBrowserTheme
 import androidx.compose.ui.input.key.Key

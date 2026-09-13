@@ -3,7 +3,7 @@ package com.bitsycore.cardbrowser
 import androidx.compose.ui.window.ComposeUIViewController
 import com.bitsycore.cardbrowser.di.appModule
 import com.bitsycore.cardbrowser.di.platformModule
-import com.bitsycore.cardbrowser.ui.App
+import com.bitsycore.cardbrowser.ui.navigation.App
 import org.koin.core.context.startKoin
 import platform.UIKit.UIViewController
 
