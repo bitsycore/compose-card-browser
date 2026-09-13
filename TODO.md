@@ -70,10 +70,16 @@ Everything below compiles and is desktop-tested. None of it has run where it wil
 
 ## Performance
 
-- [ ] **`localSetFacts` issues one query per set.** *(verified by reading, never timed)*
-  `confirmedCardCounts` loops `mSetStore.cardCount(...)` per set and `storedSetCount` loops
-  `languagesHeld(...)`, so opening Magic's set list is on the order of a thousand queries. **Measure
-  before optimising** — the store answers counts in tens of milliseconds and this may be invisible.
+- [x] **`localSetFacts` issues one query per set.** *(measured 2026-09-13, left alone)*
+  **80.7 ms** for 988 sets, half held in two languages, against a real database —
+  `LocalSetFactsBench`. And it is rarely on the path: `SetFactsWarmer` reads it ahead of the set
+  list and memoises it per catalogue, so the cost is paid on a cold miss only, inside a coroutine,
+  and decides when the "saved" marks appear rather than when the list draws.
+
+  Not optimised, deliberately. The batch version exists — `storedSetsFor(game)` already answers all
+  of it in one query — but wiring it in beside the per-set methods would leave two implementations
+  of "is this set saved", which is the exact bug class fixed three times this week (costs, text,
+  treatment). Worth revisiting if a phone measures far worse than this; the bench is there to ask.
 
 - [ ] **The advanced search's text half uses no index, deliberately.** `name_folded LIKE '%x%'` has
   a leading wildcard, which no B-tree index can serve. Listed so it stays a decision. FTS5 would
