@@ -176,14 +176,16 @@ class InMemorySetRecordStore(
 		limit: Int,
 	): List<CardPrinting> = mRows.entries
 		.filter { it.value.game == game.value }
-		// Language too, which this fake used to ignore -- and ignoring it is how a real bug lived
-		// through a suite that exercised this path: records are stored under the language the
-		// *source* answered in, so a search for the reader's preferred one matched nothing at all
-		// and every test here passed regardless.
-		.filter { vEntry ->
-			filter.language == null || vEntry.key.language == null ||
-				vEntry.key.language == filter.language.code
-		}
+		// Exactly what `searchPrintings` does: `(:language IS NULL OR language = :language)`. No
+		// leniency, even though leniency looks kinder here.
+		//
+		// This fake used to ignore language entirely, which let one bug through; it then let a row
+		// stored under *no* language match any language asked for, which let the next one through.
+		// A source that states no languages -- OPTCG states none -- writes rows under none, and a
+		// search naming one found nothing in SQLite while finding everything here. A fake looser
+		// than the query it stands in for cannot fail where the real thing fails, which is the only
+		// job it has.
+		.filter { vEntry -> filter.language == null || vEntry.key.language == filter.language.code }
 		.flatMap { it.value.cards }
 		.filter { vCard -> filter.matches(vCard) }
 		.take(limit)

@@ -83,6 +83,8 @@ class CardRepositoryTest {
 		private val mRemoteFilters: Set<CardFilterField> = setOf(CardFilterField.TEXT),
 		private val mDelayByPage: Map<Int, Long> = emptyMap(),
 		private val mMaxPageSize: Int = 2,
+		/** Empty for a source that states no languages at all, as OPTCG and TCGCSV do. */
+		private val mLanguages: Set<CardLanguage> = setOf(CardLanguage.ENGLISH),
 	) : CardProvider<TestGame> {
 
 		var listCardsCallCount = 0
@@ -100,7 +102,7 @@ class CardRepositoryTest {
 			),
 			sorting = setOf(CardSortField.COLLECTOR_NUMBER),
 			data = DataCapabilities(
-				languages = setOf(CardLanguage.ENGLISH),
+				languages = mLanguages,
 				localizedText = false,
 				localizedImages = false,
 				cardIdentity = false,
@@ -228,6 +230,34 @@ class CardRepositoryTest {
 		)
 
 		assertEquals(1, vHits.cards.size, "the stored card was written in the language served")
+	}
+
+	@Test
+	fun `a source that states no languages is searchable whatever language the screen names`() = runTest {
+		// One Piece, reproduced without a network. OPTCG states no languages at all, so its rows
+		// are written under none -- and the search resolved that null as "nothing answered" and
+		// put the reader's own preference back in its place. Every search came back empty over a
+		// set that was sitting on disk.
+		val vProvider = FakeProvider(mProviderId, listOf(listOf(card(1))), mLanguages = emptySet())
+		val vRepository = repositoryFor(vProvider)
+		vRepository.cards(
+			setId = SourceId(mProviderId, "s"),
+			game = TestGame.id,
+			query = CardQuery(),
+		).toList()
+
+		for (vLanguage in listOf(null, CardLanguage.ENGLISH, CardLanguage.FRENCH)) {
+			val vHits = vRepository.searchStoredCards(
+				game = TestGame.id,
+				filter = CardSearchFilter(text = "card", language = vLanguage),
+				knownSets = emptyList(),
+			)
+			assertEquals(
+				1,
+				vHits.cards.size,
+				"searching in ${vLanguage?.code ?: "no language"} missed a stored card",
+			)
+		}
 	}
 
 	@Test

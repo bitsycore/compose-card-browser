@@ -636,9 +636,15 @@ class CardRepository(
 		// is reading, so a French-preferring user's Riftbound cards are stored as `en`. Searching
 		// for `fr` matched nothing at all, and the screen reported an honest-looking empty result
 		// -- the same mismatch the download queue had, in the one place that reads what it wrote.
-		val vLanguage = mRegistry.resolve(game, filter.language)
-			?.let { effectiveLanguage(it, filter.language) }
-			?: filter.language
+		//
+		// Two nulls that mean opposite things, and writing this as `?.let { … } ?: filter.language`
+		// merged them. A source that states no languages at all -- OPTCG states none -- resolves to
+		// null, the elvis then read that as "nothing answered" and put the user's raw preference
+		// back, and the search asked for `en` rows that had been written under none. Every One
+		// Piece search returned empty while the set sat on disk.
+		val vProvider = mRegistry.resolve(game, filter.language)
+		val vLanguage =
+			if (vProvider != null) effectiveLanguage(vProvider, filter.language) else filter.language
 		val vCards = mSetStore.search(game, filter.copy(language = vLanguage))
 		return CardSearchResults(
 			cards = vCards,

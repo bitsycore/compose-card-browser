@@ -41,6 +41,8 @@ kotlin {
 		}
 		getByName("desktopTest").dependencies {
 			implementation(libs.ktor.client.java)
+			// The live search check drives a real SQLite store through the repository.
+			implementation(project(":database"))
 		}
 	}
 }
