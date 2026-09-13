@@ -990,10 +990,13 @@ private fun SetRow(
 					}
 				}
 
-				// A star you can press, but only while arranging. Browsing, a favourite still
-				// shows its star and a non-favourite shows nothing at all: the mark is a fact
-				// about the set and worth keeping, while an empty outline on every row is a
-				// column of targets to miss on the way to opening one.
+				// The star is a control, and only while arranging. Browsing, it said nothing the
+				// list was not already saying: a favourite is already under the "N favourites"
+				// heading, so a star beside it repeats that heading once per row.
+				//
+				// The slot stays 32dp wide either way. Collapsing it would be a second layout
+				// change on the corner the handle is already animating, which is exactly the
+				// bounce that took three attempts to find the first time.
 				else -> {
 					Spacer(Modifier.size(4.dp))
 					FavouriteStar(
@@ -1088,14 +1091,14 @@ private fun FavouriteStar(
 			),
 		contentAlignment = Alignment.Center,
 	) {
-		if (isFavourite) {
+		AnimatedVisibility(
+			visible = isEditing && isFavourite,
+			enter = fadeIn() + scaleIn(initialScale = 0.6f),
+			exit = fadeOut() + scaleOut(targetScale = 0.6f),
+		) {
 			Icon(
 				imageVector = AppIcons.StarFilled,
-				contentDescription = if (isEditing) {
-					"Remove $name from favourites"
-				} else {
-					"$name is a favourite"
-				},
+				contentDescription = "Remove $name from favourites",
 				tint = MaterialTheme.colorScheme.primary,
 				modifier = Modifier.size(20.dp),
 			)

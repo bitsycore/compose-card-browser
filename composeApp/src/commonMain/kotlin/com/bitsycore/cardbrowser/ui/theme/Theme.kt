@@ -135,6 +135,7 @@ fun CardBrowserTheme(
 		colorScheme = if (useDarkTheme) DARK_COLORS else LIGHT_COLORS,
 		motionScheme = NoBounceMotionScheme,
 	) {
+		SyncSystemBarAppearance(isDark = useDarkTheme)
 		// The app's floor, and it was missing.
 		//
 		// Every screen paints its own background through its `Scaffold`, which looks complete right

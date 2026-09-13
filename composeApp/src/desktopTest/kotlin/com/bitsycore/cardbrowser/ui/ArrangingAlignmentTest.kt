@@ -43,7 +43,9 @@ class ArrangingAlignmentTest {
 	fun `browsing is the case that does not line up`() = onSwingThread {
 		// The other half of the claim, and the reason arranging has to do something about it: while
 		// browsing, a row carries whatever it holds -- a download button, the marks for what is on
-		// disk -- and those legitimately push the star around.
+		// disk -- and no two rows hold the same things, so nothing lines up. Arranging clears all
+		// of it and leaves one control, which is why the stars can be measured against each other
+		// at all. No star is drawn while browsing, so what spreads here is those marks.
 		val vColumns = primaryColumns(arranging = false)
 
 		val vSpread = vColumns.max() - vColumns.min()

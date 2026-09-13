@@ -38,9 +38,9 @@ class SetListRenderer {
 
 		renderToPng(vOut, "sets-all-lines", width = 660, height = 1100, density = 1.65f) { SetListContent(pokemonState(), {}) }
 
-		// Browsing and arranging, side by side. Browsing should show a star only on a favourite and
-		// no handles; arranging should show a star on every row, a handle on each favourite, and no
-		// download button.
+		// Browsing and arranging, side by side. Browsing should show no stars and no handles;
+		// arranging should show a star on every row, a handle on each favourite, and no download
+		// button.
 		listOf(false to "sets-browsing", true to "sets-arranging").forEach { (vEditing, vName) ->
 			renderToPng(vOut, vName, width = 660, height = 700, density = 1.65f) {
 				SetListContent(pokemonArrangingState(vEditing), {})
