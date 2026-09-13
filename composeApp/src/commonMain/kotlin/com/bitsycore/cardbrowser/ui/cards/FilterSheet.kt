@@ -1,5 +1,9 @@
 package com.bitsycore.cardbrowser.ui.cards
 
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -154,74 +158,88 @@ fun FilterSheet(
 		if (CardFilterField.DOMAIN in state.supportedFilters && state.facets.domains.isNotEmpty()) {
 			// The word for this axis is the game's, not the app's: Riftbound has domains, Magic
 			// has colours, Altered has factions. `GameVocabulary` is the one place that decides.
-			FilterSection(vVocabulary.domain ?: "Domain") {
+			FilterValues(
+				title = vVocabulary.domain ?: "Domain",
 				// In the game's own order, not the order the facets happened to come out in. WUBRG
 				// is the point: no alphabetical sort produces it, and a Magic player reads any
 				// other order as wrong.
-				state.facets.domains.sortedBy { vKey ->
+				options = state.facets.domains.sortedBy { vKey ->
 					val vIndex = state.game?.domains?.indexOfFirst { it.key.equals(vKey, true) } ?: -1
 					// A domain the game does not declare sorts after the ones it does, rather than
 					// being dropped: a source inventing a value must still be filterable.
 					if (vIndex >= 0) vIndex else Int.MAX_VALUE
-				}.forEach { vKey ->
-					FilterValueChip(
+				}.map { vKey ->
+					FilterOption(
+						key = vKey,
 						label = state.game?.domainFor(vKey)?.label ?: vKey,
-						isSelected = vKey in state.query.domains,
 						colour = domainColourOf(state.game, vKey),
-					) {
-						onQueryChanged(state.query.copy(domains = state.query.domains.toggle(vKey)))
-					}
-				}
-			}
+					)
+				},
+				selected = state.query.domains,
+				onToggle = { vKey ->
+					onQueryChanged(state.query.copy(domains = state.query.domains.toggle(vKey)))
+				},
+				onClear = { onQueryChanged(state.query.copy(domains = emptySet())) },
+			)
 		}
 
 		if (CardFilterField.CARD_TYPE in state.supportedFilters && state.facets.cardTypes.isNotEmpty()) {
-			FilterSection(vVocabulary.cardType) {
-				state.facets.cardTypes.forEach { vType ->
-					FilterValueChip(vType, vType in state.query.cardTypes) {
-						onQueryChanged(state.query.copy(cardTypes = state.query.cardTypes.toggle(vType)))
-					}
-				}
-			}
+			FilterValues(
+				title = vVocabulary.cardType,
+				options = state.facets.cardTypes.map { FilterOption(it, it) },
+				selected = state.query.cardTypes,
+				onToggle = { vType ->
+					onQueryChanged(state.query.copy(cardTypes = state.query.cardTypes.toggle(vType)))
+				},
+				onClear = { onQueryChanged(state.query.copy(cardTypes = emptySet())) },
+			)
 		}
 
 		if (CardFilterField.RARITY in state.supportedFilters && state.facets.rarities.isNotEmpty()) {
-			FilterSection("Rarity") {
-				state.facets.rarities.forEach { vRarity ->
-					// In the game's own colours where it prints them, like the domains above and
-					// like the pill on the card itself.
-					FilterValueChip(
-						label = vRarity,
-						isSelected = vRarity in state.query.rarities,
-						colour = rarityColourOf(state.game, vRarity),
-					) {
-						onQueryChanged(state.query.copy(rarities = state.query.rarities.toggle(vRarity)))
-					}
-				}
-			}
+			FilterValues(
+				title = "Rarity",
+				// In the game's own colours where it prints them, like the domains above and like
+				// the pill on the card itself.
+				options = state.facets.rarities.map {
+					FilterOption(it, it, rarityColourOf(state.game, it))
+				},
+				selected = state.query.rarities,
+				onToggle = { vRarity ->
+					onQueryChanged(state.query.copy(rarities = state.query.rarities.toggle(vRarity)))
+				},
+				onClear = { onQueryChanged(state.query.copy(rarities = emptySet())) },
+			)
 		}
 
 		if (CardFilterField.COST in state.supportedFilters && state.facets.costs.isNotEmpty()) {
-			FilterSection(vVocabulary.cost ?: "Cost") {
-				state.facets.costs.forEach { vCost ->
-					FilterValueChip("$vCost", vCost in state.query.costs) {
-						onQueryChanged(state.query.copy(costs = state.query.costs.toggle(vCost)))
-					}
-				}
-			}
+			FilterValues(
+				title = vVocabulary.cost ?: "Cost",
+				options = state.facets.costs.map { FilterOption("$it", "$it") },
+				selected = state.query.costs.mapTo(mutableSetOf()) { "$it" },
+				onToggle = { vKey ->
+					val vCost = vKey.toIntOrNull() ?: return@FilterValues
+					onQueryChanged(state.query.copy(costs = state.query.costs.toggle(vCost)))
+				},
+				onClear = { onQueryChanged(state.query.copy(costs = emptySet())) },
+			)
 		}
 
 		if (CardFilterField.ARTWORK_TREATMENT in state.supportedFilters && state.facets.treatments.size > 1) {
-			FilterSection("Artwork") {
-				state.facets.treatments.forEach { vTreatment ->
-					FilterValueChip(
-						label = CardGridContract.treatmentLabel(vTreatment),
-						isSelected = vTreatment in state.query.treatments,
-					) {
-						onQueryChanged(state.query.copy(treatments = state.query.treatments.toggle(vTreatment)))
-					}
-				}
-			}
+			FilterValues(
+				title = "Artwork",
+				options = state.facets.treatments.map {
+					FilterOption(it.name, CardGridContract.treatmentLabel(it))
+				},
+				selected = state.query.treatments.mapTo(mutableSetOf()) { it.name },
+				onToggle = { vKey ->
+					val vTreatment = state.facets.treatments.firstOrNull { it.name == vKey }
+						?: return@FilterValues
+					onQueryChanged(
+						state.query.copy(treatments = state.query.treatments.toggle(vTreatment)),
+					)
+				},
+				onClear = { onQueryChanged(state.query.copy(treatments = emptySet())) },
+			)
 		}
 
 		// Why finish and language are missing, said once, where someone would look for them.
@@ -327,6 +345,103 @@ fun ActiveFilterChips(
  * on a choice, because choosing one and having to reopen for the second is what makes a menu worse
  * than chips; this way it is only longer, which is the point of it.
  */
+/**
+ * One value of a filter axis: what it is called, what to toggle, and the game's colour for it.
+ *
+ * A string key even for the axes that are not strings -- costs are numbers, treatments are an enum
+ * -- because the control below does not care what an axis is made of, and one control is the point.
+ * The call sites convert back, which is three lines and is where the type is known.
+ */
+private data class FilterOption(
+	val key: String,
+	val label: String,
+	val colour: Color? = null,
+)
+
+/**
+ * One filter axis, drawn as chips or as a menu depending on how many values it has.
+ *
+ * Chips show every value at once, which is what makes them worth the space: five rarities are read
+ * in a glance. Past about ten they stop being a glance and become five wrapped rows that push
+ * everything below them off a phone screen, and a sheet that has to be scrolled past one axis to
+ * reach the next is worse at both jobs. Pokemon reaches nineteen rarities, and a cost axis on a
+ * game that goes to twelve is the same shape.
+ *
+ * The menu is the sets menu's, because it is the same question -- several of many, multi-select --
+ * and two controls for one question is two things to learn. It keeps the colour as a dot, so a
+ * Magic player still picks red by its colour rather than by reading five names.
+ */
+@Composable
+private fun FilterValues(
+	title: String,
+	options: List<FilterOption>,
+	selected: Set<String>,
+	onToggle: (String) -> Unit,
+	onClear: () -> Unit,
+) {
+	if (options.size <= CHIP_LIMIT) {
+		FilterSection(title) {
+			options.forEach { vOption ->
+				FilterValueChip(
+					label = vOption.label,
+					isSelected = vOption.key in selected,
+					colour = vOption.colour,
+					onToggle = { onToggle(vOption.key) },
+				)
+			}
+		}
+		return
+	}
+
+	Spacer(Modifier.height(16.dp))
+	Column(Modifier.fillMaxWidth()) {
+		Text(title, style = MaterialTheme.typography.titleSmall)
+		Spacer(Modifier.height(6.dp))
+		var vIsOpen by remember { mutableStateOf(false) }
+		Row(verticalAlignment = Alignment.CenterVertically) {
+			OutlinedButton(onClick = { vIsOpen = true }) {
+				Text(
+					when (selected.size) {
+						0 -> "Any"
+						1 -> options.firstOrNull { it.key in selected }?.label ?: "1 chosen"
+						else -> "${selected.size} chosen"
+					},
+				)
+				Icon(AppIcons.ArrowDropDown, contentDescription = null)
+			}
+			if (selected.isNotEmpty()) {
+				TextButton(onClick = onClear) { Text("Any") }
+			}
+		}
+		DropdownMenu(expanded = vIsOpen, onDismissRequest = { vIsOpen = false }) {
+			options.forEach { vOption ->
+				DropdownMenuItem(
+					text = { Text(vOption.label) },
+					onClick = { onToggle(vOption.key) },
+					leadingIcon = vOption.colour?.let { vColour ->
+						{
+							Box(
+								Modifier
+									.size(14.dp)
+									.clip(CircleShape)
+									.background(vColour),
+							)
+						}
+					},
+					trailingIcon = {
+						if (vOption.key in selected) {
+							Icon(AppIcons.Check, contentDescription = "Included")
+						}
+					},
+				)
+			}
+		}
+	}
+}
+
+/** Past this many values an axis is a menu rather than a row of chips. */
+private const val CHIP_LIMIT = 10
+
 @Composable
 private fun SetFilterMenu(
 	options: List<CardGridContract.SetChoice>,
