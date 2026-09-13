@@ -3,6 +3,7 @@ package com.bitsycore.cardbrowser.ui.screen.storage
 import com.bitsycore.cardbrowser.core.model.CardLanguage
 import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.data.cache.CacheUsage
+import com.bitsycore.cardbrowser.data.repository.Completion
 import com.bitsycore.cardbrowser.data.settings.BulkImportRecord
 import com.bitsycore.lib.pulse.container.ContainerContract
 
@@ -43,15 +44,18 @@ object StorageContract :
 		val keptBytes: Long get() = kept.sumOf { it.bytes }
 
 		/**
-		 * Kept records this screen cannot attribute to any game.
+		 * Card data this screen cannot attribute to any game.
 		 *
-		 * Not hidden. A game whose set list has been evicted still has its pinned sets on disk, and
-		 * they cannot be mapped back to a name without it -- so the bytes are real, unattributable,
-		 * and saying "other" is the honest way to show them rather than letting the numbers
-		 * disagree with the total.
+		 * Two things land here: the set lists and card detail in the `metadata` table, which belong
+		 * to no one game's row, and sets held for a game whose own set list is gone -- without it
+		 * they cannot be mapped back to a name.
+		 *
+		 * Not hidden. The bytes are real, and showing them as "Other" is what keeps the rows adding
+		 * up to the heading. Measured against *all* card data rather than the downloaded part,
+		 * because browsed sets are in the rows above now too.
 		 */
 		val unattributedKeptBytes: Long
-			get() = ((usage?.metadataKeptBytes ?: 0L) - keptBytes).coerceAtLeast(0L)
+			get() = ((usage?.metadataBytes ?: 0L) - keptBytes).coerceAtLeast(0L)
 	}
 
 	/**
@@ -78,19 +82,40 @@ object StorageContract :
 		val sets: Int,
 		val bytes: Long,
 		val knownSets: Int? = null,
+		/** Of [sets], how many were downloaded rather than left behind by browsing. */
+		val downloadedSets: Int = sets,
+		/** How much of the whole game is here. Often an estimate, and it says so. */
+		val completion: Completion? = null,
 		val thumbnailSets: Int = 0,
 		val extraSets: Int = 0,
 		val infoLanguages: Map<CardLanguage, Int> = emptyMap(),
 		val importedVariant: BulkImportRecord? = null,
 	) {
 
-		/** "Card info 988/988 · English · Thumbnails 2" -- only the parts that are there. */
+		/** "988/988 sets · English · Thumbnails 2" -- only the parts that are there. */
 		val summary: String
 			get() = buildList {
-				add(if (knownSets != null) "Card info $sets/$knownSets" else "Card info $sets")
+				add(if (knownSets != null) "$sets/$knownSets sets" else "$sets sets")
 				if (infoLanguages.isNotEmpty()) add(languageSummary)
 				if (thumbnailSets > 0) add("Thumbnails $thumbnailSets")
 			}.joinToString(" · ")
+
+		/**
+		 * How the sets here were come by, when it is worth saying.
+		 *
+		 * Silent when every set was downloaded, which is the ordinary case and needs no note. A
+		 * browsed set is on the device on exactly the same terms as a downloaded one -- nothing
+		 * evicts either -- so this is a remark about where they came from, not a second category.
+		 */
+		val originNote: String?
+			get() {
+				val vBrowsed = sets - downloadedSets
+				return when {
+					vBrowsed <= 0 -> null
+					downloadedSets == 0 -> "from browsing"
+					else -> "$vBrowsed from browsing"
+				}
+			}
 
 		/** Languages by how much of the game each covers, most first. */
 		val languagesByCoverage: List<Pair<CardLanguage, Int>>
@@ -138,9 +163,7 @@ object StorageContract :
 
 		data object DeleteFinished : Intent
 
-		/** The two ordinary caches, which need no confirmation: they refill by themselves. */
-		data object ClearBrowsingData : Intent
-
+		/** The image cache, which needs no confirmation: it refills by itself. */
 		data object ClearImages : Intent
 
 		/** The back arrow. Navigation goes through the container like everything else. */
@@ -184,7 +207,7 @@ object StorageContract :
 
 		Intent.DeleteFinished -> state.copy(isDeleting = false, isLoading = true)
 
-		Intent.ClearBrowsingData, Intent.ClearImages -> state.copy(isLoading = true)
+		Intent.ClearImages -> state.copy(isLoading = true)
 
 		// Navigation changes no state. The view model turns these into effects.
 		Intent.BackPressed, Intent.CacheSettingsRequested, is Intent.GameOpened -> state

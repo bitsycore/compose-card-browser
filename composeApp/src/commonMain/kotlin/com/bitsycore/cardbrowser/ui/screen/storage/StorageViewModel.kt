@@ -46,13 +46,6 @@ class StorageViewModel(
 				}
 			}
 
-			StorageContract.Intent.ClearBrowsingData -> viewModelScope.launch {
-				// Only the reclaimable half. `clearMetadata` would take the downloads too, which
-				// is the one thing this screen exists to stop happening by accident.
-				mCacheManager.clearBrowsingMetadata()
-				load()
-			}
-
 			StorageContract.Intent.ClearImages -> viewModelScope.launch {
 				mCacheManager.clearImages()
 				load()
@@ -104,6 +97,8 @@ class StorageViewModel(
 					sets = vStorage.sets,
 					bytes = vStorage.bytes,
 					knownSets = vStorage.knownSets,
+					downloadedSets = vStorage.downloadedSets,
+					completion = vStorage.completion,
 					extraSets = vStorage.extraSets,
 					infoLanguages = vStorage.languages,
 					// Distinct sets, not records: one set downloaded in two languages is one set

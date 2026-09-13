@@ -7,7 +7,7 @@ import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.sqlstore.GameStorageRow
-import com.bitsycore.cardbrowser.sqlstore.PinnedSet
+import com.bitsycore.cardbrowser.sqlstore.StoredSetRow
 import com.bitsycore.cardbrowser.sqlstore.SqlCardStore
 import com.bitsycore.cardbrowser.sqlstore.StoredFacets
 import kotlinx.coroutines.CoroutineDispatcher
@@ -127,19 +127,19 @@ interface SetRecordStore {
 		isPinned: Boolean,
 	)
 
-	/** Every downloaded set, for a screen that offers to delete them. */
-	suspend fun pinnedSets(): List<PinnedSet>
+	/** Every stored set, browsed ones included, for a screen that offers to delete them. */
+	suspend fun storedSets(): List<StoredSetRow>
 
-	/** What each game has downloaded, in one query rather than a directory walk. */
-	suspend fun downloadedByGame(): List<GameStorageRow>
+	/** What each game holds, in one query rather than a directory walk. */
+	suspend fun storedByGame(): List<GameStorageRow>
 
-	/** Deletes one game's downloads. Returns how many records went. */
+	/** Deletes everything one game holds, browsed sets included. Returns how many records went. */
 	suspend fun deleteDownloaded(game: GameId): Int
 
-	/** One game's downloaded editions, one entry per set per language. */
-	suspend fun downloadedSets(game: GameId): List<PinnedSet>
+	/** One game's stored editions, one entry per set per language. */
+	suspend fun storedSetsFor(game: GameId): List<StoredSetRow>
 
-	/** Deletes one downloaded edition. Returns true when there was one. */
+	/** Deletes one stored edition. Returns true when there was one. */
 	suspend fun deleteDownloadedSet(provider: String, setId: String, language: String): Boolean
 
 	/** Evicts least-recently-used unpinned sets until browsing fits. Returns how many went. */
@@ -301,17 +301,17 @@ class SqlSetRecordStore(
 		mStore.setPinned(provider.value, setId.qualified, language, game.value, label, isPinned)
 	}
 
-	override suspend fun pinnedSets(): List<PinnedSet> =
-		withContext(mIoDispatcher) { mStore.pinnedSets() }
+	override suspend fun storedSets(): List<StoredSetRow> =
+		withContext(mIoDispatcher) { mStore.storedSets() }
 
-	override suspend fun downloadedByGame(): List<GameStorageRow> =
-		withContext(mIoDispatcher) { mStore.pinnedByGame() }
+	override suspend fun storedByGame(): List<GameStorageRow> =
+		withContext(mIoDispatcher) { mStore.storedByGame() }
 
 	override suspend fun deleteDownloaded(game: GameId): Int =
 		withContext(mIoDispatcher) { mStore.deleteDownloadedGame(game.value) }
 
-	override suspend fun downloadedSets(game: GameId): List<PinnedSet> =
-		withContext(mIoDispatcher) { mStore.pinnedSetsForGame(game.value) }
+	override suspend fun storedSetsFor(game: GameId): List<StoredSetRow> =
+		withContext(mIoDispatcher) { mStore.storedSetsForGame(game.value) }
 
 	override suspend fun deleteDownloadedSet(
 		provider: String,
@@ -359,7 +359,7 @@ class SqlSetRecordStore(
 		val vSnapshot = mStore.storageSnapshot()
 		StoredCounts(
 			sets = vSnapshot.sets,
-			pinnedSets = vSnapshot.pinnedSets,
+			storedSets = vSnapshot.pinnedSets,
 			printings = vSnapshot.printings,
 			byLanguage = vSnapshot.byLanguage,
 			unpinnedBytes = mStore.unpinnedBytes(),
@@ -398,7 +398,7 @@ data class StoredSet(
 /** What the storage screen asks for. */
 data class StoredCounts(
 	val sets: Int,
-	val pinnedSets: Int,
+	val storedSets: Int,
 	val printings: Int,
 	val byLanguage: Map<String, Int>,
 	val unpinnedBytes: Long,

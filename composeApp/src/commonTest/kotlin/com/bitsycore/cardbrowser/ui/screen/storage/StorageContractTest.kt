@@ -55,22 +55,28 @@ class StorageContractTest {
 	}
 
 	@Test
-	fun `kept bytes that cannot be attributed to a game are still shown`() {
-		// A game whose set list has been evicted still has its pinned sets on disk, and they
-		// cannot be named without it. Dropping them would make the rows disagree with the total.
+	fun `card data no row can account for is still shown`() {
+		// Two things land here: set lists and card detail, which belong to no one game's row, and
+		// sets held for a game whose own set list is gone -- without it they cannot be named.
+		// Dropping either would make the rows disagree with the heading.
 		val vState = UiState(
 			usage = usage(total = 500, kept = 400),
 			kept = listOf(game("magic", 250), game("riftbound", 50)),
 		)
 
 		assertEquals(300, vState.keptBytes)
-		assertEquals(100, vState.unattributedKeptBytes)
+		assertEquals(200, vState.unattributedKeptBytes)
+		assertEquals(
+			500,
+			vState.keptBytes + vState.unattributedKeptBytes,
+			"the parts must add up to what was measured",
+		)
 	}
 
 	@Test
 	fun `nothing unattributed when the rows account for it all`() {
 		val vState = UiState(
-			usage = usage(total = 500, kept = 300),
+			usage = usage(total = 300, kept = 300),
 			kept = listOf(game("magic", 250), game("riftbound", 50)),
 		)
 
@@ -79,7 +85,8 @@ class StorageContractTest {
 
 	@Test
 	fun `rows adding to more than the measured total do not produce a negative remainder`() {
-		val vState = UiState(usage = usage(total = 500, kept = 100), kept = listOf(game("magic", 250)))
+		// Both numbers are measured separately and a write can land between them.
+		val vState = UiState(usage = usage(total = 100, kept = 100), kept = listOf(game("magic", 250)))
 
 		assertEquals(0, vState.unattributedKeptBytes)
 	}
@@ -100,7 +107,7 @@ class StorageContractTest {
 			thumbnailSets = 2,
 		)
 
-		assertEquals("Card info 2/8 · Thumbnails 2", vGame.summary)
+		assertEquals("2/8 sets · Thumbnails 2", vGame.summary)
 	}
 
 	@Test
@@ -115,7 +122,7 @@ class StorageContractTest {
 			knownSets = null,
 		)
 
-		assertEquals("Card info 2", vGame.summary)
+		assertEquals("2 sets", vGame.summary)
 	}
 
 	@Test
@@ -129,7 +136,7 @@ class StorageContractTest {
 			thumbnailSets = 0,
 		)
 
-		assertEquals("Card info 988/988", vGame.summary)
+		assertEquals("988/988 sets", vGame.summary)
 	}
 
 	// ============
@@ -178,7 +185,7 @@ class StorageContractTest {
 	fun `an empty device says so rather than showing an empty heading`() {
 		val vState = StorageContract.reduce(
 			UiState(),
-			Intent.Loaded(usage = usage(total = 500, kept = 0), kept = emptyList()),
+			Intent.Loaded(usage = usage(total = 0, kept = 0), kept = emptyList()),
 		)
 
 		assertFalse(vState.hasKept)

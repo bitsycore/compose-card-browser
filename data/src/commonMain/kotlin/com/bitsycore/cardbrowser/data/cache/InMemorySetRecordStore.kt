@@ -6,7 +6,7 @@ import com.bitsycore.cardbrowser.core.model.GameId
 import com.bitsycore.cardbrowser.core.model.ProviderId
 import com.bitsycore.cardbrowser.core.model.SourceId
 import com.bitsycore.cardbrowser.sqlstore.GameStorageRow
-import com.bitsycore.cardbrowser.sqlstore.PinnedSet
+import com.bitsycore.cardbrowser.sqlstore.StoredSetRow
 import com.bitsycore.cardbrowser.sqlstore.StoredFacets
 
 /**
@@ -123,10 +123,11 @@ class InMemorySetRecordStore(
 			?: Row(game.value, label, emptyList(), isComplete = false, fetchedAt = 0L, isPinned = isPinned)
 	}
 
-	override suspend fun pinnedSets(): List<PinnedSet> = mRows.entries
-		.filter { it.value.isPinned }
+	// Every stored set, browsed ones included, exactly as `storedSets` does. Filtering to pinned
+	// here would hide from every test the rows the storage screen now has to show.
+	override suspend fun storedSets(): List<StoredSetRow> = mRows.entries
 		.map { (vKey, vRow) ->
-			PinnedSet(
+			StoredSetRow(
 				provider = vKey.provider,
 				setId = vKey.setId,
 				language = vKey.language ?: "-",
@@ -134,11 +135,12 @@ class InMemorySetRecordStore(
 				label = vRow.label,
 				cardCount = vRow.cards.size,
 				bytes = vRow.cards.size.toLong(),
+				isPinned = vRow.isPinned,
+				isComplete = vRow.isComplete,
 			)
 		}
 
-	override suspend fun downloadedByGame(): List<GameStorageRow> = mRows.entries
-		.filter { it.value.isPinned }
+	override suspend fun storedByGame(): List<GameStorageRow> = mRows.entries
 		.groupBy { it.value.game }
 		.map { (vGame, vEntries) ->
 			GameStorageRow(
@@ -151,13 +153,15 @@ class InMemorySetRecordStore(
 		}
 
 	override suspend fun deleteDownloaded(game: GameId): Int {
-		val vGoing = mRows.filterValues { it.isPinned && it.game == game.value }.keys
+		// Browsed rows too, like `deleteSetsForGame`. Leaving them would have the game reappear on
+		// the storage screen at a fraction of its size.
+		val vGoing = mRows.filterValues { it.game == game.value }.keys
 		vGoing.forEach { mRows.remove(it) }
 		return vGoing.size
 	}
 
-	override suspend fun downloadedSets(game: GameId): List<PinnedSet> =
-		pinnedSets().filter { it.game == game.value }
+	override suspend fun storedSetsFor(game: GameId): List<StoredSetRow> =
+		storedSets().filter { it.game == game.value }
 
 	override suspend fun deleteDownloadedSet(
 		provider: String,
@@ -250,7 +254,7 @@ class InMemorySetRecordStore(
 
 	override suspend fun snapshot(): StoredCounts = StoredCounts(
 		sets = mRows.size,
-		pinnedSets = mRows.count { it.value.isPinned },
+		storedSets = mRows.count { it.value.isPinned },
 		printings = mRows.values.sumOf { it.cards.size },
 		byLanguage = mRows.keys.groupingBy { it.language ?: "-" }.eachCount(),
 		unpinnedBytes = mRows.filterValues { !it.isPinned }.values.sumOf { it.cards.size.toLong() },

@@ -285,6 +285,128 @@ class CardRepositoryTest {
 		assertTrue(vFacets.cardTypes.isNotEmpty(), "and card types")
 	}
 
+	// ==================
+	// MARK: How much of a game is here
+	// ==================
+
+	@Test
+	fun `completion counts cards rather than sets`() = runTest {
+		// Holding 1 of 2 sets is not 50% of a game when the two are different sizes. Origins is
+		// 352 cards and Promos is 48, so holding Origins whole is 88% and not half.
+		val vProvider = FakeProvider(
+			id = mProviderId,
+			mPages = listOf(List(352) { card(it) }),
+			mSets = listOf(
+				CardSet(SourceId(mProviderId, "a"), TestGame.id, "OGN", "Origins", 352, null),
+				CardSet(SourceId(mProviderId, "b"), TestGame.id, "PR", "Promos", 48, null),
+			),
+			mMaxPageSize = 400,
+		)
+		val vRepository = repositoryFor(vProvider)
+		vRepository.setList(TestGame.id).toList()
+		vRepository.cards(SourceId(mProviderId, "a"), TestGame.id, CardQuery()).toList()
+
+		val vCompletion = vRepository.keptByGame().single().completion
+
+		assertEquals(88, vCompletion?.percent)
+		assertEquals(false, vCompletion?.isEstimate, "every set stated its own size")
+	}
+
+	@Test
+	fun `a set held in two languages counts once toward the game`() = runTest {
+		// The slash trap again. Two editions of one set are not two sets' worth of a game.
+		val vProvider = FakeProvider(
+			id = mProviderId,
+			mPages = listOf(List(50) { card(it) }),
+			mSets = listOf(CardSet(SourceId(mProviderId, "a"), TestGame.id, "OGN", "Origins", 100, null)),
+			mMaxPageSize = 100,
+		)
+		val vRepository = repositoryFor(vProvider)
+		vRepository.setList(TestGame.id).toList()
+		vRepository.cards(SourceId(mProviderId, "a"), TestGame.id, CardQuery(), CardLanguage.ENGLISH).toList()
+
+		val vCompletion = vRepository.keptByGame().single().completion
+
+		assertEquals(50, vCompletion?.heldCards, "50 cards held, not 100 because it is stored twice")
+		assertEquals(100, vCompletion?.totalCards)
+	}
+
+	@Test
+	fun `a game whose sets state no size is estimated -- and says so`() = runTest {
+		// OPTCG states no card counts at all. The screen still has to answer "how much of this do
+		// I have", so the sets actually on disk supply the mean -- and the figure is marked.
+		val vProvider = FakeProvider(
+			id = mProviderId,
+			mPages = listOf(List(100) { card(it) }),
+			mSets = listOf(
+				CardSet(SourceId(mProviderId, "a"), TestGame.id, "A", "One", null, null),
+				CardSet(SourceId(mProviderId, "b"), TestGame.id, "B", "Two", null, null),
+				CardSet(SourceId(mProviderId, "c"), TestGame.id, "C", "Three", null, null),
+			),
+			mMaxPageSize = 200,
+		)
+		val vRepository = repositoryFor(vProvider)
+		vRepository.setList(TestGame.id).toList()
+		vRepository.cards(SourceId(mProviderId, "a"), TestGame.id, CardQuery()).toList()
+
+		val vCompletion = vRepository.keptByGame().single().completion
+
+		assertTrue(vCompletion?.isEstimate == true, "nothing stated a size, so this is a guess")
+		// One set of 100 held, three sets assumed to be 100 apiece.
+		assertEquals(33, vCompletion?.percent)
+	}
+
+	@Test
+	fun `a partly stated catalogue fills the gaps and is still an estimate`() = runTest {
+		val vProvider = FakeProvider(
+			id = mProviderId,
+			mPages = listOf(List(100) { card(it) }),
+			mSets = listOf(
+				CardSet(SourceId(mProviderId, "a"), TestGame.id, "A", "One", 100, null),
+				CardSet(SourceId(mProviderId, "b"), TestGame.id, "B", "Two", null, null),
+			),
+			mMaxPageSize = 200,
+		)
+		val vRepository = repositoryFor(vProvider)
+		vRepository.setList(TestGame.id).toList()
+		vRepository.cards(SourceId(mProviderId, "a"), TestGame.id, CardQuery()).toList()
+
+		val vCompletion = vRepository.keptByGame().single().completion
+
+		assertEquals(200, vCompletion?.totalCards, "the unstated set is assumed to match the stated one")
+		assertTrue(vCompletion?.isEstimate == true, "one guessed set makes the whole total a guess")
+	}
+
+	@Test
+	fun `no catalogue on disk means no percentage rather than zero`() = runTest {
+		// A game whose set list has been cleared still has its cards. Reporting 0% would say the
+		// device holds none of it, which is the opposite of true.
+		val vProvider = FakeProvider(mProviderId, listOf(listOf(card(1))))
+		val vRepository = repositoryFor(vProvider)
+		vRepository.cards(SourceId(mProviderId, "s"), TestGame.id, CardQuery()).toList()
+
+		assertNull(vRepository.keptByGame().single().completion)
+	}
+
+	@Test
+	fun `a browsed set is reported beside downloaded ones and counted apart`() = runTest {
+		// Both are on the device and nothing evicts either, so both are listed -- but the row can
+		// still say how many arrived by being asked for.
+		val vProvider = FakeProvider(
+			id = mProviderId,
+			mPages = listOf(listOf(card(1))),
+			mSets = listOf(CardSet(SourceId(mProviderId, "s"), TestGame.id, "S", "A set", 1, null)),
+		)
+		val vRepository = repositoryFor(vProvider)
+		vRepository.setList(TestGame.id).toList()
+		vRepository.cards(SourceId(mProviderId, "s"), TestGame.id, CardQuery()).toList()
+
+		val vStorage = vRepository.keptByGame().single()
+
+		assertEquals(1, vStorage.sets, "browsing it put it on the device")
+		assertEquals(0, vStorage.downloadedSets, "but nobody asked for it")
+	}
+
 	@Test
 	fun `sets come back newest first with undated ones last`() = runTest {
 		val vProvider = FakeProvider(

@@ -104,10 +104,16 @@ cannot overwrite a newer one.
 | **Image cache** | Card art and thumbnails. The only real cache left: it has a ceiling, it evicts, and the OS may purge it. | Coil's own disk cache, LRU |
 
 Nothing evicts card data. A set you downloaded and a set you merely opened are kept on the same
-terms, because the records are small and re-fetching one is a request nobody asked for; the storage
-screen's "Clear browsed sets" is the only thing that removes the second kind. That is why the
-screen has three sections and not two — *Downloaded*, *Browsed* and *Cached* mean three different
-things about how a byte got there and what will take it away.
+terms and sit in the same list, because the records are small and re-fetching one is a request
+nobody asked for. Deleting a game — or one of its sets, or one of its languages — is the only thing
+that removes any of it.
+
+So the storage screen has two sections, *Card data* and *Image cache*, and the interesting number
+is not bytes but **how much of each game is here**. That is a fraction of the game's *cards*, not
+of its sets: holding 8 of 10 sets is not 80% when the two missing ones are the largest. The
+denominator often has to be estimated, because a set list states a card count for most sources and
+for some — OPTCG — states none at all, so the figure carries whether it is a count or a guess and
+the screen draws "62%" and "~62%" differently. See `Completion`.
 
 The split is measured, not assumed — [database/README.md](../database/README.md) has the benchmark
 that decided it. The short version: the store is 8× slower to write a catalogue and 170× faster to

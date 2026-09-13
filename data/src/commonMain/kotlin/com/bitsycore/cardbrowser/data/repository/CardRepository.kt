@@ -1,5 +1,6 @@
 package com.bitsycore.cardbrowser.data.repository
 
+import com.bitsycore.cardbrowser.sqlstore.StoredSetRow
 import com.bitsycore.cardbrowser.data.cache.SEARCH_LIMIT
 import com.bitsycore.cardbrowser.core.filter.CardFacets
 import com.bitsycore.cardbrowser.core.filter.CardFilterEngine
@@ -1627,19 +1628,21 @@ class CardRepository(
 	 */
 	suspend fun keptByGame(): List<GameStorage> {
 		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardSet>()))
-		val vPinned = mSetStore.pinnedSets()
-		return mSetStore.downloadedByGame().mapNotNull { vRow ->
+		val vStored = mSetStore.storedSets()
+		return mSetStore.storedByGame().mapNotNull { vRow ->
 			currentCoroutineContext().ensureActive()
 			val vGame = GameId(vRow.game)
 			val vProvider = mRegistry.resolve(vGame) ?: return@mapNotNull null
 			// How many sets the game has, when its catalogue is still cached. Absent is a real
 			// answer, and the screen renders it as no denominator rather than inventing one.
-			val vCatalogueIds = setListOnDisk(vProvider, vGame, vSerializer)
-				?.mapTo(mutableSetOf()) { it.id.qualified }
-			val vMine = vPinned.filter { it.game == vRow.game }
+			val vCatalogue = setListOnDisk(vProvider, vGame, vSerializer)
+			val vCatalogueIds = vCatalogue?.mapTo(mutableSetOf()) { it.id.qualified }
+			val vMine = vStored.filter { it.game == vRow.game }
 			val vHeldIds = vMine.mapTo(mutableSetOf()) { it.setId }
 			GameStorage(
 				game = vGame,
+				downloadedSets = vMine.filter { it.isPinned }.map { it.setId }.distinct().size,
+				completion = completionOf(vMine, vCatalogue),
 				// Only the sets the catalogue lists, so the numerator and `knownSets` count the
 				// same population. A bulk file does not: Scryfall's dump carries cards for sets
 				// `listSets` filters out -- digital-only Alchemy and MTGO products, and anything
@@ -1665,6 +1668,54 @@ class CardRepository(
 	}
 
 	/**
+	 * How much of a game is on the device, as a fraction of its cards.
+	 *
+	 * ## Cards rather than sets, and why the denominator has to be estimated
+	 *
+	 * Sets would be the easy answer and the wrong one: holding 8 of 10 sets is not 80% of a game
+	 * when the two missing ones are the largest. So this counts cards -- but the total needs every
+	 * set's size, and a set list states that for most sources and not all. OPTCG states none.
+	 *
+	 * The gap is filled with the mean of the sizes that *are* stated, and the result is marked
+	 * [Completion.isEstimate] so the screen can draw it as an approximation rather than a count.
+	 * Where nothing at all is stated, the held sets themselves supply the mean -- a complete set is
+	 * a real measurement of one set's size, which is the best evidence available about the rest.
+	 * Where there is not even that, the answer is null and the screen says nothing.
+	 *
+	 * The numerator counts each set once, taking the fullest edition held. A set downloaded in
+	 * English and French is one set's worth of the game, not two -- the same slash trap as
+	 * everywhere else here.
+	 */
+	private fun completionOf(held: List<StoredSetRow>, catalogue: List<CardSet>?): Completion? {
+		if (catalogue.isNullOrEmpty()) return null
+
+		// The fullest edition of each set. A partial French copy of a set held whole in English
+		// says nothing extra about how much of the game is here.
+		val vBestBySet = held.groupBy { it.setId }.mapValues { (_, vRows) -> vRows.maxOf { it.cardCount } }
+		val vHeldCards = vBestBySet.values.sum()
+
+		val vStatedSizes = catalogue.mapNotNull { it.cardCount?.takeIf { vCount -> vCount > 0 } }
+		// Failing that, what complete sets on disk actually turned out to hold.
+		val vMeasuredSizes = held.filter { it.isComplete && it.cardCount > 0 }.map { it.cardCount }
+		val vSample = vStatedSizes.ifEmpty { vMeasuredSizes }
+		if (vSample.isEmpty()) return null
+
+		val vMean = vSample.sum() / vSample.size
+		val vTotal = catalogue.sumOf { vSet ->
+			(vSet.cardCount?.takeIf { it > 0 } ?: vMean).toLong()
+		}
+		if (vTotal <= 0L) return null
+
+		return Completion(
+			heldCards = vHeldCards,
+			totalCards = vTotal.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+			// Exact only when every set in the catalogue stated its own size. One guessed set makes
+			// the whole total a guess, and saying so is the point.
+			isEstimate = vStatedSizes.size < catalogue.size,
+		)
+	}
+
+	/**
 	 * Deletes everything [game] is keeping, and stops keeping it.
 	 *
 	 * Unpinned as well as removed, so a record that survives -- because it is also the set the
@@ -1683,20 +1734,30 @@ class CardRepository(
 	 */
 	suspend fun keptSets(game: GameId): List<KeptSet> {
 		val vSerializer = CacheEnvelope.serializer(ListSerializer(serializer<CardSet>()))
-		val vCatalogue = mRegistry.resolve(game)
-			?.let { setListOnDisk(it, game, vSerializer) }
-			?.mapTo(mutableSetOf()) { it.id.qualified }
-		return mSetStore.downloadedSets(game).map { vSet ->
+		val vCatalogue = mRegistry.resolve(game)?.let { setListOnDisk(it, game, vSerializer) }
+		// The size each set states, for the per-set percentage. Absent for a source that states
+		// none, and absent is rendered as no percentage rather than as zero.
+		val vKnownSizes = vCatalogue
+			?.associate { it.id.qualified to it.cardCount?.takeIf { vCount -> vCount > 0 } }
+		val vCodes = vCatalogue?.associate { it.id.qualified to it.code }
+		return mSetStore.storedSetsFor(game).map { vSet ->
 			KeptSet(
 				provider = vSet.provider,
 				setId = vSet.setId,
 				languageCode = vSet.language,
 				label = vSet.label,
+				// The catalogue's code where it is on disk; otherwise the local half of the id,
+				// which is the printed code for most sources. Blank means the source has neither.
+				code = (vCodes?.get(vSet.setId) ?: vSet.setId.substringAfterLast(':'))
+					.takeIf { it.isNotBlank() },
 				cardCount = vSet.cardCount,
 				bytes = vSet.bytes,
 				// No catalogue on disk is not evidence a set is absent from it, so everything is
 				// left unmarked rather than marked as an extra.
-				isInCatalogue = vCatalogue == null || vSet.setId in vCatalogue,
+				isInCatalogue = vKnownSizes == null || vSet.setId in vKnownSizes,
+				isDownloaded = vSet.isPinned,
+				isComplete = vSet.isComplete,
+				knownCardCount = vKnownSizes?.get(vSet.setId),
 			)
 		}
 	}

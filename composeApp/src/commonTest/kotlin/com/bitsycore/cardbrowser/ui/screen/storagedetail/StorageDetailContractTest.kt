@@ -21,9 +21,9 @@ class StorageDetailContractTest {
 	@Test
 	fun `a set held in two languages is one set and two editions`() {
 		val vState = state(
-			KeptSet("p", "s1", "en", "Set One", 100, 1000),
-			KeptSet("p", "s1", "fr", "Set One", 100, 1000),
-			KeptSet("p", "s2", "en", "Set Two", 50, 500),
+			KeptSet("p", "s1", "en", "Set One", cardCount = 100, bytes = 1000),
+			KeptSet("p", "s1", "fr", "Set One", cardCount = 100, bytes = 1000),
+			KeptSet("p", "s2", "en", "Set Two", cardCount = 50, bytes = 500),
 		)
 
 		assertEquals(2, vState.setCount, "s1 in two languages is one set")
@@ -36,9 +36,9 @@ class StorageDetailContractTest {
 		// "2 sets - 250 cards" would be false: those two sets hold 150 cards between them, and the
 		// other 100 are the French printing of one of them.
 		val vState = state(
-			KeptSet("p", "s1", "en", "Set One", 100, 1000),
-			KeptSet("p", "s1", "fr", "Set One", 100, 1000),
-			KeptSet("p", "s2", "en", "Set Two", 50, 500),
+			KeptSet("p", "s1", "en", "Set One", cardCount = 100, bytes = 1000),
+			KeptSet("p", "s1", "fr", "Set One", cardCount = 100, bytes = 1000),
+			KeptSet("p", "s2", "en", "Set Two", cardCount = 50, bytes = 500),
 		)
 
 		assertEquals("3 editions of 2 sets · 250 cards", vState.summary)
@@ -47,8 +47,8 @@ class StorageDetailContractTest {
 	@Test
 	fun `one language says sets -- every set is its only edition`() {
 		val vState = state(
-			KeptSet("p", "s1", "en", "Set One", 100, 1000),
-			KeptSet("p", "s2", "en", "Set Two", 50, 500),
+			KeptSet("p", "s1", "en", "Set One", cardCount = 100, bytes = 1000),
+			KeptSet("p", "s2", "en", "Set Two", cardCount = 50, bytes = 500),
 		)
 
 		assertEquals("2 sets · 150 cards", vState.summary)
@@ -57,7 +57,7 @@ class StorageDetailContractTest {
 
 	@Test
 	fun `a count of one is not plural`() {
-		val vState = state(KeptSet("p", "s1", "en", "Set One", 1, 10))
+		val vState = state(KeptSet("p", "s1", "en", "Set One", cardCount = 1, bytes = 10))
 
 		assertEquals("1 set · 1 card", vState.summary)
 	}
@@ -65,7 +65,7 @@ class StorageDetailContractTest {
 	@Test
 	fun `a set stored under no language is its own group and says so`() {
 		// OPTCG states no language. Calling that English would be a claim its source never made.
-		val vState = state(KeptSet("p", "s1", "-", "Set One", 10, 100))
+		val vState = state(KeptSet("p", "s1", "-", "Set One", cardCount = 10, bytes = 100))
 
 		val vGroup = vState.byLanguage.single()
 		assertNull(vGroup.language)
@@ -73,10 +73,35 @@ class StorageDetailContractTest {
 	}
 
 	@Test
+	fun `sets are ordered by code rather than by name`() {
+		// The code leads the row now, so "OP-02, OP-01" reads as a mistake even though the names
+		// are alphabetical.
+		val vState = state(
+			KeptSet("p", "s2", "en", "Paramount War", "OP-02", 1, 1),
+			KeptSet("p", "s1", "en", "Romance Dawn", "OP-01", 1, 1),
+		)
+
+		assertEquals(listOf("OP-01", "OP-02"), vState.byLanguage.single().sets.map { it.code })
+	}
+
+	@Test
+	fun `a set with no code sorts after the ones that have one`() {
+		val vState = state(
+			KeptSet("p", "s2", "en", "Anonymous", null, 1, 1),
+			KeptSet("p", "s1", "en", "Romance Dawn", "OP-01", 1, 1),
+		)
+
+		assertEquals(
+			listOf("OP-01", null),
+			vState.byLanguage.single().sets.map { it.code },
+		)
+	}
+
+	@Test
 	fun `groups are heaviest first`() {
 		val vState = state(
-			KeptSet("p", "s1", "en", "Set One", 10, 100),
-			KeptSet("p", "s1", "fr", "Set One", 10, 900),
+			KeptSet("p", "s1", "en", "Set One", cardCount = 10, bytes = 100),
+			KeptSet("p", "s1", "fr", "Set One", cardCount = 10, bytes = 900),
 		)
 
 		assertEquals(
@@ -90,7 +115,7 @@ class StorageDetailContractTest {
 		// The reducer clears `pendingDelete` before the view model runs -- see
 		// `PulseDispatchOrderTest`. Reading it there is how the storage screen's delete became a
 		// no-op that greyed every icon on the screen.
-		val vSet = KeptSet("p", "s1", "en", "Set One", 10, 100)
+		val vSet = KeptSet("p", "s1", "en", "Set One", cardCount = 10, bytes = 100)
 		val vTarget = StorageDetailContract.Target.OneSet(vSet)
 		var vState = StorageDetailContract.reduce(state(vSet), Intent.DeleteRequested(vTarget))
 		assertEquals(vTarget, vState.pendingDelete)

@@ -75,7 +75,12 @@ object StorageDetailContract : ContainerContract<
 					LanguageGroup(
 						code = vCode,
 						language = CardLanguage.fromCode(vCode),
-						sets = vSets.sortedBy { it.label },
+						// By code where there is one, because the code is now the first thing
+						// on the row and "OP-02, OP-01" reads as a mistake. Sets without a code
+						// fall back to the name and sort after, which keeps the order stable.
+						sets = vSets.sortedWith(
+							compareBy({ it.code == null }, { it.code ?: it.label }),
+						),
 					)
 				}
 				.sortedByDescending { it.bytes }

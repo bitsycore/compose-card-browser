@@ -270,8 +270,8 @@ class SqlCardStore(driver: SqlDriver) {
 	fun pinnedBytes(): Long = mQueries.pinnedBytes().executeAsOne()
 
 	/** Every downloaded set, by label, so the storage screen can name what it would delete. */
-	fun pinnedSets(): List<PinnedSet> = mQueries.pinnedSets().executeAsList().map {
-		PinnedSet(
+	fun storedSets(): List<StoredSetRow> = mQueries.storedSets().executeAsList().map {
+		StoredSetRow(
 			provider = it.provider,
 			setId = it.set_id,
 			language = it.language,
@@ -279,6 +279,8 @@ class SqlCardStore(driver: SqlDriver) {
 			label = it.label,
 			cardCount = it.card_count.toInt(),
 			bytes = it.bytes,
+			isPinned = it.pinned == 1L,
+			isComplete = it.complete == 1L,
 		)
 	}
 
@@ -354,14 +356,14 @@ class SqlCardStore(driver: SqlDriver) {
 			?.let { it > 0 } == true
 
 	/**
-	 * What each game has downloaded, as one query.
+	 * What each game holds, as one query. Browsed sets included.
 	 *
 	 * Distinct *sets*, not rows. A set held in two languages is two records and one set, and this
 	 * project has printed the wrong side of that slash three times -- records against sets, sets
 	 * against a catalogue, a dump's sets against `listSets`. Counting both here, separately and
 	 * named, is how a caller stops having to choose the right one by accident.
 	 */
-	fun pinnedByGame(): List<GameStorageRow> = mQueries.pinnedByGame().executeAsList().map {
+	fun storedByGame(): List<GameStorageRow> = mQueries.storedByGame().executeAsList().map {
 		GameStorageRow(
 			game = it.game,
 			sets = it.sets.toInt(),
@@ -371,15 +373,15 @@ class SqlCardStore(driver: SqlDriver) {
 		)
 	}
 
-	/** What one game's download weighs per language, for a screen that breaks it down. */
-	fun pinnedLanguagesForGame(game: String): Map<String, Long> =
-		mQueries.pinnedLanguagesForGame(game).executeAsList()
+	/** What one game weighs per language, for a screen that breaks it down. */
+	fun storedLanguagesForGame(game: String): Map<String, Long> =
+		mQueries.storedLanguagesForGame(game).executeAsList()
 			.associate { it.language to (it.bytes ?: 0L) }
 
-	/** One game's downloaded editions, one row per set per language. */
-	fun pinnedSetsForGame(game: String): List<PinnedSet> =
-		mQueries.pinnedSetsForGame(game).executeAsList().map {
-			PinnedSet(
+	/** One game's stored editions, one row per set per language. */
+	fun storedSetsForGame(game: String): List<StoredSetRow> =
+		mQueries.storedSetsForGame(game).executeAsList().map {
+			StoredSetRow(
 				provider = it.provider,
 				setId = it.set_id,
 				language = it.language,
@@ -387,6 +389,8 @@ class SqlCardStore(driver: SqlDriver) {
 				label = it.label,
 				cardCount = it.card_count.toInt(),
 				bytes = it.bytes,
+				isPinned = it.pinned == 1L,
+				isComplete = it.complete == 1L,
 			)
 		}
 
@@ -409,14 +413,19 @@ class SqlCardStore(driver: SqlDriver) {
 		return vExisted
 	}
 
-	/** Deletes one game's downloads. Rows and records together, in one transaction. */
+	/**
+	 * Deletes everything one game holds. Rows and records together, in one transaction.
+	 *
+	 * Browsed sets included. Leaving them would have the game reappear on the storage screen at a
+	 * fraction of its size immediately after being deleted.
+	 */
 	fun deleteDownloadedGame(game: String): Int {
 		var vRemoved = 0
 		mDatabase.transaction {
-			vRemoved = mQueries.pinnedByGame().executeAsList()
+			vRemoved = mQueries.storedByGame().executeAsList()
 				.firstOrNull { it.game == game }?.records?.toInt() ?: 0
 			mQueries.deletePrintingsForGame(game)
-			mQueries.deletePinnedForGame(game)
+			mQueries.deleteSetsForGame(game)
 		}
 		return vRemoved
 	}
@@ -593,7 +602,7 @@ data class StoredSetMetadata(
 )
 
 /** One downloaded set, named well enough for a screen to offer deleting it. */
-data class PinnedSet(
+data class StoredSetRow(
 	val provider: String,
 	val setId: String,
 	val language: String,
@@ -601,6 +610,10 @@ data class PinnedSet(
 	val label: String,
 	val cardCount: Int,
 	val bytes: Long,
+	/** True when the user asked for this set, false when browsing left it behind. */
+	val isPinned: Boolean = true,
+	/** True when every page was fetched -- see `cached_set.complete`. */
+	val isComplete: Boolean = true,
 )
 
 /** What the storage screen needs, in one read. */

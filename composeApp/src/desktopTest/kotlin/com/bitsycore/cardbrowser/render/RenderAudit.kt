@@ -238,6 +238,12 @@ class DownloadRenderer {
 							sets = 988,
 							bytes = 441_000_000,
 							knownSets = 988,
+							downloadedSets = 988,
+							completion = com.bitsycore.cardbrowser.data.repository.Completion(
+								heldCards = 109_842,
+								totalCards = 110_004,
+								isEstimate = false,
+							),
 							// The reported case: an English-only import, whose file none the less
 							// carries a few cards printed in nothing else.
 							extraSets = 56,
@@ -258,6 +264,14 @@ class DownloadRenderer {
 							sets = 486,
 							bytes = 81_100_000,
 							knownSets = 486,
+							downloadedSets = 480,
+							// TCGdex states a count for most sets and not all, so the total for
+							// the game is partly filled in -- which is what the tilde is for.
+							completion = com.bitsycore.cardbrowser.data.repository.Completion(
+								heldCards = 19_400,
+								totalCards = 21_050,
+								isEstimate = true,
+							),
 							infoLanguages = mapOf(
 								CardLanguage.ENGLISH to 486,
 								CardLanguage.FRENCH to 412,
@@ -271,6 +285,13 @@ class DownloadRenderer {
 							sets = 2,
 							bytes = 21_000_000,
 							knownSets = 8,
+							// Nobody downloaded these; opening them put them on the device.
+							downloadedSets = 0,
+							completion = com.bitsycore.cardbrowser.data.repository.Completion(
+								heldCards = 376,
+								totalCards = 2_104,
+								isEstimate = false,
+							),
 							thumbnailSets = 2,
 							infoLanguages = mapOf(CardLanguage.ENGLISH to 2),
 						),

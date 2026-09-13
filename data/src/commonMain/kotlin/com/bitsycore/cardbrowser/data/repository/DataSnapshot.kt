@@ -183,10 +183,64 @@ data class GameStorage(
 	 * also when the kept records are still there -- so the two must not depend on each other.
 	 */
 	val knownSets: Int? = null,
+	/** Sets held because the user asked, of [sets]. The rest were left behind by browsing. */
+	val downloadedSets: Int = sets,
+	/**
+	 * How much of the whole game is on the device, or null when nothing can be divided.
+	 *
+	 * See [Completion]: often an estimate, and it says so. The estimate is built in
+	 * `CardRepository.keptByGame` from the set sizes the catalogue *does* state.
+	 */
+	val completion: Completion? = null,
 )
 
 /**
- * One downloaded edition: a set, in one language.
+ * How much of something is held, against how much there is.
+ *
+ * ## Why an estimate is a first-class state here
+ *
+ * The denominator is often not knowable. A set list states a card count for most sources and for
+ * some -- OPTCG -- states none at all, so "how many cards does this game have" can only be answered
+ * for part of it. The choice is between saying nothing, inventing a number, and saying a number and
+ * admitting what it is. The first is unhelpful for a screen whose whole job is to show how much is
+ * on the device; the second is the thing this codebase will not do.
+ *
+ * So [isEstimate] travels with the figure and the screen renders it differently -- "62%" and "~62%"
+ * are different claims and must not look the same.
+ *
+ * @property heldCards cards actually stored, counting each set once however many languages it is
+ *   held in
+ * @property totalCards what the whole population holds, exactly when [isEstimate] is false
+ */
+data class Completion(
+	val heldCards: Int,
+	val totalCards: Int,
+	val isEstimate: Boolean,
+) {
+
+	/**
+	 * 0..100, and only ever 100 when nothing is missing.
+	 *
+	 * Rounded *down*, deliberately. 99.6% rounds to 100 and a row reading "100%" beside a set that
+	 * is one card short is exactly the kind of claim this app must not make. The reverse -- showing
+	 * 99% for a complete set -- cannot happen, because a complete one takes the first branch.
+	 */
+	val percent: Int
+		get() = when {
+			totalCards <= 0 -> 0
+			heldCards >= totalCards -> 100
+			else -> ((heldCards * 100L) / totalCards).toInt().coerceIn(0, 99)
+		}
+
+	val fraction: Float
+		get() = if (totalCards <= 0) 0f else (heldCards.toFloat() / totalCards).coerceIn(0f, 1f)
+
+	/** "62%" or "~62%". The tilde is the difference between a count and a guess. */
+	val label: String get() = if (isEstimate) "~$percent%" else "$percent%"
+}
+
+/**
+ * One stored edition: a set, in one language.
  *
  * What the storage screen shows when a game is opened. A set held in English and Japanese is two of
  * these, because that is what is on disk and what deleting one of them removes.
@@ -204,12 +258,42 @@ data class KeptSet(
 	val setId: String,
 	val languageCode: String,
 	val label: String,
+	/**
+	 * The printed set code -- "OP-01", "SV08" -- or null where nothing on disk states one.
+	 *
+	 * From the cached set list where there is one, and otherwise the local half of [setId], which
+	 * is the code itself for most sources and an opaque key for a few. Null rather than the
+	 * qualified id: "optcg:OP-01" is this app's plumbing and not a thing printed on a card.
+	 */
+	val code: String? = null,
 	val cardCount: Int,
 	val bytes: Long,
 	val isInCatalogue: Boolean = true,
+	/** True when the user asked for this set; false when browsing left it behind. */
+	val isDownloaded: Boolean = true,
+	/** True when every page was fetched. A set browsed part-way is stored and is not this. */
+	val isComplete: Boolean = true,
+	/** What the set list says this set holds, or null where the source states no count. */
+	val knownCardCount: Int? = null,
 ) {
 
 	/** The language, or null where the source states none. */
 	val language: com.bitsycore.cardbrowser.core.model.CardLanguage?
 		get() = com.bitsycore.cardbrowser.core.model.CardLanguage.fromCode(languageCode)
+
+	/**
+	 * How much of this set is held, or null when there is no honest way to say.
+	 *
+	 * A complete set is 100% whatever the set list claims -- the source served every page, and a
+	 * stale catalogue count is not evidence against that. Otherwise it needs a denominator, and
+	 * where the source states none there is nothing to divide by: the screen says how many cards
+	 * are held and stops, rather than guessing a percentage for one set out of thin air.
+	 */
+	val completion: Completion?
+		get() = when {
+			isComplete -> Completion(cardCount, cardCount.coerceAtLeast(1), isEstimate = false)
+			knownCardCount != null && knownCardCount > 0 ->
+				Completion(cardCount, knownCardCount, isEstimate = false)
+			else -> null
+		}
 }

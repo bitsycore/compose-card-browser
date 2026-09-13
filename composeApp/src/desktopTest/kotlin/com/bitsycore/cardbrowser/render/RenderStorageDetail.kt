@@ -44,11 +44,15 @@ private fun twoLanguages() = StorageDetailContract.UiState(
 	displayName = "Pokémon",
 	isLoading = false,
 	sets = listOf(
-		KeptSet("tcgdex", "tcgdex:sv08", "en", "Surging Sparks", 252, 1_400_000),
-		KeptSet("tcgdex", "tcgdex:sv07", "en", "Stellar Crown", 175, 980_000),
-		KeptSet("tcgdex", "tcgdex:sv08", "fr", "Étincelles Déferlantes", 252, 1_410_000),
+		KeptSet("tcgdex", "tcgdex:sv08", "en", "Surging Sparks", "SV08", 252, 1_400_000, knownCardCount = 252),
+		// Browsed part-way rather than downloaded: a percentage and a "browsed" note.
+		KeptSet(
+			"tcgdex", "tcgdex:sv07", "en", "Stellar Crown", "SV07", 61, 340_000,
+			isDownloaded = false, isComplete = false, knownCardCount = 175,
+		),
+		KeptSet("tcgdex", "tcgdex:sv08", "fr", "Étincelles Déferlantes", "SV08", 252, 1_410_000, knownCardCount = 252),
 		// A bulk import brings sets the catalogue does not list. Rendered on purpose.
-		KeptSet("tcgdex", "tcgdex:swshp", "en", "SWSH Black Star Promos", 307, 1_700_000, false),
+		KeptSet("tcgdex", "tcgdex:swshp", "en", "SWSH Black Star Promos", "SWSHP", 307, 1_700_000, false),
 	),
 )
 
@@ -57,7 +61,8 @@ private fun noLanguageStated() = StorageDetailContract.UiState(
 	displayName = "One Piece",
 	isLoading = false,
 	sets = listOf(
-		KeptSet("optcg", "optcg:OP-01", "-", "Romance Dawn", 154, 620_000),
-		KeptSet("optcg", "optcg:OP-02", "-", "Paramount War", 154, 615_000),
+		KeptSet("optcg", "optcg:OP-01", "-", "Romance Dawn", "OP-01", 154, 620_000),
+		// OPTCG states no set sizes, so a part-fetched set gets a card count and no percentage.
+		KeptSet("optcg", "optcg:OP-02", "-", "Paramount War", "OP-02", 74, 300_000, isComplete = false),
 	),
 )

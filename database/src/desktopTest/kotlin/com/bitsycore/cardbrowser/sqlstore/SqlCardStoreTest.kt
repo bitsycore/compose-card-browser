@@ -186,7 +186,7 @@ class SqlCardStoreTest {
 		write("s", CardLanguage.JAPANESE, "Base Set", true, 1L, (1..3).map { card(it) })
 		mStore.trim(ceilingBytes = 0L)
 
-		val vPinned = mStore.pinnedSets().single()
+		val vPinned = mStore.storedSets().single()
 		assertEquals("Base Set", vPinned.label)
 		assertEquals(3, vPinned.cardCount)
 		assertEquals("ja", vPinned.language)
@@ -346,7 +346,7 @@ class SqlCardStoreTest {
 
 		assertEquals(
 			listOf("s1/en", "s2/en"),
-			mStore.pinnedSetsForGame("test").map { "${it.setId}/${it.language}" }.sorted(),
+			mStore.storedSetsForGame("test").map { "${it.setId}/${it.language}" }.sorted(),
 		)
 		assertEquals(2, mStore.readSet("p", "s1", CardLanguage.ENGLISH).size)
 		assertTrue(
@@ -356,12 +356,39 @@ class SqlCardStoreTest {
 	}
 
 	@Test
+	fun `a browsed set is listed beside a downloaded one and says which it is`() {
+		// The storage screen shows both now: nothing evicts either, and both cost the same bytes.
+		// `pinned` is carried so a row can say where a set came from, not so one can be hidden.
+		write("s1", CardLanguage.ENGLISH, "Downloaded", true, 1L, listOf(card(1)))
+		write("s2", CardLanguage.ENGLISH, "Browsed", false, 1L, listOf(card(2)))
+
+		val vHeld = mStore.storedSetsForGame("test").associateBy { it.label }
+
+		assertEquals(setOf("Downloaded", "Browsed"), vHeld.keys)
+		assertTrue(vHeld.getValue("Downloaded").isPinned)
+		assertFalse(vHeld.getValue("Browsed").isPinned)
+	}
+
+	@Test
+	fun `deleting a game takes its browsed sets too`() {
+		// Leaving them would have the game reappear on the storage screen at a fraction of its
+		// size immediately after being deleted, which reads as a delete that did not work.
+		write("s1", CardLanguage.ENGLISH, "Downloaded", true, 1L, listOf(card(1)))
+		write("s2", CardLanguage.ENGLISH, "Browsed", false, 1L, listOf(card(2)))
+
+		mStore.deleteDownloadedGame("test")
+
+		assertTrue(mStore.storedSetsForGame("test").isEmpty())
+		assertTrue(mStore.search(game = "test").isEmpty(), "and their cards went with them")
+	}
+
+	@Test
 	fun `deleting an edition that is not there says so`() {
 		write("s1", CardLanguage.ENGLISH, "Set One", true, 1L, listOf(card(1)))
 
 		assertFalse(mStore.deleteDownloadedSet("p", "s1", "ja"))
 		assertFalse(mStore.deleteDownloadedSet("p", "nope", "en"))
-		assertEquals(1, mStore.pinnedSetsForGame("test").size)
+		assertEquals(1, mStore.storedSetsForGame("test").size)
 	}
 
 	@Test
@@ -370,11 +397,11 @@ class SqlCardStoreTest {
 		// edition the screen has to be able to name and remove, not a null to be skipped.
 		write("s1", null, "Set One", true, 1L, listOf(card(1)))
 
-		val vHeld = mStore.pinnedSetsForGame("test")
+		val vHeld = mStore.storedSetsForGame("test")
 		assertEquals(listOf("-"), vHeld.map { it.language })
 
 		assertTrue(mStore.deleteDownloadedSet("p", "s1", "-"))
-		assertTrue(mStore.pinnedSetsForGame("test").isEmpty())
+		assertTrue(mStore.storedSetsForGame("test").isEmpty())
 	}
 
 	private fun write(

@@ -337,38 +337,44 @@ DELETE FROM printing WHERE provider = ? AND set_id = ? AND language = ?;
 deleteCachedSet:
 DELETE FROM cached_set WHERE provider = ? AND set_id = ? AND language = ?;
 
--- Every downloaded set, named well enough for a screen to offer deleting it after everything else
--- is gone. The label is carried for exactly that reason: the file cache's pin markers were zero
--- bytes, so clearing the cache destroyed the only index from a hashed filename back to a set.
-pinnedSets:
-SELECT provider, set_id, language, game, label, card_count, bytes FROM cached_set
-WHERE pinned = 1 ORDER BY label;
+-- Every stored set, named well enough for a screen to offer deleting it after everything else is
+-- gone. The label is carried for exactly that reason: the file cache's pin markers were zero bytes,
+-- so clearing the cache destroyed the only index from a hashed filename back to a set.
+--
+-- Unpinned rows are included. A set you opened and a set you downloaded are both on the device and
+-- both cost the same bytes; `pinned` is carried so a screen can say which is which, not so one of
+-- them can be hidden.
+storedSets:
+SELECT provider, set_id, language, game, label, card_count, bytes, pinned, complete FROM cached_set
+WHERE game != '' ORDER BY label;
 
 -- The storage screen, as one query instead of a directory walk and a string split per marker.
 -- Distinct *sets*, not rows: a set held in two languages is two records and one set, which is a
 -- ratio this project has got wrong three times.
-pinnedByGame:
+storedByGame:
 SELECT game,
        COUNT(DISTINCT set_id) AS sets,
        COUNT(*)               AS records,
        SUM(card_count)        AS cards,
        SUM(bytes)             AS bytes
 FROM cached_set
-WHERE pinned = 1 AND game != ''
+WHERE game != ''
 GROUP BY game;
 
-pinnedLanguagesForGame:
+storedLanguagesForGame:
 SELECT language, SUM(bytes) AS bytes FROM cached_set
-WHERE pinned = 1 AND game = ? GROUP BY language ORDER BY bytes DESC;
+WHERE game = ? GROUP BY language ORDER BY bytes DESC;
 
-deletePinnedForGame:
-DELETE FROM cached_set WHERE pinned = 1 AND game = ?;
+-- Everything of a game's, browsed rows included. Deleting "this game" from the storage screen has
+-- to leave nothing behind, or the row reappears at a fraction of its size.
+deleteSetsForGame:
+DELETE FROM cached_set WHERE game = ?;
 
 -- One downloaded edition: a set in a language. The storage screen offers these individually so a
 -- reader who wants the English printings back can drop the Japanese ones without losing the game.
-pinnedSetsForGame:
-SELECT provider, set_id, language, label, card_count, bytes FROM cached_set
-WHERE pinned = 1 AND game = ? ORDER BY label, language;
+storedSetsForGame:
+SELECT provider, set_id, language, label, card_count, bytes, pinned, complete FROM cached_set
+WHERE game = ? ORDER BY label, language;
 
 deletePrintingsForGame:
 DELETE FROM printing WHERE game = ?;

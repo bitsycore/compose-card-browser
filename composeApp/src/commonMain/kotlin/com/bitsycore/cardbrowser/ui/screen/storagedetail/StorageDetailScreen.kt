@@ -223,13 +223,51 @@ private fun SetRow(set: KeptSet, isBusy: Boolean, onDelete: () -> Unit) {
 		horizontalArrangement = Arrangement.SpaceBetween,
 	) {
 		Column(Modifier.weight(1f)) {
-			Text(set.label, style = MaterialTheme.typography.bodyMedium)
+			Row(verticalAlignment = Alignment.CenterVertically) {
+				// The code first, because it is how a set is actually referred to -- "OP-16", not
+				// "Beginning of the New Era". Fixed-width-ish and dimmed so the name still leads
+				// the eye.
+				set.code?.let { vCode ->
+					Text(
+						text = vCode,
+						style = MaterialTheme.typography.labelMedium,
+						color = MaterialTheme.colorScheme.onSurfaceVariant,
+					)
+					Spacer(Modifier.size(8.dp))
+				}
+				Text(
+					text = set.label,
+					style = MaterialTheme.typography.bodyMedium,
+					modifier = Modifier.weight(1f, fill = false),
+				)
+				// Only where there is a denominator. A source that states no set sizes gets a card
+				// count and no percentage, rather than a percentage of a number nobody supplied.
+				set.completion?.let { vCompletion ->
+					Spacer(Modifier.size(8.dp))
+					Text(
+						text = vCompletion.label,
+						style = MaterialTheme.typography.bodyMedium,
+						color = if (vCompletion.percent == 100) {
+							MaterialTheme.colorScheme.onSurfaceVariant
+						} else {
+							MaterialTheme.colorScheme.primary
+						},
+					)
+				}
+			}
 			Text(
 				// Marked rather than hidden. A bulk import stores sets the catalogue does not
 				// offer, and they take up real space -- a screen that cannot show them is one
 				// whose total does not add up.
 				text = buildString {
-					append("${set.cardCount} cards · ${formatBytes(set.bytes)}")
+					val vKnown = set.knownCardCount
+					if (vKnown != null && !set.isComplete) {
+						append("${set.cardCount} of $vKnown cards")
+					} else {
+						append("${set.cardCount} cards")
+					}
+					append(" · ${formatBytes(set.bytes)}")
+					if (!set.isDownloaded) append(" · browsed")
 					if (!set.isInCatalogue) append(" · not in the set list")
 				},
 				style = MaterialTheme.typography.bodySmall,
@@ -253,9 +291,9 @@ private fun StorageDetailPreview() {
 				displayName = "Pokémon",
 				isLoading = false,
 				sets = listOf(
-					KeptSet("tcgdex", "tcgdex:sv08", "en", "Surging Sparks", 252, 1_400_000),
-					KeptSet("tcgdex", "tcgdex:sv07", "en", "Stellar Crown", 175, 980_000),
-					KeptSet("tcgdex", "tcgdex:sv08", "fr", "Étincelles Déferlantes", 252, 1_410_000),
+					KeptSet("tcgdex", "tcgdex:sv08", "en", "Surging Sparks", "SV08", 252, 1_400_000),
+					KeptSet("tcgdex", "tcgdex:sv07", "en", "Stellar Crown", "SV07", 175, 980_000),
+					KeptSet("tcgdex", "tcgdex:sv08", "fr", "Étincelles Déferlantes", "SV08", 252, 1_410_000),
 				),
 			),
 			dispatch = {},
@@ -274,8 +312,8 @@ private fun StorageDetailSingleLanguagePreview() {
 				isLoading = false,
 				sets = listOf(
 					// OPTCG states no language, which is a group of its own and says so.
-					KeptSet("optcg", "optcg:OP-01", "-", "Romance Dawn", 154, 620_000),
-					KeptSet("optcg", "optcg:OP-02", "-", "Paramount War", 154, 615_000),
+					KeptSet("optcg", "optcg:OP-01", "-", "Romance Dawn", "OP-01", 154, 620_000),
+					KeptSet("optcg", "optcg:OP-02", "-", "Paramount War", "OP-02", 154, 615_000),
 				),
 			),
 			dispatch = {},

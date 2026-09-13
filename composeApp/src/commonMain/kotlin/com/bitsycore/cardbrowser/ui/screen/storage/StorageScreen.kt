@@ -128,16 +128,16 @@ fun StorageContent(
 
 				Spacer(Modifier.height(8.dp))
 				SectionHeading(
-					title = "Downloaded",
+					title = "Card data",
 					// One line, not a paragraph. The distinction between the sections is the whole
 					// content of this screen, and it survives being said briefly.
-					subtitle = "Yours until you delete it. Tap a game to see what it holds.",
+					subtitle = "Kept until you delete it. Tap a game to see what it holds.",
 					trailing = formatBytes(state.keptBytes + state.unattributedKeptBytes),
 				)
 
 				if (!state.hasKept && state.unattributedKeptBytes == 0L) {
 					Text(
-						text = "Nothing downloaded yet.",
+						text = "No cards stored yet.",
 						style = MaterialTheme.typography.bodyMedium,
 						color = MaterialTheme.colorScheme.onSurfaceVariant,
 					)
@@ -164,37 +164,16 @@ fun StorageContent(
 				}
 
 				// ============
-				//  Browsed
+				//  Image cache
 
-				// Its own section, not a cache with a bar beside the images.
-				//
-				// Card data is one database now and nothing evicts any of it: a set you opened is
-				// kept on the same terms as one you downloaded, because it is a few hundred
-				// kilobytes and re-fetching it is a request nobody asked for. So there is no
-				// ceiling to draw a bar against -- only a number and a way to drop it.
+				// The only cache left. Card data is one database and nothing evicts any of it, so
+				// a set you opened sits in the section above beside one you downloaded -- the
+				// difference between them is how much of the game is there, which the rows say.
+				// Images are different in kind: most of the bytes, a ceiling, and the platform may
+				// purge them whenever it likes.
 				Spacer(Modifier.height(16.dp))
 				SectionHeading(
-					title = "Browsed",
-					subtitle = "Sets you opened without downloading. Kept until you clear them.",
-					trailing = formatBytes(vUsage.metadataBrowsingBytes),
-				)
-				OutlinedButton(
-					onClick = { dispatch(StorageContract.Intent.ClearBrowsingData) },
-					enabled = vUsage.metadataBrowsingBytes > 0 && !state.isLoading,
-					modifier = Modifier.fillMaxWidth(),
-				) {
-					Text("Clear browsed sets")
-				}
-
-				// ============
-				//  Cached
-
-				// Images alone. This is the one thing here that really is a cache: it is most of
-				// the bytes, the platform may purge it whenever it likes, and a picture that is
-				// gone costs one request the next time it is looked at.
-				Spacer(Modifier.height(16.dp))
-				SectionHeading(
-					title = "Cached",
+					title = "Image cache",
 					subtitle = "Kept within this limit, and dropped as needed.",
 					trailing = formatBytes(vUsage.imageBytes),
 				)
@@ -342,21 +321,43 @@ private fun KeptGameRow(
 			verticalAlignment = Alignment.CenterVertically,
 		) {
 			Column(Modifier.weight(1f)) {
-				Text(game.displayName, style = MaterialTheme.typography.titleMedium)
+				Row(verticalAlignment = Alignment.CenterVertically) {
+					Text(
+						text = game.displayName,
+						style = MaterialTheme.typography.titleMedium,
+						modifier = Modifier.weight(1f, fill = false),
+					)
+					// The headline number. How much of the game is here answers the question a
+					// person opening this screen actually has, which a byte count does not.
+					game.completion?.let { vCompletion ->
+						Spacer(Modifier.size(8.dp))
+						Text(
+							text = vCompletion.label,
+							style = MaterialTheme.typography.titleMedium,
+							color = MaterialTheme.colorScheme.primary,
+						)
+					}
+				}
 				Spacer(Modifier.height(2.dp))
 				Text(
-					// What was downloaded and how much of it -- "Card info 2/8 · Thumbnails 2".
-					// A row that said only "2 sets · 21.0 MB" left the two questions a person
-					// actually has unanswered: how much of the game, and of what.
 					text = buildList {
 						add(game.summary)
 						add(formatBytes(game.bytes))
+						game.originNote?.let { add(it) }
 						game.importedVariant?.let { add("imported ${it.updatedAt.take(10)}") }
 					}.joinToString(" · "),
 					style = MaterialTheme.typography.bodySmall,
 					color = MaterialTheme.colorScheme.onSurfaceVariant,
 				)
+				game.completion?.let { vCompletion ->
+					Spacer(Modifier.height(6.dp))
+					LinearProgressIndicator(
+						progress = { vCompletion.fraction },
+						modifier = Modifier.fillMaxWidth(),
+					)
+				}
 			}
+			Spacer(Modifier.size(4.dp))
 			IconButton(onClick = onDelete, enabled = !isBusy) {
 				Icon(
 					imageVector = AppIcons.Delete,

@@ -73,22 +73,6 @@ class CacheManager(
 	}
 
 	/**
-	 * Empties only what browsing left behind.
-	 *
-	 * Downloaded sets and imported catalogues stay, which is the whole point: sweeping them away
-	 * under a button meant to reclaim a few megabytes would throw away a twenty-minute import.
-	 *
-	 * This is the only thing that removes browsed sets. Nothing evicts them on its own -- see the
-	 * storage screen's "Browsed" section -- so a zero ceiling here is a deliberate sweep rather
-	 * than the budget catching up.
-	 */
-	suspend fun clearBrowsingMetadata(): Int {
-		val vSnapshot = mMetadataStore.snapshot()
-		mMetadataStore.clear()
-		return vSnapshot.entryCount + mSetStore.trim(ceilingBytes = 0L)
-	}
-
-	/**
 	 * Empties the image cache directory.
 	 *
 	 * Deletes the files rather than going through the image loader, so this works whether or not a
