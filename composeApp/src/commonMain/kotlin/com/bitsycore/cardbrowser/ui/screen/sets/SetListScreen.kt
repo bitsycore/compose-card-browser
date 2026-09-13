@@ -938,12 +938,6 @@ private fun SetRow(
 	region: GameRegion?,
 	isSaved: Boolean,
 	/**
-	 * Whether this set has nothing left to fetch: held whole *and* with its thumbnails.
-	 *
-	 * Not [isSaved], which answers the weaker question "is any of this here?" -- a set fetched
-	 * part-way is saved and still has something to download.
-	 */
-	/**
 	 * Whether this set has anything left to fetch *and* the app has looked.
 	 *
 	 * Not the inverse of "downloaded": before the scan lands nothing is known, and nothing is

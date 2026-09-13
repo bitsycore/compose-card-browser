@@ -349,13 +349,6 @@ fun ActiveFilterChips(
 }
 
 /**
- * The sets this list covers, as a menu that stays open while several are ticked.
- *
- * Multi-select, like every other axis -- the entries are an OR. It closes on the scrim rather than
- * on a choice, because choosing one and having to reopen for the second is what makes a menu worse
- * than chips; this way it is only longer, which is the point of it.
- */
-/**
  * One value of a filter axis: what it is called, what to toggle, and the game's colour for it.
  *
  * A string key even for the axes that are not strings -- costs are numbers, treatments are an enum

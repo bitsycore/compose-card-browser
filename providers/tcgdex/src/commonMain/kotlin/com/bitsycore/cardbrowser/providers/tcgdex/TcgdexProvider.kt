@@ -575,15 +575,6 @@ class TcgdexProvider(
 	private data class GraphQlQuery(val query: String)
 
 	/**
-	 * The raw inputs to [merge], as read from the network.
-	 *
-	 * A locale maps to `null` when its request failed, which is deliberately not the same as an
-	 * empty catalogue -- see [catalogueOf].
-	 *
-	 * Monotonic rather than wall-clock, so a device whose clock jumps cannot make this look either
-	 * fresh forever or permanently stale.
-	 */
-	/**
 	 * @param lineById which product line each set id belongs to, first line to carry it winning --
 	 *   the same order [merge] assigns a region in, so the two cannot disagree about a set
 	 */

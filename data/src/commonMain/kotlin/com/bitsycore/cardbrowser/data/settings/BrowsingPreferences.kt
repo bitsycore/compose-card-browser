@@ -21,21 +21,13 @@ import okio.use
 // ==================
 
 /**
- * How much of one set's art a download actually brought down.
- *
- * @property fetched images that arrived
- * @property total images attempted. `fetched < total` is a real outcome, not an error state -- a
- *   CDN drops requests -- and the set list shows the percentage rather than rounding up to a tick
- */
-/**
  * Which dump of a game has been imported, and when the source last rebuilt it.
  *
- * Both, because "already imported" has to mean "the same file". Scryfall publishes an English
- * dump and an every-language one; having taken the first is no reason to stop offering the
- * second, and a bare flag could not tell them apart. The date catches the other case -- Scryfall
- * rebuilds daily, so last week's import is worth offering again.
+ * Both, because "already imported" must mean "the same file". Scryfall publishes an English dump
+ * and an every-language one, and rebuilds daily -- so a flag alone could neither tell the two files
+ * apart nor notice a newer one.
  *
- * @property updatedAt the source's own rebuild day as an ISO date, or `"-"` where it states none
+ * @property updatedAt the source's rebuild day as an ISO date, or `"-"` where it states none
  */
 @Serializable
 data class BulkImportRecord(
@@ -58,28 +50,18 @@ data class ImageDownloadRecord(
 /**
  * The key [BrowsingPreferences.imageDownloads] is stored under.
  *
- * Language, because a set in French and the same set in Japanese are different files. Rendition,
- * because there was a second one -- full-size art -- and there may be again; keying by kind is what
- * lets a rendition be added or removed without the records already on disk meaning something else.
- * Records written for a kind that no longer exists simply never match.
+ * Language, because a set in French and in Japanese are different files. Rendition, so a second
+ * size can be added or dropped without changing what the existing records mean -- a record for a
+ * rendition that no longer exists simply never matches.
  */
 fun imageDownloadKey(setId: String, language: CardLanguage?, kind: String): String =
 	setId + "|" + (language?.code ?: "-") + "|" + kind
 
 /**
- * Which colour scheme the app uses.
- *
- * Three values rather than a `Boolean`, because "dark" and "not dark" cannot express the default
- * anyone actually wants: a boolean has to pick a side at install time and then stops following the
- * platform when the user changes it there. [SYSTEM] is a real answer -- "whatever the device says"
- * -- and is not the same as either of the other two.
- */
-/**
  * Whether a set's cards are shown as pictures or as a list.
  *
- * Two genuinely different jobs. The grid is for looking at art; the list is for finding a card you
- * can name, or reading a set in collector order -- it fits four or five times as many rows on a
- * screen and says the number of each one.
+ * Two different jobs. The grid is for looking at art. The list is for finding a card by name or
+ * reading a set in collector order, and fits four or five times as many rows on screen.
  */
 @Serializable
 enum class CardViewMode(val label: String) {
@@ -90,8 +72,7 @@ enum class CardViewMode(val label: String) {
 /**
  * How tall a row is in [CardViewMode.LIST].
  *
- * Three, because the useful range has three points in it and not more: a dense list to scan, a
- * comfortable one to read, and one with artwork big enough to recognise a card by.
+ * Three: dense enough to scan, comfortable to read, and large enough to recognise the art.
  */
 @Serializable
 enum class CardRowHeight(val label: String) {
@@ -103,13 +84,11 @@ enum class CardRowHeight(val label: String) {
 /**
  * How wide a tile is in [CardViewMode.GRID], and so how many fit across.
  *
- * The grid's columns are adaptive, so this is a *minimum* width rather than a count: the same
- * setting gives three across on a phone and seven on a desktop window, which is what makes it one
- * setting rather than one per device.
+ * A minimum width, not a column count: the columns are adaptive, so one setting gives three across
+ * on a phone and seven on a desktop.
  *
- * Separate from [CardRowHeight] despite both having three steps. They size different things -- a
- * tile is the artwork, a row is mostly text -- and the words that read naturally for one read
- * oddly for the other.
+ * Separate from [CardRowHeight] even though both have three steps. A tile is artwork and a row is
+ * mostly text, so the labels that suit one read oddly for the other.
  */
 @Serializable
 enum class CardTileSize(val label: String) {
@@ -137,16 +116,13 @@ enum class ThemeMode(val label: String) {
 /**
  * What the user chose while browsing, remembered across launches.
  *
- * Browsing preferences only. Buying preferences -- seller country, minimum condition -- are a
- * separate concern and are deliberately not modelled here: none has been chosen, and a default
- * would be a decision nobody made.
+ * Browsing only. Buying preferences -- seller country, condition -- are deliberately not here: no
+ * default has been chosen, and inventing one would be a decision nobody made.
  *
- * @property lastSetId the set last opened, source-qualified so it survives a provider change.
- *   Written by both list screens and read by nothing: the set list used to mark it, and that mark
- *   was removed as meaningless on a touch screen. Kept because it is what a "resume where you left
- *   off" would read, and because dropping a field from a persisted model is a migration
- * @property preferredLanguages the card-language preference order. A preference, not a claim that
- *   any provider serves all of them
+ * @property lastSetId the set last opened, source-qualified. Written by both list screens and read
+ *   by nothing. Kept because it is what a "resume where you left off" would read
+ * @property preferredLanguages the language preference order. A preference, not a claim that any
+ *   source serves all of them
  */
 @Serializable
 data class BrowsingPreferences(
@@ -154,9 +130,8 @@ data class BrowsingPreferences(
 	/**
 	 * Which game the set list opens on, as a [com.bitsycore.cardbrowser.core.model.GameId] value.
 	 *
-	 * A string rather than the enum so that a preferences file written by a build that offered a
-	 * game this one does not -- or the reverse -- deserialises instead of throwing. An unrecognised
-	 * value falls back to the first routed game.
+	 * A string, not an enum, so a file written by a build with different games still deserialises.
+	 * An unknown value falls back to the first routed game.
 	 */
 	val lastGame: String? = null,
 	val preferredLanguages: List<CardLanguage> = CardLanguage.PREFERENCE_ORDER,
@@ -165,41 +140,35 @@ data class BrowsingPreferences(
 	/**
 	 * Sets pinned to the top of the set list, in the user's own order, by qualified id.
 	 *
-	 * One ordered list rather than a set plus an order, because they are the same fact -- a
-	 * favourite has a position by virtue of being in the list, so the two cannot disagree.
+	 * One ordered list rather than a set plus an order: membership and position are the same fact,
+	 * so they cannot disagree.
 	 *
-	 * Every game's favourites share it. A `SourceId.qualified` is unique across the app, so a set
-	 * list only ever matches its own game's ids and the rest sit there inertly, which is also what
-	 * makes a favourite survive a build that drops the game and a later one that brings it back.
-	 * See `SetFavourites`.
+	 * All games share it. Ids are source-qualified and unique, so each set list matches only its
+	 * own and ignores the rest -- which is also how a favourite survives a build that drops the
+	 * game. See `SetFavourites`.
 	 */
 	val favouriteSets: List<String> = emptyList(),
 	/**
 	 * The user's own order for the game picker, as `GameId` values. Empty means the routing order.
 	 *
-	 * Ids rather than an index or an enum, for the same reason [lastGame] is: the list of games a
-	 * build offers changes between releases, and a stored order that disagreed with it would have to
-	 * either lose a game or throw. It is a *hint* applied over the real list -- see `GameOrder`,
-	 * which is where the rules for a partial or stale order live.
+	 * Ids rather than indices, for the same reason as [lastGame]: the set of games changes between
+	 * releases. A hint applied over the real list -- see `GameOrder` for partial and stale orders.
 	 */
 	val gameOrder: List<String> = emptyList(),
 	/**
 	 * Games the user has hidden from the picker, as `GameId` values.
 	 *
-	 * Hidden is a display choice and nothing more: the adapter stays registered, the routing table
-	 * is untouched, and anything already downloaded stays on disk. It does stop the background set
-	 * catalogue sweep from fetching them, which is the one place where hiding saves anything real.
+	 * A display choice only: the adapter stays registered and downloads stay on disk. It does stop
+	 * the background catalogue sweep fetching them, which is the one real saving.
 	 *
-	 * An id naming no game this build offers is inert rather than an error, so hiding a game and
-	 * later installing a build without it does not corrupt the setting.
+	 * An id for a game this build does not offer is inert, not an error.
 	 */
 	val hiddenGames: Set<String> = emptySet(),
 	/**
 	 * Whether the first-launch setup has been completed or skipped.
 	 *
-	 * False on a fresh install and on nothing else. Skipping sets it too: a user who declined to
-	 * choose has chosen the defaults, and asking again on the next launch would be nagging rather
-	 * than helping. Settings can set it back, which is how the flow is re-run.
+	 * False only on a fresh install. Skipping sets it too -- declining to choose is choosing the
+	 * defaults, and asking again next launch would be nagging. Settings can set it back.
 	 */
 	val hasCompletedSetup: Boolean = false,
 	/** Ceiling for downloaded card art. Applied when the image loader is built, so on next launch. */
@@ -213,53 +182,46 @@ data class BrowsingPreferences(
 	/**
 	 * Whether sets a source states have no cards are left out of the set list.
 	 *
-	 * On by default, because such a row leads to an empty grid and there is nothing to do with it.
-	 * TCGdex lists them in quantity -- a locale that carries a set's *name* but none of its cards
-	 * still appears in that locale's catalogue.
+	 * On by default: such a row opens an empty grid. TCGdex lists many of them -- a locale carrying
+	 * a set's name but none of its cards still appears in that catalogue.
 	 *
-	 * Only a *stated* zero. A set whose count is unknown is never hidden: unknown is not zero, and
-	 * hiding on a silence would make sets disappear for every source that publishes no count.
+	 * A *stated* zero only. Unknown is not zero, and hiding on silence would empty the set list for
+	 * every source that publishes no count.
 	 */
 	val hideEmptySets: Boolean = true,
 	/**
 	 * What an image download actually fetched, per set and language.
 	 *
-	 * Keyed by [imageDownloadKey]. Recorded because there is no cheap way to ask the question
-	 * directly: answering "are this set's images cached?" honestly would mean a disk lookup per
-	 * image -- around 700 for a large set, times every row on screen -- so what is stored instead
-	 * is the outcome of a download that really happened.
+	 * Keyed by [imageDownloadKey]. Recorded rather than measured: asking "are this set's images
+	 * cached?" honestly would be a disk lookup per image, around 700 for a large set, per row.
 	 *
-	 * That is a record of a *download*, not a guarantee of *presence*. The image cache is an LRU
-	 * with a ceiling, so a set downloaded months ago may since have been partly evicted, and the
-	 * OS may purge the whole directory on Android and iOS regardless. The set list therefore says
-	 * "images downloaded" rather than "images available", and that wording is the point.
+	 * A record of a *download*, not of *presence*. The image cache is an LRU and the OS may purge
+	 * it, so the set list says "images downloaded", never "images available".
 	 *
-	 * Images that arrive by ordinary browsing are not recorded here at all, so this under-claims
-	 * rather than over-claims -- the safe direction.
+	 * Images that arrive by browsing are not recorded, so this under-claims. That is the safe way
+	 * round.
 	 */
 	val imageDownloads: Map<String, ImageDownloadRecord> = emptyMap(),
 	/**
 	 * Which edition of each game's bulk file has been imported, by game id.
 	 *
-	 * The value is the source's own `updated_at` day for the dump that was read, as an ISO date,
-	 * or `"-"` when it published none. Kept because "have I already imported this game?" cannot
-	 * be answered from the set records the import wrote: a dump holds no cards for some sets a
-	 * catalogue lists -- token sheets, memorabilia, sets with nothing printed yet -- so asking
-	 * "is every set on disk?" answers no forever, and the download-all dialog went on offering an
-	 * import that had already run and would fetch nothing new.
+	 * The value is the dump's `updated_at` day as an ISO date, or `"-"` where the source states
+	 * none.
 	 *
-	 * The date rather than a flag, so a source rebuilding its file makes the import worth
-	 * offering again. Scryfall rebuilds daily.
+	 * Kept because the set records cannot answer it. A dump holds no cards for some sets a
+	 * catalogue lists -- token sheets, memorabilia, unreleased sets -- so "is every set on disk?"
+	 * answers no forever, and the dialog keeps offering an import that would fetch nothing.
+	 *
+	 * A date rather than a flag, so a rebuilt file is worth importing again. Scryfall rebuilds
+	 * daily.
 	 */
 	val bulkImports: Map<String, BulkImportRecord> = emptyMap(),
 	/**
 	 * Which generation of the card store these records describe.
 	 *
-	 * Below [CURRENT_STORE_GENERATION] means the install predates the store as it is now -- either
-	 * it was a file-per-record cache, or the store was discarded as corrupt. Either way every claim
-	 * in [bulkImports] and [imageDownloads] is about a catalogue that no longer exists, and leaving
-	 * them would have the download dialog report an import as done and the storage screen name sets
-	 * it cannot open. `CacheReconciler` clears them and bumps this, once, at startup.
+	 * Below [CURRENT_STORE_GENERATION] means the records on disk describe a store that no longer
+	 * exists, so [bulkImports] and [imageDownloads] describe nothing. `CacheReconciler` clears them
+	 * and bumps this once at startup.
 	 */
 	val storeGeneration: Int = 0,
 	/** Grid or list, for every set. One choice rather than one per game -- it is a reading habit. */
@@ -289,9 +251,8 @@ data class BrowsingPreferences(
 		/**
 		 * Bumped whenever what is on disk stops meaning what an older install thought it meant.
 		 *
-		 * 1 is the move from a file-per-set cache to the SQLite store. Every complete-set record
-		 * the old cache held is unreadable by anything now, so the first launch after this sweeps
-		 * the metadata directory and forgets which imports had run.
+		 * 1 is the move from a file-per-set cache to the SQLite store. Nothing can read the old
+		 * records, so the first launch after it sweeps them and forgets which imports had run.
 		 */
 		const val CURRENT_STORE_GENERATION: Int = 1
 
@@ -300,12 +261,10 @@ data class BrowsingPreferences(
 		/**
 		 * What the settings screen offers for either cache, plus whatever the user types.
 		 *
-		 * One list for both, because both ceilings bound the same thing: what *browsing* is allowed
-		 * to accumulate. They used to differ because a limit also had to be large enough to hold a
-		 * bulk import, which it no longer does -- a download is pinned and pinned bytes are outside
-		 * the budget.
+		 * One list for both: both ceilings bound the same thing, what browsing may accumulate. A
+		 * download is pinned and pinned bytes sit outside the budget.
 		 *
-		 * A value off this list is valid and reachable -- the screen offers "Custom".
+		 * Values off this list are valid -- the screen offers "Custom".
 		 */
 		val CACHE_LIMIT_CHOICES: List<Long> = listOf(
 			128L * 1024 * 1024,
@@ -331,11 +290,10 @@ data class BrowsingPreferences(
 /**
  * Reads and writes [BrowsingPreferences], on disk, off the UI thread.
  *
- * Stored under [AppStorage.preferencesRoot] rather than the cache root, so "clear cache" cannot
- * take the user's choices with it. Written atomically for the same reason the cache is: a process
- * killed mid-write must leave the previous preferences intact rather than an empty file.
+ * Kept outside the cache root, so "clear cache" cannot take the user's choices with it. Written
+ * atomically, so a process killed mid-write leaves the previous file intact.
  *
- * A corrupt file falls back to defaults instead of throwing. Preferences are not worth a crash.
+ * A corrupt file falls back to defaults. Preferences are not worth a crash.
  */
 class PreferencesStore(
 	private val mStorage: AppStorage,
@@ -353,16 +311,12 @@ class PreferencesStore(
 
 	/** Reads from disk into [preferences]. Call once at startup. */
 	init {
-		// Read here, synchronously, and not only from [load].
+		// Read synchronously here, not only from `load`.
 		//
-		// Two things read `preferences.value` before any coroutine has had a chance to run: the
-		// image loader, which is built in the first composition and takes its disk budget from it,
-		// and the metadata cache's byte-limit lambda. Both were therefore always constructed
-		// against the *defaults* -- so a user who set the image cache to 128 MB got a 1 GB one
-		// anyway, and the settings screen drew a usage bar against a limit nothing was enforcing.
-		//
-		// It is one small JSON file. Blocking the caller for it at construction is cheaper than
-		// every consumer having to wait for a flow that may already have missed its moment.
+		// The image loader and the cache's byte limit both read `preferences.value` before any
+		// coroutine runs, so both used to be built against the defaults: a user who chose a 128 MB
+		// image cache got a 1 GB one, and the settings screen drew usage against a limit nothing
+		// enforced. One small JSON file is cheaper to block on than to wait for.
 		mState.value = readFromDisk()
 	}
 
@@ -374,8 +328,7 @@ class PreferencesStore(
 	/**
 	 * The stored preferences, or the defaults.
 	 *
-	 * A corrupt or unreadable file falls back rather than throwing: preferences are not worth a
-	 * crash, and the defaults are all valid.
+	 * A corrupt file falls back rather than throwing. The defaults are all valid.
 	 */
 	private fun readFromDisk(): BrowsingPreferences = try {
 		if (!mStorage.fileSystem.exists(mFile)) {

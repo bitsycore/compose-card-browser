@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
-/**
+/*
  * Keyboard navigation, for the platforms that have a keyboard.
  *
  * Desktop is the reason this exists, but nothing here is desktop-only: an Android tablet with a

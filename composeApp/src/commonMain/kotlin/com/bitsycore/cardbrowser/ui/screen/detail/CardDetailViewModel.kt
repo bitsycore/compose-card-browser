@@ -280,7 +280,6 @@ class CardDetailViewModel(
 	}
 }
 
-/** What the detail screen was opened for. Passed to the view model so it can seed itself. */
 /**
  * @param setId the card's own set, which is what a fallback load reads and what "go to set" opens
  * @param browseKey the list to swipe through -- a set id, or a search. Null means the set.

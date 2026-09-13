@@ -49,12 +49,6 @@ object HttpClientFactory {
 	}
 
 	/**
-	 * Builds the shared client.
-	 *
-	 * @param policy per-provider knobs. The default is deliberately conservative: providers here
-	 *   are free community APIs and the app is a browser, not a scraper
-	 */
-	/**
 	 * Builds a client.
 	 *
 	 * @param httpCache where to keep response bodies so a revalidation can come back as a 304.

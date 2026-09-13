@@ -987,7 +987,6 @@ private fun tileSubtitle(card: CardPrinting): String = buildList {
 	if (card.artwork.treatment != ArtworkTreatment.STANDARD) add(card.artwork.treatment.displayName)
 }.joinToString(" · ")
 
-/** Wide enough that a card's name and art stay legible on a phone. */
 /**
  * The narrowest a tile may be, per size step.
  *

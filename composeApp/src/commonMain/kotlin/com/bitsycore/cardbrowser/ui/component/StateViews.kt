@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.bitsycore.cardbrowser.core.provider.ProviderError
 import com.bitsycore.cardbrowser.ui.component.AppIcons
 
-/**
+/*
  * The states every data screen in this app has to be able to show.
  *
  * Gathered in one file so the set list, the card grid and the detail screen do not each invent

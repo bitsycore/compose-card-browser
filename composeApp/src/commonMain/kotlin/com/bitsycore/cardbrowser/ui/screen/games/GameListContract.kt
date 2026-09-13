@@ -53,7 +53,6 @@ object GameListContract :
 
 	sealed interface Intent {
 
-		/** The registry and preferences answered. */
 		/**
 		 * The order and the hidden list changed somewhere other than this screen.
 		 *

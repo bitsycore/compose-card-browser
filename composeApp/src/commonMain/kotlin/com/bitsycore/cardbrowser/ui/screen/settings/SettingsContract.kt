@@ -87,7 +87,6 @@ object SettingsContract :
 		/** Moves a language to the front of the preference order. */
 		data class PromoteLanguage(val language: CardLanguage) : Intent
 
-		/** The back arrow. An intent like any other, so the screen body only ever dispatches. */
 		/**
 		 * Show the first-launch setup again.
 		 *

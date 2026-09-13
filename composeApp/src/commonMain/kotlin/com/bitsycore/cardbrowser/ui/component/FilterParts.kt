@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.Color
 import com.bitsycore.cardbrowser.core.game.GameProfile
 import androidx.compose.ui.unit.dp
 
-/**
+/*
  * The pieces both filter surfaces are built from.
  *
  * The card grid's sheet and the search's sheet ask different questions -- the grid filters what is

@@ -23,7 +23,7 @@ import com.bitsycore.cardbrowser.ui.component.AppIcons
 import com.bitsycore.cardbrowser.ui.theme.isDarkTheme
 import org.jetbrains.compose.resources.painterResource
 
-/**
+/*
  * A game's mark: the logo, the tile it sits on, and how each is painted.
  *
  * Here rather than on the game picker because three screens draw one -- the picker, the set list's

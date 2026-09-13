@@ -602,24 +602,6 @@ class CardRepository(
 	//  Cross-set search
 
 	/**
-	 * Cards matching [text] anywhere in [game], cache first and then the provider.
-	 *
-	 * Emits up to twice, and the two emissions are not the same kind of answer:
-	 *
-	 * 1. Whatever the sets already on disk contain, marked [SearchScope.LOCAL_CACHED_SETS]. This is
-	 *    instant, works offline, and on a fresh install is empty.
-	 * 2. The provider's own answer, marked [SearchScope.REMOTE_ALL_SETS] -- but only when the
-	 *    provider declares it can search across sets. When it cannot, the local answer is the only
-	 *    answer and stays labelled as such, so the screen never implies a whole-game search ran.
-	 *
-	 * Nothing here is written to the cache. A search result is a slice of many sets under a query
-	 * that will never be repeated verbatim; storing it under any key would either collide with the
-	 * complete-set entries the rest of the app depends on being complete, or accumulate forever.
-	 *
-	 * @param knownSets the game's sets, which the caller already has from [setList]. Used both to
-	 *   know which cached sets to look in and to say how much of the game a local search covered
-	 */
-	/**
 	 * The advanced search: one indexed query over every card of a game that is on this device.
 	 *
 	 * What [searchAllSets] cannot do. That one matches a name, because matching anything else meant
@@ -998,26 +980,6 @@ class CardRepository(
 		return null
 	}
 
-	/**
-	 * The languages a menu should offer for [setId], **without asking the source anything**.
-	 *
-	 * The best answer already on hand, in order:
-	 *
-	 * 1. the confirmed list, if [languagesFor] has run for this set and its record is still fresh
-	 * 2. what the set itself claims, for the two sources that state it per set
-	 * 3. everything the source can serve
-	 *
-	 * Every screen that offers a language menu uses this, and that is the point: the card grid and
-	 * the card detail screen have to agree, and they did not. Detail briefly listed only the
-	 * languages whose cards were *on disk* -- two, for a set opened in English and Japanese --
-	 * while the grid beside it offered eleven. Neither number was the same question: what is
-	 * cached is not what exists, and a language you have not downloaded is exactly the one you
-	 * would open the menu to ask for.
-	 *
-	 * Never a request, so it costs nothing on the path that opens a card. The confirmation that
-	 * narrows step 3 to the truth is paid once, when the grid's menu is opened, and both screens
-	 * read it from then on.
-	 */
 	/**
 	 * The languages [setId] is **known** to exist in, without asking the source anything.
 	 *

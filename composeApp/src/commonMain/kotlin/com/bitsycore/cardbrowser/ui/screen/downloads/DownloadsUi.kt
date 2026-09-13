@@ -157,13 +157,6 @@ fun DownloadKindDialog(
 	 */
 	infoLanguages: Set<CardLanguage> = emptySet(),
 	/**
-	 * The size of a one-file import of this game's card records, when its source offers one.
-	 *
-	 * Offered only on the whole-game dialog, because that is the only case it improves: the file
-	 * is the entire catalogue, so using it to fetch a single set transfers far more than the
-	 * request it would replace. `null` hides the option rather than showing a disabled one.
-	 */
-	/**
 	 * The dumps this game's source publishes, cheapest first, or empty when it publishes none.
 	 *
 	 * More than one is a real choice rather than a detail: Scryfall's cheap file is 78 MB and is
@@ -715,17 +708,6 @@ fun DownloadsButton(jobs: List<DownloadJob>, onClick: () -> Unit) {
 	}
 }
 
-/**
- * Whether there is any card info left to fetch for this set.
- *
- * The rule that was wrong, extracted so it can be tested. A download splits into one job per
- * language and fetches card info in *every* language a set states, so "already have card info" is
- * not a yes/no about the set -- it is a question about several editions. Locking the checkbox on
- * presence meant one finished language read as done and the other five could be reached only
- * through "Download again".
- *
- * [languages] empty means the source states none, and then presence is all there is to go on.
- */
 /**
  * Whether this dialog offers card info at all, or names where it comes from instead.
  *

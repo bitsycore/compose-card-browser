@@ -12,26 +12,16 @@ import com.bitsycore.cardbrowser.core.model.SourceId
 // ==================
 
 /**
- * What every provider adapter implements, and the only thing the repositories know about a source.
+ * One data source, adapted. The only thing the repository knows about a source.
  *
- * Small on purpose. An adapter owns its endpoints, its DTOs, its mapping and its quirks; what it
- * exposes upward is this interface and a [capabilities] description. Adding a provider is an
- * implementation of this, a Koin registration and a routing entry -- see docs/ARCHITECTURE.md.
+ * An adapter owns its endpoints, DTOs, mapping and quirks. Upward it shows this interface and its
+ * [capabilities]. See docs/PROVIDERS.md to add one.
  *
- * ## The game is in the type
+ * The game is in the type: `RiftcodexProvider : CardProvider<RiftboundGame>`. Every adapter serves
+ * exactly one game. [G] is covariant, so the registry can hold them all in one list.
  *
- * `class RiftcodexProvider : CardProvider<RiftboundGame>` -- an adapter names the game it serves in
- * its own declaration, and [game] hands the profile back. Every adapter in this project serves
- * exactly one game, which used to be expressed by a `Set<Game>` in the capabilities plus a
- * `require(game == RIFTBOUND)` guard at the top of every method: around twenty runtime checks
- * restating something already true at compile time. Those are gone, along with the `game` parameter
- * they were checking.
- *
- * [G] is covariant, so a `CardProvider<RiftboundGame>` *is* a `CardProvider<GameProfile>` and the
- * registry can hold them all in one list without a star projection anywhere.
- *
- * Every method suspends and must be cancellable. Cancellation is not a failure: implementations let
- * `CancellationException` propagate and never wrap it in a [ProviderError].
+ * Every method suspends and must be cancellable. Let `CancellationException` through; never wrap it
+ * in a [ProviderError].
  */
 interface CardProvider<out G : GameProfile> {
 
@@ -42,11 +32,10 @@ interface CardProvider<out G : GameProfile> {
 	val displayName: String
 
 	/**
-	 * The game this adapter serves, and everything the app knows about it.
+	 * The game this adapter serves.
 	 *
-	 * The one authority on the pairing. The routing table says which provider answers for a game;
-	 * this says which game a provider is for, and `ProviderRegistry` checks the two agree at
-	 * startup rather than letting them drift.
+	 * The routing table says which provider answers for a game; this says the reverse.
+	 * `ProviderRegistry` checks the two agree at startup.
 	 */
 	val game: G
 
@@ -54,20 +43,18 @@ interface CardProvider<out G : GameProfile> {
 	val capabilities: ProviderCapabilities
 
 	/**
-	 * Every set this provider serves, newest first where release dates are known.
+	 * Every set, newest first where release dates are known.
 	 *
-	 * Not paginated: set catalogues are small (Riftbound has eight) and the set list wants them
-	 * all to sort and search over. A provider whose catalogue is large enough to need paging should
-	 * page internally and still return the whole list.
+	 * Never paginated. The set list sorts and searches over the whole catalogue, so an adapter that
+	 * needs paging must page internally and still return everything.
 	 */
 	suspend fun listSets(language: CardLanguage? = null): List<CardSet>
 
 	/**
-	 * One page of the cards in [request]'s set.
+	 * One page of a set's cards.
 	 *
-	 * The provider applies only those parts of [CardQuery] that [ProviderCapabilities.filtering]
-	 * says it supports remotely; the caller is responsible for everything else and knows from the
-	 * same capabilities that it has to. A provider must never silently ignore a filter it claims.
+	 * Apply only the filters [ProviderCapabilities.filtering] lists as remote. The caller applies
+	 * the rest and knows from the same capabilities that it must. Never ignore a filter you claim.
 	 */
 	suspend fun listCards(request: CardPageRequest): CardPage
 
@@ -75,17 +62,13 @@ interface CardProvider<out G : GameProfile> {
 	suspend fun cardDetail(id: SourceId, language: CardLanguage? = null): CardPrinting?
 
 	/**
-	 * The language this provider will actually serve when asked for [requested].
+	 * The language this source will really answer in when asked for [requested].
 	 *
-	 * The gap between what a user asks for and what a source has is the whole reason this app
-	 * models languages the way it does, and this is where the gap is measured rather than papered
-	 * over. A caller can ask before making a request and tell the user "French was asked for, this
-	 * source only has English" -- which is the truth -- instead of requesting French, receiving
-	 * English, and labelling it French.
+	 * Ask before requesting, so the user can be told "you asked for French, this source has only
+	 * English" instead of getting English labelled French.
 	 *
-	 * The default walks the preference order and takes the first language the provider carries,
-	 * which is right for every adapter here. Returns `null` for a provider that states no language
-	 * at all; that is not English, it is silence, and [CardLanguage] must not be invented from it.
+	 * The default takes the first language the source carries in preference order. `null` means the
+	 * source states no language at all. That is silence, not English: do not invent one from it.
 	 */
 	fun resolveLanguage(requested: CardLanguage? = null): CardLanguage? {
 		val vAvailable = capabilities.data.languages
@@ -95,19 +78,14 @@ interface CardProvider<out G : GameProfile> {
 	}
 
 	/**
-	 * Which of [candidates] this source can really serve cards for, for one set.
+	 * Which of [candidates] this source really has cards for, in one set.
 	 *
-	 * The default confirms all of them, which is the right answer for a source whose catalogue is
-	 * the same in every language it offers. Override it where a source *lists* a set in a language
-	 * it has no cards for -- a distinction that cannot be seen from a set list and that the user
-	 * would otherwise discover one language at a time.
+	 * The default confirms all of them. Override where a source lists a set in a language it has no
+	 * cards for -- the set list cannot see that, so the user would find out one language at a time.
 	 *
-	 * It is worth overriding only when the check is cheap. TCGdex's is a request per candidate,
-	 * returning about a hundred bytes each; downloading each language's set to find out would not
-	 * be worth knowing.
+	 * Only worth overriding when the check is cheap. TCGdex's is one small request per candidate.
 	 *
-	 * @param candidates the languages the set claims, which is already a narrower set than
-	 *   [DataCapabilities.languages]
+	 * @param candidates the languages the set claims, already narrower than [DataCapabilities.languages]
 	 */
 	suspend fun confirmLanguages(setId: SourceId, candidates: Set<CardLanguage>): Set<CardLanguage> =
 		candidates
@@ -119,13 +97,11 @@ interface CardProvider<out G : GameProfile> {
 // ==================
 
 /**
- * What a provider can supply, stated once for the whole provider.
+ * What a source can supply, stated once for the whole source.
  *
- * This describes the *source*, not any particular set or printing. A provider that can carry French
- * says so here; whether a given printing exists in French is [com.bitsycore.cardbrowser.core.model.LanguageCoverage]
- * on that printing. Capability is the ceiling, coverage is the fact.
- *
- * Which *game* a provider serves is not here. That is `CardProvider.game`, and it is in the type.
+ * Describes the source, never one set or printing. "This source can carry French" belongs here;
+ * "this printing exists in French" is `LanguageCoverage` on the printing. Capability is the
+ * ceiling, coverage is the fact.
  */
 data class ProviderCapabilities(
 	val filtering: FilterSupport,
@@ -147,13 +123,12 @@ data class Attribution(
 )
 
 /**
- * Which filters a provider applies itself, and which the caller must apply to a complete local set.
+ * Which filters the source applies, and which the app must apply to a whole set itself.
  *
- * The split is the point. A filter in [remote] costs one request. A filter in [localOnly] costs
- * every page of the set before a single correct result can be shown, which is why the repository
- * has to know the difference and why the UI has to be able to say "these results are partial".
+ * [remote] costs one request. [localOnly] costs every page of the set before one correct result can
+ * be shown -- so the repository has to know, and the UI has to be able to say "partial".
  *
- * A field in neither set is not offered by this provider at all and the UI must not show it.
+ * A field in neither is not offered at all, and the UI must not draw it.
  */
 data class FilterSupport(
 	val remote: Set<CardFilterField>,
@@ -185,50 +160,37 @@ data class DataCapabilities(
 	/** True when the provider maps individual printings to Cardmarket *products*. */
 	val cardmarketProductMapping: Boolean,
 	/**
-	 * True when the card records ship inside the app rather than being fetched.
+	 * True when the card records ship inside the app.
 	 *
-	 * A source whose catalogue is a bundled file has nothing to download, nothing to keep and
-	 * nothing to clear: the records are in the installed app and are as available offline on the
-	 * first launch as they will ever be. Offering to download them is offering work that cannot be
-	 * done, and offering to delete them is worse -- there is no state to remove, so the button
-	 * either lies or breaks the game.
+	 * Nothing to download, keep or clear. A download button would do no work and a delete button
+	 * would either lie or break the game.
 	 *
-	 * Only the *records*. Artwork is a separate question and is normally still fetched: a bundled
-	 * catalogue that also bundled its pictures would be a very large app.
-	 *
-	 * False for every source that answers over the network, which is almost all of them.
+	 * Records only. Artwork is still fetched.
 	 */
 	val bundledCardData: Boolean = false,
 	/**
-	 * True when the source publishes a small rendition of its art, distinct from the full image.
+	 * True when the source publishes a small image as well as the full one.
 	 *
-	 * The difference decides both what a bulk image download *is* and what it costs. Measured
-	 * across sources on 2026-09-09: TCGdex 19.5 KB against 63 KB full, Scryfall 47 against 67,
-	 * YGOPRODeck 28 against 153. Where there is no small rendition the app falls back to the full
-	 * image -- Wuthering Waves' single rendition is 196 KB, measured 2026-09-11 -- so calling that
-	 * a thumbnail download understates it by roughly ten times and names the wrong thing.
+	 * This decides what an image download costs. Measured 2026-09-09: TCGdex 19.5 KB against 63 KB
+	 * full, Scryfall 47 against 67, YGOPRODeck 28 against 153. With no small image the app falls
+	 * back to the full one -- Wuthering Waves' is 196 KB -- so calling that a thumbnail download
+	 * would understate it about tenfold.
 	 *
-	 * False is the safe default: a source that has not said gets offered the honest label and the
-	 * honest size, rather than a promise of a cheap fetch it cannot keep.
+	 * False is the safe default: the dialog then shows the honest label and size.
 	 */
 	val thumbnailImages: Boolean = false,
 	/**
-	 * True when this source's records are to be taken from its dump and not fetched set by set.
+	 * True when records must come from the source's dump, not set by set.
 	 *
-	 * A statement about how the source wants to be used, not about what it can do. A source that
-	 * publishes a bulk file publishes it so that clients stop walking its API for data it has
-	 * already packaged: filling a catalogue one set at a time is hundreds of requests to rebuild a
-	 * file that is one request, and doing it anyway is the kind of traffic that gets an app
+	 * How the source wants to be used, not what it can do. A dump exists so clients stop walking the
+	 * API for data already packaged; 988 sets fetched one at a time is the traffic that gets an app
 	 * blocked.
 	 *
-	 * So where this is true the per-set download offers no card info at all and says why. It does
-	 * not stop a set being *browsed* -- opening one still asks the API for it, which is a handful
-	 * of requests for something the user is looking at, and is what the app is for. What it stops
-	 * is the bulk case wearing a per-set disguise: 988 sets downloaded one at a time.
+	 * The single-set download then offers no card info and says where to get it. Browsing a set
+	 * still reads the API -- that is a few requests for something the user is looking at.
 	 *
-	 * False for a source that publishes no dump, where per-set is the only way there is. It is not
-	 * implied by publishing one: a dump that covers part of a catalogue, or that is rebuilt rarely
-	 * enough to be stale, is an option rather than the only route.
+	 * Not implied by publishing a dump: a partial or rarely-rebuilt dump is an option, not the only
+	 * route.
 	 */
 	val cardInfoFromBulkOnly: Boolean = false,
 )
@@ -266,10 +228,10 @@ enum class SortDirection {
 }
 
 /**
- * A request for cards within one set.
+ * A request for cards in one set.
  *
- * [text] matches name or collector number; the two are one field because that is how the search box
- * behaves. Every collection field is an OR within itself and an AND across fields.
+ * [text] matches name or collector number -- one field, because that is one search box. Each
+ * collection is an OR within itself and an AND against the others.
  */
 data class CardQuery(
 	val text: String? = null,

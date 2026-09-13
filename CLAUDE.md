@@ -83,9 +83,14 @@ this wrong is the most common way to put the right value in the wrong place.
 - `v` for locals, `m` for private members, `SCREAMING_SNAKE_CASE` for constants. Parameters are
   **not** prefixed in Kotlin — named arguments matter.
 - Tabs, not spaces.
-- KDoc `/** … */` on every class and non-obvious function. This codebase comments **why**, not
-  what. A comment restating the line above it is noise; one recording a measurement, a rejected
-  alternative, or a bug that shaped the code is the house style.
+- **Comments: short, plain, and only where they earn it.**
+  - A KDoc on every file and class, saying what it is.
+  - A KDoc on a function whose name does not already say it.
+  - An inline comment where the logic is genuinely hard to follow.
+  - Nothing else. A comment restating the line above it is noise.
+  - Write plainly. Short sentences, ordinary words, no narration of how the code got here. Keep the
+    fact -- the measurement, the rejected alternative, the bug that shaped it -- and drop the story
+    around it. Three lines beat twelve.
 - Section separators (`// ==================` / `// MARK: Name`) between major groups.
 - Screens split as `XScreen()` (binds the view model) and `XContent(state, dispatch)` (pure, so it
   previews). **No Koin inside a `Content`** — a preview has no Koin graph and will throw.

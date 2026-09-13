@@ -154,7 +154,6 @@ class ArrangingMotionTest {
 
 	private companion object {
 
-		/** Above the card and the row text, below the set marks, which are solid blocks of colour. */
 		/**
 		 * How far apart a pixel's channels must be to count as tinted rather than grey.
 		 *

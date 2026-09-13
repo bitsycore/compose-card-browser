@@ -11,7 +11,7 @@ import com.bitsycore.cardbrowser.data.repository.DataOrigin
 import com.bitsycore.cardbrowser.data.settings.ImageDownloadRecord
 import com.bitsycore.lib.pulse.container.ContainerContract
 
-/**
+/*
  * The set list's state, the things that can happen to it, and the pure transitions between them.
  *
  * The reducer lives here and is total and synchronous: given a state and an intent it returns the
@@ -68,13 +68,6 @@ object SetListContract :
 		val browsingLanguageOptions: Set<CardLanguage> = emptySet(),
 		/** True while the source is being asked whether its dump has been rebuilt. */
 		val isCheckingBulkUpdate: Boolean = false,
-		/**
-		 * The games the app can actually serve, from the routing table.
-		 *
-		 * Whatever the registry routes. A game with no routed adapter is
-		 * not a game this app offers, and putting it in the switcher would produce a menu item that
-		 * leads to an empty screen. Cyberpunk TCG is exactly that case today.
-		 */
 		/**
 		 * Every game this build serves.
 		 *
@@ -325,15 +318,12 @@ object SetListContract :
 		/** The source answered about its bulk file, or said it has none. */
 		data class BulkAvailable(val variants: List<BulkSummary>) : Intent
 
-		/** The user asked for the whole catalogue in one file. */
 		/**
 		 * Import this game's whole catalogue from the source's dump.
 		 *
 		 * @param variantId which dump, by `BulkSummary.id`, or `null` for the cheapest
 		 */
 		data class BulkImportRequested(val variantId: String?) : Intent
-
-		/** An import moved on, or finished when [progress] is null. */
 
 		/** A set was pinned to the top, or unpinned. */
 		data class FavouriteToggled(val setId: String) : Intent
@@ -405,13 +395,6 @@ object SetListContract :
 		/** Arranging or browsing. Screen state only -- nothing about it is persisted. */
 		data object EditingToggled : Intent
 
-		/**
-		 * The user picked a different game.
-		 *
-		 * Clears the list rather than keeping the old one visible under a new title: the sets of
-		 * one game are not a stale view of another game's, they are simply the wrong data, and
-		 * leaving them on screen for the length of a load would show Pokémon sets under "Magic".
-		 */
 		/**
 		 * Switch game without leaving this screen.
 		 *

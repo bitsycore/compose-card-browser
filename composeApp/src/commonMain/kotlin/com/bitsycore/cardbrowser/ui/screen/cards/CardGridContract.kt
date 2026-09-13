@@ -26,12 +26,6 @@ import com.bitsycore.lib.pulse.container.ContainerContract
 object CardGridContract :
 	ContainerContract<CardGridContract.UiState, CardGridContract.Intent, CardGridContract.Effect>() {
 
-	/**
-	 * @property query what the user has asked for. Changing it bumps [requestGeneration]
-	 * @property isCompleteSet whether [cards] were filtered from the whole set or from part of it
-	 * @property cachedCardCount how many cards of the set the app holds, for the partial notice
-	 * @property knownSetSize the provider's own count for the set
-	 */
 	/** One set the filter can be pointed at. */
 	data class SetChoice(val id: String, val name: String)
 

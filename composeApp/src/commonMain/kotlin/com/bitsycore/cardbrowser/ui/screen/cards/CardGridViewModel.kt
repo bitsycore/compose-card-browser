@@ -322,12 +322,6 @@ class CardGridViewModel(
 	}
 
 	/**
-	 * The game a set id belongs to, via the provider that issued it.
-	 *
-	 * `null` when the id will not parse or names a provider this build does not route -- both of
-	 * which are reachable from a restored back stack, and neither of which should crash.
-	 */
-	/**
 	 * The other source: the store, across whatever sets the filter names.
 	 *
 	 * This is what the separate search screen used to be, and it is the same query -- the grid's
@@ -427,24 +421,6 @@ class CardGridViewModel(
 		)
 	}
 
-	/**
-	 * The filterable values across everything this game has stored, for the searches that are not
-	 * one set.
-	 *
-	 * The set branch computes facets from the complete set it just loaded; this branch has no such
-	 * set, and nothing filled them in -- so a game-wide search offered a sort order and no filters
-	 * at all. `CardRepository.searchFacets` existed for exactly this and had no caller: it was the
-	 * deleted search screen's, and moving that screen into the card grid left the call behind.
-	 *
-	 * Once per game rather than per load: the values do not depend on the query, so re-reading them
-	 * on every keystroke is five SQL queries to produce the answer already on screen. But only once
-	 * an answer *arrives* -- an empty read is not remembered. A game whose import is still running
-	 * has nothing stored yet, and caching that emptiness meant the filters never appeared however
-	 * long the user waited, which is what "no filters on Magic until I search" was.
-	 *
-	 * In its own coroutine, and deliberately not `mLoadJob`: that job is cancelled by the next
-	 * keystroke, and the chips would then be cancelled along with a search they do not belong to.
-	 */
 	/** True when this card carries a filterable value the sheet is not currently offering. */
 	private fun CardPrinting.isOutside(facets: CardFacets): Boolean =
 		classification.rarity?.let { it !in facets.rarities } == true ||
