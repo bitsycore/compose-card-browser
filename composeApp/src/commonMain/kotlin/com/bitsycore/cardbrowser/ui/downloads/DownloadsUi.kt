@@ -102,7 +102,12 @@ fun DownloadKindDialog(
 	 * @param variantId which bulk file to import, by `BulkSummary.id`, or `null` when this game's
 	 *   source publishes none and card info is fetched per set
 	 */
-	onConfirm: (Set<DownloadKind>, Set<CardLanguage>, String?) -> Unit,
+	onConfirm: (
+		kinds: Set<DownloadKind>,
+		infoLanguages: Set<CardLanguage>,
+		imageLanguages: Set<CardLanguage>,
+		variantId: String?,
+	) -> Unit,
 	/**
 	 * How many sets this covers. 1 for a single row; more for "download all".
 	 *
@@ -122,13 +127,25 @@ fun DownloadKindDialog(
 	 */
 	alreadyHave: Set<DownloadKind> = emptySet(),
 	/**
-	 * The languages this set is actually published in, as its provider stated them.
+	 * The languages on offer: this set's editions where its provider states them, otherwise what
+	 * the source says it serves at all. [languagesAreClaimed] says which.
 	 *
-	 * Empty for a source that says nothing about languages, which is most of them -- and then no
-	 * choice is offered, because there is nothing honest to offer. Not the languages the *provider*
-	 * can serve in general: that would put Korean on a set that was never printed in it.
+	 * It used to be the first only, and a source that says nothing about languages -- which is most
+	 * of them -- offered no choice at all. That is the right default for a *claim about this set*
+	 * and the wrong one for a download: the user is choosing what to fetch, not being told what
+	 * exists, and "we could not check" is a reason to offer rather than to refuse.
 	 */
 	languages: List<CardLanguage> = emptyList(),
+	/**
+	 * True when [languages] is what the source serves in general rather than what this set states.
+	 *
+	 * The two are drawn differently and default differently, because they are different facts. A
+	 * stated list is this set's editions, so every one of them is worth fetching and all are
+	 * ticked. A claimed list is a menu of what is worth *asking* for -- ticking eleven of them
+	 * would queue eleven jobs for a set that may be printed in one -- so only the preferred
+	 * language starts ticked and the note says the app has not checked.
+	 */
+	languagesAreClaimed: Boolean = false,
 	/** Ticked when the dialog opens. The user's own preference, where the set has it. */
 	defaultLanguage: CardLanguage? = null,
 	/**
@@ -251,6 +268,14 @@ fun DownloadKindDialog(
 		)
 	}
 
+	// And which languages the *records* are wanted in, which used to be every one the set stated
+	// with no say in it. Card records are small, so taking them all is still the default where the
+	// set says what it is published in -- but a source that states nothing offers a claim, and
+	// eleven speculative jobs is not a default anybody chose.
+	var vInfoLanguages by remember(languages, defaultLanguage, languagesAreClaimed) {
+		mutableStateOf(defaultInfoLanguages(languages, defaultLanguage, languagesAreClaimed))
+	}
+
 	AlertDialog(
 		onDismissRequest = onDismiss,
 		modifier = dialogWidth(),
@@ -353,6 +378,34 @@ fun DownloadKindDialog(
 						}
 					},
 				)
+				// Which languages the records come in, which the user used to have no say over.
+				//
+				// Under this row rather than beside the image chips at the bottom, because it is
+				// about *this* tick box: the two halves of a download are chosen separately and
+				// were being explained as one asymmetry a screenful further down.
+				if (vChoosable && !isCardDataBundled) {
+					LanguagePicker(
+						title = "Card info languages",
+						note = if (languagesAreClaimed) {
+							"This source has not said which editions this set has. These are the " +
+								"languages it serves; one that was never printed simply arrives " +
+								"empty."
+						} else {
+							"Records are small, so all ${languages.size} are taken by default."
+						},
+						languages = languages,
+						selected = vInfoLanguages,
+						enabled = vInfo && !vLocked(DownloadKind.CARD_INFO),
+						emptyWarning = vInfo && vInfoLanguages.isEmpty(),
+						onToggle = { vLanguage ->
+							vInfoLanguages = if (vLanguage in vInfoLanguages) {
+								vInfoLanguages - vLanguage
+							} else {
+								vInfoLanguages + vLanguage
+							}
+						},
+					)
+				}
 				// Shown whenever there is a choice, and deliberately *not* gated on the lock.
 				//
 				// It used to be `&& !vLocked(CARD_INFO)`, which hid the chooser precisely when it was
@@ -443,58 +496,26 @@ fun DownloadKindDialog(
 					},
 				)
 				if (vChoosable) {
-					Spacer(Modifier.height(14.dp))
-					HorizontalDivider()
-					Spacer(Modifier.height(10.dp))
-					Text(
-						text = "Image languages",
-						style = MaterialTheme.typography.labelLarge,
-					)
-					Text(
-						// The asymmetry, in one line. Card info is cheap -- or already here -- and
-						// switching language on a card you have is the point of downloading it;
-						// pictures are a request per card per language.
-						text = buildString {
-							append(
-								if (isCardDataBundled) {
-									"Info is built in for all ${languages.size}."
-								} else {
-									"Info comes in all ${languages.size}."
-								},
-							)
-							append(if (hasThumbnails) " Pick the thumbnail languages." else " Pick the image languages.")
+					LanguagePicker(
+						title = if (hasThumbnails) "Thumbnail languages" else "Image languages",
+						// Why this one is not all of them by default. Records are a few kilobytes;
+						// pictures are a request per card per language against someone else's CDN.
+						note = "A picture per card, per language. Pick as few as you will look at.",
+						languages = languages,
+						selected = vLanguages,
+						// Only meaningful for the kinds that fetch pictures. Greyed rather than
+						// hidden, so the choice does not appear and vanish as the tick boxes above
+						// are used.
+						enabled = vThumbnails,
+						emptyWarning = vThumbnails && vLanguages.isEmpty(),
+						onToggle = { vLanguage ->
+							vLanguages = if (vLanguage in vLanguages) {
+								vLanguages - vLanguage
+							} else {
+								vLanguages + vLanguage
+							}
 						},
-						style = MaterialTheme.typography.bodySmall,
-						color = MaterialTheme.colorScheme.onSurfaceVariant,
 					)
-					Spacer(Modifier.height(8.dp))
-					FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-						for (vLanguage in languages) {
-							FilterChip(
-								selected = vLanguage in vLanguages,
-								onClick = {
-									vLanguages = if (vLanguage in vLanguages) {
-										vLanguages - vLanguage
-									} else {
-										vLanguages + vLanguage
-									}
-								},
-								// Only meaningful for the kinds that fetch pictures. Greyed rather
-								// than hidden, so the choice does not appear and vanish as the
-								// tick boxes above are used.
-								enabled = vThumbnails,
-								label = { Text(vLanguage.displayName) },
-							)
-						}
-					}
-					if (vThumbnails && vLanguages.isEmpty()) {
-						Spacer(Modifier.height(6.dp))
-						Text(
-							text = "Choose at least one language for the thumbnails.",
-							style = MaterialTheme.typography.bodySmall,
-							color = MaterialTheme.colorScheme.error,
-						)
-					}
 				}
 			}
 		},
@@ -503,13 +524,15 @@ fun DownloadKindDialog(
 				// Nothing ticked is not a download, so the button is not offered as one -- and
 				// neither is imagery in no language at all.
 				enabled = (vInfo || vThumbnails) &&
-					(!vThumbnails || !vChoosable || vLanguages.isNotEmpty()),
+					(!vThumbnails || !vChoosable || vLanguages.isNotEmpty()) &&
+					(!vInfo || !vChoosable || vInfoLanguages.isNotEmpty()),
 				onClick = {
 					onConfirm(
 						buildSet {
 							if (vInfo) add(DownloadKind.CARD_INFO)
 							if (vThumbnails) add(DownloadKind.GRID_THUMBNAILS)
 						},
+						vInfoLanguages,
 						vLanguages,
 						vVariant?.id,
 					)
@@ -653,12 +676,89 @@ fun DownloadsButton(jobs: List<DownloadJob>, onClick: () -> Unit) {
  *
  * [languages] empty means the source states none, and then presence is all there is to go on.
  */
+/**
+ * Which languages the records are fetched in when the dialog opens.
+ *
+ * Extracted so the rule can be tested, like [infoIsComplete] beside it, because it is a rule rather
+ * than a default: the two cases answer differently and getting them the wrong way round is either
+ * a silently incomplete download or eleven speculative jobs.
+ *
+ * A **stated** list is this set's editions. All of them, because a record is a few kilobytes and
+ * being able to switch language on a card already held is most of the reason for holding it -- this
+ * is what the dialog always did, and it is preserved.
+ *
+ * A **claimed** list is what the source serves in general, offered because the source said nothing
+ * about this set. Ticking all of it would queue a job per language for a set that may be printed in
+ * one, so only the preference starts on and the rest are there to add.
+ */
+internal fun defaultInfoLanguages(
+	languages: List<CardLanguage>,
+	defaultLanguage: CardLanguage?,
+	languagesAreClaimed: Boolean,
+): Set<CardLanguage> = if (languagesAreClaimed) {
+	setOfNotNull(defaultLanguage?.takeIf { it in languages } ?: languages.firstOrNull())
+} else {
+	languages.toSet()
+}
+
 internal fun infoIsComplete(
 	alreadyHave: Set<DownloadKind>,
 	languages: List<CardLanguage>,
 	infoLanguages: Set<CardLanguage>,
 ): Boolean = DownloadKind.CARD_INFO in alreadyHave &&
 	(languages.isEmpty() || languages.all { it in infoLanguages })
+
+/**
+ * A titled row of language chips: one half of a download, and which languages it is wanted in.
+ *
+ * Two of these now, because card info and pictures are two purchases with different costs and the
+ * user chooses both. It was one control for the pictures, and a sentence a screenful below the
+ * card-info row explaining that records came in every language whether they were wanted or not.
+ *
+ * @param enabled false when the kind this chooses for is not ticked. Greyed rather than hidden, so
+ *   the control does not appear and vanish as the boxes above are used
+ * @param emptyWarning true when the kind *is* ticked and nothing is chosen, which is the one state
+ *   the Download button refuses -- said here rather than left as a button that does nothing
+ */
+@Composable
+private fun LanguagePicker(
+	title: String,
+	note: String,
+	languages: List<CardLanguage>,
+	selected: Set<CardLanguage>,
+	enabled: Boolean,
+	emptyWarning: Boolean,
+	onToggle: (CardLanguage) -> Unit,
+) {
+	Spacer(Modifier.height(14.dp))
+	HorizontalDivider()
+	Spacer(Modifier.height(10.dp))
+	Text(text = title, style = MaterialTheme.typography.labelLarge)
+	Text(
+		text = note,
+		style = MaterialTheme.typography.bodySmall,
+		color = MaterialTheme.colorScheme.onSurfaceVariant,
+	)
+	Spacer(Modifier.height(8.dp))
+	FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+		for (vLanguage in languages) {
+			FilterChip(
+				selected = vLanguage in selected,
+				onClick = { onToggle(vLanguage) },
+				enabled = enabled,
+				label = { Text(vLanguage.displayName) },
+			)
+		}
+	}
+	if (emptyWarning) {
+		Spacer(Modifier.height(6.dp))
+		Text(
+			text = "Choose at least one language.",
+			style = MaterialTheme.typography.bodySmall,
+			color = MaterialTheme.colorScheme.error,
+		)
+	}
+}
 
 /**
  * One line saying exactly where a job stands, and which edition it is.
@@ -750,14 +850,14 @@ private fun previewJob(
 @Preview
 @Composable
 private fun DownloadKindDialogPreview() = PreviewFrame {
-	DownloadKindDialog(setName = "Origins", cardCount = 352, onDismiss = {}, onConfirm = { _, _, _ -> })
+	DownloadKindDialog(setName = "Origins", cardCount = 352, onDismiss = {}, onConfirm = { _, _, _, _ -> })
 }
 
 @Preview
 @Composable
 private fun DownloadKindDialogUnknownSizePreview() = PreviewFrame {
 	// No card count, so no size estimate is offered rather than a made-up one.
-	DownloadKindDialog(setName = "Promos", cardCount = null, onDismiss = {}, onConfirm = { _, _, _ -> })
+	DownloadKindDialog(setName = "Promos", cardCount = null, onDismiss = {}, onConfirm = { _, _, _, _ -> })
 }
 
 @Preview
@@ -769,7 +869,7 @@ private fun DownloadAllDialogPreview() = PreviewFrame {
 		cardCount = 21_450,
 		setCount = 88,
 		onDismiss = {},
-		onConfirm = { _, _, _ -> },
+		onConfirm = { _, _, _, _ -> },
 	)
 }
 
@@ -783,7 +883,7 @@ private fun DownloadKindDialogPartlyHeldPreview() = PreviewFrame {
 		cardCount = 352,
 		alreadyHave = setOf(DownloadKind.CARD_INFO),
 		onDismiss = {},
-		onConfirm = { _, _, _ -> },
+		onConfirm = { _, _, _, _ -> },
 	)
 }
 
@@ -800,6 +900,6 @@ private fun DownloadKindDialogPartlyTranslatedPreview() = PreviewFrame(isDark = 
 		defaultLanguage = CardLanguage.FRENCH,
 		infoLanguages = setOf(CardLanguage.FRENCH),
 		onDismiss = {},
-		onConfirm = { _, _, _ -> },
+		onConfirm = { _, _, _, _ -> },
 	)
 }

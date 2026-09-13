@@ -168,7 +168,7 @@ fun SetListScreen(
 		state = vState,
 		dispatch = viewModel::dispatch,
 		downloads = vJobs,
-		onDownload = { vSet, vKinds, vLanguages ->
+		onDownload = { vSet, vKinds, vInfoLanguages, vArtLanguages ->
 			// One job per language, because everything downstream is per language: a cache key
 			// embeds it and so does an image download record. Splitting here is what makes "card
 			// info in every language, thumbnails in the two you read" a thing the queue can
@@ -183,13 +183,17 @@ fun SetListScreen(
 			// whatever the user preferred, which for an English-only source was a job labelled
 			// with a language it would never return.
 			val vPrimary = vDownloadLanguage
-			val vStated = vSet.languages.toList().ifEmpty { listOf(vPrimary) }
-			val vForArt = vLanguages.ifEmpty { setOf(vPrimary) }.filter { it in vStated || vSet.languages.isEmpty() }
+			// What the dialog was told to fetch, which is no longer "every language the set
+			// states": that was the rule and the user had no say in it. Empty only when a caller
+			// asks for nothing, and then the preference stands in.
+			val vForInfo = vInfoLanguages.ifEmpty { setOf(vPrimary) }.toList()
+			val vForArt = vArtLanguages.ifEmpty { setOf(vPrimary) }
+				.filter { it in vSet.languages || vSet.languages.isEmpty() }
 
 			val vInfoKinds = vKinds.filterNot { it.isImagery }.toSet()
 			val vArtKinds = vKinds.filter { it.isImagery }.toSet()
 
-			for (vLanguage in vStated) {
+			for (vLanguage in vForInfo) {
 				if (vInfoKinds.isEmpty()) break
 				vDownloads.enqueue(
 					DownloadRequest(
@@ -249,7 +253,16 @@ fun SetListContent(
 	state: SetListContract.UiState,
 	dispatch: (SetListContract.Intent) -> Unit,
 	downloads: List<DownloadJob> = emptyList(),
-	onDownload: (CardSet, Set<DownloadKind>, Set<CardLanguage>) -> Unit = { _, _, _ -> },
+	/**
+	 * @param infoLanguages which editions of the records to fetch, and pictures separately -- the
+	 *   two are chosen apart in the dialog because they cost very differently
+	 */
+	onDownload: (
+		set: CardSet,
+		kinds: Set<DownloadKind>,
+		infoLanguages: Set<CardLanguage>,
+		imageLanguages: Set<CardLanguage>,
+	) -> Unit = { _, _, _, _ -> },
 	/**
 	 * The user's preferred language, ticked by default in the download dialog.
 	 *
@@ -661,15 +674,20 @@ fun SetListContent(
 			),
 			onDismiss = { vPendingSet = null },
 			isImportingGame = vIsImportingGame,
-			languages = vSet.languages.toList(),
+			// This set's editions where the source states them, otherwise the menu of what the
+			// source serves at all -- see `DownloadKindDialog.languagesAreClaimed`. Most sources
+			// state nothing, and offering no choice at all there meant a game with six languages
+			// could only ever be downloaded in one.
+			languages = vSet.languages.toList().ifEmpty { state.browsingLanguageOptions.toList() },
+			languagesAreClaimed = vSet.languages.isEmpty(),
 			defaultLanguage = preferredLanguage,
 			isCardDataBundled = isCardDataBundled,
 			hasThumbnails = hasThumbnails,
 			infoLanguages = vState.savedLanguages[vSet.id.qualified].orEmpty(),
 			// One set, so no dump is involved and there is nothing to choose: a 78 MB file to
 			// fill one set is far worse than the request it would replace. See `BulkCatalogue`.
-			onConfirm = { vKinds, vLanguages, _ ->
-				onDownload(vSet, vKinds, vLanguages)
+			onConfirm = { vKinds, vInfoLanguages, vArtLanguages, _ ->
+				onDownload(vSet, vKinds, vInfoLanguages, vArtLanguages)
 				vPendingSet = null
 				// Straight to the queue, so the download is visibly a thing that now exists rather
 				// than a dialog that closed and apparently did nothing.
@@ -702,7 +720,9 @@ fun SetListContent(
 			bulkVariants = vState.bulkVariants,
 			// Every language any of these sets states. A language only some of them have is still
 			// worth offering -- the enqueue skips it for the sets that were never printed in it.
-			languages = vSets.flatMap { it.languages }.distinct(),
+			languages = vSets.flatMap { it.languages }.distinct()
+				.ifEmpty { state.browsingLanguageOptions.toList() },
+			languagesAreClaimed = vSets.none { it.languages.isNotEmpty() },
 			defaultLanguage = preferredLanguage,
 			isCardDataBundled = isCardDataBundled,
 			hasThumbnails = hasThumbnails,
@@ -719,7 +739,7 @@ fun SetListContent(
 			onCheckForUpdate = {
 				dispatch(SetListContract.Intent.BulkUpdateCheckRequested)
 			},
-			onConfirm = { vKinds, vLanguages, vVariantId ->
+			onConfirm = { vKinds, vInfoLanguages, vArtLanguages, vVariantId ->
 				// Where the source publishes a dump, the whole game's records come from it and
 				// there is no path here that fetches them a set at a time. That is not a
 				// preference: the file exists so clients stop walking somebody else's API, and
@@ -737,7 +757,7 @@ fun SetListContent(
 					vKinds
 				}
 				if (vPerSet.isNotEmpty()) {
-					vSets.forEach { vSet -> onDownload(vSet, vPerSet, vLanguages) }
+					vSets.forEach { vSet -> onDownload(vSet, vPerSet, vInfoLanguages, vArtLanguages) }
 				}
 				vPendingAll = false
 				dispatch(SetListContract.Intent.DownloadsRequested)

@@ -9,6 +9,7 @@ import com.bitsycore.cardbrowser.data.download.DownloadKind
 import com.bitsycore.cardbrowser.data.download.DownloadRequest
 import com.bitsycore.cardbrowser.data.download.DownloadStatus
 import com.bitsycore.cardbrowser.ui.downloads.describe
+import com.bitsycore.cardbrowser.ui.downloads.defaultInfoLanguages
 import com.bitsycore.cardbrowser.ui.downloads.infoIsComplete
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -24,6 +25,50 @@ import kotlin.test.assertTrue
  * was already held when one language of six had finished.
  */
 class DownloadsUiTest {
+
+	// ==================
+	// MARK: Which languages a download starts with
+	// ==================
+
+	@Test
+	fun `a set that states its editions is downloaded in all of them`() {
+		val vStated = listOf(CardLanguage.ENGLISH, CardLanguage.FRENCH, CardLanguage.GERMAN)
+
+		// A record is a few kilobytes and switching language on a card already held is most of the
+		// reason for holding it, so all three are taken -- which is what the dialog always did and
+		// what the language chips must not quietly change.
+		assertEquals(
+			vStated.toSet(),
+			defaultInfoLanguages(vStated, CardLanguage.FRENCH, languagesAreClaimed = false),
+		)
+	}
+
+	@Test
+	fun `a source that states nothing starts on the preference alone`() {
+		val vClaimed = CardLanguage.PREFERENCE_ORDER
+
+		// The other half, and the reason the two are not one rule. This list is what the *source*
+		// serves, offered because it said nothing about the set -- ticking all eleven would queue
+		// eleven jobs for a set that may be printed in one.
+		assertEquals(
+			setOf(CardLanguage.GERMAN),
+			defaultInfoLanguages(vClaimed, CardLanguage.GERMAN, languagesAreClaimed = true),
+		)
+	}
+
+	@Test
+	fun `a preference the offer does not contain falls back to the first offered`() {
+		// An English-only source with a French-preferring user. Ticking nothing would leave the
+		// Download button refusing to do anything, with no indication why.
+		assertEquals(
+			setOf(CardLanguage.ENGLISH),
+			defaultInfoLanguages(
+				listOf(CardLanguage.ENGLISH),
+				CardLanguage.FRENCH,
+				languagesAreClaimed = true,
+			),
+		)
+	}
 
 	private fun job(
 		language: CardLanguage?,

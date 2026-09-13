@@ -54,7 +54,7 @@ class DownloadRenderer {
 				setName = "Base Set",
 				cardCount = 102,
 				onDismiss = {},
-				onConfirm = { _, _, _ -> },
+				onConfirm = { _, _, _, _ -> },
 				languages = listOf(
 					CardLanguage.ENGLISH,
 					CardLanguage.FRENCH,
@@ -69,7 +69,7 @@ class DownloadRenderer {
 				setName = "Base Set",
 				cardCount = 102,
 				onDismiss = {},
-				onConfirm = { _, _, _ -> },
+				onConfirm = { _, _, _, _ -> },
 				alreadyHave = setOf(DownloadKind.CARD_INFO),
 				languages = listOf(CardLanguage.ENGLISH, CardLanguage.FRENCH, CardLanguage.GERMAN),
 				defaultLanguage = CardLanguage.FRENCH,
@@ -108,7 +108,7 @@ class DownloadRenderer {
 				setCount = 988,
 				cardCount = null,
 				onDismiss = {},
-				onConfirm = { _, _, _ -> },
+				onConfirm = { _, _, _, _ -> },
 				languages = listOf(CardLanguage.ENGLISH, CardLanguage.FRENCH, CardLanguage.JAPANESE),
 				defaultLanguage = CardLanguage.FRENCH,
 				bulkVariants = listOf(
@@ -141,7 +141,7 @@ class DownloadRenderer {
 				setName = "Origins",
 				cardCount = 298,
 				onDismiss = {},
-				onConfirm = { _, _, _ -> },
+				onConfirm = { _, _, _, _ -> },
 				alreadyHave = setOf(DownloadKind.CARD_INFO),
 				infoLanguages = setOf(CardLanguage.ENGLISH),
 				languages = listOf(CardLanguage.ENGLISH),
@@ -153,7 +153,7 @@ class DownloadRenderer {
 				setName = "Beginning of Ripples",
 				cardCount = 123,
 				onDismiss = {},
-				onConfirm = { _, _, _ -> },
+				onConfirm = { _, _, _, _ -> },
 				isCardDataBundled = true,
 				hasThumbnails = false,
 				languages = listOf(
@@ -169,7 +169,7 @@ class DownloadRenderer {
 				setName = "Base Set",
 				cardCount = 102,
 				onDismiss = {},
-				onConfirm = { _, _, _ -> },
+				onConfirm = { _, _, _, _ -> },
 				languages = CardLanguage.entries.toList(),
 				defaultLanguage = CardLanguage.FRENCH,
 			)
