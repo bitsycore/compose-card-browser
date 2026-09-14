@@ -505,9 +505,10 @@ class DownloadManager(
 				// red rows for sets that had answered perfectly and simply had nothing to give.
 				// The distinction the app cares about is "the fetch failed" against "the source
 				// has nothing here", and only the first is worth a warning.
-				if (vPinsRecords) {
-					mRepository.setPinned(vRequest.game, vRequest.setId, vRequest.language, false)
-				}
+				// The pin stays. It records that the set was asked for, which is true whatever came
+				// back -- and releasing it here undid the reader's own request: the set stopped
+				// counting as downloaded, stopped being protected, and on a source that answered
+				// empty by accident there was then nothing to show it had ever been wanted.
 				update(job.id) {
 					DownloadStatus.Completed(cards = 0, imagesFetched = 0, imagesFailed = 0)
 				}

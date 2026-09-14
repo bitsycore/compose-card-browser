@@ -45,14 +45,23 @@ class OptcgMapperTest {
 	)
 
 	@Test
-	fun `a set states neither a date nor a count -- and neither is invented`() {
+	fun `a set states no count -- and one is not invented`() {
 		val vSet = OptcgMapper.toSet(OptcgSetDto(setName = "Romance Dawn", setId = "OP-01"), mProvider)
 
 		assertNotNull(vSet)
 		assertEquals("OP-01", vSet.id.local)
 		assertEquals(OnePieceGame.id, vSet.game)
-		assertNull(vSet.releaseDate)
 		assertNull(vSet.cardCount)
+	}
+
+	@Test
+	fun `a set the curated table does not know keeps a null date`() {
+		// The date is supplied, not stated -- see `OptcgReleaseDates`. What must not happen is a
+		// date appearing for a set nobody looked up, so an unknown id stays null and sorts last.
+		val vSet = OptcgMapper.toSet(OptcgSetDto(setName = "Something New", setId = "OP-99"), mProvider)
+
+		assertNotNull(vSet)
+		assertNull(vSet.releaseDate)
 	}
 
 	@Test

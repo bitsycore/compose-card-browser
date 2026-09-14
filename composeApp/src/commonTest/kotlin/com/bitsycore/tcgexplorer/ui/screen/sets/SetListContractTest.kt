@@ -37,6 +37,56 @@ class SetListContractTest {
 		)
 	}
 
+	// ============
+	//  Empty sets, and the four that were lost
+
+	@Test
+	fun `a downloaded set is never hidden -- whatever its count says`() {
+		// The reported loss. Four One Piece sets were downloaded, came back empty because the phone
+		// slept, and disappeared from the list -- with no row left to reach and no way to retry.
+		//
+		// A fetch that returned nothing and a set that really holds nothing are the same response,
+		// and nothing at the fetch can tell them apart. What can be told apart is whether the reader
+		// asked for this set.
+		val vSet = set("OP-14", region = null)
+		val vState = loaded(vSet).copy(
+			hideEmptySets = true,
+			confirmedCardCounts = mapOf(vSet.id.qualified to 0),
+			savedSetIds = setOf(vSet.id.qualified),
+		)
+
+		assertTrue(
+			vSet in vState.visibleSets,
+			"a set on the device must stay reachable, so it can be looked at and fetched again",
+		)
+		assertEquals(0, vState.hiddenEmptyCount)
+	}
+
+	@Test
+	fun `a set that is empty and was never downloaded is still hidden`() {
+		// The other half, and the reason the option exists: TCGdex lists Spanish Base Set with 102
+		// cards and serves none, and 13 of the WoW TCG's 54 sets hold sealed product and no singles.
+		// Nobody asked for those, and a list full of them is noise.
+		val vSet = set("base1", region = null)
+		val vState = loaded(vSet).copy(
+			hideEmptySets = true,
+			confirmedCardCounts = mapOf(vSet.id.qualified to 0),
+		)
+
+		assertTrue(vSet !in vState.visibleSets)
+		assertEquals(1, vState.hiddenEmptyCount)
+	}
+
+	@Test
+	fun `an unknown count is never empty`() {
+		// Four of the sources publish no count at all -- One Piece among them. Hiding on a silence
+		// would empty their lists entirely.
+		val vSet = set("OP-15", region = null).copy(cardCount = null)
+		val vState = loaded(vSet).copy(hideEmptySets = true)
+
+		assertTrue(vSet in vState.visibleSets)
+	}
+
 	private fun set(local: String, region: String?, name: String = local) = CardSet(
 		id = SourceId(ProviderId("test"), local),
 		game = TwoLineGame.id,

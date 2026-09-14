@@ -49,7 +49,7 @@ class SqlCardStore(driver: SqlDriver) {
 		printings: List<CardPrinting>,
 		isComplete: Boolean = true,
 	) {
-		val vLanguage = language?.code ?: "-"
+		val vLanguage = language?.code ?: NO_LANGUAGE
 		var vBytes = 0L
 		mDatabase.transaction {
 			// Replacing a set, not merging into it. A refetch that returns fewer cards must not
@@ -157,7 +157,7 @@ class SqlCardStore(driver: SqlDriver) {
 		label: String,
 		isPinned: Boolean,
 	) {
-		val vLanguage = language?.code ?: "-"
+		val vLanguage = language?.code ?: NO_LANGUAGE
 		mQueries.transaction {
 			// Only when there is nothing there. See `insertPinPlaceholder`: a pin arrives before
 			// the set it protects, and an UPDATE against an absent row is a silent no-op that
@@ -315,12 +315,12 @@ class SqlCardStore(driver: SqlDriver) {
 
 	/** Records that a set was read, which is what eviction orders by. */
 	fun touch(provider: String, setId: String, language: CardLanguage?, at: Long) {
-		mQueries.touchSet(at, provider, setId, language?.code ?: "-")
+		mQueries.touchSet(at, provider, setId, language?.code ?: NO_LANGUAGE)
 	}
 
 	/** Whether this exact edition is on disk, which is the set list's saved mark. */
 	fun hasSet(provider: String, setId: String, language: CardLanguage?): Boolean =
-		mQueries.hasSet(provider, setId, language?.code ?: "-").executeAsOne() > 0
+		mQueries.hasSet(provider, setId, language?.code ?: NO_LANGUAGE).executeAsOne() > 0
 
 	/** Which languages of a set are held, without a file-existence check per candidate. */
 	fun languagesHeld(provider: String, setId: String): List<String> =
@@ -328,7 +328,7 @@ class SqlCardStore(driver: SqlDriver) {
 
 	/** How many cards a set really holds in one language. The `.n` sidecar, as a column. */
 	fun cardCount(provider: String, setId: String, language: CardLanguage?): Int? =
-		mQueries.cardCountForSet(provider, setId, language?.code ?: "-")
+		mQueries.cardCountForSet(provider, setId, language?.code ?: NO_LANGUAGE)
 			.executeAsOneOrNull()
 			?.toInt()
 
@@ -339,7 +339,7 @@ class SqlCardStore(driver: SqlDriver) {
 	 * "is it here and how big", which is a row; the grid asks for the cards.
 	 */
 	fun setMetadata(provider: String, setId: String, language: CardLanguage?): StoredSetMetadata? =
-		mQueries.setMetadata(provider, setId, language?.code ?: "-")
+		mQueries.setMetadata(provider, setId, language?.code ?: NO_LANGUAGE)
 			.executeAsOneOrNull()
 			?.let {
 				StoredSetMetadata(
@@ -353,7 +353,7 @@ class SqlCardStore(driver: SqlDriver) {
 
 	/** Whether this edition was deliberately downloaded. */
 	fun isPinned(provider: String, setId: String, language: CardLanguage?): Boolean =
-		mQueries.isSetPinned(provider, setId, language?.code ?: "-")
+		mQueries.isSetPinned(provider, setId, language?.code ?: NO_LANGUAGE)
 			.executeAsOneOrNull()
 			?.let { it > 0 } == true
 
@@ -442,7 +442,7 @@ class SqlCardStore(driver: SqlDriver) {
 
 	/** One set's cards, which is the set-open path. */
 	fun readSet(provider: String, setId: String, language: CardLanguage?): List<CardPrinting> =
-		mQueries.printingsInSet(provider, setId, language?.code ?: "-")
+		mQueries.printingsInSet(provider, setId, language?.code ?: NO_LANGUAGE)
 			.executeAsList()
 			.map { JSON.decodeFromString(CardPrinting.serializer(), it) }
 
@@ -557,12 +557,19 @@ class SqlCardStore(driver: SqlDriver) {
 	 */
 	private fun delimited(values: Set<String>) = values.joinToString(DOMAIN_SEPARATOR)
 
-	private companion object {
+	companion object {
 
-		/** The one treatment the serialiser omits, because it is the default. */
+		/**
+		 * How "the source states no language" is spelled in a row.
+		 *
+		 * A column, so it cannot be null and needs a value. Named because it is a sentinel two
+		 * modules compare against -- OPTCG and TCGCSV state no language at all, so this is the
+		 * ordinary case for three of the ten games rather than an edge one.
+		 */
+		const val NO_LANGUAGE: String = "-"
 
 		/** Matches the file cache's parser: a record carries fields this build has no DTO for. */
-		val JSON = Json { ignoreUnknownKeys = true; explicitNulls = false }
+		internal val JSON = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
 		/**
 		 * Lowercase and strip accents, so "Kai'Sa" and "kaisa" match.
@@ -571,7 +578,7 @@ class SqlCardStore(driver: SqlDriver) {
 		 * whether the index works, not reimplementing search. A migration would move the real
 		 * folding here rather than keep two.
 		 */
-		fun fold(value: String): String = value.lowercase()
+		internal fun fold(value: String): String = value.lowercase()
 			.map { vChar ->
 				when (vChar) {
 					'á', 'à', 'â', 'ä', 'ã' -> 'a'

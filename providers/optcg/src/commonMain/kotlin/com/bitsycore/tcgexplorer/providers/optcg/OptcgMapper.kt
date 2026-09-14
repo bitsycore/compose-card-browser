@@ -50,10 +50,11 @@ internal object OptcgMapper {
 			game = OnePieceGame.id,
 			code = dto.setId.uppercase(),
 			name = dto.setName.ifBlank { dto.setId },
-			// The API states neither, and neither is guessed. A set list ordered by code is the
-			// honest consequence -- see `CardRepository.SET_ORDER`.
+			// The API states no size, and it is not guessed.
 			cardCount = null,
-			releaseDate = null,
+			// The API states no date either. This one is curated -- see [OptcgReleaseDates] for
+			// where the dates came from and why they are not the source's own.
+			releaseDate = OptcgReleaseDates.of(dto.setId),
 		)
 	}
 

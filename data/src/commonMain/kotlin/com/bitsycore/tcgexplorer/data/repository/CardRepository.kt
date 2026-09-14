@@ -554,6 +554,7 @@ class CardRepository(
 		// then cached as a complete set, so the empty set was served from disk forever after.
 		if (vTotal != null && vBest.size < vTotal) vComplete = false
 
+
 		// If the refresh collected less than what was already cached, `vBest` *is* the cached
 		// payload -- so it is as complete as it ever was, and re-filing it as PARTIAL because this
 		// attempt failed would be a lie about the data. That downgrade was silent and permanent:
@@ -909,11 +910,15 @@ class CardRepository(
 	 * that row will open onto, and printing it anyway is the app claiming something it never checked.
 	 *
 	 * This is the part it *has* checked: what a source actually served, recorded when the set was
-	 * cached whole. A set absent from the map has never been fetched in that language, and the
-	 * caller should keep showing the source's figure -- that is still the only number available, and
-	 * an absent entry is not a count of zero.
+	 * cached **whole**. A set absent from the map has never been fetched whole in that language, and
+	 * the caller should keep showing the source's figure -- that is still the only number available,
+	 * and an absent entry is not a count of zero.
 	 *
-	 * Cheap for the same reason [savedSetIds] is: one tiny sibling file per set, never the record.
+	 * A zero here is a measurement and belongs in the map: YGOPRODeck serves `Beyond the Brave` with
+	 * no French cards at all, and a row that fell back to the English 8 would print it over an empty
+	 * grid. What must not follow from a zero is *hiding the set* -- see `SetListContract.isEmptySet`,
+	 * which is where a fetch that came back empty stopped being told apart from a set that has
+	 * nothing in it.
 	 */
 	suspend fun confirmedCardCounts(
 		game: GameId,
