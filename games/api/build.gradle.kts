@@ -18,7 +18,7 @@ kotlin {
 	jvm("desktop")
 
 	android {
-		namespace = "com.bitsycore.toploader.games.api"
+		namespace = "com.bitsycore.tcgexplorer.games.api"
 		compileSdk = libs.versions.androidCompileSdk.get().toInt()
 		minSdk = libs.versions.androidMinSdk.get().toInt()
 	}

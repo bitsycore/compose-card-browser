@@ -1,0 +1,661 @@
+package com.bitsycore.tcgexplorer.ui.screen.cards
+
+import com.bitsycore.tcgexplorer.core.filter.CardFacets
+import com.bitsycore.tcgexplorer.core.game.GameProfile
+import com.bitsycore.tcgexplorer.core.model.CardLanguage
+import com.bitsycore.tcgexplorer.data.settings.CardRowHeight
+import com.bitsycore.tcgexplorer.data.settings.CardTileSize
+import com.bitsycore.tcgexplorer.data.settings.CardViewMode
+import com.bitsycore.tcgexplorer.core.game.GameVocabulary
+import com.bitsycore.tcgexplorer.core.model.ArtworkTreatment
+import com.bitsycore.tcgexplorer.core.model.CardPrinting
+import com.bitsycore.tcgexplorer.core.provider.CardQuery
+import com.bitsycore.tcgexplorer.core.provider.CardSortField
+import com.bitsycore.tcgexplorer.core.provider.ProviderError
+import com.bitsycore.tcgexplorer.data.repository.DataOrigin
+import com.bitsycore.tcgexplorer.data.repository.LanguageSubstitution
+import com.bitsycore.lib.pulse.container.ContainerContract
+
+/**
+ * The card grid's state machine.
+ *
+ * Two things here are worth reading closely: [UiState.requestGeneration], which is how a superseded
+ * response is recognised and dropped, and [UiState.coverageNotice], which is how the screen avoids
+ * describing a partial set as a complete one.
+ */
+object CardGridContract :
+	ContainerContract<CardGridContract.UiState, CardGridContract.Intent, CardGridContract.Effect>() {
+
+	/** One set the filter can be pointed at. */
+	data class SetChoice(val id: String, val name: String)
+
+	data class UiState(
+		/**
+		 * The set this screen was opened for, or empty when it was opened for a whole game.
+		 *
+		 * Both are the same screen. What changes is where the cards come from: one set is read from
+		 * the provider through the cache, which is what lets a set nobody has downloaded be browsed
+		 * at all; a game is read from the store, which is the only thing that can answer across
+		 * sets. The filter decides which -- see `setIds`.
+		 */
+		val setId: String = "",
+
+		/**
+		 * The sets the filter is pointed at, and the axis that switches the source above.
+		 *
+		 * Opening a set preselects it. Removing it widens the search to everything downloaded,
+		 * which is what the old separate search screen was, and adding others narrows it back.
+		 */
+		val setIds: Set<String> = emptySet(),
+
+		/** The sets the filter may offer: those with something stored. */
+		val setOptions: List<SetChoice> = emptyList(),
+
+		/**
+		 * How much of the game a store-backed search could actually see.
+		 *
+		 * `searched` is the sets held on this device; `known` is the sets the game has. They are the
+		 * whole honesty of this screen's other mode: no source is asked to search its own catalogue,
+		 * so an empty result means "not in what you have downloaded" and never "no such card".
+		 * Both zero while a set is being browsed, where the question does not arise.
+		 */
+		val searchedSetCount: Int = 0,
+		val knownSetCount: Int = 0,
+		/** True when the store returned as many rows as it is willing to return. */
+		val isTruncated: Boolean = false,
+
+		/**
+		 * True while the filter values are being read.
+		 *
+		 * Worth a state of its own because on a large game it is visible. Computing them is six
+		 * queries over every card the game has stored, and the answer is kept afterwards -- so it
+		 * is slow once per download and instant every time after.
+		 */
+		val isLoadingFacets: Boolean = false,
+		val setName: String = "",
+		val setCode: String = "",
+		/**
+		 * Which game this set belongs to, resolved from the set id's provider.
+		 *
+		 * Drives the filter sheet's wording -- "Colour" for Magic, "Faction" for Altered -- via
+		 * [GameVocabulary], and nothing else. Riftbound until the set is selected.
+		 */
+		val game: GameProfile? = null,
+		val cards: List<CardPrinting> = emptyList(),
+		val facets: CardFacets = CardFacets(),
+		val query: CardQuery = CardQuery(),
+		val supportedFilters: Set<com.bitsycore.tcgexplorer.core.provider.CardFilterField> = emptySet(),
+		val isLoading: Boolean = true,
+		val isCompleteSet: Boolean = false,
+		val cachedCardCount: Int = 0,
+		val knownSetSize: Int? = null,
+		val origin: DataOrigin = DataOrigin.NONE,
+		val isStale: Boolean = false,
+		val error: ProviderError? = null,
+		val requestGeneration: Int = 0,
+		/**
+		 * Pictures or a list, and how tall a list's rows are.
+		 *
+		 * Seeded from preferences and written back when changed, so the choice follows the user to
+		 * the next set rather than being per-screen. [rowHeight] is only read in
+		 * [CardViewMode.LIST]; it is still remembered in grid mode, so switching back and forth
+		 * does not forget it.
+		 */
+		val viewMode: CardViewMode = CardViewMode.GRID,
+		val rowHeight: CardRowHeight = CardRowHeight.REGULAR,
+		val tileSize: CardTileSize = CardTileSize.MEDIUM,
+		val isFilterSheetOpen: Boolean = false,
+		val isSearchOpen: Boolean = false,
+		/** Restored when coming back from detail, so the grid returns to where it was. */
+		val firstVisibleIndex: Int = 0,
+		/**
+		 * Which edition of the set is on screen.
+		 *
+		 * Seeded from the user's preference and changeable here, because the set is the natural
+		 * place to change it: the detail screen could already switch language, but the only way to
+		 * browse a set in another one was to change the global preference and come back.
+		 */
+		val language: CardLanguage? = null,
+		/**
+		 * What the source *claims* for this set, or for its catalogue. A claim, not a fact.
+		 *
+		 * Used for one thing only: deciding whether a language control is worth showing at all. It
+		 * must never be listed as though it were the set's editions -- see [confirmedLanguages].
+		 */
+		val availableLanguages: Set<CardLanguage> = emptySet(),
+		/**
+		 * The languages this set is *known* to exist in: confirmed by the source, or on disk.
+		 *
+		 * What the menu lists. The menu used to list [availableLanguages] and then narrow to this
+		 * when the confirmation landed, so it opened with eleven entries for a Magic set and
+		 * collapsed to four under the user's finger. Both lists were shown the same way and only
+		 * one of them was ever true.
+		 */
+		val confirmedLanguages: Set<CardLanguage> = emptySet(),
+		/** True while the source is being asked which editions of this set exist. */
+		val isConfirmingLanguages: Boolean = false,
+		/** True when that ask failed, so the menu says so rather than looking merely short. */
+		val languageCheckFailed: Boolean = false,
+		/** The language to fall back to when a switch turns out to be impossible. */
+		val previousLanguage: CardLanguage? = null,
+		/**
+		 * The language the user would have had, when this set opened in a downloaded one instead.
+		 *
+		 * Set only for the fixable case -- the preferred language is not on disk and another one
+		 * was deliberately downloaded. A set that simply has no edition in the preferred language
+		 * leaves this null, because there is nothing to offer and saying "not downloaded" about a
+		 * printing that does not exist would be a lie. See `CardRepository.OpeningLanguage`.
+		 */
+		val languageSubstitutedFor: CardLanguage? = null,
+		/** Which of the two substitutions happened, so the banner offers a fetch or does not. */
+		val languageSubstitution: LanguageSubstitution? = null,
+		/** True while a chosen language is being fetched, so the control can show it is busy. */
+		val isChangingLanguage: Boolean = false,
+	) {
+
+		/**
+		 * The languages worth offering, in the app's preference order.
+		 *
+		 * A single-language source gets no control at all: a menu with one item that is already
+		 * selected is furniture.
+		 */
+		val languageOptions: List<CardLanguage>
+			get() {
+				// The language on screen is a fact by definition -- the source served it -- so it is
+				// always offered, even before anything has been confirmed. Without it a menu could
+				// open with no way back to what you are reading.
+				val vKnown = confirmedLanguages + setOfNotNull(language)
+				return CardLanguage.PREFERENCE_ORDER.filter { it in vKnown } +
+					vKnown.filterNot { it in CardLanguage.PREFERENCE_ORDER }
+			}
+
+		/**
+		 * Whether a language control belongs in the bar at all.
+		 *
+		 * Driven by the *claim*, because a claim is good enough to justify offering to look: a
+		 * source that says it serves eleven languages is reason to show a menu, and the menu itself
+		 * then shows only what is known. A source with one language gets no control -- a menu of
+		 * one item that is already selected is furniture.
+		 */
+		val hasLanguageChoice: Boolean
+			get() = availableLanguages.size > 1 || confirmedLanguages.size > 1
+
+		/** True when nothing has arrived yet and there is nothing to explain. */
+		val isInitialLoad: Boolean get() = isLoading && cards.isEmpty() && error == null
+
+		/** True when the set loaded but the filters exclude everything. */
+		val isEmptyAfterFilter: Boolean
+			get() = !isLoading && cards.isEmpty() && error == null && cachedCardCount > 0
+
+		/** How many filters are on, for the badge on the filter button. */
+		val activeFilterCount: Int get() = query.activeCount
+
+		/**
+		 * Whether this screen is reading the store rather than one set's provider.
+		 *
+		 * The axis the whole screen turns on, and it lives here because two places need the same
+		 * answer: the view model, to pick which load to start, and [browseKey], to name the list it
+		 * publishes. It was a condition written out in the view model and a string built next to
+		 * it, which is two copies of one rule.
+		 *
+		 * **One set is one set, wherever it was chosen.** This used to also require that the set
+		 * match the one the screen was opened for, so picking a single set in the *search's* filter
+		 * searched the store instead of reading it -- which answers with nothing at all for a set
+		 * nobody has downloaded, while opening the same set from the list reads its provider and
+		 * works. A filter naming exactly one set is the same request as opening it.
+		 */
+		val isStoredBrowse: Boolean get() = setIds.size != 1
+
+		/**
+		 * The name the detail screen swipes this list under.
+		 *
+		 * A set browse is the set. Anything else is the set of sets being searched, which is what
+		 * makes a card opened from a game-wide search carry that search's results into its top bar
+		 * rather than arriving alone.
+		 */
+		val browseKey: String
+			get() = if (isStoredBrowse) {
+				"stored:" + setIds.sorted().joinToString(",")
+			} else {
+				setIds.single()
+			}
+
+		/**
+		 * The sentence that keeps the screen honest, or `null` when nothing needs saying.
+		 *
+		 * Three cases, in order of how misleading their absence would be:
+		 *
+		 * 1. Filtering a set the app only partly holds. The results are real but not exhaustive,
+		 *    and saying so is the difference between "there are four Fury epics" and "there are
+		 *    four among the 200 cards we have".
+		 * 2. Holding part of a set with no filter on. Less dangerous, still worth stating.
+		 * 3. Showing a saved copy while a refresh runs, or after one failed.
+		 */
+		/**
+		 * Said when the source has no picture of anything here.
+		 *
+		 * Its own notice rather than a branch of [coverageNotice], because it is a different fact
+		 * and both can be true at once -- a partly downloaded set with no scans needs to say both
+		 * things, and a `when` chain would pick one.
+		 *
+		 * All or nothing on purpose. Individual cards without art are ordinary -- TCGdex's own
+		 * `ja/sv8` has 32 of 138 -- and each already says "No image" on its tile. A whole set with
+		 * none is the case a reader reads as the app being broken, and it is the one worth a
+		 * sentence.
+		 */
+		val artworkNotice: String?
+			get() = if (cards.isNotEmpty() && cards.none { it.artwork.hasImage }) {
+				"This source has no card images for this set."
+			} else {
+				null
+			}
+
+		val coverageNotice: String?
+			get() = when {
+				!isCompleteSet && knownSetSize != null && cachedCardCount < knownSetSize ->
+					if (query.isEmpty) {
+						"Partial set: $cachedCardCount of $knownSetSize cards downloaded."
+					} else {
+						"Filtered from $cachedCardCount of $knownSetSize downloaded cards — not the whole set."
+					}
+				error != null && cards.isNotEmpty() -> "Showing saved cards. Refresh failed."
+				origin == DataOrigin.CACHE && isStale -> "Saved copy, refreshing…"
+				// 4. A search across a game, which can only see what is downloaded. Said always,
+				//    not only when it found nothing: a result that looks complete and is not is the
+				//    more misleading of the two.
+				isStoredBrowse && knownSetCount > 0 -> buildString {
+					append("Searched the ")
+					append(if (searchedSetCount == 1) "1 set" else "$searchedSetCount sets")
+					append(" you have downloaded, of $knownSetCount.")
+					if (isTruncated) append(" Showing the first ${cards.size}.")
+				}
+				else -> null
+			}
+
+		/**
+		 * The count under the set's name: "227 cards", or "12 of 227" while a filter narrows them.
+		 *
+		 * The denominator is how many cards the app is holding, never the provider's own count for
+		 * the set, because those are not the same unit. Riftbound's Vendetta is 358 *records* -- one
+		 * per variant -- which collapse to 227 distinct cards, so comparing the two made a fully
+		 * downloaded set read "227 of 358": indistinguishable from a download that gave up two
+		 * thirds of the way through. How much of the set is actually held is [coverageNotice]'s job,
+		 * and it says so in words rather than leaving a ratio to be misread.
+		 */
+		val countLabel: String
+			get() {
+				val vHeld = maxOf(cachedCardCount, cards.size)
+				return if (vHeld > 0 && cards.size != vHeld) {
+					"${cards.size} of $vHeld"
+				} else {
+					"${cards.size} cards"
+				}
+			}
+
+		/** True when the notice describes a failure the user can act on. */
+		val noticeIsRetryable: Boolean get() = error != null && cards.isNotEmpty()
+	}
+
+	sealed interface Intent {
+
+		/** The back arrow. Navigation goes through the container like everything else. */
+		data object BackPressed : Intent
+
+		/** A tile was tapped. */
+		data class CardOpened(val card: CardPrinting) : Intent
+
+		/** The downloads button in the bar. */
+		data object DownloadsRequested : Intent
+
+		/** The store-backed search, for this set. */
+		data object FullSearchRequested : Intent
+
+		/** The screen opened, or the user pulled to refresh. */
+		data object Load : Intent
+
+		/** The set this grid is for. Dispatched once, from the navigation argument. */
+		data class SetSelected(val setId: String, val setName: String, val setCode: String) : Intent
+
+		/**
+		 * Opened for a whole game rather than for one of its sets.
+		 *
+		 * The same screen either way. With no set ticked the source is the store, which is what
+		 * the separate search screen used to be -- see `UiState.setId`.
+		 */
+		data class GameSelected(val game: GameProfile) : Intent
+
+		/** The sets the filter points at. Empty is every set with something stored. */
+		data class SetFilterChanged(val setIds: Set<String>) : Intent
+
+		/** Which sets the filter may offer, from what is stored. */
+		data class SetOptionsLoaded(val sets: List<SetChoice>) : Intent
+
+		/** Any change to the query. Bumps the generation, superseding anything in flight. */
+		data class QueryChanged(val query: CardQuery) : Intent
+
+		/** Clears every filter but keeps the sort. */
+		data object ClearFilters : Intent
+
+		data class FilterSheetToggled(val isOpen: Boolean) : Intent
+
+		/** The search button. Hides the field without discarding what was typed. */
+		data class SearchToggled(val isOpen: Boolean) : Intent
+
+		/** Grid or list. Persisted by the view model, so it outlives the screen. */
+		data class ViewModeChanged(val mode: CardViewMode) : Intent
+
+		/** How tall a list row is. Persisted too. */
+		data class RowHeightChanged(val height: CardRowHeight) : Intent
+
+		/** How big a grid tile is. Persisted too. */
+		data class TileSizeChanged(val size: CardTileSize) : Intent
+
+		/** What preferences had when the screen opened. */
+		data class ViewPreferencesLoaded(
+			val mode: CardViewMode,
+			val height: CardRowHeight,
+			val tileSize: CardTileSize,
+		) : Intent
+
+		data class ScrollPositionChanged(val index: Int) : Intent
+
+		/** A result arrived, tagged with the load it belongs to. */
+		data class Loaded(
+			val generation: Int,
+			val cards: List<CardPrinting>,
+			val isCompleteSet: Boolean,
+			val cachedCardCount: Int,
+			val knownSetSize: Int?,
+			val origin: DataOrigin,
+			val isStale: Boolean,
+			val error: ProviderError?,
+			val isFinal: Boolean,
+		) : Intent
+
+		/**
+		 * The load ended, however it ended.
+		 *
+		 * A flow can finish without a final emission -- a fresh cached set emits once and returns --
+		 * so without this [UiState.isLoading] stayed true forever. That is not merely untidy:
+		 * [UiState.isEmptyAfterFilter] is gated on it, so filtering a cached set down to nothing
+		 * showed neither cards nor the "no matches" message.
+		 */
+		data class LoadFinished(val generation: Int) : Intent
+
+		/** The filter values present in the set, once the whole set is known. */
+		data class FacetsComputed(val facets: CardFacets) : Intent
+
+		/** How much of the game the last store-backed search could see. See `UiState.coverageNotice`. */
+		data class SearchCoverage(val searched: Int, val known: Int, val isTruncated: Boolean) : Intent
+
+		/** The filter values are being read, or have arrived. */
+		data class FacetsLoading(val isLoading: Boolean) : Intent
+
+		/** What the routed provider can filter on, so the sheet offers only what works. */
+		data class CapabilitiesResolved(
+			val supportedFilters: Set<com.bitsycore.tcgexplorer.core.provider.CardFilterField>,
+			/** Which game's words the filter sheet should use. See [GameVocabulary]. */
+			val game: GameProfile,
+			val languages: Set<CardLanguage>,
+			val language: CardLanguage?,
+			/** The editions already established, which is what the menu may list. */
+			val confirmed: Set<CardLanguage> = emptySet(),
+			/** What was wanted, when [language] is a stand-in for it. */
+			val substitutedFor: CardLanguage? = null,
+			/** Why it is a stand-in: not downloaded, or not published at all. */
+			val substitution: LanguageSubstitution? = null,
+		) : Intent
+
+		/**
+		 * The language menu was opened, so its options are worth confirming.
+		 *
+		 * Confirmation is a request per candidate -- eleven for a Magic set -- so it is paid when
+		 * a menu is actually looked at rather than on every set open. `CardRepository` caches the
+		 * answer, so this costs once per set per TTL and nothing at all for a set whose cards are
+		 * on disk.
+		 */
+		data object LanguageOptionsRequested : Intent
+
+		/** The confirmed list, replacing the claimed one the menu opened with. */
+		data class LanguageOptionsResolved(val languages: Set<CardLanguage>) : Intent
+
+		/** The user picked another edition of this set. */
+		data class LanguageSelected(val language: CardLanguage) : Intent
+
+		/**
+		 * The chosen language could not be shown, so the previous one is restored.
+		 *
+		 * Not every source can answer for every set. TCGdex keys each locale by its own set ids --
+		 * the English `base1` is `PMCG1` in Japanese and absent from Korean -- so there is no
+		 * Korean edition of an English Pokémon set to fetch. Leaving the user on an empty grid
+		 * would be worse than not offering the switch.
+		 */
+		data object LanguageUnavailable : Intent
+	}
+
+	sealed interface Effect {
+
+		/** Shown when a chosen language has nothing for this set, so the tap is not silently lost. */
+		data class LanguageUnavailable(val language: CardLanguage, val reason: String) : Effect
+
+		data object NavigateBack : Effect
+
+		/**
+		 * @param browseKey the list the detail should swipe, which is this grid as the user left
+		 *   it -- see [UiState.browseKey]
+		 */
+		data class OpenCard(val card: CardPrinting, val browseKey: String) : Effect
+
+		data object OpenDownloads : Effect
+
+	}
+
+	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
+
+		// Navigation changes no state. The view model turns these into effects.
+		Intent.BackPressed, Intent.DownloadsRequested, Intent.FullSearchRequested -> state
+
+		// Opening a card closes the sheet, which is the one navigation that can happen while it is
+		// up: the grid is still tappable behind a bottom sheet. Leaving it open puts two things on
+		// screen that both answer Back -- the sheet's own dismiss and the back stack -- and which
+		// one gets the gesture depends on what is composed where. The card is what was asked for,
+		// so the sheet goes.
+		is Intent.CardOpened -> state.copy(isFilterSheetOpen = false)
+
+		is Intent.ViewModeChanged -> state.copy(viewMode = intent.mode)
+
+		is Intent.RowHeightChanged -> state.copy(rowHeight = intent.height)
+
+		is Intent.TileSizeChanged -> state.copy(tileSize = intent.size)
+
+		is Intent.ViewPreferencesLoaded -> state.copy(
+			viewMode = intent.mode,
+			rowHeight = intent.height,
+			tileSize = intent.tileSize,
+		)
+
+		Intent.Load -> state.copy(
+			isLoading = true,
+			error = null,
+			requestGeneration = state.requestGeneration + 1,
+		)
+
+		is Intent.SetSelected -> state.copy(
+			setId = intent.setId,
+			setName = intent.setName,
+			setCode = intent.setCode,
+			// Shut, on a set. What you came here for is the pictures; the box is a tap away and
+			// taking a strip of the screen for it before it is asked for is the wrong default.
+			isSearchOpen = false,
+			// Preselected, so opening a set is a search already pointed at it -- and the way out
+			// of that set is to untick it rather than to leave the screen.
+			setIds = setOfNotNull(intent.setId.takeIf { it.isNotBlank() }),
+		)
+
+		is Intent.SetFilterChanged -> state.copy(
+			setIds = intent.setIds,
+			isLoading = true,
+			error = null,
+			// A different set of sets is a different question, and may be a different source
+			// entirely -- see `UiState.setId`.
+			requestGeneration = state.requestGeneration + 1,
+		)
+
+		is Intent.SetOptionsLoaded -> state.copy(setOptions = intent.sets)
+
+		is Intent.GameSelected -> state.copy(
+			game = intent.game,
+			setName = "Search ${intent.game.shortName}",
+			// Open, on a game: this entry point *is* the search, and arriving at it with the box
+			// shut would be asking the user to press a button to get what they just asked for.
+			isSearchOpen = true,
+			// Nothing ticked: everything downloaded, which is what this entry point is for.
+			setIds = emptySet(),
+			isLoading = true,
+			requestGeneration = state.requestGeneration + 1,
+		)
+
+		is Intent.QueryChanged -> state.copy(
+			query = intent.query,
+			isLoading = true,
+			error = null,
+			// Every query change is a new load. Without this, a response for "Fury" could land
+			// after the user cleared it and repopulate a grid they had just emptied.
+			requestGeneration = state.requestGeneration + 1,
+		)
+
+		Intent.ClearFilters -> state.copy(
+			query = CardQuery(sortBy = state.query.sortBy, sortDirection = state.query.sortDirection),
+			isLoading = true,
+			error = null,
+			requestGeneration = state.requestGeneration + 1,
+		)
+
+		is Intent.FilterSheetToggled -> state.copy(isFilterSheetOpen = intent.isOpen)
+
+		// Closing keeps the query. Losing a search because the field was dismissed would be a
+		// nasty surprise, and the text stays visible either way as a removable chip.
+		is Intent.SearchToggled -> state.copy(isSearchOpen = intent.isOpen)
+
+		is Intent.ScrollPositionChanged -> state.copy(firstVisibleIndex = intent.index)
+
+		is Intent.Loaded -> {
+			// The guard. Anything from a superseded generation is discarded outright.
+			if (intent.generation != state.requestGeneration) {
+				state
+			} else {
+				state.copy(
+					cards = intent.cards,
+					isCompleteSet = intent.isCompleteSet,
+					cachedCardCount = intent.cachedCardCount,
+					knownSetSize = intent.knownSetSize ?: state.knownSetSize,
+					origin = intent.origin,
+					isStale = intent.isStale,
+					error = intent.error,
+					isLoading = !intent.isFinal,
+					// The switch has landed, and it stuck: nothing to fall back to any more.
+					isChangingLanguage = if (intent.isFinal) false else state.isChangingLanguage,
+					previousLanguage = if (intent.isFinal) null else state.previousLanguage,
+				)
+			}
+		}
+
+		is Intent.LoadFinished ->
+			if (intent.generation == state.requestGeneration) state.copy(isLoading = false) else state
+
+		is Intent.FacetsComputed -> state.copy(facets = intent.facets, isLoadingFacets = false)
+
+		is Intent.FacetsLoading -> state.copy(isLoadingFacets = intent.isLoading)
+
+		is Intent.SearchCoverage -> state.copy(
+			searchedSetCount = intent.searched,
+			knownSetCount = intent.known,
+			isTruncated = intent.isTruncated,
+		)
+
+		is Intent.CapabilitiesResolved -> state.copy(
+			supportedFilters = intent.supportedFilters,
+			game = intent.game,
+			availableLanguages = intent.languages,
+			// Only seeded, never overwritten: a resolve that lands after the user has already
+			// chosen must not undo their choice.
+			language = state.language ?: intent.language,
+			confirmedLanguages = state.confirmedLanguages + intent.confirmed,
+			// Same rule, and for the same reason: once the user has picked a language, the notice
+			// about the one they were given instead is no longer about what is on screen.
+			languageSubstitutedFor = if (state.language == null) intent.substitutedFor else null,
+			languageSubstitution = if (state.language == null) intent.substitution else null,
+		)
+
+		// The menu was opened. It shows what is known plus "checking", never the claim.
+		is Intent.LanguageOptionsRequested ->
+			state.copy(isConfirmingLanguages = true, languageCheckFailed = false)
+
+		// Narrowing only. A confirmation that arrives after the user has already picked must not
+		// widen the menu back to the claim, and an empty answer is a failed probe rather than a
+		// set with no languages -- see `CardProvider.confirmLanguages`.
+		is Intent.LanguageOptionsResolved -> if (intent.languages.isEmpty()) {
+			// An empty answer is a probe that failed, not a set with no languages. The menu says
+			// which of those it is rather than silently showing a short list.
+			state.copy(isConfirmingLanguages = false, languageCheckFailed = true)
+		} else {
+			state.copy(
+				availableLanguages = intent.languages,
+				confirmedLanguages = intent.languages,
+				isConfirmingLanguages = false,
+				languageCheckFailed = false,
+			)
+		}
+
+		// The cards on screen are kept while the new edition loads. Blanking the grid to a spinner
+		// makes a switch that turns out to be impossible look like one that destroyed the set.
+		is Intent.LanguageSelected -> if (intent.language == state.language) {
+			state
+		} else {
+			state.copy(
+				language = intent.language,
+				previousLanguage = state.language,
+				isChangingLanguage = true,
+				isLoading = true,
+				error = null,
+				requestGeneration = state.requestGeneration + 1,
+				// The notice offered this, and it has been taken. Whatever happens next -- the
+				// fetch works, or the set has no such edition and `LanguageUnavailable` puts the
+				// old one back -- "you were given a stand-in" is no longer the state of things.
+				languageSubstitutedFor = null,
+				languageSubstitution = null,
+			)
+		}
+
+		Intent.LanguageUnavailable -> state.copy(
+			language = state.previousLanguage ?: state.language,
+			previousLanguage = null,
+			isChangingLanguage = false,
+			isLoading = false,
+			// Asked for and not there: the strongest evidence available, so the menu stops
+			// offering it rather than waiting for a confirmation to say the same thing later.
+			confirmedLanguages = state.confirmedLanguages - setOfNotNull(state.language),
+		)
+	}
+
+	/**
+	 * Sort options offered in the UI, paired with what to show for them.
+	 *
+	 * A function of the game rather than a constant, because the cost axis is not called the same
+	 * thing twice: it is Energy in Riftbound, Mana value in Magic, Cost in One Piece and Level in
+	 * Yu-Gi-Oh. A game with no single cost number -- Pokémon -- does not get the option at all,
+	 * rather than getting one that sorts every card equally.
+	 */
+	fun sortOptions(game: GameProfile?): List<Pair<CardSortField, String>> = buildList {
+		add(CardSortField.COLLECTOR_NUMBER to "Collector number")
+		add(CardSortField.NAME to "Name")
+		add(CardSortField.RARITY to "Rarity")
+		game?.vocabulary?.cost?.let { add(CardSortField.COST to it) }
+	}
+
+	/** Human wording for a treatment chip. */
+	fun treatmentLabel(treatment: ArtworkTreatment): String = treatment.displayName
+
+	/** Flips a value in or out of a set, which is what every filter chip does. */
+	fun <T> Set<T>.toggle(value: T): Set<T> = if (value in this) this - value else this + value
+}

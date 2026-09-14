@@ -16,7 +16,7 @@ kotlin {
 	jvm("desktop")
 
 	android {
-		namespace = "com.bitsycore.toploader.core"
+		namespace = "com.bitsycore.tcgexplorer.core"
 		compileSdk = libs.versions.androidCompileSdk.get().toInt()
 		minSdk = libs.versions.androidMinSdk.get().toInt()
 		// commonTest is pure Kotlin with no device in it; without this the android target ignores

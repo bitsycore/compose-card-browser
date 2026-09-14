@@ -1,0 +1,161 @@
+package com.bitsycore.tcgexplorer.ui.screen.games
+
+import com.bitsycore.tcgexplorer.core.game.GameOrder
+import com.bitsycore.tcgexplorer.core.game.GameProfile
+import com.bitsycore.lib.pulse.container.ContainerContract
+
+/**
+ * The game picker's state and the pure transitions over it.
+ *
+ * Small, because the screen is: which games this build serves, which one was last opened, one line
+ * per game saying where its data comes from, and the user's own order and hidden list over the top.
+ *
+ * The ordering itself is not done here. [GameOrder] holds the rules -- what a partial order means,
+ * what a stale id means, whether one more game may be hidden -- so this reducer only has to keep
+ * `allGames`, `order` and `hiddenIds` and derive the two visible lists from them. Putting the rules
+ * in core is what lets them be tested without a view model.
+ */
+object GameListContract :
+	ContainerContract<GameListContract.UiState, GameListContract.Intent, GameListContract.Effect>() {
+
+	/**
+	 * @property allGames every game with a routed provider, in registry order and including hidden
+	 *   ones. Never `Game.entries` -- a game the app cannot actually serve must not be offered,
+	 *   which is why this comes from the registry. Kept whole so ordering stays derivable
+	 * @property order the user's order, as `GameId` values. Empty means the registry's own
+	 * @property hiddenIds games the user has hidden, as `GameId` values
+	 * @property sources one line per game naming the provider behind it, so the attribution the
+	 *   sources ask for is visible before a single request is made
+	 * @property isEditing whether the reorder and hide controls are showing. Not persisted: it is a
+	 *   mode you are in, not a setting you have
+	 */
+	data class UiState(
+		val allGames: List<GameProfile> = emptyList(),
+		val order: List<String> = emptyList(),
+		val hiddenIds: Set<String> = emptySet(),
+		val sources: Map<GameProfile, String> = emptyMap(),
+		val isEditing: Boolean = false,
+		val isLoading: Boolean = true,
+	) {
+
+		/** What the picker lists: the user's order, minus anything hidden. */
+		val games: List<GameProfile> get() = GameOrder.visible(allGames, order, hiddenIds)
+
+		/** The hidden games, shown only while editing so they can be brought back. */
+		val hiddenGames: List<GameProfile> get() = GameOrder.hidden(allGames, order, hiddenIds)
+
+		/** False when only one game is left visible; the hide control is disabled rather than failing. */
+		val canHideMore: Boolean get() = GameOrder.canHide(allGames, hiddenIds)
+
+		/** True when the user has customised anything, which is what "Reset" is offered for. */
+		val isCustomised: Boolean get() = order.isNotEmpty() || hiddenIds.isNotEmpty()
+	}
+
+	sealed interface Intent {
+
+		/**
+		 * The order and the hidden list changed somewhere other than this screen.
+		 *
+		 * Separate from [Loaded] on purpose: that one also clears `isLoading` and replaces the
+		 * game list, neither of which a preference write has anything to say about. Re-sending it
+		 * for every change would have this screen reload itself every time the user opened a game.
+		 */
+		data class CustomisationChanged(
+			val order: List<String>,
+			val hiddenIds: Set<String>,
+		) : Intent
+
+		data class Loaded(
+			val games: List<GameProfile>,
+			val sources: Map<GameProfile, String>,
+			val order: List<String>,
+			val hiddenIds: Set<String>,
+		) : Intent
+
+		/** A game was chosen; remembered for next launch. */
+		data class GameOpened(val game: GameProfile) : Intent
+
+		/** The reorder and hide controls were shown or dismissed. */
+		data object EditingToggled : Intent
+
+		/**
+		 * A game was dragged to [toVisibleIndex] of the visible list.
+		 *
+		 * Indexed against what is on screen rather than the stored order, because that is what the
+		 * finger is over. Past either end it clamps rather than wrapping.
+		 */
+		data class GameMovedTo(val game: GameProfile, val toVisibleIndex: Int) : Intent
+
+		/** A game was hidden or brought back. Refused for the last visible game. */
+		data class GameVisibilityToggled(val game: GameProfile) : Intent
+
+		/** Order and hidden list both cleared, back to what the routing table says. */
+		data object CustomisationReset : Intent
+
+		/** The bar menu. Three destinations, three intents, so the body only ever dispatches. */
+		data object SettingsRequested : Intent
+
+		data object StorageRequested : Intent
+
+		data object DownloadsRequested : Intent
+	}
+
+	/**
+	 * Navigation, emitted by the container rather than handed to the layout.
+	 *
+	 * A `Content` takes a state and a dispatch. Opening a game is already an intent -- it has to be,
+	 * because it is also what remembers the last game -- so having the *navigation* half of the same
+	 * tap arrive by a separate lambda meant one interaction split across two mechanisms.
+	 */
+	sealed interface Effect {
+
+		data class OpenGame(val game: GameProfile) : Effect
+
+		data object OpenSettings : Effect
+
+		data object OpenStorage : Effect
+
+		data object OpenDownloads : Effect
+	}
+
+	override fun reduce(state: UiState, intent: Intent): UiState = when (intent) {
+
+		is Intent.Loaded -> state.copy(
+			allGames = intent.games,
+			sources = intent.sources,
+			order = intent.order,
+			hiddenIds = intent.hiddenIds,
+			isLoading = false,
+		)
+
+		is Intent.CustomisationChanged -> state.copy(
+			order = intent.order,
+			hiddenIds = intent.hiddenIds,
+		)
+
+		// The game is remembered as a preference, by the view model. Nothing on this screen is
+		// drawn from it -- see `GameRow`.
+		is Intent.GameOpened -> state
+
+		is Intent.EditingToggled -> state.copy(isEditing = !state.isEditing)
+
+		is Intent.GameMovedTo -> state.copy(
+			order = GameOrder.movedTo(
+				games = state.allGames,
+				order = state.order,
+				hiddenIds = state.hiddenIds,
+				game = intent.game,
+				toVisibleIndex = intent.toVisibleIndex,
+			),
+		)
+
+		is Intent.GameVisibilityToggled -> state.copy(
+			hiddenIds = GameOrder.withVisibilityToggled(state.allGames, state.hiddenIds, intent.game),
+		)
+
+		is Intent.CustomisationReset -> state.copy(order = emptyList(), hiddenIds = emptySet())
+
+		// Navigation changes no state. The view model turns these into effects.
+		Intent.SettingsRequested, Intent.StorageRequested, Intent.DownloadsRequested -> state
+	}
+}

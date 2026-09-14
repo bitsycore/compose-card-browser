@@ -122,15 +122,20 @@ There are no `TODO`, `FIXME` or `HACK` markers anywhere in the source. *(verifie
 
 ## Naming
 
-- [x] **Decide the app's name.** *(2026-09-13)* **Toploader — The TCG Browser**, and
-  `com.bitsycore.toploader`. A toploader is the rigid holder a card worth keeping goes into, which
-  every collector reads instantly.
+- [x] **Decide the app's name.** *(settled 2026-09-14)* **TCG Explorer**, and
+  `com.bitsycore.tcgexplorer`.
 
-  Checked and rejected along the way: *TCG Browser* is free on both stores but collides with a
-  dormant WoW TCG site and is unsearchable and unownable; *Cardshelf*, *Cardstock*, *Near Mint*,
-  *Riffle* and *Codex* are all taken. The lesson worth keeping: **anything starting with "Card" is
-  gone** — that namespace is saturated.
+  It was *Toploader* for a day. That name is taken on the App Store, which is the one kind of
+  collision there is no arguing with — so the whole rename ran a second time.
 
-  The Kotlin packages are `com.bitsycore.toploader.*` as of the same day: 2013 references across
-  261 files, 238 directories moved with `git mv` so the history follows a file rather than
-  stopping at it.
+  Checked and rejected along the way: *Cardshelf*, *Cardstock*, *Near Mint*, *Riffle*, *Codex* and
+  *Toploader* are taken; *TCG Browser* is free on both stores but collides with a dormant WoW TCG
+  site and is unsearchable and unownable. Two lessons worth keeping: **anything starting with
+  "Card" is gone**, and **check the App Store, not just the web** — Toploader survived a web search
+  and did not survive Apple.
+
+  A note for whoever renames this next: display strings take the space ("TCG Explorer"), everything
+  that is also a path does not (`TCGExplorer` for the Gradle root, the jpackage name, the Xcode
+  target, product and scheme). In a `.pbxproj`, a value with a space has to be quoted --
+  `INFOPLIST_KEY_CFBundleDisplayName = "TCG Explorer";` -- and that is the only one that has one.
+

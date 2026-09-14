@@ -2,10 +2,10 @@
 <resources>
 
 	<!--
-	A bare splash theme. The app's real colours are Compose's, set in ToploaderTheme; this exists
+	A bare splash theme. The app's real colours are Compose's, set in TcgExplorerTheme; this exists
 	only so the window between launch and the first frame is not the platform default.
 	-->
-	<style name="Theme.Toploader" parent="android:Theme.Material.NoActionBar">
+	<style name="Theme.TcgExplorer" parent="android:Theme.Material.NoActionBar">
 		<item name="android:statusBarColor">@android:color/transparent</item>
 		<item name="android:navigationBarColor">@android:color/transparent</item>
 		<item name="android:windowBackground">@android:color/background_light</item>

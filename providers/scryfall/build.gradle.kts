@@ -12,7 +12,7 @@ kotlin {
 	jvm("desktop")
 
 	android {
-		namespace = "com.bitsycore.toploader.providers.scryfall"
+		namespace = "com.bitsycore.tcgexplorer.providers.scryfall"
 		compileSdk = libs.versions.androidCompileSdk.get().toInt()
 		minSdk = libs.versions.androidMinSdk.get().toInt()
 		withHostTest {}

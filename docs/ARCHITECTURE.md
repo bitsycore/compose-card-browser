@@ -1,6 +1,6 @@
 # Architecture
 
-How Toploader is put together. The provider and game contracts have their own documents —
+How TCG Explorer is put together. The provider and game contracts have their own documents —
 [PROVIDERS.md](PROVIDERS.md) and [GAMES.md](GAMES.md) — and this one covers everything around them:
 the modules, how data flows from a source to a screen, what is cached where, and the pattern every
 screen follows.

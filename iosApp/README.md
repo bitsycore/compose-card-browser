@@ -1,8 +1,8 @@
 # iOS shell
 
-Three files, and none of them contain any of the app. Everything Toploader does lives in
+Three files, and none of them contain any of the app. Everything TCG Explorer does lives in
 `:composeApp` and crosses into Swift as a single `UIViewController` from
-[`MainViewController.kt`](../composeApp/src/iosMain/kotlin/com/bitsycore/toploader/MainViewController.kt).
+[`MainViewController.kt`](../composeApp/src/iosMain/kotlin/com/bitsycore/tcgexplorer/MainViewController.kt).
 
 - `iosApp/iOSApp.swift` — the `@main` entry point. Starts Koin, shows `ContentView`.
 - `iosApp/ContentView.swift` — wraps the Compose view controller for SwiftUI.
@@ -16,8 +16,8 @@ can be run, and an unverified `project.pbxproj` would have looked finished and f
 
 What is confirmed:
 
-- **The simulator build links.** `xcodebuild -project iosApp/iosApp.xcodeproj -scheme Toploader
-  -sdk iphonesimulator -configuration Debug build` succeeded and produced `Toploader.app`. This is
+- **The simulator build links.** `xcodebuild -project iosApp/iosApp.xcodeproj -scheme TCG Explorer
+  -sdk iphonesimulator -configuration Debug build` succeeded and produced `TCG Explorer.app`. This is
   the first time the iOS target has linked at all.
 - **A device build installs and launches.** The app got as far as Compose's composition and Koin's
   graph on a physical iPhone, and threw there twice. Both are fixed below.
@@ -40,7 +40,7 @@ What is not:
   ```
 
   The empty name in the message is the tell. The fix is `PRODUCT_NAME` in both target
-  configurations, and `Toploader.app` for the product reference and the scheme's two
+  configurations, and `TCG Explorer.app` for the product reference and the scheme's two
   `BuildableName` entries.
 - **`OTHER_LDFLAGS` carried `-framework "MapLibre"`.** This app has no map.
 - **`DEVELOPMENT_ASSET_PATHS` named a `Preview Content` folder** that does not exist here.

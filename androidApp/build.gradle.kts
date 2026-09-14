@@ -10,11 +10,11 @@ plugins {
 // Kotlin Multiplatform plugin. Kotlin here is compiled by the Android plugin itself, which is why
 // no Kotlin plugin is applied alongside it.
 android {
-	namespace = "com.bitsycore.toploader.android"
+	namespace = "com.bitsycore.tcgexplorer.android"
 	compileSdk = libs.versions.androidCompileSdk.get().toInt()
 
 	defaultConfig {
-		applicationId = "com.bitsycore.toploader"
+		applicationId = "com.bitsycore.tcgexplorer"
 		minSdk = libs.versions.androidMinSdk.get().toInt()
 		targetSdk = libs.versions.androidTargetSdk.get().toInt()
 		versionCode = libs.versions.appCode.get().toInt()

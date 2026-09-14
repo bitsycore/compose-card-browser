@@ -6,7 +6,7 @@ plugins {
 	alias(libs.plugins.kotlinSerialization)
 	// SQLite and the resource archive for the experimental native desktop target. Does nothing
 	// unless the `nativeDesktop` flag is on.
-	id("toploader.native-desktop")
+	id("tcgexplorer.native-desktop")
 }
 
 val nativeDesktop = providers.gradleProperty("nativeDesktop").map(String::toBoolean).getOrElse(false)
@@ -20,11 +20,11 @@ val vGenerateAppBuild = tasks.register("generateAppBuild") {
 	inputs.property("version", vVersion)
 	outputs.dir(vOut)
 	doLast {
-		val vFile = vOut.get().asFile.resolve("com/bitsycore/toploader/AppBuild.kt")
+		val vFile = vOut.get().asFile.resolve("com/bitsycore/tcgexplorer/AppBuild.kt")
 		vFile.parentFile.mkdirs()
 		vFile.writeText(
 			"""
-			package com.bitsycore.toploader
+			package com.bitsycore.tcgexplorer
 
 			/** Generated from `libs.versions.toml`. Do not edit; change the catalogue instead. */
 			object AppBuild {
@@ -49,7 +49,7 @@ kotlin {
 	jvm("desktop")
 
 	android {
-		namespace = "com.bitsycore.toploader"
+		namespace = "com.bitsycore.tcgexplorer"
 		compileSdk = libs.versions.androidCompileSdk.get().toInt()
 		minSdk = libs.versions.androidMinSdk.get().toInt()
 		androidResources { enable = true }
@@ -212,7 +212,7 @@ kotlin {
 }
 
 compose.resources {
-	packageOfResClass = "com.bitsycore.toploader.resources"
+	packageOfResClass = "com.bitsycore.tcgexplorer.resources"
 }
 
 compose.desktop {
@@ -223,7 +223,7 @@ compose.desktop {
 		(this as ExtensionAware).extensions.configure(
 			com.bitsycore.compose.sdl.gradle.ComposeDesktopNativeExtension::class.java,
 		) {
-			entryPoint = "com.bitsycore.toploader.main"
+			entryPoint = "com.bitsycore.tcgexplorer.main"
 			// The same PNGs the JVM distribution uses. `exeIcon` takes the sizes and builds the
 			// `.ico` itself; this icon has no dark variant, hence the same files twice.
 			icon {
@@ -239,12 +239,12 @@ compose.desktop {
 	}
 
 	application {
-		mainClass = "com.bitsycore.toploader.MainKt"
+		mainClass = "com.bitsycore.tcgexplorer.MainKt"
 		// Skia loads native code; the flag keeps JDK 24+ from warning about it on every start.
 		jvmArgs += "--enable-native-access=ALL-UNNAMED"
 
 		nativeDistributions {
-			packageName = "Toploader"
+			packageName = "TCGExplorer"
 			packageVersion = "1.0.0"
 			description = "Browse trading card game sets"
 			// Desktop distribution is later work; an app image is enough to run one locally and

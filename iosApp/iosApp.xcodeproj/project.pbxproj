@@ -7,16 +7,16 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		A2EE6660564CD05DB9B8D622 /* Toploader.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Toploader.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2EE6660564CD05DB9B8D622 /* TCGExplorer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TCGExplorer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		458FC078BCEE8DA73761E755 /* Exceptions for "iosApp" folder in "Toploader" target */ = {
+		458FC078BCEE8DA73761E755 /* Exceptions for "iosApp" folder in "TCGExplorer" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 73A9EE9DC7F4E42557AF3BE3 /* Toploader */;
+			target = 73A9EE9DC7F4E42557AF3BE3 /* TCGExplorer */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -24,7 +24,7 @@
 		706916981E81632DEEF58499 /* iosApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				458FC078BCEE8DA73761E755 /* Exceptions for "iosApp" folder in "Toploader" target */,
+				458FC078BCEE8DA73761E755 /* Exceptions for "iosApp" folder in "TCGExplorer" target */,
 			);
 			path = iosApp;
 			sourceTree = "<group>";
@@ -45,7 +45,7 @@
 		05F8443FDADD06A21D40B68B /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A2EE6660564CD05DB9B8D622 /* Toploader.app */,
+				A2EE6660564CD05DB9B8D622 /* TCGExplorer.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -61,9 +61,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		73A9EE9DC7F4E42557AF3BE3 /* Toploader */ = {
+		73A9EE9DC7F4E42557AF3BE3 /* TCGExplorer */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = D6B8DA540D849B211214394B /* Build configuration list for PBXNativeTarget "Toploader" */;
+			buildConfigurationList = D6B8DA540D849B211214394B /* Build configuration list for PBXNativeTarget "TCGExplorer" */;
 			buildPhases = (
 				F58D53881BA6266771D1FAD9 /* Compile Kotlin framework */,
 				13D5716D1581690067778171 /* Sources */,
@@ -77,11 +77,11 @@
 			fileSystemSynchronizedGroups = (
 				706916981E81632DEEF58499 /* iosApp */,
 			);
-			name = Toploader;
+			name = TCGExplorer;
 			packageProductDependencies = (
 			);
 			productName = iosApp;
-			productReference = A2EE6660564CD05DB9B8D622 /* Toploader.app */;
+			productReference = A2EE6660564CD05DB9B8D622 /* TCGExplorer.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -113,7 +113,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				73A9EE9DC7F4E42557AF3BE3 /* Toploader */,
+				73A9EE9DC7F4E42557AF3BE3 /* TCGExplorer */,
 			);
 		};
 /* End PBXProject section */
@@ -178,7 +178,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iosApp/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Toploader;
+				INFOPLIST_KEY_CFBundleDisplayName = "TCG Explorer";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -197,7 +197,7 @@
 					"-framework",
 					"\"ComposeApp\"",
 				);
-				PRODUCT_NAME = Toploader;
+				PRODUCT_NAME = TCGExplorer;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -261,7 +261,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.bitsycore.toploader;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bitsycore.tcgexplorer;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -286,7 +286,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iosApp/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Toploader;
+				INFOPLIST_KEY_CFBundleDisplayName = "TCG Explorer";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -305,7 +305,7 @@
 					"-framework",
 					"\"ComposeApp\"",
 				);
-				PRODUCT_NAME = Toploader;
+				PRODUCT_NAME = TCGExplorer;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -376,7 +376,7 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.bitsycore.toploader;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bitsycore.tcgexplorer;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
@@ -396,7 +396,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		D6B8DA540D849B211214394B /* Build configuration list for PBXNativeTarget "Toploader" */ = {
+		D6B8DA540D849B211214394B /* Build configuration list for PBXNativeTarget "TCGExplorer" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				6AF21DD33751364BFDB8CB10 /* Debug */,

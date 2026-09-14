@@ -87,7 +87,7 @@ def get(path, locale, **params):
 	vRequest = urllib.request.Request(vUrl, headers={
 		"x-lang": locale,
 		"Accept": "application/json",
-		"User-Agent": "toploader-scraper (github.com/bitsycore)",
+		"User-Agent": "tcgexplorer-scraper (github.com/bitsycore)",
 	})
 	with urllib.request.urlopen(vRequest, timeout=30) as vResponse:
 		vBody = json.loads(vResponse.read().decode("utf-8"))

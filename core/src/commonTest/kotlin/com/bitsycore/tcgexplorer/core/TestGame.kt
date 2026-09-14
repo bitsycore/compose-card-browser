@@ -1,0 +1,81 @@
+package com.bitsycore.tcgexplorer.core
+
+import com.bitsycore.tcgexplorer.core.game.GameProfile
+import com.bitsycore.tcgexplorer.core.game.GameVocabulary
+import com.bitsycore.tcgexplorer.core.model.GameId
+
+/**
+ * A game invented for these tests.
+ *
+ * Core's tests deliberately do **not** use a real `:games:*` module. Core sits below those, so
+ * depending on one would invert the layering -- and a test that only passes because `RiftboundGame`
+ * happens to declare the right ladder would not be testing core's mechanisms at all. Its values
+ * mirror Riftbound's because that is what the fixtures in `TestCards` describe.
+ */
+object TestGame : GameProfile {
+
+	override val id: GameId = GameId("test-game")
+
+	override val displayName: String = "Test Game"
+
+	override val shortName: String = "Test"
+
+	override val vocabulary: GameVocabulary = GameVocabulary(
+		domain = "Domain",
+		cost = "Energy",
+		primaryStat = "Might",
+		secondaryStat = "Power",
+	)
+
+	override val rarityLadder: List<String> =
+		listOf("Common", "Uncommon", "Rare", "Epic", "Showcase")
+
+	override val cardmarketSlug: String = "Riftbound"
+
+	/** Riftbound's real category id, so the search the tests assert on is the one users get. */
+	override val cardmarketCategoryId: Int = 1655
+}
+
+/** A game that states no Cardmarket segment, which must suppress the link entirely. */
+object TestGameWithoutMarketplace : GameProfile {
+
+	override val id: GameId = GameId("test-game-no-market")
+
+	override val displayName: String = "Unlisted Game"
+
+	override val vocabulary: GameVocabulary = GameVocabulary()
+
+	override val cardmarketSlug: String? = null
+}
+
+/**
+ * A game with a Cardmarket section but no category id.
+ *
+ * Magic and Yu-Gi-Oh are both in this state, and for different reasons: Magic's own search URL
+ * carries no category at all, Yu-Gi-Oh's sends `0`, which means any. Either way the search is still
+ * built -- it is a *wrong* id, not a missing one, that returns nothing.
+ */
+object TestGameWithoutCategory : GameProfile {
+
+	override val id: GameId = GameId("test-game-no-category")
+
+	override val displayName: String = "Uncategorised Game"
+
+	override val vocabulary: GameVocabulary = GameVocabulary()
+
+	override val cardmarketSlug: String = "Uncategorised"
+}
+
+/** A game that puts the printed code in the Cardmarket search box, the way One Piece does. */
+object TestGameSearchingByCode : GameProfile {
+
+	override val id: GameId = GameId("test-game-code-search")
+
+	override val displayName: String = "Coded Game"
+
+	override val vocabulary: GameVocabulary = GameVocabulary()
+
+	override val cardmarketSlug: String = "Coded"
+
+	override val cardmarketSearchIncludesCode: Boolean = true
+}

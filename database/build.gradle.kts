@@ -21,7 +21,7 @@ kotlin {
 	jvm("desktop")
 
 	android {
-		namespace = "com.bitsycore.toploader.database"
+		namespace = "com.bitsycore.tcgexplorer.database"
 		compileSdk = libs.versions.androidCompileSdk.get().toInt()
 		minSdk = libs.versions.androidMinSdk.get().toInt()
 		withHostTest {}
@@ -87,7 +87,7 @@ kotlin {
 sqldelight {
 	databases {
 		create("CardDatabase") {
-			packageName.set("com.bitsycore.toploader.sqlstore.db")
+			packageName.set("com.bitsycore.tcgexplorer.sqlstore.db")
 		}
 	}
 }
