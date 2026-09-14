@@ -16,11 +16,15 @@ xcuserdata/
 *.xcuserdatad/
 .DS_Store
 
-# Signing keys, never commit. This project signs debug builds with AGP's own
-# per-machine debug keystore and has no release signing config, so there is no
-# key here that is meant to be shared.
+# Signing keys. The publishing key never goes in here.
+#
+# `androidApp/debug.keystore` is the exception and is committed on purpose: it is AGP's own debug
+# credentials, and sharing it is what lets a build from one computer install over a build from
+# another instead of demanding an uninstall. It signs debug and local release builds. The store
+# artifact is signed with `publish.jks`, which stays out.
 *.jks
 *.keystore
+!androidApp/debug.keystore
 
 # Scratch space for provider research: captured API responses and device
 # screenshots. Evidence for one afternoon, not for the repository.

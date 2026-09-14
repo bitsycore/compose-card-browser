@@ -77,6 +77,11 @@ Requires JDK 21 and the Android SDK. On Windows, `local.properties` needs forwar
 ./gradlew desktopTest              # the test suite
 ```
 
+Android builds are signed with `androidApp/debug.keystore`, which is committed. That is deliberate:
+AGP's own debug keystore is generated per machine, so a build from a second computer would not
+install over one from the first. It is AGP's own debug credentials and is not a secret. The store
+artifact is signed separately and that key is not in this repository.
+
 iOS links and launches as of 2026-09-14, and has not yet reached a screen — see
 [iosApp/README.md](iosApp/README.md). An experimental Kotlin/Native desktop target exists and is off
 by default: [docs/NATIVE_DESKTOP.md](docs/NATIVE_DESKTOP.md).
