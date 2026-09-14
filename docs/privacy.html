@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — TCG Explorer</title>
+<!--
+	Deliberately self-contained: no web fonts, no analytics, no CDN, nothing to fetch. A privacy
+	page that loads a third-party script to render itself is answering its own question badly.
+-->
+<style>
+	:root {
+		color-scheme: light dark;
+		--bg: #ffffff;
+		--fg: #1a1a1e;
+		--muted: #5a5a66;
+		--rule: #e3e3e8;
+		--accent: #5b4bd6;
+		--card: #f7f7fa;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root {
+			--bg: #131316;
+			--fg: #ececf0;
+			--muted: #a0a0ad;
+			--rule: #2a2a31;
+			--accent: #b3a5ff;
+			--card: #1b1b20;
+		}
+	}
+	* { box-sizing: border-box; }
+	body {
+		margin: 0 auto;
+		padding: 2.5rem 1.25rem 5rem;
+		max-width: 46rem;
+		background: var(--bg);
+		color: var(--fg);
+		font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+	}
+	h1 { font-size: 1.9rem; margin: 0 0 .25rem; letter-spacing: -.01em; }
+	h2 { font-size: 1.2rem; margin: 2.5rem 0 .6rem; letter-spacing: -.005em; }
+	.sub { color: var(--muted); margin: 0 0 2rem; }
+	hr { border: 0; border-top: 1px solid var(--rule); margin: 2.5rem 0 0; }
+	a { color: var(--accent); }
+	ul { padding-left: 1.2rem; }
+	li { margin: .35rem 0; }
+	.lead {
+		background: var(--card);
+		border: 1px solid var(--rule);
+		border-radius: .6rem;
+		padding: 1rem 1.15rem;
+		margin: 1.5rem 0;
+	}
+	.lead p { margin: .4rem 0; }
+	table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .93rem; }
+	th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+	th { color: var(--muted); font-weight: 600; }
+	code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em; }
+	footer { color: var(--muted); font-size: .9rem; margin-top: 2rem; }
+</style>
+</head>
+<body>
+
+<h1>Privacy Policy</h1>
+<p class="sub">TCG Explorer · last updated 14 September 2026</p>
+
+<div class="lead">
+	<p><strong>TCG Explorer does not collect, store or transmit any personal information.</strong></p>
+	<p>There are no accounts, no analytics, no advertising, no tracking and no crash reporting. The
+	app has no server of its own, so there is nowhere for your data to be sent.</p>
+</div>
+
+<h2>What the app stores, and where</h2>
+
+<p>Everything the app keeps is stored on your own device and never leaves it:</p>
+
+<ul>
+	<li><strong>Card data</strong> — the sets and cards you browse or download, in a local database.</li>
+	<li><strong>Card images</strong> — in a local image cache.</li>
+	<li><strong>Your settings</strong> — chosen games, card language, favourite sets, theme and
+	storage limits.</li>
+</ul>
+
+<p>None of this is transmitted anywhere. You can delete any of it at any time from the app's
+<em>Storage</em> screen, and all of it by uninstalling the app.</p>
+
+<h2>Requests the app makes</h2>
+
+<p>TCG Explorer has no backend. To show you cards, it requests them directly from each game's public
+card database, and requests card images from those databases' image servers.</p>
+
+<p>These are independent third parties. Like any website you visit, they necessarily receive your
+<strong>IP address</strong>, the request itself (for example, which set you opened) and the app's
+user agent string, which is <code>TCGExplorer/1.0</code>. They do not receive your name, your
+device's identifiers, or anything else about you, because the app does not have or send any of it.</p>
+
+<table>
+	<tr><th>Game</th><th>Source contacted</th></tr>
+	<tr><td>Riftbound</td><td>api.riftcodex.com, cmsassets.rgpub.io</td></tr>
+	<tr><td>Pokémon</td><td>api.tcgdex.net, assets.tcgdex.net</td></tr>
+	<tr><td>Magic: The Gathering</td><td>api.scryfall.com, cards.scryfall.io, svgs.scryfall.io</td></tr>
+	<tr><td>One Piece Card Game</td><td>optcgapi.com</td></tr>
+	<tr><td>Altered</td><td>cdn.jsdelivr.net, raw.githubusercontent.com</td></tr>
+	<tr><td>Yu-Gi-Oh!</td><td>db.ygoprodeck.com, images.ygoprodeck.com</td></tr>
+	<tr><td>Disney Lorcana, Cyberpunk TCG, World of Warcraft TCG</td><td>tcgcsv.com, tcgplayer-cdn.tcgplayer.com</td></tr>
+	<tr><td>Wuthering Waves TCG</td><td>ucp-jp.com (card data for this game ships inside the app)</td></tr>
+</table>
+
+<p>Each of these services has its own privacy policy, which governs what it does with the requests
+it receives. TCG Explorer is not affiliated with any of them.</p>
+
+<h2>Links out of the app</h2>
+
+<p>Some screens offer links to Cardmarket, TCGplayer, a card source's own website, or the project's
+Discord. These open in your browser and only when you tap them. Once you follow one, that site's own
+privacy policy applies.</p>
+
+<h2>Children</h2>
+
+<p>The app is suitable for all ages. It collects no information from anyone, including children, and
+contains no advertising, no social features and no user-generated content.</p>
+
+<h2>Your data, and your rights</h2>
+
+<p>Because no personal data is collected, there is nothing for us to look up, export, correct or
+delete on your behalf, and no data is ever sold or shared. The data on your device is entirely under
+your control: the <em>Storage</em> screen removes any part of it, and uninstalling the app removes
+all of it.</p>
+
+<h2>Changes</h2>
+
+<p>If this policy changes, the date at the top of this page changes with it, and the previous
+versions remain in the project's public source history.</p>
+
+<h2>Contact</h2>
+
+<p>Questions about this policy, or anything else about the app:
+<a href="https://discord.gg/ZG4trQs2cu">discord.gg/ZG4trQs2cu</a>.</p>
+
+<hr>
+<footer>
+	TCG Explorer is an unofficial, unaffiliated project. Card names, text, artwork, set names and
+	game names are the property of their respective publishers.
+</footer>
+
+</body>
+</html>

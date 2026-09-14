@@ -2,6 +2,9 @@
 
 A card browser for ten trading card games, written once and running on Android, iOS and desktop.
 
+[Privacy policy](docs/privacy.html) — nothing is collected; the short version is that the app has
+no server of its own.
+
 **Bugs, suggestions and help: [discord.gg/ZG4trQs2cu](https://discord.gg/ZG4trQs2cu)** — a wrong
 card, a source that has stopped answering, a set that will not download. Say which game and which
 set; that is usually enough to find it.
