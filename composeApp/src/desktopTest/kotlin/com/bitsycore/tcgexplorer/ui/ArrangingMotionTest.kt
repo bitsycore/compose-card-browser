@@ -31,7 +31,7 @@ import kotlin.test.assertTrue
  * still, and read as a "boing" in the hand.
  *
  * What they have in common is a second layout change on the same corner, so that is what this
- * measures: the mark's left edge, frame by frame, through the whole transition. One animation gives
+ * measures: the name's left edge, frame by frame, through the whole transition. One animation gives
  * a monotone slide that stops where it stops. Two give an overshoot, a reversal, or both.
  */
 class ArrangingMotionTest {
@@ -45,17 +45,17 @@ class ArrangingMotionTest {
 		val vScene = scene()
 		try {
 			vScene.settle(frames = 40)
-			vResting = vScene.markLeft()
+			vResting = vScene.nameLeft()
 
 			mEditing = true
 			// Every frame of the transition, not just its ends -- an overshoot is only ever visible
 			// in the middle.
 			repeat(60) {
 				vScene.settle(frames = 1)
-				vEdges += vScene.markLeft()
+				vEdges += vScene.nameLeft()
 			}
 			vScene.settle(frames = 40)
-			vSettled = vScene.markLeft()
+			vSettled = vScene.nameLeft()
 		} finally {
 			vScene.close()
 		}
@@ -83,39 +83,40 @@ class ArrangingMotionTest {
 	// ==================
 
 	/**
-	 * The left edge of the first set's mark, in pixels.
+	 * The left edge of the first set's name, in pixels.
 	 *
-	 * Found by column rather than by coordinate, so it survives the layout above it changing: the
-	 * mark is the only thing on the lower half of the screen with a tall unbroken run of *coloured*
-	 * pixels. Everything else there is grey -- the surface, the card, the drag handle, the type --
-	 * while a set's monogram is tinted from its own code.
+	 * Found by column rather than by coordinate, so it survives the layout above it changing.
 	 *
-	 * It used to look for brightness instead, which worked only because the first row was the last
-	 * opened one and wore a filled primary monogram for it. That highlight is gone, the monogram is
-	 * a 22% tint on the row like every other, and nothing on this half of the screen is bright any
-	 * more. Colour is the property the mark always had.
+	 * ## Why the name, and why brightness
 	 *
-	 * The column returned is a few pixels inside the true edge -- the box has a 10dp radius, so its
-	 * first columns are too short to make [MARK_RUN]. That is constant frame to frame, and this
-	 * test measures movement.
+	 * This used to find the set's monogram by looking for a tall run of *coloured* pixels, which
+	 * worked because the monogram was the only tinted block on the lower half of the screen. There
+	 * is no monogram now: a row without a published symbol draws no tile at all, and the set's
+	 * colour moved to a faint hatch across the whole card -- which is coloured, is the width of the
+	 * row, and does not move, so colour has stopped being able to find anything.
+	 *
+	 * Brightness can. In the dark theme the name is `onSurface` and nothing else on the card comes
+	 * near it: the drag handle and the metadata line are `onSurfaceVariant`, about 30 levels
+	 * darker, the hatch is a 7% tint, and the tab's label is near-black on its own colour. A
+	 * threshold between the two greys finds the name and nothing to the left of it.
+	 *
+	 * The column returned is a pixel or two inside the true edge, because a glyph's first column is
+	 * anti-aliased. That is constant frame to frame, and this test measures movement.
 	 */
 	@OptIn(ExperimentalComposeUiApi::class)
-	private fun ImageComposeScene.markLeft(): Int {
+	private fun ImageComposeScene.nameLeft(): Int {
 		val vPng = render(mNanos).encodeToData()?.bytes ?: error("could not encode")
 		val vImage = ImageIO.read(ByteArrayInputStream(vPng))
 		for (vX in 0 until vImage.width) {
 			var vRun = 0
 			for (vY in vImage.height / 2 until vImage.height) {
 				val vRgb = vImage.getRGB(vX, vY)
-				val vRed = vRgb shr 16 and 0xFF
-				val vGreen = vRgb shr 8 and 0xFF
-				val vBlue = vRgb and 0xFF
-				val vColourfulness = maxOf(vRed, vGreen, vBlue) - minOf(vRed, vGreen, vBlue)
-				vRun = if (vColourfulness >= COLOURED) vRun + 1 else 0
-				if (vRun >= MARK_RUN) return vX
+				val vDarkest = minOf(vRgb shr 16 and 0xFF, vRgb shr 8 and 0xFF, vRgb and 0xFF)
+				vRun = if (vDarkest >= BRIGHT) vRun + 1 else 0
+				if (vRun >= GLYPH_RUN) return vX
 			}
 		}
-		error("no set mark found on screen")
+		error("no set name found on screen")
 	}
 
 	@OptIn(ExperimentalComposeUiApi::class)
@@ -155,13 +156,14 @@ class ArrangingMotionTest {
 	private companion object {
 
 		/**
-		 * How far apart a pixel's channels must be to count as tinted rather than grey.
+		 * How light a pixel must be to be part of the set's name.
 		 *
-		 * The dark theme's own surfaces span about 7; a monogram's 22% tint about 17.
+		 * Between the dark theme's two foregrounds: `onSurface`, which the name uses, sits above
+		 * this, and `onSurfaceVariant`, which the handle and the metadata line use, sits below it.
 		 */
-		const val COLOURED = 12
+		const val BRIGHT = 215
 
-		/** Taller than the drag handle's bars and shorter than a mark. */
-		const val MARK_RUN = 60
+		/** A glyph's stem, not a stray anti-aliased pixel. */
+		const val GLYPH_RUN = 3
 	}
 }

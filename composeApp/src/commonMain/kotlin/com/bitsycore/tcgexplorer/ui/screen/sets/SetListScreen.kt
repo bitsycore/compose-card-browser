@@ -55,19 +55,16 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.CircularWavyProgressIndicator
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.bitsycore.tcgexplorer.data.download.DownloadJob
-import com.bitsycore.tcgexplorer.data.settings.PreferencesStore
 import com.bitsycore.tcgexplorer.data.download.DownloadKind
-import com.bitsycore.tcgexplorer.data.download.DownloadManager
-import com.bitsycore.tcgexplorer.data.download.DownloadRequest
 import com.bitsycore.tcgexplorer.ui.screen.downloads.DownloadKindDialog
 import org.koin.compose.koinInject
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import com.bitsycore.tcgexplorer.games.api.GameArt
 import com.bitsycore.tcgexplorer.ui.art.GameArtRegistry
@@ -80,8 +77,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -101,7 +102,6 @@ import com.bitsycore.tcgexplorer.ui.component.ErrorState
 import com.bitsycore.tcgexplorer.ui.component.LoadingState
 import com.bitsycore.tcgexplorer.ui.component.LanguageMenu
 import com.bitsycore.tcgexplorer.ui.component.NoticeBanner
-import com.bitsycore.tcgexplorer.core.provider.ProviderRegistry
 import com.bitsycore.tcgexplorer.ui.component.sharedSetContainer
 import com.bitsycore.tcgexplorer.ui.preview.PreviewData
 import com.bitsycore.tcgexplorer.ui.preview.PreviewFrame
@@ -110,6 +110,8 @@ import com.bitsycore.lib.pulse.compose.collectEffect
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import com.bitsycore.tcgexplorer.ui.component.AppIcons
+import com.bitsycore.tcgexplorer.ui.component.Coverage
+import com.bitsycore.tcgexplorer.ui.component.CoverageRings
 import com.bitsycore.tcgexplorer.ui.component.AppOverflowMenu
 
 /**
@@ -168,14 +170,13 @@ fun SetListContent(
 	dispatch: (SetListContract.Intent) -> Unit,
 	gameArt: GameArt? = null,
 ) {
-	val vState = state
 
 	// Everything this screen needs now arrives in the state. It used to take the queue, the
 	// preferred language, three capability flags and four callbacks as parameters, all assembled
 	// in the binder above from Koin -- which meant the dialog could only ever be previewed in its
 	// default shape, and the rules that built the jobs sat in a lambda no test could reach.
-	val vDownloads = vState.downloads
-	val vPreferredLanguage = vState.browsingLanguage
+	val vDownloads = state.downloads
+	val vPreferredLanguage = state.browsingLanguage
 
 	// Which set's download dialog is open, and whether the queue is showing. Local because neither
 	// is worth a trip through the state machine: nothing outside this screen cares.
@@ -213,7 +214,7 @@ fun SetListContent(
 					val vLogo = gameArt?.logo
 					if (vLogo == null) {
 						// A game whose module ships no logo, and the state before one loads.
-						Text(vState.game?.shortName.orEmpty())
+						Text(state.game?.shortName.orEmpty())
 					} else {
 						// The mark always sits on a tile, exactly as it does in the picker, and from
 						// the same function so the two cannot drift. This screen used to give one
@@ -237,7 +238,7 @@ fun SetListContent(
 								painter = painterResource(vLogo),
 								// The title *is* the game name, so this carries it for a screen
 								// reader rather than being decorative.
-								contentDescription = vState.game?.displayName,
+								contentDescription = state.game?.displayName,
 								contentScale = ContentScale.Fit,
 								// Bounded both ways. Height is what normally binds, but these are
 								// wordmarks of wildly different aspect -- One Piece is 149 dp wide
@@ -254,11 +255,11 @@ fun SetListContent(
 				actions = {
 					// What every set below will open in, and what a download will fetch. First in
 					// the row because it qualifies the whole list rather than acting on it.
-					if (vState.browsingLanguageOptions.size > 1) {
+					if (state.browsingLanguageOptions.size > 1) {
 						LanguageMenu(
 							options = CardLanguage.PREFERENCE_ORDER
-								.filter { it in vState.browsingLanguageOptions },
-							selected = vState.browsingLanguage,
+								.filter { it in state.browsingLanguageOptions },
+							selected = state.browsingLanguage,
 							// A preference, said plainly, because the menu lists what the *source*
 							// serves and not what each set is published in -- the rows answer that
 							// one, per set, and the grid confirms it when a set is opened.
@@ -270,11 +271,11 @@ fun SetListContent(
 					}
 					// Whatever the list is currently showing, which is the useful scope: with a
 					// region chip or a search active, "all" means all of *those*, not all 988.
-					if (vState.visibleSets.isNotEmpty()) {
+					if (state.visibleSets.isNotEmpty()) {
 						IconButton(onClick = { vPendingAll = true }) {
 							Icon(
 								AppIcons.CloudDownload,
-								contentDescription = "Download all ${vState.visibleSets.size} sets shown",
+								contentDescription = "Download all ${state.visibleSets.size} sets shown",
 							)
 						}
 					}
@@ -295,10 +296,10 @@ fun SetListContent(
 			)
 
 			// Only for a game that really ships more than one line. See `GameProfile.regions`.
-			if (vState.regionOptions.isNotEmpty()) {
+			if (state.regionOptions.isNotEmpty()) {
 				RegionFilter(
-					regions = vState.regionOptions,
-					selected = vState.region,
+					regions = state.regionOptions,
+					selected = state.region,
 					onSelect = { dispatch(SetListContract.Intent.RegionSelected(it)) },
 				)
 			}
@@ -330,13 +331,13 @@ fun SetListContent(
 						.padding(
 							start = 16.dp,
 							end = 16.dp,
-							top = if (vState.regionOptions.isEmpty()) 12.dp else 4.dp,
+							top = if (state.regionOptions.isEmpty()) 12.dp else 4.dp,
 							bottom = 8.dp,
 						),
 					verticalAlignment = Alignment.CenterVertically,
 				) {
 					OutlinedTextField(
-						value = vState.search,
+						value = state.search,
 						onValueChange = { dispatch(SetListContract.Intent.SearchChanged(it)) },
 						// A placeholder, not a label. A floating label reserves 8dp above the
 						// border for itself whether or not it has floated, which is invisible
@@ -351,8 +352,8 @@ fun SetListContent(
 					Spacer(Modifier.size(4.dp))
 					IconButton(onClick = { dispatch(SetListContract.Intent.EditingToggled) }) {
 						Icon(
-							imageVector = if (vState.isEditing) AppIcons.Check else AppIcons.Tune,
-							contentDescription = if (vState.isEditing) {
+							imageVector = if (state.isEditing) AppIcons.Check else AppIcons.Tune,
+							contentDescription = if (state.isEditing) {
 								"Done arranging favourites"
 							} else {
 								"Arrange favourites"
@@ -369,11 +370,11 @@ fun SetListContent(
 
 			// The honesty strip. Shown whenever what is on screen is not a fresh network result.
 			when {
-				vState.error != null && vState.sets.isNotEmpty() -> NoticeBanner(
+				state.error != null && state.sets.isNotEmpty() -> NoticeBanner(
 					text = "Showing saved sets. Refresh failed.",
 					onAction = { dispatch(SetListContract.Intent.Refresh) },
 				)
-				vState.origin == DataOrigin.CACHE && vState.isStale -> NoticeBanner(
+				state.origin == DataOrigin.CACHE && state.isStale -> NoticeBanner(
 					text = "Saved copy, refreshing…",
 					onAction = null,
 				)
@@ -381,17 +382,17 @@ fun SetListContent(
 
 			Box(Modifier.weight(1f)) {
 				when {
-					vState.isInitialLoad -> LoadingState()
+					state.isInitialLoad -> LoadingState()
 
-					vState.sets.isEmpty() && vState.error != null -> ErrorState(
-						error = vState.error,
+					state.sets.isEmpty() && state.error != null -> ErrorState(
+						error = state.error,
 						onRetry = { dispatch(SetListContract.Intent.Refresh) },
 					)
 
-					vState.isEmptySearch -> EmptyState(emptyMessage(vState))
+					state.isEmptySearch -> EmptyState(emptyMessage(state))
 
 					else -> {
-						val vFavourites = vState.favouriteSets
+						val vFavourites = state.favouriteSets
 						val vListState = rememberLazyListState()
 						val vReorder = rememberReorder(vListState)
 						val vFavouriteKeys = vFavourites.map { it.id.qualified }
@@ -403,7 +404,7 @@ fun SetListContent(
 						}
 
 						// The keyboard's cursor, over the two groups as one run of sets.
-						val vSelectable = vFavourites + vState.otherSets
+						val vSelectable = vFavourites + state.otherSets
 						var vSelected by remember { mutableIntStateOf(0) }
 						// See the game picker: no cursor until something navigates.
 						var vCursorVisible by remember { mutableStateOf(false) }
@@ -414,7 +415,7 @@ fun SetListContent(
 						// rows too. This is the one place the two are converted between.
 						val vFavHeading = if (vFavourites.isNotEmpty()) 1 else 0
 						val vAllHeading =
-							if (vFavourites.isNotEmpty() && vState.otherSets.isNotEmpty()) 1 else 0
+							if (vFavourites.isNotEmpty() && state.otherSets.isNotEmpty()) 1 else 0
 						val vRowOf: (Int) -> Int = { vIndex ->
 							if (vIndex < vFavourites.size) {
 								vFavHeading + vIndex
@@ -479,7 +480,7 @@ fun SetListContent(
 										// Only while arranging: outside that mode there are no
 										// handles to be missing, so explaining their absence
 										// answers a question nobody asked.
-										note = if (!vState.isEditing || vState.canReorderFavourites) {
+										note = if (!state.isEditing || state.canReorderFavourites) {
 											null
 										} else if (vFavourites.size > 1) {
 											"Clear the search to reorder"
@@ -494,24 +495,24 @@ fun SetListContent(
 								selectedId = vSelectable.getOrNull(vSelected)
 									?.takeIf { vCursorVisible }?.id?.qualified,
 								sets = vFavourites,
-								state = vState,
+								state = state,
 								dispatch = dispatch,
 								downloads = vDownloads,
 								onDownload = { vPendingSet = it },
-								reorder = vReorder.takeIf { vState.canReorderFavourites },
+								reorder = vReorder.takeIf { state.canReorderFavourites },
 								reorderKeys = vFavouriteKeys,
 								onMove = vOnMove,
 							)
 
-							if (vFavourites.isNotEmpty() && vState.otherSets.isNotEmpty()) {
+							if (vFavourites.isNotEmpty() && state.otherSets.isNotEmpty()) {
 								item(key = "all-sets-heading") { SectionHeading("All sets") }
 							}
 
 							setRows(
 								selectedId = vSelectable.getOrNull(vSelected)
 									?.takeIf { vCursorVisible }?.id?.qualified,
-								sets = vState.otherSets,
-								state = vState,
+								sets = state.otherSets,
+								state = state,
 								dispatch = dispatch,
 								downloads = vDownloads,
 								onDownload = { vPendingSet = it },
@@ -525,7 +526,7 @@ fun SetListContent(
 							// only thing wanted here is the answer to "is that all of them?".
 							item(key = "set-count-footer") {
 								Text(
-									text = vState.countsLine,
+									text = state.countsLine,
 									style = MaterialTheme.typography.bodySmall,
 									color = MaterialTheme.colorScheme.onSurfaceVariant,
 									modifier = Modifier.padding(top = 8.dp, bottom = 24.dp),
@@ -541,10 +542,10 @@ fun SetListContent(
 							labels = buildList {
 								if (vFavourites.isNotEmpty()) add("Favourites")
 								vFavourites.forEach { add(it.code.ifBlank { it.name }) }
-								if (vFavourites.isNotEmpty() && vState.otherSets.isNotEmpty()) {
+								if (vFavourites.isNotEmpty() && state.otherSets.isNotEmpty()) {
 									add("All sets")
 								}
-								vState.otherSets.forEach { add(it.code.ifBlank { it.name }) }
+								state.otherSets.forEach { add(it.code.ifBlank { it.name }) }
 							},
 						)
 					}
@@ -565,8 +566,8 @@ fun SetListContent(
 			setName = vSet.name,
 			cardCount = vSet.cardCount,
 			alreadyHave = alreadyDownloaded(
-				isSaved = vSet.id.qualified in vState.savedSetIds,
-				images = vState.imageDownloads[vSet.id.qualified],
+				isSaved = vSet.id.qualified in state.savedSetIds,
+				images = state.imageDownloads[vSet.id.qualified],
 			),
 			onDismiss = { vPendingSet = null },
 			isImportingGame = vIsImportingGame,
@@ -577,12 +578,12 @@ fun SetListContent(
 			languages = vSet.languages.toList().ifEmpty { state.browsingLanguageOptions.toList() },
 			languagesAreClaimed = vSet.languages.isEmpty(),
 			defaultLanguage = vPreferredLanguage,
-			isCardDataBundled = vState.isCardDataBundled,
-			isCardInfoBulkOnly = vState.isCardInfoBulkOnly,
-			hasThumbnails = vState.hasThumbnails,
+			isCardDataBundled = state.isCardDataBundled,
+			isCardInfoBulkOnly = state.isCardInfoBulkOnly,
+			hasThumbnails = state.hasThumbnails,
 			// Chips only, so an edition held under no language has none to light up. That it is
 			// held at all is carried by `savedSetIds`, which is what locks the card-info row.
-			infoLanguages = vState.savedLanguages[vSet.id.qualified]
+			infoLanguages = state.savedLanguages[vSet.id.qualified]
 				.orEmpty()
 				.filterNotNullTo(mutableSetOf()),
 			// One set, so no dump is involved and there is nothing to choose: a 78 MB file to
@@ -605,7 +606,7 @@ fun SetListContent(
 	}
 
 	if (vPendingAll) {
-		val vSets = vState.visibleSets
+		val vSets = state.visibleSets
 		DownloadKindDialog(
 			setName = "",
 			setCount = vSets.size,
@@ -619,25 +620,25 @@ fun SetListContent(
 			alreadyHave = vSets
 				.map { vSet ->
 					alreadyDownloaded(
-						isSaved = vSet.id.qualified in vState.savedSetIds,
-						images = vState.imageDownloads[vSet.id.qualified],
+						isSaved = vSet.id.qualified in state.savedSetIds,
+						images = state.imageDownloads[vSet.id.qualified],
 					)
 				}
 				.reduceOrNull { vAcc, vNext -> vAcc intersect vNext }
 				.orEmpty(),
-			bulkVariants = vState.bulkVariants,
+			bulkVariants = state.bulkVariants,
 			// Every language any of these sets states. A language only some of them have is still
 			// worth offering -- the enqueue skips it for the sets that were never printed in it.
 			languages = vSets.flatMap { it.languages }.distinct()
 				.ifEmpty { state.browsingLanguageOptions.toList() },
 			languagesAreClaimed = vSets.none { it.languages.isNotEmpty() },
 			defaultLanguage = vPreferredLanguage,
-			isCardDataBundled = vState.isCardDataBundled,
-			hasThumbnails = vState.hasThumbnails,
+			isCardDataBundled = state.isCardDataBundled,
+			hasThumbnails = state.hasThumbnails,
 			// Only what *every* shown set already holds, for the same reason `alreadyHave` is an
 			// intersection: a language half the list is missing must stay fetchable.
 			infoLanguages = vSets
-				.map { vState.savedLanguages[it.id.qualified].orEmpty() }
+				.map { state.savedLanguages[it.id.qualified].orEmpty() }
 				.reduceOrNull { vAcc, vNext -> vAcc intersect vNext }
 				.orEmpty()
 				// Chips only. See the single-set dialog above.
@@ -657,7 +658,7 @@ fun SetListContent(
 				//
 				// Art is unaffected. It is not in the file, it comes from a CDN rather than the
 				// API, and it is still fetched per set.
-				val vBulkHandlesInfo = vState.bulkVariants.isNotEmpty()
+				val vBulkHandlesInfo = state.bulkVariants.isNotEmpty()
 				if (vBulkHandlesInfo && DownloadKind.CARD_INFO in vKinds) {
 					dispatch(SetListContract.Intent.BulkImportRequested(vVariantId))
 				}
@@ -886,195 +887,208 @@ private fun SetRow(
 	dragOffsetY: Float = 0f,
 	handleModifier: Modifier? = null,
 ) {
-	Card(
-		// Not clickable while arranging, for the reason the game picker is not: the row's job there
-		// is to be dragged, and opening a set from under a press aimed at its handle is the obvious
-		// way to get that wrong.
-		//
-		// Absent rather than disabled, and one `Card` rather than one per mode. A disabled `Card`
-		// greys everything inside it -- the set's name reads as unavailable when it is merely not
-		// tappable -- and announces itself to a screen reader as a button that does nothing. Two
-		// call sites would be worse still: that is a composition identity, and toggling the mode
-		// would throw away everything inside, which is the bug the game picker's rows had.
+	val vTint = setColour(set.code)
+	// The same tint reads louder over a light surface than a dark one, so it is drawn weaker
+	// there. Measured by rendering both: at one strength the light theme was stripes with a row
+	// behind them.
+	val vHatchStrength = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) LIGHT_HATCH_SCALE else 1f
+	// The tab and the card travel together, so everything that moves the row -- the lazy list's own
+	// item animation, the drag offset, the lift -- sits out here rather than on the card.
+	//
+	// A box rather than a column: the tab overlaps the card's top edge instead of sitting flush
+	// above it, so the card keeps all four of its corners and the tab is simply a rounded thing
+	// laid over one of them.
+	Box(
 		modifier = itemModifier
 			.fillMaxWidth()
-			// The keyboard's cursor. An outline, so it reads as pointing at a row rather than as
-			// the row being in some other state.
-			.then(
-				if (isSelected) {
-					Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CardDefaults.shape)
-				} else {
-					Modifier
-				},
-			)
 			// Rides above its neighbours while they slide underneath it.
 			.zIndex(if (isLifted) 1f else 0f)
-			.graphicsLayer { translationY = dragOffsetY }
-			// The row is one half of the container transform into the card grid; the grid screen's
-			// root is the other. See `Modifier.sharedSetContainer`.
-			.sharedSetContainer(set.id.qualified)
-			// Before the click, so the ripple keeps to the card's corners.
-			.clip(CardDefaults.shape)
-			.then(
-				if (isEditing) Modifier else Modifier.clickable(role = Role.Button, onClick = onClick),
-			),
-		elevation = CardDefaults.cardElevation(
-			defaultElevation = if (isDragging) DRAGGED_ROW_ELEVATION else 0.dp,
-		),
+			.graphicsLayer { translationY = dragOffsetY },
 	) {
-		Row(
-			// Constant, in both modes, for the reason recorded on the game picker's row.
+		Card(
+			// Not clickable while arranging, for the reason the game picker is not: the row's job there
+			// is to be dragged, and opening a set from under a press aimed at its handle is the obvious
+			// way to get that wrong.
 			//
-			// It used to drop from 16dp to 4dp to claw back room for the handle, and being a plain
-			// `if` rather than an animation it did not ease at all: 12dp of inset vanished in one
-			// frame while the handle was still springing open beside it. That step against a spring
-			// is the boing. One animation drives this corner now -- the handle's -- and the room it
-			// needs is the room it makes.
+			// Absent rather than disabled, and one `Card` rather than one per mode. A disabled `Card`
+			// greys everything inside it -- the set's name reads as unavailable when it is merely not
+			// tappable -- and announces itself to a screen reader as a button that does nothing. Two
+			// call sites would be worse still: that is a composition identity, and toggling the mode
+			// would throw away everything inside, which is the bug the game picker's rows had.
 			modifier = Modifier
-				.padding(16.dp)
-				.fillMaxWidth(),
-			verticalAlignment = Alignment.CenterVertically,
-		) {
-			// The defaults, for the reason recorded on the game picker's row: `AnimatedVisibility`
-			// in a `Row` is `fadeIn() + expandHorizontally()` on one critically damped spring, and
-			// `expandHorizontally` already anchors its content to the end -- so the handle slides
-			// in from outside the row without help. Adding a slide on top was a second animation
-			// moving the same object a different distance, and it chattered.
-			AnimatedVisibility(visible = handleModifier != null) {
-				ReorderHandle(handleModifier ?: Modifier)
-			}
-			SetMark(set)
-			Spacer(Modifier.size(12.dp))
-			Column(Modifier.weight(1f)) {
-				Text(
-					text = set.name,
-					style = MaterialTheme.typography.titleMedium,
-					fontWeight = FontWeight.Medium,
+				.fillMaxWidth()
+				// Room for the half of the tab that stands above the card.
+				.padding(top = SET_TAB_OVERHANG)
+				// The keyboard's cursor. An outline, so it reads as pointing at a row rather than as
+				// the row being in some other state.
+				.then(
+					if (isSelected) {
+						Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CardDefaults.shape)
+					} else {
+						Modifier
+					},
 				)
-				Spacer(Modifier.height(2.dp))
-				// The badge sits on the subtitle line rather than at the end of the row. As a
-				// trailing sibling of a weighted column it took its width from the set name, and
-				// on a row that also says "Last opened" that left the name about one character
-				// wide. Here it competes with nothing: it is provenance, like the code and the
-				// date it sits next to.
-				Row(verticalAlignment = Alignment.CenterVertically) {
-					if (region != null) {
-						RegionBadge(region)
-						Spacer(Modifier.size(6.dp))
-					}
-					LanguagePin(availableLanguages)
-					Text(
-						text = setSubtitle(set, confirmedCardCount),
-						style = MaterialTheme.typography.bodySmall,
-						color = MaterialTheme.colorScheme.onSurfaceVariant,
-						maxLines = 2,
-						overflow = TextOverflow.Ellipsis,
-					)
+				// The row is one half of the container transform into the card grid; the grid screen's
+				// root is the other. See `Modifier.sharedSetContainer`.
+				.sharedSetContainer(set.id.qualified)
+				// Before the click, so the ripple keeps to the card's corners.
+				.clip(CardDefaults.shape)
+				.then(
+					if (isEditing) Modifier else Modifier.clickable(role = Role.Button, onClick = onClick),
+				),
+			elevation = CardDefaults.cardElevation(
+				defaultElevation = if (isDragging) DRAGGED_ROW_ELEVATION else 0.dp,
+			),
+		) {
+			Row(
+				// Constant, in both modes, for the reason recorded on the game picker's row.
+				//
+				// It used to drop from 16dp to 4dp to claw back room for the handle, and being a plain
+				// `if` rather than an animation it did not ease at all: 12dp of inset vanished in one
+				// frame while the handle was still springing open beside it. That step against a spring
+				// is the boing. One animation drives this corner now -- the handle's -- and the room it
+				// needs is the room it makes.
+				modifier = Modifier
+					.fillMaxWidth()
+					// Behind the content and outside the padding, so it covers the whole card and is
+					// clipped to its corners.
+					.drawBehind { drawSetHatch(vTint, vHatchStrength) }
+					.padding(16.dp),
+				verticalAlignment = Alignment.CenterVertically,
+			) {
+				// The defaults, for the reason recorded on the game picker's row: `AnimatedVisibility`
+				// in a `Row` is `fadeIn() + expandHorizontally()` on one critically damped spring, and
+				// `expandHorizontally` already anchors its content to the end -- so the handle slides
+				// in from outside the row without help. Adding a slide on top was a second animation
+				// moving the same object a different distance, and it chattered.
+				AnimatedVisibility(visible = handleModifier != null) {
+					ReorderHandle(handleModifier ?: Modifier)
 				}
-			}
-			// A running download replaces the button with its own progress, so the row shows one
-			// state rather than a button next to a spinner describing the same thing.
-			when {
-				downloadStatus?.isActive == true -> {
-					Spacer(Modifier.size(8.dp))
-					val vProgress = downloadStatus.progress
-					// Wavy, to agree with the Downloads screen. The reason is recorded there and
-					// applies just as much here: a long download that is progressing looks
-					// identical to a stalled one under a static indicator, and the wave moves on
-					// its own. This is the app's other live-download surface, so it should not
-					// read differently.
-					Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
-						if (vProgress == null) {
-							CircularWavyProgressIndicator(Modifier.size(24.dp))
-						} else {
-							CircularWavyProgressIndicator(
-								progress = { vProgress },
-								modifier = Modifier.size(24.dp),
+				SetMark(set)
+				Column(Modifier.weight(1f)) {
+					Text(
+						text = set.name,
+						style = MaterialTheme.typography.titleMedium,
+						fontWeight = FontWeight.Medium,
+					)
+
+					Spacer(Modifier.height(2.dp))
+					// The badge sits on the subtitle line rather than at the end of the row. As a
+					// trailing sibling of a weighted column it took its width from the set name, and
+					// on a row that also says "Last opened" that left the name about one character
+					// wide. Here it competes with nothing: it is provenance, like the code and the
+					// date it sits next to.
+					Row(verticalAlignment = Alignment.CenterVertically) {
+						if (region != null) {
+							RegionBadge(region)
+							Spacer(Modifier.size(6.dp))
+						}
+						LanguagePin(availableLanguages)
+						Text(
+							text = setSubtitle(set, confirmedCardCount),
+							style = MaterialTheme.typography.bodySmall,
+							color = MaterialTheme.colorScheme.onSurfaceVariant,
+							maxLines = 2,
+							overflow = TextOverflow.Ellipsis,
+						)
+						set.releaseDate?.let {
+							Spacer(Modifier.width(8.dp))
+							Text(
+								text = "${monthName(it.month.ordinal)} ${it.year}",
+								style = MaterialTheme.typography.labelSmall,
+								fontWeight = FontWeight.Light,
 							)
 						}
 					}
 				}
+				// A running download replaces the button with its own progress, so the row shows one
+				// state rather than a button next to a spinner describing the same thing.
+				when {
+					downloadStatus?.isActive == true -> {
+						Spacer(Modifier.size(8.dp))
+						val vProgress = downloadStatus.progress
+						// Wavy, to agree with the Downloads screen. The reason is recorded there and
+						// applies just as much here: a long download that is progressing looks
+						// identical to a stalled one under a static indicator, and the wave moves on
+						// its own. This is the app's other live-download surface, so it should not
+						// read differently.
+						Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+							if (vProgress == null) {
+								CircularWavyProgressIndicator(Modifier.size(24.dp))
+							} else {
+								CircularWavyProgressIndicator(
+									progress = { vProgress },
+									modifier = Modifier.size(24.dp),
+								)
+							}
+						}
+					}
 
-				// The star is a control, and only while arranging. Browsing, it said nothing the
-				// list was not already saying: a favourite is already under the "N favourites"
-				// heading, so a star beside it repeats that heading once per row.
-				//
-				// The slot stays 32dp wide either way. Collapsing it would be a second layout
-				// change on the corner the handle is already animating, which is exactly the
-				// bounce that took three attempts to find the first time.
-				else -> {
-					Spacer(Modifier.size(4.dp))
-					FavouriteStar(
-						name = set.name,
-						isFavourite = isFavourite,
-						isEditing = isEditing,
-						onToggle = onToggleFavourite,
-					)
-					// Offered only while there is something left to fetch, and only while browsing.
-					// A button that starts a download of nothing is worse than no button: it
-					// invites a tap, does the work of checking, and reports that everything was
-					// already there. Arranging is a different job, and a row being dragged should
-					// not also be a row that starts a download.
+					// The star is a control, and only while arranging. Browsing, it said nothing the
+					// list was not already saying: a favourite is already under the "N favourites"
+					// heading, so a star beside it repeats that heading once per row.
 					//
-					// The marks below still say what is held -- this removes the *offer*, not the
-					// statement. Which is the right way round: "you have this" is information, and
-					// "get this" is an action that has nothing to act on.
-					AnimatedVisibility(visible = canOfferDownload && !isEditing) {
-						DownloadButton(name = set.name, onDownload = onDownload)
+					// The slot stays 32dp wide either way. Collapsing it would be a second layout
+					// change on the corner the handle is already animating, which is exactly the
+					// bounce that took three attempts to find the first time.
+					else -> {
+						Spacer(Modifier.size(4.dp))
+						FavouriteStar(
+							name = set.name,
+							isFavourite = isFavourite,
+							isEditing = isEditing,
+							onToggle = onToggleFavourite,
+						)
+						// Offered only while there is something left to fetch, and only while browsing.
+						// A button that starts a download of nothing is worse than no button: it
+						// invites a tap, does the work of checking, and reports that everything was
+						// already there. Arranging is a different job, and a row being dragged should
+						// not also be a row that starts a download.
+						//
+						// The marks below still say what is held -- this removes the *offer*, not the
+						// statement. Which is the right way round: "you have this" is information, and
+						// "get this" is an action that has nothing to act on.
+						AnimatedVisibility(visible = canOfferDownload && !isEditing) {
+							DownloadButton(name = set.name, onDownload = onDownload)
+						}
 					}
 				}
-			}
-			// Two marks, because the two halves of a download are separately true: a set can have
-			// its records and none of its thumbnails, which is the common case after browsing it
-			// once. Full-size art has no mark because it is never bulk-downloaded and so has no
-			// state to report -- see `DownloadKind`.
-			//
-			// Browsing only. They are things to read, and arranging is not reading: leaving them
-			// on put the star of a downloaded set two notches left of an undownloaded one's, and a
-			// column of controls that do not line up reads as a bug.
-			AnimatedVisibility(visible = !isEditing && (isSaved || images?.isEmpty == false)) {
-				Row(verticalAlignment = Alignment.CenterVertically) {
-					Spacer(Modifier.size(6.dp))
-					if (isSaved) {
-						// A different glyph, not merely a different tint: colour alone is not a
-						// distinction for a reader who cannot see it, and this one changes what the
-						// row means rather than decorating it.
-						Icon(
-							imageVector = if (isIncomplete) {
-								AppIcons.ErrorOutline
-							} else {
-								AppIcons.Description
+				// Two rings, because the two halves of a download are separately true: a set can have
+				// its records and none of its thumbnails, which is the common case after browsing it
+				// once. Full-size art has no ring because it is never bulk-downloaded and so has no
+				// state to report -- see `DownloadKind`.
+				//
+				// Browsing only. They are things to read, and arranging is not reading: leaving them
+				// on put the star of a downloaded set two notches left of an undownloaded one's, and a
+				// column of controls that do not line up reads as a bug.
+				AnimatedVisibility(visible = !isEditing && (isSaved || images?.isEmpty == false)) {
+					Row(verticalAlignment = Alignment.CenterVertically) {
+						Spacer(Modifier.size(6.dp))
+						CoverageRings(
+							// Card info keeps no per-set fraction, so an unfinished one is drawn as
+							// interrupted rather than as a made-up sweep. "Saved", not "complete":
+							// a fetch stopped part-way leaves a file behind too.
+							info = when {
+								!isSaved -> Coverage.Unknown
+								isIncomplete -> Coverage.Interrupted
+								else -> Coverage.Complete
 							},
-							// "Saved", not "complete". A set interrupted part-way through leaves a
-							// file behind too, and the mark must not promise more than that -- so
-							// when it *is* that, it says so instead of staying quiet.
-							contentDescription = if (isIncomplete) {
-								"Download did not finish. Download it again to fetch the rest."
-							} else {
-								"Card info saved on this device"
-							},
-							tint = if (isIncomplete) {
-								MaterialTheme.colorScheme.error
-							} else {
-								MaterialTheme.colorScheme.primary
-							},
-							modifier = Modifier.size(18.dp),
+							infoIcon = AppIcons.Description,
+							thumbnails = images?.thumbnails.toCoverage(),
+							thumbnailIcon = AppIcons.GridView,
 						)
 					}
-					ImageMark(
-						record = images?.thumbnails,
-						icon = AppIcons.GridView,
-						label = "Thumbnails",
-						leadingSpace = isSaved,
-					)
 				}
+				// "Last opened" is on the metadata line rather than out here. As an unweighted
+				// trailing sibling it was measured at its full intrinsic width before the weighted
+				// column got any, so on a row with a long set name the name was squeezed to about one
+				// character per line. The row's own tint is the primary signal anyway; this is the
+				// label that explains it.
 			}
-			// "Last opened" is on the metadata line rather than out here. As an unweighted
-			// trailing sibling it was measured at its full intrinsic width before the weighted
-			// column got any, so on a row with a long set name the name was squeezed to about one
-			// character per line. The row's own tint is the primary signal anyway; this is the
-			// label that explains it.
 		}
+		// After the card, so it lies over it. It carries no click of its own, so the tap still
+		// reaches the card underneath and opens the set.
+		SetTab(set.code, Modifier.align(Alignment.TopStart))
 	}
 }
 
@@ -1199,67 +1213,97 @@ private fun alreadyDownloaded(isSaved: Boolean, images: SetImageStatus?): Set<Do
 	}
 
 /**
- * One rendition's mark, with a percentage when the download did not finish.
+ * One rendition's download record as a ring's worth of knowledge.
  *
- * Draws nothing at all when no download was recorded. Absent is not the same as zero: art arrives
- * by browsing too and that is not tracked, so a missing mark means "never downloaded", never "not
- * present".
+ * A null record is [Coverage.Unknown] and draws nothing. Absent is not the same as zero: art
+ * arrives by browsing too and that is not tracked, so this under-claims rather than over-claims.
+ *
+ * "Downloaded", not "available" -- the image cache is an LRU and the OS may purge it, so the record
+ * says what came down rather than promising what is still there.
+ */
+private fun ImageDownloadRecord?.toCoverage(): Coverage = when {
+	this == null -> Coverage.Unknown
+	isComplete -> Coverage.Complete
+	else -> Coverage.Partial(percent)
+}
+
+/**
+ * The set's code, on a rounded tab lying over the top-left of its row.
+ *
+ * The code is identity, and putting it up here takes it off the line below, which then carries the
+ * languages, the size and the date without running out of room on a phone. The tab's colour is the
+ * set's own, so a scan down the left edge of the list reads as codes rather than as decoration --
+ * see [setColour].
+ *
+ * Overlapping rather than flush: the card keeps all four of its own corners and this is a second
+ * rounded shape laid over one of them, which is the arrangement the project owner drew.
  */
 @Composable
-private fun ImageMark(
-	record: ImageDownloadRecord?,
-	icon: androidx.compose.ui.graphics.vector.ImageVector,
-	label: String,
-	leadingSpace: Boolean,
-) {
-	if (record == null) return
-	if (leadingSpace) Spacer(Modifier.size(6.dp))
-	Icon(
-		imageVector = icon,
-		// "Downloaded", not "available": the image cache is an LRU and the OS may purge it, so
-		// this records what came down rather than promising what is still there.
-		contentDescription = if (record.isComplete) {
-			"$label downloaded"
-		} else {
-			"${record.percent}% of $label downloaded"
-		},
-		tint = if (record.isComplete) {
-			MaterialTheme.colorScheme.primary
-		} else {
-			// A partial download is not a tick. The muted metadata colour, so it reads as a
-			// qualification rather than a win.
-			MaterialTheme.colorScheme.onSurfaceVariant
-		},
-		modifier = Modifier.size(18.dp),
-	)
-	// The number only when it says something the icon does not.
-	if (!record.isComplete) {
-		Spacer(Modifier.size(2.dp))
+private fun SetTab(code: String, modifier: Modifier = Modifier) {
+	val vTint = setColour(code)
+	Box(
+		modifier = modifier
+			.padding(start = SET_TAB_INSET)
+			.height(SET_TAB_HEIGHT)
+			.clip(RoundedCornerShape(SET_TAB_RADIUS))
+			.background(vTint)
+			.padding(horizontal = 10.dp),
+		contentAlignment = Alignment.Center,
+	) {
 		Text(
-			text = "${record.percent}%",
+			// Six, for the reason recorded on `SetMonogram`: One Piece's codes are five characters
+			// and Pokemon has `sv08.5`, and a shorter cap silently renames a set.
+			text = code.take(6),
 			style = MaterialTheme.typography.labelSmall,
-			color = MaterialTheme.colorScheme.onSurfaceVariant,
+			fontWeight = FontWeight.Bold,
+			maxLines = 1,
+			softWrap = false,
+			// Against the set's own colour, which is fixed at mid-lightness by `setColour` so that
+			// this one foreground works for every hue it can produce.
+			color = Color.Black.copy(alpha = 0.82f),
 		)
 	}
 }
 
+/** The tab starts a little in from the edge, the way a divider's does. */
+private val SET_TAB_INSET = 12.dp
+
+private val SET_TAB_HEIGHT = 21.dp
+
+private val SET_TAB_RADIUS = 7.dp
+
 /**
- * A set's own symbol where its provider publishes one, and its code where none exists.
+ * How far the card is pushed down to make room for the tab.
+ *
+ * Less than the tab's height, and the difference is the overlap: the tab stands
+ * `SET_TAB_HEIGHT - SET_TAB_OVERHANG` deep into the card.
+ */
+private val SET_TAB_OVERHANG = 13.dp
+
+/**
+ * A set's own symbol, where its provider publishes one.
  *
  * Three of the sources supply real artwork -- Scryfall a symbol for all 988 of its paper sets,
  * TCGdex a logo for 157 of its 218, YGOPRODeck box art for many of its. The rest publish nothing at
- * all, and so do the sets those three skip, which is why the coloured monogram below is a permanent
- * fallback rather than a temporary one.
+ * all, and so do the sets those three skip.
+ *
+ * Nothing is drawn for those, not even an empty tile: a slot reserved for a picture that does not
+ * exist is a column of holes down the list. The set's colour is on the row itself now -- see the
+ * hatch in [SetRow] -- so a row without a symbol is still not an undifferentiated grey block.
+ *
+ * The slot *is* held while a symbol that really exists is loading or has failed, because there the
+ * space belongs to something.
  */
 @Composable
 private fun SetMark(set: CardSet) {
-	val vSymbol = set.symbol
-	if (vSymbol == null) {
-		SetMonogram(set.code)
-		return
-	}
+	val vSymbol = set.symbol ?: return
 
-	Box(modifier = Modifier.size(SET_MARK_WIDTH, SET_MARK_HEIGHT), contentAlignment = Alignment.Center) {
+	Box(
+		// The gap to the name travels with the mark, so a row without one closes up rather than
+		// starting its name 12dp in from nothing.
+		modifier = Modifier.padding(end = 12.dp).size(SET_MARK_WIDTH, SET_MARK_HEIGHT),
+		contentAlignment = Alignment.Center,
+	) {
 		SubcomposeAsyncImage(
 			model = vSymbol.url,
 			contentDescription = null,
@@ -1273,45 +1317,39 @@ private fun SetMark(set: CardSet) {
 			} else {
 				null
 			},
-			// The monogram, not a spinner and not a gap: a symbol that is slow or missing leaves a
-			// row that still identifies its set.
-			loading = { SetMonogram(set.code) },
-			error = { SetMonogram(set.code) },
+			// Nothing while it loads or after it fails. The slot is the right size either way, and
+			// the row already identifies its set by its tab and its hatch.
+			loading = {},
+			error = {},
 		)
 	}
 }
 
 /**
- * A set's code in a tile, standing in for the set symbol the provider does not have.
+ * The set's own colour, brushed diagonally across its row.
  *
- * Riftcodex publishes no icon, logo or symbol for a set -- the only image anywhere in its schema is
- * a card's own art. Rather than leave the row as an undifferentiated wall of text, or invent a
- * symbol and pass it off as the game's, this shows the set's real short code, which is what players
- * call it anyway and what is printed on the cards.
+ * This is where the set's colour lives now that there is no monogram tile. It does the job the tile
+ * did -- a scrolled list of several hundred Magic sets is not a wall of identical grey rectangles --
+ * without spending 56dp of a phone's width on a decoration, and without reserving a slot for a
+ * picture most providers do not publish.
+ *
+ * Faint on purpose. It sits behind the set's name, and a texture that competes with the text it is
+ * under has stopped being a background.
  */
-@Composable
-private fun SetMonogram(code: String) {
-	val vTint = setColour(code)
-	Box(
-		modifier = Modifier
-			.size(SET_MARK_WIDTH, SET_MARK_HEIGHT)
-			.clip(RoundedCornerShape(10.dp))
-			// Tinted rather than saturated, so a screen of these reads as a list rather than as a
-			// paint chart, and the code stays legible on top of it.
-			.background(vTint.copy(alpha = 0.22f)),
-		contentAlignment = Alignment.Center,
-	) {
-		Text(
-			// Long enough for the codes that actually occur. One Piece's are five characters --
-			// `OP-14`, `ST-21`, `EB-02` -- and a four-character cap truncated every one of them to
-			// `OP-1`, which is a different set. Six covers those plus Pokémon's `sv08.5`.
-			text = code.take(6),
-			style = MaterialTheme.typography.labelLarge,
-			fontWeight = FontWeight.Medium,
-			maxLines = 1,
-			softWrap = false,
-			color = vTint,
+private fun DrawScope.drawSetHatch(tint: Color, strength: Float) {
+	val vStep = ROW_HATCH_STEP.toPx()
+	drawRect(color = tint.copy(alpha = ROW_TINT_ALPHA * strength))
+	// From a row's height to the left of it, so the first stripe crosses the leading edge rather
+	// than starting inside it.
+	var vX = -size.height
+	while (vX < size.width) {
+		drawLine(
+			color = tint.copy(alpha = ROW_HATCH_ALPHA * strength),
+			start = Offset(vX, size.height),
+			end = Offset(vX + size.height, 0f),
+			strokeWidth = vStep / 3f,
 		)
+		vX += vStep
 	}
 }
 
@@ -1402,7 +1440,10 @@ private fun LanguagePin(languages: Set<CardLanguage>) {
 private const val LANGUAGE_PIN_MAX = 3
 
 /**
- * "OGN · 352 cards · Oct 2025", with each part dropped when the provider does not supply it.
+ * "352 cards · Oct 2025", with each part dropped when the provider does not supply it.
+ *
+ * The code used to lead this line and is now on the row's tab -- see [SetTab]. One place, not two:
+ * printing it here as well put the same six characters twice on every row.
  *
  * A missing release date shows nothing rather than "Unknown date": the row is not the place to
  * discuss what the provider does not know.
@@ -1418,9 +1459,7 @@ private fun setSubtitle(
 	set: CardSet,
 	confirmedCardCount: Int? = null,
 ): String = buildList {
-	add(set.code)
 	(confirmedCardCount ?: set.cardCount)?.let { add(if (it == 1) "1 card" else "$it cards") }
-	set.releaseDate?.let { add("${monthName(it.month.ordinal)} ${it.year}") }
 }.joinToString(" · ")
 
 /** Zero-based, matching `Month.ordinal`, so January is 0. */
@@ -1514,9 +1553,20 @@ private fun SetListSavedPreview() = PreviewFrame {
  * shaped set logos that TCGdex and Scryfall publish into a smear. Landscape suits both: a code sits
  * comfortably on one line, and a logo letterboxes instead of cropping.
  */
-private val SET_MARK_WIDTH = 68.dp
+private val SET_MARK_WIDTH = 44.dp
 
 private val SET_MARK_HEIGHT = 44.dp
+
+/** Close enough to read as a texture, far enough apart to read as stripes. */
+private val ROW_HATCH_STEP = 11.dp
+
+/** Faint. It is under the set's name, and a background that competes with text is not one. */
+private const val ROW_TINT_ALPHA = 0.07f
+
+private const val ROW_HATCH_ALPHA = 0.08f
+
+/** How much of the hatch survives on the light theme. */
+private const val LIGHT_HATCH_SCALE = 0.55f
 
 @Preview
 @Composable

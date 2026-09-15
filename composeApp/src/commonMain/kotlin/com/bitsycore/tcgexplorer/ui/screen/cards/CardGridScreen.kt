@@ -4,6 +4,7 @@ import com.bitsycore.tcgexplorer.core.game.RarityLadder
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +23,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Badge
@@ -801,8 +804,32 @@ private fun CardRow(
 				},
 			),
 	) {
+		// The rarity as the row's leading edge. A column of these is readable downward without
+		// reading a word, which is what the chip on the second line cannot do -- it sits at a
+		// different x on every row because the collector number in front of it varies in width.
+		//
+		// Drawn only where the game's profile actually names a colour for this rarity. Pokemon has
+		// no rarity ladder on purpose, and several sources issue rarities no profile describes; a
+		// neutral stripe in those cases would read as a rarity rather than as the absence of one.
+		// The lane is reserved either way, so rows line up across games.
+		val vRarityColour = card.classification.rarity
+			?.takeIf { it.isNotBlank() }
+			?.let { game?.rarityColourFor(it) }
+			?.let { Color(it.toInt()) }
 		Row(
-			modifier = Modifier.padding(8.dp).fillMaxWidth(),
+			modifier = Modifier
+				.fillMaxWidth()
+				// Behind the content and outside the padding, so it spans the row's full height and
+				// is clipped to the card's corners rather than floating inside them.
+				.drawBehind {
+					if (vRarityColour != null) {
+						drawRect(
+							color = vRarityColour,
+							size = Size(RARITY_STRIPE_WIDTH.toPx(), size.height),
+						)
+					}
+				}
+				.padding(start = RARITY_STRIPE_WIDTH + 8.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
 			CardImage(
@@ -872,6 +899,9 @@ private fun CardRow(
 		}
 	}
 }
+
+/** Wide enough to read as an edge at arm's length, narrow enough not to be a block of colour. */
+private val RARITY_STRIPE_WIDTH = 5.dp
 
 /**
  * The card's number, over the set's size where that is known.
