@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Row shapes — TCG Explorer</title>
+<!--
+	A drawing board, not shipping code.
+
+	Compose renders take a Gradle run each; this takes a reload. Every row below is a candidate for
+	the set list and the card list, and the point is the *shape* — what a row can be besides a
+	rounded rectangle with text in it. Once one is chosen it gets rebuilt in Compose, where the
+	chips, download marks and progress spinner are real.
+
+	Themed per game, because ten games in one list is the actual problem: a row has to say which
+	game it belongs to before it says anything else.
+-->
+<style>
+	:root {
+		--bg: #0e0e12;
+		--surface: #17171d;
+		--surface-2: #1e1e26;
+		--fg: #ecedf2;
+		--muted: #9a9aab;
+		--faint: #6a6a7a;
+		--rule: #2b2b36;
+		--mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	}
+	body.light {
+		--bg: #f4f4f7;
+		--surface: #ffffff;
+		--surface-2: #ececf2;
+		--fg: #17171d;
+		--muted: #5c5c6b;
+		--faint: #8b8b9a;
+		--rule: #e0e0e8;
+	}
+
+	/* Per-game palette. One hue plus a wash, because a row is mostly surface. */
+	.g-rift { --a: #8b5cf6; --a2: #c4b5fd; }
+	.g-pkmn { --a: #f2b705; --a2: #ffd95c; }
+	.g-optcg { --a: #e0413c; --a2: #ff8a85; }
+	.g-mtg { --a: #d9a441; --a2: #f0cd84; }
+	.g-lorcana { --a: #58c1d4; --a2: #a5e3ee; }
+	.g-ygo { --a: #c4712d; --a2: #e8a86b; }
+
+	* { box-sizing: border-box; }
+	body {
+		margin: 0;
+		padding: 28px 24px 80px;
+		background: var(--bg);
+		color: var(--fg);
+		font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+		-webkit-font-smoothing: antialiased;
+	}
+	header { max-width: 1180px; margin: 0 auto 26px; display: flex; align-items: baseline; gap: 14px; }
+	h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -.01em; }
+	header p { margin: 0; color: var(--muted); font-size: 13px; }
+	button.mode {
+		margin-left: auto; background: var(--surface-2); color: var(--fg); border: 1px solid var(--rule);
+		border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13px; cursor: pointer;
+	}
+
+	.board { max-width: 1180px; margin: 0 auto; display: grid; gap: 22px; grid-template-columns: repeat(2, 1fr); }
+	@media (max-width: 1000px) { .board { grid-template-columns: 1fr; } }
+
+	.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 16px 16px 18px; }
+	.panel > h2 { font-size: 13px; font-weight: 600; margin: 0 0 2px; letter-spacing: .01em; }
+	.panel > .note { font-size: 12px; color: var(--muted); margin: 0 0 14px; }
+	.stack { display: grid; gap: 10px; }
+	.section { max-width: 1180px; margin: 34px auto 14px; font-size: 12px; letter-spacing: .09em;
+		text-transform: uppercase; color: var(--faint); border-bottom: 1px solid var(--rule); padding-bottom: 6px; }
+
+	/* ------- shared innards ------- */
+	.name { font-size: 14.5px; font-weight: 550; letter-spacing: -.005em; line-height: 1.25; }
+	.facts { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+	.facts .n { color: var(--a); font-weight: 650; font-size: 13px; }
+	.code { font-family: var(--mono); font-size: 11.5px; color: var(--faint); letter-spacing: .02em; }
+	.date { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+	.dot { width: 3px; height: 3px; border-radius: 50%; background: var(--faint); flex: none; }
+	.lang { font-family: var(--mono); font-size: 10px; text-transform: uppercase; color: var(--faint);
+		border: 1px solid var(--rule); border-radius: 3px; padding: 0 3px; }
+	.grow { flex: 1; min-width: 0; }
+	.trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+	/* ================= SET ROWS ================= */
+
+	/* 1. Stack — a set is a pile of cards, so the row is one. */
+	.r-stack { position: relative; padding-right: 8px; }
+	.r-stack .sheet { position: absolute; inset: 0; border-radius: 12px; background: var(--surface-2); }
+	.r-stack .s1 { transform: translate(8px, 7px); opacity: .35; }
+	.r-stack .s2 { transform: translate(4px, 3.5px); opacity: .65; }
+	.r-stack .face { position: relative; display: flex; align-items: center; gap: 12px;
+		background: var(--surface-2); border-radius: 12px; padding: 11px 13px; border: 1px solid var(--rule); }
+
+	/* 2. Stub — the code is torn off down a perforation. */
+	.r-stub { display: flex; align-items: stretch; border-radius: 12px; overflow: hidden;
+		background: var(--surface-2); min-height: 66px;
+		-webkit-mask: radial-gradient(circle 6px at 74px 0, transparent 98%, #000) ,
+			radial-gradient(circle 6px at 74px 100%, transparent 98%, #000);
+		-webkit-mask-composite: source-in; mask-composite: intersect; }
+	.r-stub .stub { width: 74px; flex: none; display: grid; place-items: center; gap: 2px;
+		background: color-mix(in srgb, var(--a) 20%, transparent); }
+	.r-stub .stub b { font-family: var(--mono); font-size: 13px; color: var(--a); font-weight: 700; }
+	.r-stub .stub span { font-size: 9.5px; color: var(--a2); opacity: .8; letter-spacing: .05em; }
+	.r-stub .perf { width: 0; border-left: 2px dashed color-mix(in srgb, var(--bg) 70%, transparent); }
+	.r-stub .body { display: flex; align-items: center; gap: 10px; padding: 10px 13px; flex: 1; min-width: 0; }
+
+	/* 3. Spine — no card, just an edge and a hairline. */
+	.r-spine { display: flex; align-items: center; gap: 12px; padding: 9px 4px 9px 0;
+		border-bottom: 1px solid var(--rule); }
+	.r-spine .bar { width: 3px; align-self: stretch; border-radius: 2px; background: var(--a); flex: none; }
+
+	/* 4. Chamfer — the cut corner of a sleeve, code in the cut. */
+	.r-cham { display: flex; align-items: center; gap: 11px; background: var(--surface-2);
+		padding: 12px 13px 12px 15px; min-height: 64px;
+		clip-path: polygon(26px 0, 100% 0, 100% 100%, 0 100%, 0 26px); border-radius: 0 12px 12px 12px; }
+	.r-cham .tag { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--a); width: 46px; flex: none; }
+
+	/* 5. Wash — the tint bleeds in from the leading edge. */
+	.r-wash { display: flex; align-items: center; gap: 13px; border-radius: 12px; padding: 13px 14px;
+		background: linear-gradient(100deg, color-mix(in srgb, var(--a) 32%, var(--surface-2)) 0%,
+			var(--surface-2) 46%); }
+	.r-wash .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--a2); }
+
+	/* 6. Meter — the row's own fill says how much is downloaded. */
+	.r-meter { position: relative; border-radius: 12px; background: var(--surface-2); overflow: hidden; }
+	.r-meter .fill { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--a) 22%, transparent); }
+	.r-meter .body { position: relative; display: flex; align-items: center; gap: 12px; padding: 11px 13px; }
+	.r-meter .pct { font-size: 12px; font-weight: 650; color: var(--a2); font-variant-numeric: tabular-nums; }
+
+	/* 7. Pack — a foil booster: serrated top edge, seam down the middle. */
+	.r-pack { display: flex; align-items: center; gap: 12px; padding: 13px 13px 12px; min-height: 66px;
+		background: linear-gradient(160deg, color-mix(in srgb, var(--a) 26%, var(--surface-2)),
+			var(--surface-2) 55%, color-mix(in srgb, var(--a) 12%, var(--surface-2)));
+		border-radius: 3px 3px 12px 12px;
+		-webkit-mask: linear-gradient(#000 0 0) 0 7px/100% calc(100% - 7px) no-repeat,
+			repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 10px) 0 0/100% 7px no-repeat;
+		mask: linear-gradient(#000 0 0) 0 7px/100% calc(100% - 7px) no-repeat,
+			repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 10px) 0 0/100% 7px no-repeat; }
+
+	/* 8. Tab — a file divider, code on the jutting tab. */
+	.r-tab { position: relative; margin-top: 15px; }
+	.r-tab .tab { position: absolute; top: -15px; left: 12px; height: 16px; padding: 0 12px 1px;
+		display: flex; align-items: center; font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+		color: #0e0e12; background: var(--a); border-radius: 5px 5px 0 0;
+		clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 100%, 6px 100%); padding-inline: 16px; }
+	.r-tab .body { display: flex; align-items: center; gap: 12px; background: var(--surface-2);
+		border-radius: 0 10px 10px 10px; padding: 11px 13px; border-top: 2px solid var(--a); }
+
+	/* 9. Slot — a binder pocket: inset, the set peeking out of it. */
+	.r-slot { display: flex; align-items: center; gap: 12px; padding: 10px 13px 10px 10px; border-radius: 10px;
+		background: var(--bg); border: 1px solid var(--rule);
+		box-shadow: inset 0 2px 6px rgba(0,0,0,.35); min-height: 66px; }
+	.r-slot .peek { width: 34px; height: 46px; flex: none; border-radius: 3px;
+		background: linear-gradient(160deg, var(--a), color-mix(in srgb, var(--a) 40%, #000));
+		box-shadow: 0 2px 5px rgba(0,0,0,.4); }
+
+	/* 10. Hex — a hexagonal monogram, flat row beside it. */
+	.r-hex { display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 4px; border-radius: 10px;
+		background: var(--surface-2); }
+	.r-hex .hex { width: 44px; height: 50px; flex: none; display: grid; place-items: center;
+		clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+		background: color-mix(in srgb, var(--a) 24%, transparent);
+		font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--a2); }
+
+	/* ================= CARD ROWS ================= */
+
+	.art { background: linear-gradient(150deg, color-mix(in srgb, var(--a) 45%, #2a2a33), #2a2a33 70%);
+		flex: none; position: relative; overflow: hidden; }
+	.art::after { content: ""; position: absolute; inset: 0;
+		background: radial-gradient(circle at 30% 25%, rgba(255,255,255,.18), transparent 60%); }
+
+	/* A. Bleed — the art is the leading edge, no inset. */
+	.c-bleed { display: flex; align-items: center; gap: 12px; background: var(--surface-2);
+		border-radius: 10px; overflow: hidden; min-height: 66px; }
+	.c-bleed .art { width: 52px; align-self: stretch; }
+
+	/* B. Stripe — rarity as an edge, readable as a column. */
+	.c-stripe { display: flex; align-items: center; gap: 10px; background: var(--surface-2);
+		border-radius: 8px; overflow: hidden; min-height: 58px; padding-right: 12px; }
+	.c-stripe .rar { width: 5px; align-self: stretch; flex: none; }
+	.c-stripe .art { width: 32px; height: 45px; border-radius: 3px; }
+
+	/* C. Cost on the art, where the card prints it. */
+	.c-cost { display: flex; align-items: center; gap: 12px; background: var(--surface-2);
+		border-radius: 10px; overflow: hidden; min-height: 66px; }
+	.c-cost .wrap { position: relative; width: 54px; align-self: stretch; flex: none; }
+	.c-cost .art { position: absolute; inset: 0; }
+	.c-cost .pip { position: absolute; top: 5px; left: 5px; width: 22px; height: 22px; z-index: 2;
+		border-radius: 50%; background: var(--a); color: #101014; display: grid; place-items: center;
+		font-size: 12px; font-weight: 700; }
+
+	/* D. Hairline — no card, maximum density. */
+	.c-hair { display: flex; align-items: center; gap: 10px; padding: 5px 2px;
+		border-bottom: 1px solid var(--rule); }
+	.c-hair .art { width: 28px; height: 39px; border-radius: 2px; }
+	.c-hair .num { font-family: var(--mono); font-size: 11px; color: var(--faint); width: 34px; flex: none; }
+
+	/* E. Fanned — the art tilted, as a card laid on a table. */
+	.c-fan { display: flex; align-items: center; gap: 16px; background: var(--surface-2);
+		border-radius: 10px; padding: 10px 12px 10px 16px; min-height: 68px; }
+	.c-fan .art { width: 34px; height: 48px; border-radius: 3px; transform: rotate(-7deg);
+		box-shadow: 0 3px 8px rgba(0,0,0,.45); }
+
+	/* F. Fold — the top-right corner turned down, rarity underneath. */
+	.c-fold { position: relative; display: flex; align-items: center; gap: 12px; background: var(--surface-2);
+		border-radius: 10px; min-height: 66px; overflow: hidden;
+		clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 0 100%); }
+	.c-fold .corner { position: absolute; top: 0; right: 0; width: 20px; height: 20px;
+		background: var(--rar); clip-path: polygon(0 0, 100% 100%, 100% 0); }
+	.c-fold .art { width: 52px; align-self: stretch; }
+
+	/* ------- coverage, the pair of facts the live row already carries ------- */
+	.cov { display: flex; align-items: center; gap: 14px; margin-top: 6px; font-size: 12px; }
+	.cov span { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+	.cov i { width: 8px; height: 8px; border-radius: 50%; flex: none; font-style: normal; }
+	.ok { background: #4caf7d; } .part { background: #e0a33c; } .none { background: #55555f; }
+
+	/* The same pair as two arcs instead of two sentences. */
+	.rings { display: flex; gap: 5px; flex: none; }
+	.ring { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+		font-size: 9px; font-weight: 700; color: var(--fg); }
+	.ring.full { background: conic-gradient(#4caf7d 100%, #2b2b36 0); }
+	.ring.p62 { background: conic-gradient(#e0a33c 62%, #2b2b36 0); }
+	.ring.p0 { background: conic-gradient(#55555f 0%, #2b2b36 0); }
+	.ring::after { content: attr(data-l); width: 15px; height: 15px; border-radius: 50%;
+		background: var(--surface-2); display: grid; place-items: center; font-size: 8.5px;
+		color: var(--muted); font-weight: 700; }
+
+	/* Two stacked bars: info on top, pictures under it. */
+	.pair { display: grid; gap: 3px; width: 54px; flex: none; }
+	.pair div { height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; }
+	.pair div b { display: block; height: 100%; border-radius: 2px; }
+
+	/* ------- the in-progress layout: icon · identity · state rail ------- */
+	.r-pill { display: flex; align-items: center; gap: 12px; background: var(--surface-2);
+		border-radius: 10px; padding: 10px 12px; min-height: 62px; }
+	.r-pill .ico { width: 42px; height: 42px; flex: none; border-radius: 7px; display: grid;
+		place-items: center; font-family: var(--mono); font-size: 7.5px; letter-spacing: .08em;
+		color: #4a4a56; background: repeating-linear-gradient(135deg, #24242c 0 5px, #1b1b22 5px 10px); }
+	.mline { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-top: 4px;
+		display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+	.mline .sep { color: var(--faint); }
+	.mline .id { color: var(--a2); font-weight: 600; letter-spacing: .03em; }
+
+	/* Language: identity, so it sits left with the code — a filled tag, not a dot. */
+	.langs { display: inline-flex; gap: 3px; }
+	.langs u { text-decoration: none; font-family: var(--mono); font-size: 9.5px; font-weight: 700;
+		letter-spacing: .04em; padding: 1px 4px; border-radius: 3px; color: var(--a2);
+		background: color-mix(in srgb, var(--a) 18%, transparent); }
+	.langs u.off { color: var(--faint); background: transparent; border: 1px solid var(--rule); }
+
+	.rail { display: grid; gap: 4px; justify-items: end; flex: none; }
+	.rail em { font-style: normal; font-family: var(--mono); font-size: 9.5px; font-weight: 700;
+		letter-spacing: .06em; padding: 2px 7px; border-radius: 999px; border: 1px solid; }
+	.p-ok { color: #6ed6a0; border-color: #2f6b4d; background: rgba(76,175,125,.1); }
+	.p-part { color: #f0bd63; border-color: #7a5a24; background: rgba(224,163,60,.1); }
+	.p-none { color: #6a6a7a; border-color: var(--rule); }
+
+	.cap { display: flex; flex: none; border-radius: 999px; overflow: hidden; border: 1px solid var(--rule); }
+	.cap u { text-decoration: none; position: relative; width: 40px; height: 22px; display: grid;
+		place-items: center; font-size: 10px; font-weight: 700; color: var(--fg); background: #22222b; }
+	.cap u b { position: absolute; inset: 0 auto 0 0; }
+	.cap u.ok b { background: rgba(76,175,125,.55); } .cap u.part b { background: rgba(224,163,60,.55); }
+	.cap u.none b { background: transparent; }
+
+	.split { width: 4px; align-self: stretch; flex: none; display: grid; grid-template-rows: 1fr 1fr;
+		gap: 2px; margin-right: 12px; }
+	.split b { align-self: start; width: 100%; border-radius: 2px; background: var(--rule); display: block; }
+	.split b.ok { background: #4caf7d; } .split b.part { background: #e0a33c; }
+	.split b.none { background: var(--rule); height: 100% !important; }
+
+	/* T: the spine gauge carrying both coverage facts, so the line keeps its width. */
+	.r-gauge { display: flex; align-items: center; gap: 11px; padding: 9px 2px 9px 0;
+		border-bottom: 1px solid var(--rule); }
+	.r-gauge .ico { width: 38px; height: 38px; flex: none; border-radius: 7px; display: grid;
+		place-items: center; font-family: var(--mono); font-size: 7px; letter-spacing: .08em;
+		color: #4a4a56; background: repeating-linear-gradient(135deg, #24242c 0 5px, #1b1b22 5px 10px); }
+	.r-gauge .split { margin-right: 1px; height: 38px; align-self: center; }
+	.pc { font-family: var(--mono); font-size: 10.5px; font-weight: 700; flex: none; }
+	.pc { color: #e0a33c; background: none; }
+
+	/* ================= ROUND TWO: the four shapes, with icon and coverage ================= */
+
+	/* The set icon. Hatched where the source publishes none, which is most of them. */
+	.setico { width: 38px; height: 38px; flex: none; border-radius: 8px; display: grid;
+		place-items: center; font-family: var(--mono); font-size: 7px; letter-spacing: .08em;
+		color: #4a4a56; background: repeating-linear-gradient(135deg, #24242c 0 5px, #1b1b22 5px 10px); }
+	.setico.has { background: color-mix(in srgb, var(--a) 22%, #1b1b22); color: var(--a2);
+		font-size: 10px; font-weight: 700; letter-spacing: .02em; }
+
+	/* Donut rings: masked, so the centre is the row rather than a colour that has to match it. */
+	.ring2 { position: relative; width: 20px; height: 20px; flex: none; }
+	.ring2 i { position: absolute; inset: 0; border-radius: 50%; font-style: normal;
+		background: conic-gradient(var(--c) calc(var(--p) * 1%), rgba(255,255,255,.13) 0);
+		-webkit-mask: radial-gradient(farthest-side, transparent 56%, #000 59%);
+		mask: radial-gradient(farthest-side, transparent 56%, #000 59%); }
+	.ring2 s { position: absolute; inset: 0; display: grid; place-items: center; text-decoration: none;
+		font-size: 9px; font-weight: 700; color: var(--muted); }
+	.rings2 { display: flex; gap: 5px; flex: none; align-items: center; }
+
+	/* One capsule, two halves. A number where there is one, a glyph where the state is absolute. */
+	.cap2 { display: flex; flex: none; border-radius: 999px; overflow: hidden;
+		border: 1px solid rgba(255,255,255,.12); background: rgba(0,0,0,.35); }
+	.cap2 u { text-decoration: none; position: relative; min-width: 27px; height: 20px; padding: 0 5px;
+		display: grid; place-items: center; font-family: var(--mono); font-size: 9px; font-weight: 700;
+		color: #d8d8e2; }
+	.cap2 u b { position: absolute; inset: 0 auto 0 0; }
+	.cap2 u s { position: relative; text-decoration: none; }
+	.cap2 u.f b { background: rgba(76,175,125,.5); }
+	.cap2 u.p b { background: rgba(224,163,60,.5); }
+	.cap2 u.z b { background: none; }
+	.cap2 u.z { color: #74747f; }
+
+	.id2 { display: flex; align-items: center; gap: 11px; flex: 1; min-width: 0; }
+
+	/* Wash, now with the icon sitting in the tint it bleeds from. */
+	.w2 { display: flex; align-items: center; gap: 11px; border-radius: 12px; padding: 10px 12px;
+		background: linear-gradient(100deg, color-mix(in srgb, var(--a) 34%, var(--surface-2)) 0%,
+			var(--surface-2) 52%); }
+
+	/* Chamfer, with the icon cut to the same silhouette — two shapes, one idea. */
+	.ch2 { display: flex; align-items: center; gap: 11px; background: var(--surface-2);
+		padding: 10px 12px 10px 13px; border-radius: 0 12px 12px 12px;
+		clip-path: polygon(24px 0, 100% 0, 100% 100%, 0 100%, 0 24px); }
+	.ch2 .setico { clip-path: polygon(11px 0, 100% 0, 100% 100%, 0 100%, 0 11px); border-radius: 0 8px 8px 8px; }
+
+	/* Pack: serrated tear along the top, the icon printed on the wrapper. */
+	.pk2 { display: flex; align-items: center; gap: 11px; padding: 14px 12px 11px;
+		background: linear-gradient(160deg, color-mix(in srgb, var(--a) 28%, var(--surface-2)),
+			var(--surface-2) 58%, color-mix(in srgb, var(--a) 14%, var(--surface-2)));
+		border-radius: 3px 3px 12px 12px;
+		-webkit-mask: linear-gradient(#000 0 0) 0 7px/100% calc(100% - 7px) no-repeat,
+			repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 10px) 0 0/100% 7px no-repeat;
+		mask: linear-gradient(#000 0 0) 0 7px/100% calc(100% - 7px) no-repeat,
+			repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 10px) 0 0/100% 7px no-repeat; }
+
+	/* Tab: the code rides the tab, so the line below it does not have to carry one. */
+	.tb2 { position: relative; margin-top: 15px; }
+	.tb2 .tab { position: absolute; top: -15px; left: 10px; height: 16px; display: flex;
+		align-items: center; padding: 0 15px 1px; font-family: var(--mono); font-size: 10px;
+		font-weight: 700; color: #14141a; background: var(--a); border-radius: 5px 5px 0 0;
+		clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 100%, 6px 100%); }
+	.tb2 .body { display: flex; align-items: center; gap: 11px; background: var(--surface-2);
+		border-radius: 0 10px 10px 10px; padding: 10px 12px; border-top: 2px solid var(--a); }
+
+	.today { border: 1px dashed var(--rule); border-radius: 10px; padding: 12px 13px; display: flex;
+		align-items: center; gap: 12px; }
+	.today .thumb { width: 52px; height: 52px; border-radius: 8px; flex: none; background:
+		repeating-linear-gradient(135deg, #24242c 0 5px, #1b1b22 5px 10px); display: grid;
+		place-items: center; font-family: var(--mono); font-size: 7.5px; color: #4a4a56;
+		letter-spacing: .08em; }
+	.badge { font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: var(--faint); }
+</style>
+</head>
+<body>
+
+<header>
+	<h1>Row shapes</h1>
+	<p>set list &amp; card list · themed per game · candidates for the real rows</p>
+	<button class="mode" onclick="document.body.classList.toggle('light')">Light / dark</button>
+</header>
+
+<div class="section">Today, for comparison</div>
+<div class="board">
+	<div class="panel">
+		<h2>Set row as it ships</h2>
+		<p class="note">Three left-aligned lines at one indent. The icon is a hatched placeholder for most
+			sets, the code is nowhere, and coverage costs two words each.</p>
+		<div class="stack">
+			<div class="today g-pkmn"><div class="thumb">SET ICON</div>
+				<div class="grow"><div class="name" style="font-size:17px;font-weight:650">Silver Tempest</div>
+					<div class="facts">195 cards · Nov 2022</div>
+					<div class="cov"><span><i class="ok"></i>Card info</span><span><i class="ok"></i>Thumbnails</span></div></div></div>
+			<div class="today g-pkmn"><div class="thumb">SET ICON</div>
+				<div class="grow"><div class="name" style="font-size:17px;font-weight:650">Paldea Evolved</div>
+					<div class="facts">279 cards · Jun 2023</div>
+					<div class="cov"><span><i class="ok"></i>Card info</span><span><i class="part"></i>Thumbnails 62%</span></div></div></div>
+		</div>
+	</div>
+	<div class="panel">
+		<h2>Card row as it ships</h2>
+		<p class="note">Thumb, name, rarity. The number is nowhere.</p>
+		<div class="stack">
+			<div class="today g-rift"><div class="thumb" style="width:40px;height:56px;border-radius:4px"></div>
+				<div class="grow"><div class="name">Annie — Fiery Personality</div><div class="facts">Epic</div></div></div>
+			<div class="today g-rift"><div class="thumb" style="width:40px;height:56px;border-radius:4px"></div>
+				<div class="grow"><div class="name">Firestorm</div><div class="facts">Common</div></div></div>
+		</div>
+	</div>
+</div>
+
+<div class="section">T — the combination, drawn at 430px because that is where it has to fit</div>
+<div class="board">
+	<div class="panel" style="grid-column: 1 / -1">
+		<h2>T · Spine gauge + one identity line</h2>
+		<p class="note">The spine costs 4px, where a rail costs 45, so this is the version that fits
+			whatever else lands on the row. A percentage appears only where there is one to state; "all"
+			and "none" are the shape, not a number. (An earlier note here said a rail wraps the line at
+			phone width — that was the board's own panel padding, not the layout. See the true-width
+			section: a rail fits.)</p>
+		<div class="stack" style="gap:0">
+			<div class="r-gauge g-pkmn">
+				<div class="split"><b class="ok" style="height:100%"></b><b class="ok" style="height:100%"></b></div>
+				<div class="ico">ICON</div>
+				<div class="grow"><div class="name">Silver Tempest</div>
+					<div class="mline"><span class="id">SWSH12</span><span class="langs"><u>EN</u><u>JA</u></span><span class="sep">·</span>11 Nov 2022<span class="sep">·</span>195 cards</div></div>
+			</div>
+			<div class="r-gauge g-pkmn">
+				<div class="split"><b class="ok" style="height:100%"></b><b class="part" style="height:62%"></b></div>
+				<div class="ico">ICON</div>
+				<div class="grow"><div class="name">Paldea Evolved</div>
+					<div class="mline"><span class="id">SV02</span><span class="langs"><u>EN</u><u>JA</u><u>FR</u></span><span class="sep">·</span>09 Jun 2023<span class="sep">·</span>279 cards</div></div>
+				<div class="pc">62%</div>
+			</div>
+			<div class="r-gauge g-pkmn">
+				<div class="split"><b class="part" style="height:34%"></b><b class="none"></b></div>
+				<div class="ico">ICON</div>
+				<div class="grow"><div class="name">Surging Sparks</div>
+					<div class="mline"><span class="id">SV08</span><span class="langs"><u>EN</u><u class="off">JA</u></span><span class="sep">·</span>08 Nov 2024<span class="sep">·</span>252 cards</div></div>
+				<div class="pc">34%</div>
+			</div>
+			<div class="r-gauge g-pkmn">
+				<div class="split"><b class="none"></b><b class="none"></b></div>
+				<div class="ico">ICON</div>
+				<div class="grow"><div class="name">Obsidian Flames</div>
+					<div class="mline"><span class="id">SV03</span><span class="langs"><u class="off">EN</u><u class="off">FR</u><u class="off">DE</u></span><span class="sep">·</span>11 Aug 2023<span class="sep">·</span>230 cards</div></div>
+			</div>
+			<div class="r-gauge g-pkmn">
+				<div class="split"><b class="ok" style="height:100%"></b><b class="ok" style="height:100%"></b></div>
+				<div class="ico">ICON</div>
+				<div class="grow"><div class="name">Scarlet &amp; Violet—Twilight Masquerade</div>
+					<div class="mline"><span class="id">SV06</span><span class="langs"><u>EN</u></span><span class="sep">·</span>24 May 2024<span class="sep">·</span>226 cards</div></div>
+			</div>
+			<div class="r-gauge g-pkmn" style="opacity:.6">
+				<div class="split"><b class="none"></b><b class="none"></b></div>
+				<div class="ico">ICON</div>
+				<div class="grow"><div class="name">McDonald's Collection 2022</div>
+					<div class="mline"><span class="id">mcd22</span><span class="sep">·</span>date unknown<span class="sep">·</span>size unknown</div></div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="section">Round two — the four keepers, with the set icon and coverage</div>
+<div class="board">
+
+	<div class="panel">
+		<h2>Wash + icon</h2>
+		<p class="note">The icon sits in the tint it bleeds from, so the colour introduces the icon
+			rather than competing with it. Top two rows carry rings, bottom two the capsule.</p>
+		<div class="stack">
+			<div class="w2 g-lorcana"><div class="setico has">TFC</div>
+				<div class="id2"><div class="grow"><div class="name">The First Chapter</div>
+					<div class="mline"><span class="id">TFC</span><span class="langs"><u>EN</u><u>FR</u></span><span class="sep">·</span>18 Aug 2023<span class="sep">·</span>216 cards</div></div>
+					<span class="rings2"><span class="ring2"><i style="--p:100;--c:#4caf7d"></i><s>i</s></span><span class="ring2"><i style="--p:100;--c:#4caf7d"></i><s>▣</s></span></span></div></div>
+			<div class="w2 g-lorcana"><div class="setico">ICON</div>
+				<div class="id2"><div class="grow"><div class="name">Rise of the Floodborn</div>
+					<div class="mline"><span class="id">ROF</span><span class="langs"><u>EN</u><u class="off">DE</u></span><span class="sep">·</span>17 Nov 2023<span class="sep">·</span>204 cards</div></div>
+					<span class="rings2"><span class="ring2"><i style="--p:100;--c:#4caf7d"></i><s>i</s></span><span class="ring2"><i style="--p:62;--c:#e0a33c"></i><s>▣</s></span></span></div></div>
+			<div class="w2 g-lorcana"><div class="setico has">ITI</div>
+				<div class="id2"><div class="grow"><div class="name">Into the Inklands</div>
+					<div class="mline"><span class="id">ITI</span><span class="langs"><u>EN</u></span><span class="sep">·</span>23 Feb 2024<span class="sep">·</span>204 cards</div></div>
+					<span class="cap2"><u class="f"><b style="width:100%"></b><s>i</s></u><u class="f"><b style="width:100%"></b><s>▣</s></u></span></div></div>
+			<div class="w2 g-lorcana"><div class="setico">ICON</div>
+				<div class="id2"><div class="grow"><div class="name">Ursula's Return</div>
+					<div class="mline"><span class="id">URR</span><span class="langs"><u>EN</u></span><span class="sep">·</span>17 May 2024<span class="sep">·</span>204 cards</div></div>
+					<span class="cap2"><u class="p"><b style="width:34%"></b><s>34%</s></u><u class="z"><b></b><s>▣</s></u></span></div></div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>Chamfer + icon</h2>
+		<p class="note">The icon is cut to the row's own silhouette — two shapes saying one thing. The code
+			can no longer live in the cut once an icon is there, so it moves to the line.</p>
+		<div class="stack">
+			<div class="ch2 g-mtg"><div class="setico has">BLB</div>
+				<div class="id2"><div class="grow"><div class="name">Bloomburrow</div>
+					<div class="mline"><span class="id">BLB</span><span class="langs"><u>EN</u><u>JA</u></span><span class="sep">·</span>02 Aug 2024<span class="sep">·</span>261 cards</div></div>
+					<span class="rings2"><span class="ring2"><i style="--p:100;--c:#4caf7d"></i><s>i</s></span><span class="ring2"><i style="--p:100;--c:#4caf7d"></i><s>▣</s></span></span></div></div>
+			<div class="ch2 g-mtg"><div class="setico">ICON</div>
+				<div class="id2"><div class="grow"><div class="name">Duskmourn: House of Horror</div>
+					<div class="mline"><span class="id">DSK</span><span class="langs"><u>EN</u></span><span class="sep">·</span>27 Sep 2024<span class="sep">·</span>276 cards</div></div>
+					<span class="rings2"><span class="ring2"><i style="--p:100;--c:#4caf7d"></i><s>i</s></span><span class="ring2"><i style="--p:62;--c:#e0a33c"></i><s>▣</s></span></span></div></div>
+			<div class="ch2 g-mtg"><div class="setico has">FDN</div>
+				<div class="id2"><div class="grow"><div class="name">Foundations</div>
+					<div class="mline"><span class="id">FDN</span><span class="langs"><u>EN</u><u>FR</u><u>DE</u></span><span class="sep">·</span>15 Nov 2024<span class="sep">·</span>281 cards</div></div>
+					<span class="cap2"><u class="f"><b style="width:100%"></b><s>i</s></u><u class="f"><b style="width:100%"></b><s>▣</s></u></span></div></div>
+			<div class="ch2 g-mtg"><div class="setico">ICON</div>
+				<div class="id2"><div class="grow"><div class="name">Aetherdrift</div>
+					<div class="mline"><span class="id">DFT</span><span class="langs"><u>EN</u></span><span class="sep">·</span>14 Feb 2025<span class="sep">·</span>276 cards</div></div>
+					<span class="cap2"><u class="p"><b style="width:34%"></b><s>34%</s></u><u class="z"><b></b><s>▣</s></u></span></div></div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>Pack + icon</h2>
+		<p class="note">A foil booster: the tear runs along the top, the icon is printed on the wrapper.
+			The serration is the one shape here that survives being shrunk.</p>
+		<div class="stack" style="gap:12px">
+			<div class="pk2 g-pkmn"><div class="setico has">STS</div>
+				<div class="id2"><div class="grow"><div class="name">Silver Tempest</div>
+					<div class="mline"><span class="id">SWSH12</span><span class="langs"><u>EN</u><u>JA</u></span><span class="sep">·</span>11 Nov 2022<span class="sep">·</span>195 cards</div></div>
+					<span class="rings2"><span class="ring2"><i style="--p:100;--c:#4caf7d"></i><s>i</s></span><span class="ring2"><i style="--p:100;--c:#4caf7d"></i><s>▣</s></span></span></div></div>
+			<div class="pk2 g-pkmn"><div class="setico">ICON</div>
+				<div class="id2"><div class="grow"><div class="name">Paldea Evolved</div>
+					<div class="mline"><span class="id">SV02</span><span class="langs"><u>EN</u><u>JA</u><u>FR</u></span><span class="sep">·</span>09 Jun 2023<span class="sep">·</span>279 cards</div></div>
+					<span class="rings2"><span class="ring2"><i style="--p:100;--c:#4caf7d"></i><s>i</s></span><span class="ring2"><i style="--p:62;--c:#e0a33c"></i><s>▣</s></span></span></div></div>
+			<div class="pk2 g-pkmn"><div class="setico has">PRE</div>
+				<div class="id2"><div class="grow"><div class="name">Prismatic Evolutions</div>
+					<div class="mline"><span class="id">SV8PT5</span><span class="langs"><u>EN</u></span><span class="sep">·</span>17 Jan 2025<span class="sep">·</span>180 cards</div></div>
+					<span class="cap2"><u class="f"><b style="width:100%"></b><s>i</s></u><u class="f"><b style="width:100%"></b><s>▣</s></u></span></div></div>
+			<div class="pk2 g-pkmn"><div class="setico">ICON</div>
+				<div class="id2"><div class="grow"><div class="name">Surging Sparks</div>
+					<div class="mline"><span class="id">SV08</span><span class="langs"><u>EN</u><u class="off">JA</u></span><span class="sep">·</span>08 Nov 2024<span class="sep">·</span>252 cards</div></div>
+					<span class="cap2"><u class="p"><b style="width:34%"></b><s>34%</s></u><u class="z"><b></b><s>▣</s></u></span></div></div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>Tab + icon</h2>
+		<p class="note">The only one of the four that gets shorter: the code rides the tab, so the line
+			below it carries languages, date and count and nothing else.</p>
+		<div class="stack" style="gap:17px">
+			<div class="tb2 g-optcg"><div class="tab">OP-04</div>
+				<div class="body"><div class="setico has">OP04</div>
+					<div class="id2"><div class="grow"><div class="name">Kingdoms of Intrigue</div>
+						<div class="mline"><span class="langs"><u>EN</u><u>JA</u></span><span class="sep">·</span>10 Dec 2022<span class="sep">·</span>122 cards</div></div>
+						<span class="rings2"><span class="ring2"><i style="--p:100;--c:#4caf7d"></i><s>i</s></span><span class="ring2"><i style="--p:100;--c:#4caf7d"></i><s>▣</s></span></span></div></div></div>
+			<div class="tb2 g-optcg"><div class="tab">OP-16</div>
+				<div class="body"><div class="setico">ICON</div>
+					<div class="id2"><div class="grow"><div class="name">Beginning of the Same Dream</div>
+						<div class="mline"><span class="langs"><u>EN</u><u class="off">JA</u></span><span class="sep">·</span>29 Nov 2024<span class="sep">·</span>120 cards</div></div>
+						<span class="rings2"><span class="ring2"><i style="--p:100;--c:#4caf7d"></i><s>i</s></span><span class="ring2"><i style="--p:62;--c:#e0a33c"></i><s>▣</s></span></span></div></div></div>
+			<div class="tb2 g-optcg"><div class="tab">OP-08</div>
+				<div class="body"><div class="setico has">OP08</div>
+					<div class="id2"><div class="grow"><div class="name">Two Legends</div>
+						<div class="mline"><span class="langs"><u>EN</u><u>JA</u></span><span class="sep">·</span>22 Sep 2023<span class="sep">·</span>124 cards</div></div>
+						<span class="cap2"><u class="f"><b style="width:100%"></b><s>i</s></u><u class="f"><b style="width:100%"></b><s>▣</s></u></span></div></div></div>
+			<div class="tb2 g-optcg"><div class="tab">EB-01</div>
+				<div class="body"><div class="setico">ICON</div>
+					<div class="id2"><div class="grow"><div class="name">Memorial Collection</div>
+						<div class="mline"><span class="langs"><u>EN</u></span><span class="sep">·</span>26 Jan 2024<span class="sep">·</span>62 cards</div></div>
+						<span class="cap2"><u class="p"><b style="width:34%"></b><s>34%</s></u><u class="z"><b></b><s>▣</s></u></span></div></div></div>
+		</div>
+	</div>
+
+</div>
+
+<div class="section">The same four at true phone width — no board chrome</div>
+<div class="board">
+	<div class="panel" style="grid-column: 1 / -1">
+		<h2>400px, only the row's own padding</h2>
+		<p class="note">The panels above add ~80px of board chrome the app does not have, which is the
+			whole reason every line wrapped up there. At real width all four fit on one line — including
+			the worst case, three languages and a full date. The right column drops the day anyway; it
+			buys ~21px and reads better in a column, since the day of the month is never what is being
+			compared.</p>
+		<div style="display:flex; gap:18px; flex-wrap:wrap">
+			<div style="width:400px">
+				<div class="badge" style="margin-bottom:7px">full date · 11 Nov 2022</div>
+				<div class="stack" style="gap:14px">
+					<div class="w2 g-lorcana"><div class="setico has">TFC</div>
+						<div class="id2"><div class="grow"><div class="name">The First Chapter</div>
+							<div class="mline"><span class="id">TFC</span><span class="langs"><u>EN</u><u>FR</u></span><span class="sep">·</span>18 Aug 2023<span class="sep">·</span>216 cards</div></div>
+							<span class="rings2"><span class="ring2"><i style="--p:100;--c:#4caf7d"></i><s>i</s></span><span class="ring2"><i style="--p:62;--c:#e0a33c"></i><s>▣</s></span></span></div></div>
+					<div class="ch2 g-mtg"><div class="setico has">BLB</div>
+						<div class="id2"><div class="grow"><div class="name">Bloomburrow</div>
+							<div class="mline"><span class="id">BLB</span><span class="langs"><u>EN</u><u>JA</u></span><span class="sep">·</span>02 Aug 2024<span class="sep">·</span>261 cards</div></div>
+							<span class="cap2"><u class="f"><b style="width:100%"></b><s>i</s></u><u class="f"><b style="width:100%"></b><s>▣</s></u></span></div></div>
+					<div class="pk2 g-pkmn"><div class="setico">ICON</div>
+						<div class="id2"><div class="grow"><div class="name">Paldea Evolved</div>
+							<div class="mline"><span class="id">SV02</span><span class="langs"><u>EN</u><u>JA</u><u>FR</u></span><span class="sep">·</span>09 Jun 2023<span class="sep">·</span>279 cards</div></div>
+							<span class="rings2"><span class="ring2"><i style="--p:100;--c:#4caf7d"></i><s>i</s></span><span class="ring2"><i style="--p:62;--c:#e0a33c"></i><s>▣</s></span></span></div></div>
+					<div class="tb2 g-optcg"><div class="tab">OP-16</div>
+						<div class="body"><div class="setico">ICON</div>
+							<div class="id2"><div class="grow"><div class="name">Beginning of the Same Dream</div>
+								<div class="mline"><span class="langs"><u>EN</u><u class="off">JA</u></span><span class="sep">·</span>29 Nov 2024<span class="sep">·</span>120 cards</div></div>
+								<span class="cap2"><u class="f"><b style="width:100%"></b><s>i</s></u><u class="p"><b style="width:62%"></b><s>62%</s></u></span></div></div></div>
+				</div>
+			</div>
+			<div style="width:400px">
+				<div class="badge" style="margin-bottom:7px">month only · Nov 2022</div>
+				<div class="stack" style="gap:14px">
+					<div class="w2 g-lorcana"><div class="setico has">TFC</div>
+						<div class="id2"><div class="grow"><div class="name">The First Chapter</div>
+							<div class="mline"><span class="id">TFC</span><span class="langs"><u>EN</u><u>FR</u></span><span class="sep">·</span>Aug 2023<span class="sep">·</span>216 cards</div></div>
+							<span class="rings2"><span class="ring2"><i style="--p:100;--c:#4caf7d"></i><s>i</s></span><span class="ring2"><i style="--p:62;--c:#e0a33c"></i><s>▣</s></span></span></div></div>
+					<div class="ch2 g-mtg"><div class="setico has">BLB</div>
+						<div class="id2"><div class="grow"><div class="name">Bloomburrow</div>
+							<div class="mline"><span class="id">BLB</span><span class="langs"><u>EN</u><u>JA</u></span><span class="sep">·</span>Aug 2024<span class="sep">·</span>261 cards</div></div>
+							<span class="cap2"><u class="f"><b style="width:100%"></b><s>i</s></u><u class="f"><b style="width:100%"></b><s>▣</s></u></span></div></div>
+					<div class="pk2 g-pkmn"><div class="setico">ICON</div>
+						<div class="id2"><div class="grow"><div class="name">Paldea Evolved</div>
+							<div class="mline"><span class="id">SV02</span><span class="langs"><u>EN</u><u>JA</u><u>FR</u></span><span class="sep">·</span>Jun 2023<span class="sep">·</span>279 cards</div></div>
+							<span class="rings2"><span class="ring2"><i style="--p:100;--c:#4caf7d"></i><s>i</s></span><span class="ring2"><i style="--p:62;--c:#e0a33c"></i><s>▣</s></span></span></div></div>
+					<div class="tb2 g-optcg"><div class="tab">OP-16</div>
+						<div class="body"><div class="setico">ICON</div>
+							<div class="id2"><div class="grow"><div class="name">Beginning of the Same Dream</div>
+								<div class="mline"><span class="langs"><u>EN</u><u class="off">JA</u></span><span class="sep">·</span>Nov 2024<span class="sep">·</span>120 cards</div></div>
+								<span class="cap2"><u class="f"><b style="width:100%"></b><s>i</s></u><u class="p"><b style="width:62%"></b><s>62%</s></u></span></div></div></div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="section">Set rows</div>
+<div class="board">
+
+	<div class="panel">
+		<h2>1 · Stack</h2>
+		<p class="note">A set is a pile of cards, so the row is one. Depth without a shadow.</p>
+		<div class="stack">
+			<div class="r-stack g-rift">
+				<div class="sheet s1"></div><div class="sheet s2"></div>
+				<div class="face">
+					<div class="grow"><div class="name">Origins</div>
+						<div class="facts"><span class="n">352</span> cards <span class="dot"></span>
+							<span class="code">OGN</span> <span class="dot"></span> <span class="lang">en</span></div></div>
+					<div class="date">Oct 2025</div>
+				</div>
+			</div>
+			<div class="r-stack g-optcg">
+				<div class="sheet s1"></div><div class="sheet s2"></div>
+				<div class="face">
+					<div class="grow"><div class="name">Kingdoms of Intrigue</div>
+						<div class="facts"><span class="n">122</span> cards <span class="dot"></span>
+							<span class="code">OP-04</span> <span class="dot"></span> <span class="lang">en</span>
+							<span class="lang">jp</span></div></div>
+					<div class="date">Dec 2022</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>2 · Stub</h2>
+		<p class="note">A ticket. The code is torn off down a perforation, punched at both ends.</p>
+		<div class="stack">
+			<div class="r-stub g-optcg">
+				<div class="stub"><b>OP-16</b><span>ONE PIECE</span></div>
+				<div class="perf"></div>
+				<div class="body">
+					<div class="grow"><div class="name">Beginning of the Same Dream</div>
+						<div class="facts"><span class="n">120</span> cards <span class="dot"></span>
+							<span class="lang">en</span> <span class="lang">jp</span></div></div>
+					<div class="date">Nov 2024</div>
+				</div>
+			</div>
+			<div class="r-stub g-pkmn">
+				<div class="stub"><b>sv8</b><span>POKÉMON</span></div>
+				<div class="perf"></div>
+				<div class="body">
+					<div class="grow"><div class="name">Surging Sparks</div>
+						<div class="facts"><span class="n">252</span> cards <span class="dot"></span>
+							<span class="lang">en</span></div></div>
+					<div class="date">Nov 2024</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>3 · Spine</h2>
+		<p class="note">No card at all. An edge and a hairline — the densest of the set. A long list reads as a list.</p>
+		<div class="stack" style="gap:0">
+			<div class="r-spine g-rift"><div class="bar"></div>
+				<div class="grow"><div class="name">Vendetta</div>
+					<div class="facts"><span class="n">358</span> cards <span class="dot"></span><span class="code">VEN</span></div></div>
+				<div class="date">Jul 2026</div></div>
+			<div class="r-spine g-rift"><div class="bar"></div>
+				<div class="grow"><div class="name">Unleashed</div>
+					<div class="facts"><span class="n">280</span> cards <span class="dot"></span><span class="code">UNL</span></div></div>
+				<div class="date">May 2026</div></div>
+			<div class="r-spine g-rift"><div class="bar"></div>
+				<div class="grow"><div class="name">Origins</div>
+					<div class="facts"><span class="n">352</span> cards <span class="dot"></span><span class="code">OGN</span></div></div>
+				<div class="date">Oct 2025</div></div>
+			<div class="r-spine g-rift" style="opacity:.62"><div class="bar" style="background:var(--faint)"></div>
+				<div class="grow"><div class="name">Riftbound Promotional Cards</div>
+					<div class="facts">size unknown <span class="dot"></span><span class="code">PR</span></div></div>
+				<div class="date">—</div></div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>4 · Chamfer</h2>
+		<p class="note">The cut corner of a sleeved card, with the code sitting in the cut.</p>
+		<div class="stack">
+			<div class="r-cham g-mtg">
+				<div class="tag">BLB</div>
+				<div class="grow"><div class="name">Bloomburrow</div>
+					<div class="facts"><span class="n">261</span> cards <span class="dot"></span><span class="lang">en</span></div></div>
+				<div class="date">Aug 2024</div>
+			</div>
+			<div class="r-cham g-ygo">
+				<div class="tag">RA03</div>
+				<div class="grow"><div class="name">Quarter Century Bonanza</div>
+					<div class="facts"><span class="n">300</span> cards <span class="dot"></span><span class="lang">en</span></div></div>
+				<div class="date">Nov 2024</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>5 · Wash</h2>
+		<p class="note">No tile. The game's colour bleeds in from the leading edge and gets out of the way.</p>
+		<div class="stack">
+			<div class="r-wash g-lorcana">
+				<div class="tag">TFC</div>
+				<div class="grow"><div class="name">The First Chapter</div>
+					<div class="facts"><span class="n">216</span> cards <span class="dot"></span><span class="lang">en</span></div></div>
+				<div class="date">Aug 2023</div>
+			</div>
+			<div class="r-wash g-rift">
+				<div class="tag">OGS</div>
+				<div class="grow"><div class="name">Origins: Proving Grounds</div>
+					<div class="facts"><span class="n">24</span> cards <span class="dot"></span><span class="lang">en</span></div></div>
+				<div class="date">Oct 2025</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>6 · Meter</h2>
+		<p class="note">The row's own background says how much card info is held; the bar under the name
+			says how many pictures. Two facts, no sentences.</p>
+		<div class="stack">
+			<div class="r-meter g-pkmn"><div class="fill" style="width:100%"></div>
+				<div class="body"><div class="grow"><div class="name">Silver Tempest</div>
+					<div class="facts"><span class="n">195</span> cards <span class="dot"></span><span class="code">swsh12</span>
+						<span class="dot"></span> Nov 2022</div></div>
+					<div class="pair"><div><b class="ok" style="width:100%"></b></div><div><b class="ok" style="width:100%"></b></div></div></div></div>
+			<div class="r-meter g-pkmn"><div class="fill" style="width:100%"></div>
+				<div class="body"><div class="grow"><div class="name">Paldea Evolved</div>
+					<div class="facts"><span class="n">279</span> cards <span class="dot"></span><span class="code">sv02</span>
+						<span class="dot"></span> Jun 2023</div></div>
+					<div class="pair"><div><b class="ok" style="width:100%"></b></div><div><b class="part" style="width:62%"></b></div></div></div></div>
+			<div class="r-meter g-pkmn"><div class="fill" style="width:34%"></div>
+				<div class="body"><div class="grow"><div class="name">Surging Sparks</div>
+					<div class="facts"><span class="n">252</span> cards <span class="dot"></span><span class="code">sv08</span>
+						<span class="dot"></span> Nov 2024</div></div>
+					<div class="pair"><div><b class="part" style="width:34%"></b></div><div><b class="none" style="width:3%"></b></div></div></div></div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>7 · Pack</h2>
+		<p class="note">A foil booster: serrated tear along the top, the game's colour in the wrapper.</p>
+		<div class="stack">
+			<div class="r-pack g-pkmn">
+				<div class="grow"><div class="name">Prismatic Evolutions</div>
+					<div class="facts"><span class="n">180</span> cards <span class="dot"></span>
+						<span class="code">sv8pt5</span></div></div>
+				<div class="date">Jan 2025</div>
+			</div>
+			<div class="r-pack g-optcg">
+				<div class="grow"><div class="name">Two Legends</div>
+					<div class="facts"><span class="n">124</span> cards <span class="dot"></span>
+						<span class="code">OP-08</span></div></div>
+				<div class="date">Sep 2023</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>8 · Tab</h2>
+		<p class="note">A file divider. The code sits on the tab above the row, so a scan down the left reads codes.</p>
+		<div class="stack" style="gap:16px">
+			<div class="r-tab g-mtg"><div class="tab">DSK</div>
+				<div class="body"><div class="grow"><div class="name">Duskmourn: House of Horror</div>
+					<div class="facts"><span class="n">276</span> cards <span class="dot"></span><span class="lang">en</span></div></div>
+					<div class="date">Sep 2024</div></div></div>
+			<div class="r-tab g-lorcana"><div class="tab">ROF</div>
+				<div class="body"><div class="grow"><div class="name">Rise of the Floodborn</div>
+					<div class="facts"><span class="n">204</span> cards <span class="dot"></span><span class="lang">en</span></div></div>
+					<div class="date">Nov 2023</div></div></div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>9 · Slot</h2>
+		<p class="note">A binder pocket, the set peeking out of it. Inset rather than raised — the list is the binder.</p>
+		<div class="stack">
+			<div class="r-slot g-rift"><div class="peek"></div>
+				<div class="grow"><div class="name">Origins</div>
+					<div class="facts"><span class="n">352</span> cards <span class="dot"></span><span class="code">OGN</span></div></div>
+				<div class="date">Oct 2025</div></div>
+			<div class="r-slot g-ygo"><div class="peek"></div>
+				<div class="grow"><div class="name">Legend of Blue Eyes White Dragon</div>
+					<div class="facts"><span class="n">126</span> cards <span class="dot"></span><span class="code">LOB</span></div></div>
+				<div class="date">Mar 2002</div></div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>10 · Hex</h2>
+		<p class="note">A hexagon instead of a rounded square — a shape nothing else on the screen uses.</p>
+		<div class="stack">
+			<div class="r-hex g-optcg"><div class="hex">OP-16</div>
+				<div class="grow"><div class="name">Beginning of the Same Dream</div>
+					<div class="facts"><span class="n">120</span> cards <span class="dot"></span>
+						<span class="lang">en</span> <span class="lang">jp</span></div></div>
+				<div class="date">Nov 2024</div></div>
+			<div class="r-hex g-pkmn"><div class="hex">sv8</div>
+				<div class="grow"><div class="name">Surging Sparks</div>
+					<div class="facts"><span class="n">252</span> cards <span class="dot"></span><span class="lang">en</span></div></div>
+				<div class="date">Nov 2024</div></div>
+		</div>
+	</div>
+
+</div>
+
+<div class="section">Coverage — the two facts, as shape rather than sentence</div>
+<div class="board">
+
+	<div class="panel">
+		<h2>P · Pills on a right rail <span class="badge" style="margin-left:6px">the in-progress one</span></h2>
+		<p class="note">Facts become one mono line — code, full date, count. Coverage moves right and
+			becomes two outlined pills, so the left column is identity and the right column is state.</p>
+		<div class="stack">
+			<div class="r-pill g-pkmn"><div class="ico">ICON</div>
+				<div class="grow"><div class="name">Silver Tempest</div>
+					<div class="mline"><span class="id">SWSH12</span><span class="langs"><u>EN</u><u>JA</u></span><span class="sep">·</span>11 Nov 2022<span class="sep">·</span>195 cards</div></div>
+				<div class="rail"><em class="p-ok">INFO</em><em class="p-ok">THUMBS</em></div></div>
+			<div class="r-pill g-pkmn"><div class="ico">ICON</div>
+				<div class="grow"><div class="name">Paldea Evolved</div>
+					<div class="mline"><span class="id">SV02</span><span class="langs"><u>EN</u><u>JA</u><u>FR</u></span><span class="sep">·</span>09 Jun 2023<span class="sep">·</span>279 cards</div></div>
+				<div class="rail"><em class="p-ok">INFO</em><em class="p-part">THUMBS 62%</em></div></div>
+			<div class="r-pill g-pkmn"><div class="ico">ICON</div>
+				<div class="grow"><div class="name">Surging Sparks</div>
+					<div class="mline"><span class="id">SV08</span><span class="langs"><u>EN</u><u class="off">JA</u></span><span class="sep">·</span>08 Nov 2024<span class="sep">·</span>252 cards</div></div>
+				<div class="rail"><em class="p-part">INFO 34%</em><em class="p-none">THUMBS</em></div></div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>Q · One capsule, two halves</h2>
+		<p class="note">The same pair as a single split shape: left half info, right half pictures. One
+			object to find on every row instead of two, and it never reflows as text does.</p>
+		<div class="stack">
+			<div class="r-pill g-pkmn"><div class="ico">ICON</div>
+				<div class="grow"><div class="name">Silver Tempest</div>
+					<div class="mline"><span class="id">SWSH12</span><span class="langs"><u>EN</u><u>JA</u></span><span class="sep">·</span>11 Nov 2022<span class="sep">·</span>195 cards</div></div>
+				<div class="cap"><u class="ok"><b style="width:100%"></b>i</u><u class="ok"><b style="width:100%"></b>▣</u></div></div>
+			<div class="r-pill g-pkmn"><div class="ico">ICON</div>
+				<div class="grow"><div class="name">Paldea Evolved</div>
+					<div class="mline"><span class="id">SV02</span><span class="langs"><u>EN</u><u>JA</u><u>FR</u></span><span class="sep">·</span>09 Jun 2023<span class="sep">·</span>279 cards</div></div>
+				<div class="cap"><u class="ok"><b style="width:100%"></b>i</u><u class="part"><b style="width:62%"></b>▣</u></div></div>
+			<div class="r-pill g-pkmn"><div class="ico">ICON</div>
+				<div class="grow"><div class="name">Surging Sparks</div>
+					<div class="mline"><span class="id">SV08</span><span class="langs"><u>EN</u><u class="off">JA</u></span><span class="sep">·</span>08 Nov 2024<span class="sep">·</span>252 cards</div></div>
+				<div class="cap"><u class="part"><b style="width:34%"></b>i</u><u class="none"><b style="width:0"></b>▣</u></div></div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>R · Two rings</h2>
+		<p class="note">A dial reads as a fraction at a glance where a percentage has to be read. Smallest
+			right rail of the three, and 0 / part / all are three visibly different shapes.</p>
+		<div class="stack">
+			<div class="r-pill g-pkmn"><div class="ico">ICON</div>
+				<div class="grow"><div class="name">Silver Tempest</div>
+					<div class="mline"><span class="id">SWSH12</span><span class="langs"><u>EN</u><u>JA</u></span><span class="sep">·</span>11 Nov 2022<span class="sep">·</span>195 cards</div></div>
+				<div class="rings"><span class="ring full" data-l="i"></span><span class="ring full" data-l="▣"></span></div></div>
+			<div class="r-pill g-pkmn"><div class="ico">ICON</div>
+				<div class="grow"><div class="name">Paldea Evolved</div>
+					<div class="mline"><span class="id">SV02</span><span class="langs"><u>EN</u><u>JA</u><u>FR</u></span><span class="sep">·</span>09 Jun 2023<span class="sep">·</span>279 cards</div></div>
+				<div class="rings"><span class="ring full" data-l="i"></span><span class="ring p62" data-l="▣"></span></div></div>
+			<div class="r-pill g-pkmn"><div class="ico">ICON</div>
+				<div class="grow"><div class="name">Surging Sparks</div>
+					<div class="mline"><span class="id">SV08</span><span class="langs"><u>EN</u><u class="off">JA</u></span><span class="sep">·</span>08 Nov 2024<span class="sep">·</span>252 cards</div></div>
+				<div class="rings"><span class="ring p62" style="background:conic-gradient(#e0a33c 34%,#2b2b36 0)" data-l="i"></span><span class="ring p0" data-l="▣"></span></div></div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>S · Split spine</h2>
+		<p class="note">No rail at all. The leading edge is the gauge — upper half info, lower half
+			pictures — so coverage costs three pixels of width and the row keeps its whole line.</p>
+		<div class="stack" style="gap:0">
+			<div class="r-spine g-pkmn" style="padding-left:0">
+				<div class="split"><b class="ok" style="height:100%"></b><b class="ok" style="height:100%"></b></div>
+				<div class="grow"><div class="name">Silver Tempest</div>
+					<div class="mline"><span class="id">SWSH12</span><span class="langs"><u>EN</u><u>JA</u></span><span class="sep">·</span>11 Nov 2022<span class="sep">·</span>195 cards</div></div></div>
+			<div class="r-spine g-pkmn" style="padding-left:0">
+				<div class="split"><b class="ok" style="height:100%"></b><b class="part" style="height:62%"></b></div>
+				<div class="grow"><div class="name">Paldea Evolved</div>
+					<div class="mline"><span class="id">SV02</span><span class="langs"><u>EN</u><u>JA</u><u>FR</u></span><span class="sep">·</span>09 Jun 2023<span class="sep">·</span>279 cards</div></div></div>
+			<div class="r-spine g-pkmn" style="padding-left:0">
+				<div class="split"><b class="part" style="height:34%"></b><b class="none" style="height:0"></b></div>
+				<div class="grow"><div class="name">Surging Sparks</div>
+					<div class="mline"><span class="id">SV08</span><span class="langs"><u>EN</u><u class="off">JA</u></span><span class="sep">·</span>08 Nov 2024<span class="sep">·</span>252 cards</div></div></div>
+			<div class="r-spine g-pkmn" style="padding-left:0">
+				<div class="split"><b class="ok" style="height:100%"></b><b class="ok" style="height:100%"></b></div>
+				<div class="grow"><div class="name">Obsidian Flames</div>
+					<div class="mline"><span class="id">SV03</span><span class="langs"><u>EN</u><u>FR</u><u>DE</u></span><span class="sep">·</span>11 Aug 2023<span class="sep">·</span>230 cards</div></div></div>
+		</div>
+	</div>
+
+</div>
+
+<div class="section">Card rows</div>
+<div class="board">
+
+	<div class="panel">
+		<h2>A · Bleed</h2>
+		<p class="note">The art is the row's leading edge, not a picture sitting on a card.</p>
+		<div class="stack">
+			<div class="c-bleed g-rift"><div class="art"></div>
+				<div class="grow" style="padding:10px 12px 10px 0">
+					<div class="name"><span class="code" style="margin-right:7px">001</span>Annie — Fiery Personality</div>
+					<div class="facts">Epic <span class="dot"></span> Fury <span class="dot"></span>
+						<span class="n">5</span> energy</div></div></div>
+			<div class="c-bleed g-mtg"><div class="art"></div>
+				<div class="grow" style="padding:10px 12px 10px 0">
+					<div class="name"><span class="code" style="margin-right:7px">0122</span>Lightning Bolt</div>
+					<div class="facts">Common <span class="dot"></span> Instant <span class="dot"></span>
+						<span class="n">1</span> mana</div></div></div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>B · Stripe</h2>
+		<p class="note">Rarity as a vertical edge, so a column of rarities can be read down the list without reading a word.</p>
+		<div class="stack" style="gap:6px">
+			<div class="c-stripe g-rift"><div class="rar" style="background:#b07bf0"></div><div class="art"></div>
+				<div class="grow"><div class="name trunc">Annie — Fiery Personality</div>
+					<div class="facts"><span class="code">001</span> <span class="dot"></span> Epic
+						<span class="dot"></span> <span class="n">5</span></div></div></div>
+			<div class="c-stripe g-rift"><div class="rar" style="background:#8a8a97"></div><div class="art"></div>
+				<div class="grow"><div class="name trunc">Firestorm</div>
+					<div class="facts"><span class="code">002</span> <span class="dot"></span> Common
+						<span class="dot"></span> <span class="n">2</span></div></div></div>
+			<div class="c-stripe g-rift"><div class="rar" style="background:#4fa3e3"></div><div class="art"></div>
+				<div class="grow"><div class="name trunc">Incinerate</div>
+					<div class="facts"><span class="code">003</span> <span class="dot"></span> Rare
+						<span class="dot"></span> <span class="n">3</span></div></div></div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>C · Cost pip</h2>
+		<p class="note">The cost sits on the art, in the corner the card itself prints it.</p>
+		<div class="stack">
+			<div class="c-cost g-rift"><div class="wrap"><div class="art"></div><div class="pip">7</div></div>
+				<div class="grow" style="padding:10px 12px 10px 0"><div class="name trunc">Master Yi — Wuju Bladesman</div>
+					<div class="facts"><span class="code">004</span> <span class="dot"></span> Rare
+						<span class="dot"></span> Order</div></div></div>
+			<div class="c-cost g-lorcana"><div class="wrap"><div class="art"></div><div class="pip">4</div></div>
+				<div class="grow" style="padding:10px 12px 10px 0"><div class="name trunc">Elsa — Snow Queen</div>
+					<div class="facts"><span class="code">041</span> <span class="dot"></span> Legendary
+						<span class="dot"></span> Amethyst</div></div></div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>D · Hairline</h2>
+		<p class="note">No card, almost no padding. Twice as many cards on screen; the art is a colour cue only.</p>
+		<div class="stack" style="gap:0">
+			<div class="c-hair g-rift"><div class="art"></div><div class="num">001</div>
+				<div class="grow trunc name" style="font-size:13.5px">Annie — Fiery Personality</div>
+				<div class="dot" style="background:#b07bf0;width:7px;height:7px"></div>
+				<div class="facts" style="margin:0"><span class="n">5</span></div></div>
+			<div class="c-hair g-rift"><div class="art"></div><div class="num">002</div>
+				<div class="grow trunc name" style="font-size:13.5px">Firestorm</div>
+				<div class="dot" style="background:#8a8a97;width:7px;height:7px"></div>
+				<div class="facts" style="margin:0"><span class="n">2</span></div></div>
+			<div class="c-hair g-rift"><div class="art"></div><div class="num">007a</div>
+				<div class="grow trunc name" style="font-size:13.5px">Garen, Might of Demacia — Signature Edition</div>
+				<div class="dot" style="background:#4fa3e3;width:7px;height:7px"></div>
+				<div class="facts" style="margin:0"><span class="n">6</span></div></div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>E · Fanned</h2>
+		<p class="note">The art tilted, as a card laid on a table. Costs width, and a list of them looks hand-dealt.</p>
+		<div class="stack">
+			<div class="c-fan g-optcg"><div class="art"></div>
+				<div class="grow"><div class="name trunc">Monkey.D.Luffy</div>
+					<div class="facts"><span class="code">OP01-001</span> <span class="dot"></span> Leader
+						<span class="dot"></span> <span class="n">5000</span></div></div></div>
+			<div class="c-fan g-optcg"><div class="art"></div>
+				<div class="grow"><div class="name trunc">Roronoa Zoro</div>
+					<div class="facts"><span class="code">OP01-025</span> <span class="dot"></span> Super Rare
+						<span class="dot"></span> <span class="n">6000</span></div></div></div>
+		</div>
+	</div>
+
+	<div class="panel">
+		<h2>F · Fold</h2>
+		<p class="note">The top-right corner turned down, rarity showing underneath it. One shape carries one fact.</p>
+		<div class="stack">
+			<div class="c-fold g-pkmn" style="--rar:#b07bf0"><div class="corner"></div><div class="art"></div>
+				<div class="grow" style="padding:10px 12px 10px 0"><div class="name trunc">Pikachu ex</div>
+					<div class="facts"><span class="code">238</span> <span class="dot"></span> Ultra Rare
+						<span class="dot"></span> Lightning</div></div></div>
+			<div class="c-fold g-pkmn" style="--rar:#8a8a97"><div class="corner"></div><div class="art"></div>
+				<div class="grow" style="padding:10px 12px 10px 0"><div class="name trunc">Bidoof</div>
+					<div class="facts"><span class="code">111</span> <span class="dot"></span> Common
+						<span class="dot"></span> Colorless</div></div></div>
+		</div>
+	</div>
+
+</div>
+
+</body>
+</html>
