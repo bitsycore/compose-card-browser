@@ -268,10 +268,10 @@ class AppModuleTest {
 
 	@Test
 	fun `a source that refuses per-set records is one that publishes a dump`() {
-		// `cardInfoFromBulkOnly` takes the per-set download away, so a source that sets it without
-		// implementing `BulkCatalogue` leaves no way to get records at all: the single-set dialog
-		// points at an import that does not exist. The flag is a redirection, not a refusal, and
-		// this is the assertion that it redirects somewhere.
+		// `cardInfoFromBulkOnly` routes the *whole-game* download to the dump, so a source that
+		// sets it without implementing `BulkCatalogue` leaves no way to take a catalogue at all --
+		// the dialog names a file that does not exist. Per-set downloads are unaffected, which is
+		// why this is an assertion about the whole-game route rather than about records in general.
 		val vRegistry = graph().get<ProviderRegistry>()
 		val vBulkOnly = vRegistry.games
 			.mapNotNull { vRegistry.resolve(it) }
@@ -284,7 +284,7 @@ class AppModuleTest {
 		vBulkOnly.forEach { vProvider ->
 			assertTrue(
 				vProvider is BulkCatalogue,
-				"${vProvider.id.value} takes card info off the per-set dialog and publishes no dump",
+				"${vProvider.id.value} sends the whole-game download to a dump it does not publish",
 			)
 		}
 	}

@@ -277,9 +277,15 @@ fun DownloadKindDialog(
 	// with no say in it. Card records are small, so taking them all is still the default where the
 	// set says what it is published in -- but a source that states nothing offers a claim, and
 	// eleven speculative jobs is not a default anybody chose.
-	// Card info is not on offer here at all: either it is already in the app, or it belongs to the
-	// whole-game import. One name for the two, because the row is the same row either way.
-	val vInfoIsElsewhere = cardInfoIsElsewhere(isCardDataBundled, isCardInfoBulkOnly, setCount)
+	// Card info is not on offer here at all, because it is already in the app.
+	//
+	// Bundled is the only reason left. A bulk-only source used to be a second one, and the
+	// single-set dialog refused card info and pointed at the whole-game import -- which was too
+	// blunt: one set is a handful of requests for something the reader is looking at, and the
+	// traffic the dump exists to prevent is the *catalogue* being walked, not one set of it. The
+	// whole-game path still takes the file and never fans out per set; see the confirm handler in
+	// `SetListScreen`. The note on the row below names the file so the choice is informed.
+	val vInfoIsElsewhere = isCardDataBundled
 	val vWantsInfo = vInfo && !vInfoIsElsewhere
 	// Whether the *language* of the records is this dialog's to choose.
 	//
@@ -290,8 +296,6 @@ fun DownloadKindDialog(
 	val vInfoLanguageChoosable = vChoosable &&
 		cardInfoLanguageIsChosen(
 			isCardDataBundled = isCardDataBundled,
-			isCardInfoBulkOnly = isCardInfoBulkOnly,
-			setCount = setCount,
 			hasBulkVariants = bulkVariants.isNotEmpty(),
 		)
 
@@ -314,23 +318,11 @@ fun DownloadKindDialog(
 			Column(Modifier.verticalScroll(rememberScrollState())) {
 				if (vInfoIsElsewhere) {
 					Text(
-						text = if (isCardDataBundled) {
-							"Card info · Built in"
-						} else {
-							"Card info · Whole game only"
-						},
+						text = "Card info · Built in",
 						style = MaterialTheme.typography.bodyMedium,
 					)
 					Text(
-						text = if (isCardDataBundled) {
-							"Ships with the app. Always available offline."
-						} else {
-							// Named as the thing the user can actually go and do, rather than as a
-							// refusal. The control is one screen away, on the download-all dialog.
-							"This source publishes its records as one file. Use “Download " +
-								"all” to take it; fetching them a set at a time would be " +
-								"hundreds of requests for the same data."
-						},
+						text = "Ships with the app. Always available offline.",
 						style = MaterialTheme.typography.bodySmall,
 						color = MaterialTheme.colorScheme.onSurfaceVariant,
 					)
@@ -348,6 +340,12 @@ fun DownloadKindDialog(
 					// reason is indistinguishable from a broken one.
 					note = when {
 						isImportingGame -> "Already downloading for the whole game"
+						// Offered, and told what the cheaper route is. This source packages its
+						// whole catalogue as one file, so taking a few hundred sets one at a time
+						// is the traffic that file exists to prevent -- but one set is not that.
+						isCardInfoBulkOnly && setCount == 1 ->
+							"Fetched from the API. “Download all” takes the whole game as one file"
+
 						// Short, because the row is already ticked and disabled: the question a
 						// reader has here is "what have I got, and is it current?", and the answer
 						// is the language plus the button beside it. It used to be two sentences of
@@ -711,24 +709,6 @@ fun DownloadsButton(jobs: List<DownloadJob>, onClick: () -> Unit) {
 }
 
 /**
- * Whether this dialog offers card info at all, or names where it comes from instead.
- *
- * Extracted so the rule can be tested, because it is the one place two different "no" answers meet
- * and the second one is conditional. Bundled records are never on offer anywhere. Bulk-only records
- * are not on offer *per set* -- and are very much on offer for the whole game, which is the whole
- * point of saying so: the user is being pointed at the import, not refused.
- *
- * Getting it wrong the other way is worse than it looks. The card-info tick defaults to on, so a
- * dialog that hides the row without also declining to queue the kind would enqueue a per-set fetch
- * for a source that has just finished explaining why it must not.
- */
-internal fun cardInfoIsElsewhere(
-	isCardDataBundled: Boolean,
-	isCardInfoBulkOnly: Boolean,
-	setCount: Int,
-): Boolean = isCardDataBundled || (isCardInfoBulkOnly && setCount == 1)
-
-/**
  * Whether the *language* of the records is this dialog's to choose.
  *
  * Only where they are fetched per set. A dump's languages are the dump's -- Scryfall publishes a
@@ -737,16 +717,16 @@ internal fun cardInfoIsElsewhere(
  * control for the same fact that cannot honour what it is set to. The whole-game dialog offered
  * both at once, which is what this removes.
  *
- * Separate from [cardInfoIsElsewhere] because the answers differ exactly where it matters: on the
- * whole-game dialog for a source with a dump, the card-info *row* is very much offered -- it is how
- * the import is started -- and its language is not a choice.
+ * Bundled records have no language control either, for the plainer reason that nothing is being
+ * fetched.
+ *
+ * A bulk-only source's *single-set* dialog does choose, and that is the point of the distinction:
+ * one set comes from the API like anybody else's, so the chips are the only control there is.
  */
 internal fun cardInfoLanguageIsChosen(
 	isCardDataBundled: Boolean,
-	isCardInfoBulkOnly: Boolean,
-	setCount: Int,
 	hasBulkVariants: Boolean,
-): Boolean = !cardInfoIsElsewhere(isCardDataBundled, isCardInfoBulkOnly, setCount) && !hasBulkVariants
+): Boolean = !isCardDataBundled && !hasBulkVariants
 
 /**
  * Which languages the records are fetched in when the dialog opens: one.

@@ -180,14 +180,20 @@ data class DataCapabilities(
 	 */
 	val thumbnailImages: Boolean = false,
 	/**
-	 * True when records must come from the source's dump, not set by set.
+	 * True when the source wants its *catalogue* taken from its dump rather than walked set by set.
 	 *
 	 * How the source wants to be used, not what it can do. A dump exists so clients stop walking the
 	 * API for data already packaged; 988 sets fetched one at a time is the traffic that gets an app
 	 * blocked.
 	 *
-	 * The single-set download then offers no card info and says where to get it. Browsing a set
-	 * still reads the API -- that is a few requests for something the user is looking at.
+	 * What it costs: the whole-game download takes the file and never fans out per set. One set is
+	 * still fetched from the API like any other source's -- that is a handful of requests for
+	 * something the reader is looking at, and it is the same traffic browsing the set already makes.
+	 * The single-set dialog names the file so the cheaper route is visible, which is a steer rather
+	 * than a refusal.
+	 *
+	 * It used to refuse card info per set outright. That was too blunt: it left the only way to hold
+	 * one Magic set offline being a 78 MB import of all 988.
 	 *
 	 * Not implied by publishing a dump: a partial or rarely-rebuilt dump is an option, not the only
 	 * route.

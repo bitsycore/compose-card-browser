@@ -9,7 +9,6 @@ import com.bitsycore.tcgexplorer.data.download.DownloadKind
 import com.bitsycore.tcgexplorer.data.download.DownloadRequest
 import com.bitsycore.tcgexplorer.data.download.DownloadStatus
 import com.bitsycore.tcgexplorer.ui.screen.downloads.describe
-import com.bitsycore.tcgexplorer.ui.screen.downloads.cardInfoIsElsewhere
 import com.bitsycore.tcgexplorer.ui.screen.downloads.cardInfoLanguageIsChosen
 import com.bitsycore.tcgexplorer.ui.screen.downloads.defaultInfoLanguages
 import com.bitsycore.tcgexplorer.ui.screen.downloads.infoIsComplete
@@ -33,75 +32,42 @@ class DownloadsUiTest {
 	// ==================
 
 	@Test
-	fun `a bulk-only source offers no card info for one set and offers it for the game`() {
-		// Scryfall's case. 988 sets fetched one at a time rebuilds a file the source publishes as
-		// one, which is the traffic the file exists to prevent.
-		assertTrue(
-			cardInfoIsElsewhere(
-				isCardDataBundled = false,
-				isCardInfoBulkOnly = true,
-				setCount = 1,
-			),
-		)
-		// And the other half, which is the reason this is not a flat refusal: the whole-game
-		// dialog is where the import lives, so it must still offer the row.
-		assertFalse(
-			cardInfoIsElsewhere(
-				isCardDataBundled = false,
-				isCardInfoBulkOnly = true,
-				setCount = 988,
-			),
-		)
-	}
-
-	@Test
-	fun `bundled records are never on offer at any count`() {
-		for (vCount in listOf(1, 42)) {
-			assertTrue(
-				cardInfoIsElsewhere(
-					isCardDataBundled = true,
-					isCardInfoBulkOnly = false,
-					setCount = vCount,
-				),
-				"a set count of $vCount cannot make a bundled catalogue downloadable",
-			)
-		}
-	}
-
-	@Test
-	fun `an ordinary source offers card info per set`() {
-		assertFalse(
-			cardInfoIsElsewhere(
-				isCardDataBundled = false,
-				isCardInfoBulkOnly = false,
-				setCount = 1,
-			),
-		)
-	}
-
-	@Test
-	fun `a dump decides its own languages and the chips do not`() {
-		// Magic's whole-game dialog offered the file *and* a row of card-info language chips, which
-		// is two controls for one fact and only one of them is obeyed: Scryfall's cheap dump is
-		// 97% English whatever the chips say, and taking the every-language one is a different
-		// file rather than a different tick. The variant selector is the language control there.
-		assertFalse(
-			cardInfoLanguageIsChosen(
-				isCardDataBundled = false,
-				isCardInfoBulkOnly = true,
-				setCount = 988,
-				hasBulkVariants = true,
-			),
-		)
-		// A source with no dump fetches per set, and then the chips are the only control there is.
+	fun `a bulk-only source picks its languages per set and takes them from the file for the game`() {
+		// Scryfall's case, and the distinction the whole rule turns on.
+		//
+		// One set is fetched from the API like anybody else's, so the chips are the only language
+		// control there is and they are offered. It used to refuse card info here entirely and
+		// point at the whole-game import, which was too blunt: the traffic the dump exists to
+		// prevent is the catalogue being walked, not one set of it.
 		assertTrue(
 			cardInfoLanguageIsChosen(
 				isCardDataBundled = false,
-				isCardInfoBulkOnly = false,
-				setCount = 42,
 				hasBulkVariants = false,
 			),
 		)
+		// The whole-game dialog offered the file *and* a row of card-info language chips, which is
+		// two controls for one fact and only one of them is obeyed: Scryfall's cheap dump is 97%
+		// English whatever the chips say, and taking the every-language one is a different file
+		// rather than a different tick. The variant selector is the language control there.
+		assertFalse(
+			cardInfoLanguageIsChosen(
+				isCardDataBundled = false,
+				hasBulkVariants = true,
+			),
+		)
+	}
+
+	@Test
+	fun `bundled records choose no language because nothing is fetched`() {
+		for (vHasVariants in listOf(false, true)) {
+			assertFalse(
+				cardInfoLanguageIsChosen(
+					isCardDataBundled = true,
+					hasBulkVariants = vHasVariants,
+				),
+				"a bundled catalogue has no language to pick, dump or no dump",
+			)
+		}
 	}
 
 	// ==================

@@ -149,9 +149,9 @@ class ScryfallProvider(
 			cardmarketProductMapping = true,
 			thumbnailImages = true,
 			// Scryfall asks clients to take its bulk files rather than page its API for data it
-			// has already packaged, and its catalogue is 988 sets -- so a per-set card-info
-			// download here is 988 downloads that rebuild a file the source publishes as one.
-			// Browsing a set still reads the API, which is what the API is for.
+			// has already packaged, and its catalogue is 988 sets -- so "download all" here takes
+			// the file rather than rebuilding it 988 requests at a time. One set is still fetched
+			// from the API, which is what the API is for and is what browsing it already does.
 			cardInfoFromBulkOnly = true,
 		),
 		attribution = Attribution(
