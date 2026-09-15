@@ -356,6 +356,6 @@ class YgoprodeckProvider(
 		 */
 		const val MAX_PAGE_SIZE: Int = 100
 
-		private const val USER_AGENT = "TCGExplorer/1.0 (github.com/bitsycore)"
+		private const val USER_AGENT = "TCG Explorer/1.0"
 	}
 }

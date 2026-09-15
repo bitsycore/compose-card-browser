@@ -199,7 +199,7 @@ data class ProviderHttpPolicy(
 		 * and is generated -- `:data` cannot see it and must not depend on the UI to make a request.
 		 * Two places, so bumping the app means bumping this too.
 		 */
-		const val DEFAULT_USER_AGENT: String = "TCGExplorer/1.0 (+https://github.com/bitsycore)"
+		const val DEFAULT_USER_AGENT: String = "TCG Explorer/1.0"
 
 		// No per-provider presets here.
 		//

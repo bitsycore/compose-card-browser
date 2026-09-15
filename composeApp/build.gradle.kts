@@ -244,7 +244,7 @@ compose.desktop {
 		jvmArgs += "--enable-native-access=ALL-UNNAMED"
 
 		nativeDistributions {
-			packageName = "TCGExplorer"
+			packageName = "TCG Explorer"
 			packageVersion = "1.0.0"
 			description = "Browse trading card game sets"
 			// Desktop distribution is later work; an app image is enough to run one locally and

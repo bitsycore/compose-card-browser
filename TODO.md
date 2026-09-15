@@ -135,7 +135,19 @@ There are no `TODO`, `FIXME` or `HACK` markers anywhere in the source. *(verifie
   and did not survive Apple.
 
   A note for whoever renames this next: display strings take the space ("TCG Explorer"), everything
-  that is also a path does not (`TCGExplorer` for the Gradle root, the jpackage name, the Xcode
-  target, product and scheme). In a `.pbxproj`, a value with a space has to be quoted --
-  `INFOPLIST_KEY_CFBundleDisplayName = "TCG Explorer";` -- and that is the only one that has one.
+  that is also an identifier does not (`TCGExplorer` for the Gradle root, the Xcode target, product
+  and scheme). In a `.pbxproj`, a value with a space has to be quoted --
+  `INFOPLIST_KEY_CFBundleDisplayName = "TCG Explorer";`.
+
+  The user agent is `TCG Explorer/1.0`, with the space, by the project owner's decision on
+  2026-09-14. Well-formed: a `User-Agent` is a space-separated list of products, so a server parses
+  this as two -- `TCG` and `Explorer/1.0` -- rather than rejecting it. Do not "fix" it to one token.
+
+  A find-replace across the repo put the space back into all of them on 2026-09-14 and broke the
+  release build: `rootProject.name` feeds the Compose Resources package for any module that has not
+  pinned its own, and R8 rejects `tcg explorer/...` as a class name. `:games:api` was the one such
+  module and now pins `packageOfResClass`, so the root name cannot reach a class name again.
+
+  The jpackage `packageName` **is** a display string and does take the space -- verified on Windows
+  2026-09-14, the app image is `TCG Explorer`. This note used to claim otherwise.
 

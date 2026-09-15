@@ -39,3 +39,13 @@ kotlin {
 		}
 	}
 }
+
+compose.resources {
+	// Pinned, like every other module that carries resources. This one declares the dependency and
+	// owns no resource files, so it was the only one left on the default -- which derives the
+	// package from `rootProject.name`. Renaming the project to "TCG Explorer" therefore generated
+	// `tcg explorer.games.api.generated.resources`, and R8 rejects a space in a class name: the
+	// release build failed and nothing in this file mentioned the root name.
+	packageOfResClass = "com.bitsycore.tcgexplorer.games.api.resources"
+	publicResClass = false
+}

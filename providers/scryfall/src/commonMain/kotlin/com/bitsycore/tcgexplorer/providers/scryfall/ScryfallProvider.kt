@@ -386,7 +386,7 @@ class ScryfallProvider(
 		 * naming a provider was the one place that layer knew any of them existed.
 		 */
 		val HTTP_POLICY: ProviderHttpPolicy = ProviderHttpPolicy(
-			userAgent = "TCGExplorer/1.0 (github.com/bitsycore)",
+			userAgent = "TCG Explorer/1.0",
 			minRequestInterval = 150.milliseconds,
 		)
 
@@ -399,6 +399,6 @@ class ScryfallProvider(
 		const val MAX_PAGE_SIZE: Int = 175
 
 		/** Scryfall's documentation asks for a client that identifies itself. */
-		private const val USER_AGENT = "TCGExplorer/1.0 (github.com/bitsycore)"
+		private const val USER_AGENT = "TCG Explorer/1.0"
 	}
 }

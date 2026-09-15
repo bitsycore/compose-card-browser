@@ -1,3 +1,7 @@
+// No space: this is an identifier, not a display string. Compose Resources derives a package
+// from it for any module that has not pinned its own, and R8 rejects a space in a class name.
+// The app's visible name is set per platform -- the Android label, CFBundleDisplayName, and the
+// desktop `packageName`, which is the one place "TCG Explorer" is correct.
 rootProject.name = "TCGExplorer"
 
 pluginManagement {
