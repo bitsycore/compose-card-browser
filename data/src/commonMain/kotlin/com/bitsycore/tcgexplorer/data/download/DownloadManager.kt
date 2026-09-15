@@ -480,15 +480,25 @@ class DownloadManager(
 			//
 			// Only when card info was actually asked for. An images-only job runs against whatever
 			// is already stored and has no business failing because that happens to be partial.
-			if (vPinsRecords && vCards.isNotEmpty() && vSnapshot?.value?.isCompleteSet != true) {
+			//
+			// Zero cards is checked here too, and used not to be: the guard read
+			// `vCards.isNotEmpty() && ...`, so a fetch that failed before a single card arrived
+			// skipped this branch entirely and reported `Completed(cards = 0)` from the one below.
+			// That is the shape a batch download takes when the network goes -- every set fails the
+			// same way -- and the queue said every one of them had finished. The error message was
+			// already in hand and was thrown away.
+			if (vPinsRecords && vSnapshot?.value?.isCompleteSet != true) {
 				val vKnown = vSnapshot?.value?.knownSetSize
 				update(job.id) {
 					DownloadStatus.Failed(
 						vSnapshot?.error?.message
-							?: if (vKnown != null) {
-								"Stopped at ${vCards.size} of $vKnown cards"
-							} else {
-								"Stopped at ${vCards.size} cards"
+							?: when {
+								// Nothing arrived at all, and the fetch did not finish. Worth its
+								// own sentence: "stopped at 0 cards" reads like a set that is empty,
+								// which is the one thing this is not.
+								vCards.isEmpty() -> "Nothing arrived. The set is still to fetch."
+								vKnown != null -> "Stopped at ${vCards.size} of $vKnown cards"
+								else -> "Stopped at ${vCards.size} cards"
 							},
 					)
 				}
@@ -496,6 +506,9 @@ class DownloadManager(
 			}
 
 			if (vCards.isEmpty()) {
+				// Reached only when the fetch *finished* and the source served nothing, because the
+				// guard above has already failed anything that stopped short.
+				//
 				// Not a failure. A set with no cards is a real thing a source can hold: a
 				// marketplace catalogue files sealed product under a set name and lists no
 				// singles for it at all -- 13 of the WoW TCG's 54 sets are exactly that, holding

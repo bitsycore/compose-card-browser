@@ -776,6 +776,11 @@ private fun LazyListScope.setRows(
 			// repeat the chip on every single row.
 			region = if (state.region != null) null else state.game?.regionFor(vSet.region),
 			isSaved = vId in state.savedSetIds,
+			// Only once the scan has answered, for the same reason `canOfferDownload` waits: before
+			// then nothing is in `completeSetIds`, and every saved row would flash an error mark.
+			isIncomplete = state.isDownloadStateKnown &&
+				vId in state.savedSetIds &&
+				vId !in state.completeSetIds,
 			isEditing = state.isEditing,
 			// Both halves, because a download is both: the records and the pictures. A set with
 			// its cards and none of its art still has something to fetch. Full-size art is not
@@ -847,6 +852,17 @@ private fun SetRow(
 	isSelected: Boolean = false,
 	region: GameRegion?,
 	isSaved: Boolean,
+	/**
+	 * On disk, and the fetch that put it there did not finish.
+	 *
+	 * Drawn instead of the saved mark rather than beside it, so the row's width does not move --
+	 * see the arranging note on `ArrangingMotionTest`. The two are mutually exclusive anyway: a
+	 * download is either finished or it is not.
+	 *
+	 * This is the state a batch download leaves behind when the network goes, and without a mark
+	 * the row is indistinguishable from a set the source really has nothing for.
+	 */
+	isIncomplete: Boolean = false,
 	/**
 	 * Whether this set has anything left to fetch *and* the app has looked.
 	 *
@@ -1020,12 +1036,28 @@ private fun SetRow(
 				Row(verticalAlignment = Alignment.CenterVertically) {
 					Spacer(Modifier.size(6.dp))
 					if (isSaved) {
+						// A different glyph, not merely a different tint: colour alone is not a
+						// distinction for a reader who cannot see it, and this one changes what the
+						// row means rather than decorating it.
 						Icon(
-							imageVector = AppIcons.Description,
+							imageVector = if (isIncomplete) {
+								AppIcons.ErrorOutline
+							} else {
+								AppIcons.Description
+							},
 							// "Saved", not "complete". A set interrupted part-way through leaves a
-							// file behind too, and the mark must not promise more than that.
-							contentDescription = "Card info saved on this device",
-							tint = MaterialTheme.colorScheme.primary,
+							// file behind too, and the mark must not promise more than that -- so
+							// when it *is* that, it says so instead of staying quiet.
+							contentDescription = if (isIncomplete) {
+								"Download did not finish. Download it again to fetch the rest."
+							} else {
+								"Card info saved on this device"
+							},
+							tint = if (isIncomplete) {
+								MaterialTheme.colorScheme.error
+							} else {
+								MaterialTheme.colorScheme.primary
+							},
 							modifier = Modifier.size(18.dp),
 						)
 					}

@@ -41,25 +41,61 @@ class SetListContractTest {
 	//  Empty sets, and the four that were lost
 
 	@Test
-	fun `a downloaded set is never hidden -- whatever its count says`() {
+	fun `a download that did not finish is never hidden -- whatever its count says`() {
 		// The reported loss. Four One Piece sets were downloaded, came back empty because the phone
 		// slept, and disappeared from the list -- with no row left to reach and no way to retry.
 		//
-		// A fetch that returned nothing and a set that really holds nothing are the same response,
-		// and nothing at the fetch can tell them apart. What can be told apart is whether the reader
-		// asked for this set.
+		// On disk and not complete is what a fetch that stopped short leaves behind, and it is the
+		// one state that must stay on screen: it is the only route back to fetching the set again.
 		val vSet = set("OP-14", region = null)
 		val vState = loaded(vSet).copy(
 			hideEmptySets = true,
 			confirmedCardCounts = mapOf(vSet.id.qualified to 0),
 			savedSetIds = setOf(vSet.id.qualified),
+			// Deliberately absent from completeSetIds: that is what "broken" is.
 		)
 
 		assertTrue(
 			vSet in vState.visibleSets,
-			"a set on the device must stay reachable, so it can be looked at and fetched again",
+			"a broken download must stay reachable, so it can be fetched again",
 		)
 		assertEquals(0, vState.hiddenEmptyCount)
+	}
+
+	@Test
+	fun `a downloaded set that really holds nothing is still hidden`() {
+		// The narrowing asked for after the first fix went too wide. A set that *finished* and holds
+		// nothing costs no disk and has nothing to look at, so downloading it is no reason to keep
+		// it on screen -- 13 of the WoW TCG's 54 sets are sealed product and a whole-game download
+		// takes all of them.
+		//
+		// The pair of this and the test above is the whole rule: what keeps a row visible is the
+		// download being *unfinished*, not the download having happened.
+		val vSet = set("WOW-07", region = null)
+		val vState = loaded(vSet).copy(
+			hideEmptySets = true,
+			confirmedCardCounts = mapOf(vSet.id.qualified to 0),
+			savedSetIds = setOf(vSet.id.qualified),
+			completeSetIds = setOf(vSet.id.qualified),
+		)
+
+		assertTrue(vSet !in vState.visibleSets, "finished and empty is empty, downloaded or not")
+		assertEquals(1, vState.hiddenEmptyCount)
+	}
+
+	@Test
+	fun `a broken download with cards in it is still not hidden`() {
+		// A partial fetch that got some of the way. It is not empty, so the count rule would show it
+		// anyway -- asserted so that stays true if the count rule changes, because this is the row
+		// carrying the only "download again" button the user has.
+		val vSet = set("OP-03", region = null)
+		val vState = loaded(vSet).copy(
+			hideEmptySets = true,
+			confirmedCardCounts = mapOf(vSet.id.qualified to 12),
+			savedSetIds = setOf(vSet.id.qualified),
+		)
+
+		assertTrue(vSet in vState.visibleSets)
 	}
 
 	@Test

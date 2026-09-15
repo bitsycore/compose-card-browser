@@ -42,6 +42,7 @@ import okio.Path.Companion.toPath
 import okio.fakefilesystem.FakeFileSystem
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /*
@@ -85,6 +86,42 @@ class InterruptedDownloadTest {
 		assertTrue(
 			vStatus.reason.contains("2 of 4"),
 			"the row should say how far it got, and said: ${vStatus.reason}",
+		)
+	}
+
+	@Test
+	fun `a set that fails before the first card is failed -- not completed`() = runTest {
+		// The shape a batch download takes when the network goes: every set dies on its first page,
+		// so none of them has a single card. The guard above read `vCards.isNotEmpty() && ...`, so
+		// all of them skipped it and were reported `Completed(cards = 0)` by the empty-set branch
+		// below -- the queue said the whole game had finished, and the error message it already had
+		// in hand was dropped.
+		//
+		// Downstream this is what marks the set broken rather than empty: an unfinished download is
+		// the one thing `SetListContract.isEmptySet` refuses to hide, so the row survives to be
+		// fetched again.
+		val vManager = managerFor(failFromPage = 1)
+
+		vManager.enqueue(
+			DownloadRequest(
+				game = TestGame.id,
+				setId = mSetId,
+				setName = "Origins",
+				kinds = setOf(DownloadKind.CARD_INFO),
+				language = CardLanguage.ENGLISH,
+			),
+		)
+		testScheduler.advanceUntilIdle()
+
+		val vStatus = vManager.jobs.value.single().status
+		assertTrue(
+			vStatus is DownloadStatus.Failed,
+			"a download that fetched nothing reported $vStatus",
+		)
+		assertFalse(
+			vStatus.reason.contains("0 cards"),
+			"'stopped at 0 cards' reads like an empty set, which is the one thing this is not -- " +
+				"said instead: ${vStatus.reason}",
 		)
 	}
 

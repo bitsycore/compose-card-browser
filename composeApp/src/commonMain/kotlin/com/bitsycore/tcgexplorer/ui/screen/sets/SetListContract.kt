@@ -271,17 +271,28 @@ object SetListContract :
 		 * An unknown count is never empty. Four of the sources publish no count at all, and hiding
 		 * on a silence would empty their lists entirely.
 		 *
-		 * **A set that is on the device is never hidden**, whatever its count says. A fetch that
-		 * comes back empty and a set that really is empty are the same response -- YGOPRODeck serves
-		 * `Beyond the Brave` with no French cards at all, so a zero genuinely is a measurement --
-		 * and no rule at the fetch can tell them apart. What can be told apart is whether the reader
-		 * asked for this set: four One Piece sets were downloaded, came back empty when the phone
-		 * slept, and vanished from the list with no way to reach them and retry. Downloading
-		 * something is the clearest statement there is that you want to see it.
+		 * **A download that did not finish is never hidden**, whatever its count says -- that is a
+		 * broken set, and it has to stay reachable to be fetched again. On disk and *not* complete
+		 * is exactly that state, and it is the state a batch download leaves behind when the
+		 * network goes: four One Piece sets were downloaded, came back empty when the phone slept,
+		 * and vanished with no row left to retry from.
+		 *
+		 * A set that finished and really holds nothing **is** hidden, downloaded or not. It costs
+		 * nothing on disk and there is nothing in it to look at, which is what the option is for:
+		 * TCGdex lists Spanish Base Set with 102 cards and serves none, and 13 of the WoW TCG's 54
+		 * sets hold only sealed product.
+		 *
+		 * The limit worth knowing: a source answering "200, no cards" for a set that really has
+		 * some is indistinguishable from one that really has none, and OPTCG and TCGCSV derive
+		 * their `totalCount` from the very response being judged, so there is no independent figure
+		 * to check it against. That case still hides. What is caught is the fetch that *failed*,
+		 * which is the one a batch download actually produces.
 		 */
-		fun isEmptySet(set: CardSet): Boolean =
-			set.id.qualified !in savedSetIds &&
-				(confirmedCardCounts[set.id.qualified] ?: set.cardCount) == 0
+		fun isEmptySet(set: CardSet): Boolean {
+			val vId = set.id.qualified
+			if (vId in savedSetIds && vId !in completeSetIds) return false
+			return (confirmedCardCounts[vId] ?: set.cardCount) == 0
+		}
 
 		/** How many sets the option is keeping off the screen, within the region being shown. */
 		val hiddenEmptyCount: Int
