@@ -10,7 +10,6 @@ import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
@@ -23,7 +22,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -199,51 +197,6 @@ private class AnimatedCornerClip(private val mCorner: State<Dp>) : SharedTransit
 		return mPath
 	}
 }
-
-/**
- * Fades an ornament that sits on top of a shared container without being part of it.
- *
- * The set row's tab is the case this exists for. It is drawn over its card and cannot join the
- * transform: the other half of that transform is a whole screen, and a tab stretched across one is
- * not a tab. So while the card flies it is in the shared overlay, above everything, and the tab is
- * left behind on the page -- it vanishes under the travelling card and reappears on top of it the
- * instant the transition ends, which is the pop that was reported.
- *
- * Fading it with the transition removes the pop. The two directions are deliberately not
- * symmetrical:
- *
- * - **Leaving**, it goes at once. An ornament still sitting where a row used to be, after the row
- *   has left, is the same artefact the other way round.
- * - **Arriving**, it waits. The tab is laid out at the row's final position from the first frame,
- *   while the card is still somewhere between the two screens -- so fading it in early would draw
- *   a tab floating over empty space, attached to nothing. The delay lands it as the card arrives
- *   underneath it.
- */
-@Composable
-fun Modifier.fadesWithSharedContainer(): Modifier {
-	// No shared scope means no transform and nothing to hide from: a preview, or a screen that is
-	// not one of the pair. The ornament is simply drawn.
-	LocalSharedTransitionScope.current ?: return this
-	val vAlpha = LocalNavAnimatedContentScope.current.transition.animateFloat(
-		transitionSpec = {
-			if (targetState == EnterExitState.Visible) {
-				tween(ORNAMENT_FADE_IN_MILLIS, delayMillis = ORNAMENT_FADE_IN_DELAY_MILLIS)
-			} else {
-				tween(ORNAMENT_FADE_OUT_MILLIS)
-			}
-		},
-		label = "container-ornament-alpha",
-	) { vState -> if (vState == EnterExitState.Visible) 1f else 0f }
-	return this.graphicsLayer { alpha = vAlpha.value }
-}
-
-/** Most of the way through the container's flight, so the tab arrives with its row. */
-private const val ORNAMENT_FADE_IN_DELAY_MILLIS = 200
-
-private const val ORNAMENT_FADE_IN_MILLIS = 120
-
-/** Quick: the row is leaving, and the ornament must not outlive it. */
-private const val ORNAMENT_FADE_OUT_MILLIS = 90
 
 /**
  * How the corner radius travels. The same spring as the bounds, so the two cannot drift apart.

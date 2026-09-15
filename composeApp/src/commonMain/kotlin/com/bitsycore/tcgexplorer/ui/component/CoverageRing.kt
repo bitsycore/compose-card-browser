@@ -155,20 +155,26 @@ fun CoverageRings(
 		horizontalAlignment = Alignment.CenterHorizontally,
 	) {
 		CoverageRing(coverage = info, icon = infoIcon, label = "Card info")
-		Spacer(Modifier.height(4.dp))
+		Spacer(Modifier.height(RING_GAP))
 		CoverageRing(coverage = thumbnails, icon = thumbnailIcon, label = "Thumbnails")
 	}
 }
 
-/** Big enough to read a sweep on, small enough that two fit where one chip did. */
-private val RING_SIZE = 22.dp
+/**
+ * Big enough to read a sweep on, small enough that the pair fits the row's height.
+ *
+ * Measured: stacked, two rings and their gap are 44dp, against a row whose content is 45.6dp. At
+ * 22dp they came to 48dp and pushed a two-ring row 2dp taller than its neighbours, which is a list
+ * that does not line up for no reason a reader could name.
+ */
+private val RING_SIZE = 20.dp
 
 private val RING_STROKE = 2.5.dp
 
 private val RING_ICON = 11.dp
 
 /** Enough that two rings read as two, not as a figure of eight. */
-private val RING_GAP = 5.dp
+private val RING_GAP = 4.dp
 
 /** Visible as a groove without competing with the arc drawn over it. */
 private const val TRACK_ALPHA = 0.22f

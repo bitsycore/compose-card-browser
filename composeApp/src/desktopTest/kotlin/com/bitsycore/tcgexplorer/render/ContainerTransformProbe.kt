@@ -21,14 +21,12 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.bitsycore.tcgexplorer.ui.component.sharedSetContainer
-import com.bitsycore.tcgexplorer.ui.component.fadesWithSharedContainer
 import com.bitsycore.tcgexplorer.ui.component.LocalSharedTransitionScope
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import org.jetbrains.skia.Bitmap
@@ -116,33 +114,29 @@ class ContainerTransformProbe {
 	}
 
 	@Test
-	fun `an ornament beside the container is not drawn while the container is in flight`() {
-		// The set row's tab. It is drawn over the row's card but cannot join the transform -- the
-		// other half of that is a whole screen -- so while the card is in the shared overlay the
-		// tab sits on the page underneath it, and reappears on top the instant the transition ends.
-		// Reported as the id popping in front after the animation rather than arriving with it.
+	fun `an ornament inside the container travels with it instead of being hidden by it`() {
+		// The set row's tab. It is drawn over the row's card, and while the card is in the shared
+		// overlay -- above everything -- anything left outside the container sits on the page
+		// underneath it: the tab disappeared under its own travelling card and jumped back in front
+		// the instant the transition ended. Reported twice, in those words.
 		//
-		// `fadesWithSharedContainer` is the real modifier, reached by providing the two locals it
-		// reads. A copy of it here would be a test of the copy.
+		// The ornament here is placed where the container covers it, so the two arrangements give
+		// opposite answers: inside, it is drawn on every frame; outside, the overlay hides it for
+		// the length of the flight.
 		val vOrnament = ornamentOverTime()
 
-		val vFlight = vOrnament.take(ORNAMENT_FLIGHT_FRAMES)
 		assertTrue(
-			vFlight.all { it == 0 },
-			"the ornament was drawn while the container was still travelling: $vOrnament",
-		)
-		assertTrue(
-			vOrnament.last() > 0,
-			"the ornament never arrived: $vOrnament",
+			vOrnament.all { it > 0 },
+			"the container hid its own ornament part way through: $vOrnament",
 		)
 	}
 
 	/**
-	 * Arrives at the small side -- the set list -- and measures the ornament on each frame.
+	 * Shrinks the container back to the small side -- the set list -- measuring the ornament.
 	 *
-	 * The container starts expanded and shrinks, which is the direction the pop was seen in: coming
-	 * back from the grid. The ornament belongs to the small side only, and is placed away from the
-	 * container so the two colours cannot overlap.
+	 * That is the direction the fault was seen in: coming back from the grid. The ornament sits at
+	 * the container's own corner, *inside* it, so a frame where it is missing is a frame where the
+	 * container is drawn over the top of it.
 	 */
 	private fun ornamentOverTime(): List<Int> {
 		var vExpanded by mutableStateOf(true)
@@ -163,18 +157,11 @@ class ContainerTransformProbe {
 									modifier = Modifier
 										.sharedSetContainer("probe")
 										.width(if (vBig) BIG else SMALL)
-										.height(if (vBig) BIG else SMALL)
-										.background(Color.Red),
-								)
-								if (!vBig) {
-									Box(
-										modifier = Modifier
-											.align(Alignment.TopEnd)
-											.fadesWithSharedContainer()
-											.width(ORNAMENT)
-											.height(ORNAMENT)
-											.background(Color.Green),
-									)
+										.height(if (vBig) BIG else SMALL),
+								) {
+									Box(Modifier.fillMaxSize().background(Color.Red))
+									// Over the container's own fill, the way the tab is over the card.
+									Box(Modifier.width(ORNAMENT).height(ORNAMENT).background(Color.Green))
 								}
 							}
 						}
@@ -345,7 +332,6 @@ class ContainerTransformProbe {
 		/** Past the ornament's own delay, so the settled frame is really settled. */
 		const val ORNAMENT_FRAMES = 14
 
-		/** Frames the container is still visibly travelling for, at 30 ms each. */
-		const val ORNAMENT_FLIGHT_FRAMES = 6
+
 	}
 }

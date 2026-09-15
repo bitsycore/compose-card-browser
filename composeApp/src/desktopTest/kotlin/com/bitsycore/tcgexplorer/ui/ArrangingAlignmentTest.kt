@@ -26,6 +26,9 @@ import kotlin.test.assertTrue
  *
  * Measured on the right-hand quarter of the screen, where the only things drawn in the theme's
  * primary colour are those controls.
+ *
+ * Browsing lines up as well now, which it did not when this was written -- see the second test for
+ * what changed and why the assertion is kept rather than dropped.
  */
 class ArrangingAlignmentTest {
 
@@ -40,18 +43,25 @@ class ArrangingAlignmentTest {
 	}
 
 	@Test
-	fun `browsing is the case that does not line up`() = onSwingThread {
-		// The other half of the claim, and the reason arranging has to do something about it: while
-		// browsing, a row carries whatever it holds -- a download button, the marks for what is on
-		// disk -- and no two rows hold the same things, so nothing lines up. Arranging clears all
-		// of it and leaves one control, which is why the stars can be measured against each other
-		// at all. No star is drawn while browsing, so what spreads here is those marks.
+	fun `browsing lines up too, now that the coverage rings are one column`() = onSwingThread {
+		// This used to assert the opposite, and the opposite used to be true: while browsing, a row
+		// carried whatever it held and no two rows held the same things.
+		//
+		// Two things changed it. The coverage marks became rings stacked one above the other rather
+		// than sat side by side, so a row showing both is exactly as wide here as a row showing one;
+		// and the rings are the last thing in the row, so nothing in front of them can shift them.
+		// The band is 33px -- one ring -- whatever a given set holds.
+		//
+		// Worth keeping as an assertion rather than deleting, because un-stacking the rings would
+		// silently undo it: the measured spread was 81px when they sat side by side.
 		val vColumns = primaryColumns(arranging = false)
 
+		assertTrue(vColumns.isNotEmpty(), "no coverage marks were drawn at all")
 		val vSpread = vColumns.max() - vColumns.min()
 		assertTrue(
-			vSpread > STAR_WIDTH_PX,
-			"browsing rows were aligned too, so this test is measuring nothing: $vSpread px",
+			vSpread <= STAR_WIDTH_PX,
+			"browsing marks span $vSpread px, so a row's trailing edge moves with what it holds: " +
+				"${vColumns.sorted()}",
 		)
 	}
 
