@@ -27,8 +27,12 @@ android {
 	// different signature and Android refuses to install it over the first -- you have to uninstall
 	// and lose the downloaded card data to move between machines. A shared key removes that.
 	//
-	// Not a secret, and not meant to be: these are AGP's own debug credentials, and the store
-	// build is signed with `publish.jks`, which is *not* in this repository.
+	// Not a secret, and not meant to be: these are AGP's own debug credentials -- alias
+	// `androiddebugkey`, password `android`, `CN=Android Debug`.
+	//
+	// It signs `release` as well as `debug`, so a minified local build installs over an ordinary
+	// one. The Play artifact is a separate thing signed with `publish.jks`, which no Gradle or CI
+	// file here references: that signing happens outside the build.
 	signingConfigs {
 		getByName("debug") {
 			storeFile = file("debug.keystore")
@@ -43,8 +47,10 @@ android {
 			isMinifyEnabled = true
    			isShrinkResources = true
 			proguardFile(getDefaultProguardFile("proguard-android-optimize.txt"))
-			// The shared debug key, so a minified local build installs over a debug one. The store
-			// artifact is signed separately with `publish.jks`.
+			// The shared debug key, so a minified local build installs over a debug one. Deliberate:
+			// this build type is for testing R8 on a device, not for the store. Play refuses a
+			// debug-signed artifact, so the upload is signed with `publish.jks` outside Gradle and
+			// cannot be produced by this task -- see the signing configs above.
 			signingConfig = signingConfigs.getByName("debug")
 		}
 	}
