@@ -262,7 +262,7 @@ object SetListContract :
 			}
 
 		/**
-		 * A set this list knows holds no cards.
+		 * A set this list knows holds no cards, *and* that the reader has not asked for.
 		 *
 		 * The count a fetch established wins over the one the catalogue claims, because the
 		 * catalogue can be wrong in exactly this way: TCGdex lists Spanish Base Set with 102 cards
@@ -270,9 +270,18 @@ object SetListContract :
 		 *
 		 * An unknown count is never empty. Four of the sources publish no count at all, and hiding
 		 * on a silence would empty their lists entirely.
+		 *
+		 * **A set that is on the device is never hidden**, whatever its count says. A fetch that
+		 * comes back empty and a set that really is empty are the same response -- YGOPRODeck serves
+		 * `Beyond the Brave` with no French cards at all, so a zero genuinely is a measurement --
+		 * and no rule at the fetch can tell them apart. What can be told apart is whether the reader
+		 * asked for this set: four One Piece sets were downloaded, came back empty when the phone
+		 * slept, and vanished from the list with no way to reach them and retry. Downloading
+		 * something is the clearest statement there is that you want to see it.
 		 */
 		fun isEmptySet(set: CardSet): Boolean =
-			(confirmedCardCounts[set.id.qualified] ?: set.cardCount) == 0
+			set.id.qualified !in savedSetIds &&
+				(confirmedCardCounts[set.id.qualified] ?: set.cardCount) == 0
 
 		/** How many sets the option is keeping off the screen, within the region being shown. */
 		val hiddenEmptyCount: Int

@@ -104,6 +104,25 @@ class OptcgSearchLiveSmokeTest {
 	}
 
 	@Test
+	fun `every set the API serves has a curated release date`() {
+		// The maintenance signal. `optcgapi.com` publishes no dates, so they live in
+		// `OptcgReleaseDates` -- and a set Bandai ships after that table was written would sort
+		// silently to the bottom of the list with every other undated set, which is the state this
+		// was added to fix. Failing here is the only way anyone finds out.
+		runBlocking {
+			val vSets = OptcgProvider(HttpClientFactory.create()).listSets()
+			assertTrue(vSets.isNotEmpty(), "OPTCG served no sets")
+
+			val vUndated = vSets.filter { it.releaseDate == null }.map { "${it.id.local} (${it.name})" }
+			assertTrue(
+				vUndated.isEmpty(),
+				"OPTCG serves ${vSets.size} sets and these have no date in OptcgReleaseDates: " +
+					"$vUndated -- add them, do not guess a date to make them sort",
+			)
+		}
+	}
+
+	@Test
 	fun `every printing in a real set has a distinct id`() = runBlocking {
 		// A duplicate id is a crash rather than a cosmetic bug: `LazyVerticalGrid` throws on a
 		// repeated key. One Piece prints the same card number with several arts, so this is the

@@ -21,11 +21,30 @@ android {
 		versionName = libs.versions.app.get()
 	}
 
+	// One debug key for everyone, checked in.
+	//
+	// AGP's own debug keystore is generated per machine, so a build from a second computer has a
+	// different signature and Android refuses to install it over the first -- you have to uninstall
+	// and lose the downloaded card data to move between machines. A shared key removes that.
+	//
+	// Not a secret, and not meant to be: these are AGP's own debug credentials, and the store
+	// build is signed with `publish.jks`, which is *not* in this repository.
+	signingConfigs {
+		getByName("debug") {
+			storeFile = file("debug.keystore")
+			storePassword = "android"
+			keyAlias = "androiddebugkey"
+			keyPassword = "android"
+		}
+	}
+
 	buildTypes {
 		release {
 			isMinifyEnabled = true
    			isShrinkResources = true
 			proguardFile(getDefaultProguardFile("proguard-android-optimize.txt"))
+			// The shared debug key, so a minified local build installs over a debug one. The store
+			// artifact is signed separately with `publish.jks`.
 			signingConfig = signingConfigs.getByName("debug")
 		}
 	}

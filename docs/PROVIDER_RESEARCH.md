@@ -105,6 +105,23 @@ Altered's per-locale set indexes are 8.7 KB each and list the same 20 sets in ev
 is nothing per set to learn from them. Listing a set in a locale would not be evidence of cards in
 it anyway — that is exactly the TCGdex Korean trap — so it is left unstated rather than claimed.
 
+### One Piece states no release date, and the ids are not what you expect — 2026-09-14
+
+`optcgapi.com` publishes a set's name and its id and nothing else. The only date any endpoint
+carries is `date_scraped`, which is when the scraper ran — it read `2026-09-14` on 2026-09-14.
+
+So every One Piece set fell into the undated group at the bottom of the set list, in code order.
+`OptcgReleaseDates` supplies the English dates from a published calendar, cross-checked on four
+anchors against a second listing. Curated, not stated, and the KDoc says so.
+
+The ids matter more than they look. The API serves 22 sets, and the two newest main boxes are
+**`OP14-EB04`** and **`OP15-EB04`** — Japan's EB-04 never got a standalone English box, so Bandai
+folded it into the English OP-14 and OP-15 and the API uses the combined codes. A table keyed on
+`OP-14` would miss exactly the sets a reader most wants.
+
+`OptcgSearchLiveSmokeTest` fails when the API serves a set the table does not know, because a new
+set would otherwise sort silently to the bottom — the state this replaced.
+
 ## Pokémon — TCGdex
 
 `https://api.tcgdex.net/v2/{lang}/…`, no key, no auth.

@@ -1,5 +1,6 @@
 package com.bitsycore.tcgexplorer.providers.optcg
 
+import kotlinx.datetime.LocalDate
 import com.bitsycore.tcgexplorer.core.model.Availability
 import com.bitsycore.tcgexplorer.core.model.CardLanguage
 import com.bitsycore.tcgexplorer.core.model.SourceId
@@ -33,10 +34,13 @@ class OptcgLiveSmokeTest {
 		val vFirst = vSets.firstOrNull { it.id.local == "OP-01" }
 		assertNotNull(vFirst, "OP-01 is missing from the live set list")
 		assertEquals("Romance Dawn", vFirst.name)
-		// Neither is stated by this API, and the adapter must keep saying so rather than
+		// The size is not stated by this API and the adapter must keep saying so rather than
 		// backfilling something plausible.
-		assertEquals(null, vFirst.releaseDate)
 		assertEquals(null, vFirst.cardCount)
+		// The date is not stated either, and is supplied from a curated table on purpose -- see
+		// `OptcgReleaseDates`. Without it every One Piece set sorts into the undated group at the
+		// bottom of the list, in code order.
+		assertEquals(LocalDate(2022, 12, 2), vFirst.releaseDate)
 	}
 
 	@Test
