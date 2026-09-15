@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -21,12 +22,14 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.bitsycore.tcgexplorer.ui.component.sharedSetContainer
+import com.bitsycore.tcgexplorer.ui.component.fadesWithSharedContainer
 import com.bitsycore.tcgexplorer.ui.component.LocalSharedTransitionScope
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import org.jetbrains.skia.Bitmap
@@ -114,29 +117,136 @@ class ContainerTransformProbe {
 	}
 
 	@Test
-	fun `an ornament inside the container travels with it instead of being hidden by it`() {
-		// The set row's tab. It is drawn over the row's card, and while the card is in the shared
-		// overlay -- above everything -- anything left outside the container sits on the page
-		// underneath it: the tab disappeared under its own travelling card and jumped back in front
-		// the instant the transition ended. Reported twice, in those words.
+	fun `the transform has to sit on the card, not on a box around it`() {
+		// Why the tab cannot simply be moved inside the container, which is the obvious fix for it
+		// being hidden under its own row -- and what that cost when it was tried.
 		//
-		// The ornament here is placed where the container covers it, so the two arrangements give
-		// opposite answers: inside, it is drawn on every frame; outside, the overlay hides it for
-		// the length of the flight.
-		val vOrnament = ornamentOverTime()
+		// `RemeasureToBounds` gives the *shared node* the animated size. Put it on the card and the
+		// card is measured at every intermediate size, which is the expansion. Put it on a box
+		// wrapping the card and its tab, and the box is measured at those sizes while the card
+		// inside it keeps its own wrap-content height: the container grows, and the thing the eye
+		// follows stays row-sized in the corner of it.
+		val vOnCard = paintedHeights(shareTheWrapper = false)
+		val vOnWrapper = paintedHeights(shareTheWrapper = true)
 
 		assertTrue(
-			vOrnament.all { it > 0 },
-			"the container hid its own ornament part way through: $vOrnament",
+			vOnCard.distinct().size > 2,
+			"the card should be remeasured through intermediate heights, got $vOnCard",
+		)
+		assertTrue(
+			vOnWrapper.distinct().size <= 2,
+			"a wrapped card was expected to stay its own height, got $vOnWrapper",
 		)
 	}
 
 	/**
-	 * Shrinks the container back to the small side -- the set list -- measuring the ornament.
+	 * The height of the painted region on each frame, with the transform on one node or the other.
 	 *
-	 * That is the direction the fault was seen in: coming back from the grid. The ornament sits at
-	 * the container's own corner, *inside* it, so a frame where it is missing is a frame where the
-	 * container is drawn over the top of it.
+	 * The small side stands in for the set row: a card of its own height. The big side is the grid
+	 * screen, which fills what it is given.
+	 *
+	 * Only the row is red. The two sides cross-fade over each other for the whole flight, so a probe
+	 * painting both the same colour measures whichever of them is larger -- which is the grid,
+	 * always, and the answer comes back "it expands" whatever the row is doing. That was the first
+	 * version of this, and it reported the opposite of what the screen was doing.
+	 */
+	private fun paintedHeights(shareTheWrapper: Boolean): List<Int> {
+		var vExpanded by mutableStateOf(false)
+		val vHeights = mutableListOf<Int>()
+		val vTransform = ContentTransform(
+			targetContentEnter = EnterTransition.None,
+			initialContentExit = ExitTransition.None,
+			sizeTransform = null,
+		)
+
+		val vScene = ImageComposeScene(width = SCENE, height = SCENE, density = Density(1f)) {
+			SharedTransitionLayout {
+				CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+					AnimatedContent(targetState = vExpanded, transitionSpec = { vTransform }) { vBig ->
+						CompositionLocalProvider(LocalNavAnimatedContentScope provides this) {
+							Box(Modifier.fillMaxSize().padding(4.dp)) {
+								if (vBig) {
+									Box(
+										Modifier
+											.sharedSetContainer("probe")
+											.fillMaxSize()
+											.background(Color.Blue),
+									)
+								} else if (shareTheWrapper) {
+									Box(Modifier.fillMaxWidth().sharedSetContainer("probe")) {
+										Box(Modifier.fillMaxWidth().height(SMALL).background(Color.Red))
+									}
+								} else {
+									Box(
+										Modifier
+											.sharedSetContainer("probe")
+											.fillMaxWidth()
+											.height(SMALL)
+											.background(Color.Red),
+									)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		try {
+			vScene.render(0L)
+			vExpanded = true
+			for (vFrame in 1..FRAMES) {
+				vHeights += redHeight(vScene.render(vFrame * FRAME_STEP_MILLIS * 1_000_000L))
+			}
+		} finally {
+			vScene.close()
+		}
+		return vHeights
+	}
+
+	/** How many pixels tall the red region is on a column through the middle of the scene. */
+	private fun redHeight(image: org.jetbrains.skia.Image): Int {
+		val vInfo = ImageInfo.makeN32(image.width, image.height, ColorAlphaType.PREMUL)
+		val vBitmap = Bitmap().apply { allocPixels(vInfo) }
+		check(image.readPixels(vBitmap)) { "could not read the rendered pixels" }
+		var vCount = 0
+		for (vY in 0 until image.height) {
+			val vPixel = vBitmap.getColor(image.width / 2, vY)
+			val vRed = (vPixel shr 16) and 0xFF
+			val vGreen = (vPixel shr 8) and 0xFF
+			if (vRed > 100 && vGreen < 100) vCount++
+		}
+		return vCount
+	}
+
+	@Test
+	fun `an ornament beside the container is not drawn while the container is in flight`() {
+		// The set row's tab. It is drawn over the row's card but cannot join the transform -- the
+		// other half of that is a whole screen -- so while the card is in the shared overlay the
+		// tab sits on the page underneath it, and reappears on top the instant the transition ends.
+		// Reported as the id popping in front after the animation rather than arriving with it.
+		//
+		// `fadesWithSharedContainer` is the real modifier, reached by providing the two locals it
+		// reads. A copy of it here would be a test of the copy.
+		val vOrnament = ornamentOverTime()
+
+		val vFlight = vOrnament.take(ORNAMENT_FLIGHT_FRAMES)
+		assertTrue(
+			vFlight.all { it == 0 },
+			"the ornament was drawn while the container was still travelling: $vOrnament",
+		)
+		assertTrue(
+			vOrnament.last() > 0,
+			"the ornament never arrived: $vOrnament",
+		)
+	}
+
+	/**
+	 * Arrives at the small side -- the set list -- and measures the ornament on each frame.
+	 *
+	 * The container starts expanded and shrinks, which is the direction the pop was seen in: coming
+	 * back from the grid. The ornament belongs to the small side only, and is placed away from the
+	 * container so the two colours cannot overlap.
 	 */
 	private fun ornamentOverTime(): List<Int> {
 		var vExpanded by mutableStateOf(true)
@@ -157,11 +267,18 @@ class ContainerTransformProbe {
 									modifier = Modifier
 										.sharedSetContainer("probe")
 										.width(if (vBig) BIG else SMALL)
-										.height(if (vBig) BIG else SMALL),
-								) {
-									Box(Modifier.fillMaxSize().background(Color.Red))
-									// Over the container's own fill, the way the tab is over the card.
-									Box(Modifier.width(ORNAMENT).height(ORNAMENT).background(Color.Green))
+										.height(if (vBig) BIG else SMALL)
+										.background(Color.Red),
+								)
+								if (!vBig) {
+									Box(
+										modifier = Modifier
+											.align(Alignment.TopEnd)
+											.fadesWithSharedContainer()
+											.width(ORNAMENT)
+											.height(ORNAMENT)
+											.background(Color.Green),
+									)
 								}
 							}
 						}
@@ -332,6 +449,7 @@ class ContainerTransformProbe {
 		/** Past the ornament's own delay, so the settled frame is really settled. */
 		const val ORNAMENT_FRAMES = 14
 
-
+		/** Frames the container is still visibly travelling for, at 30 ms each. */
+		const val ORNAMENT_FLIGHT_FRAMES = 6
 	}
 }

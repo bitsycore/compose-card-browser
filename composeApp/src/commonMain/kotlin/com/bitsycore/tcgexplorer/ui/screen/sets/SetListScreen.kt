@@ -104,6 +104,7 @@ import com.bitsycore.tcgexplorer.ui.component.ErrorState
 import com.bitsycore.tcgexplorer.ui.component.LoadingState
 import com.bitsycore.tcgexplorer.ui.component.LanguageMenu
 import com.bitsycore.tcgexplorer.ui.component.NoticeBanner
+import com.bitsycore.tcgexplorer.ui.component.fadesWithSharedContainer
 import com.bitsycore.tcgexplorer.ui.component.sharedSetContainer
 import com.bitsycore.tcgexplorer.ui.preview.PreviewData
 import com.bitsycore.tcgexplorer.ui.preview.PreviewFrame
@@ -907,215 +908,202 @@ private fun SetRow(
 			.zIndex(if (isLifted) 1f else 0f)
 			.graphicsLayer { translationY = dragOffsetY },
 	) {
-		// The card *and* its tab are the container, so both travel into the grid and back.
-		//
-		// The transform was on the card alone, and the tab is drawn over it: while the card was in
-		// the shared overlay -- above everything -- the tab stayed behind on the page, hidden under
-		// the travelling card, and jumped back in front the instant the transition ended. Inside the
-		// container it is lifted into the overlay with the card, keeps its place on the corner for
-		// the whole journey, and fades with the row it belongs to.
-		Box(
+		Card(
+			// Not clickable while arranging, for the reason the game picker is not: the row's job there
+			// is to be dragged, and opening a set from under a press aimed at its handle is the obvious
+			// way to get that wrong.
+			//
+			// Absent rather than disabled, and one `Card` rather than one per mode. A disabled `Card`
+			// greys everything inside it -- the set's name reads as unavailable when it is merely not
+			// tappable -- and announces itself to a screen reader as a button that does nothing. Two
+			// call sites would be worse still: that is a composition identity, and toggling the mode
+			// would throw away everything inside, which is the bug the game picker's rows had.
 			modifier = Modifier
 				.fillMaxWidth()
-				// The row is one half of the container transform into the card grid; the grid
-				// screen's root is the other. See `Modifier.sharedSetContainer`.
-				.sharedSetContainer(set.id.qualified),
+				// Room for the half of the tab that stands above the card.
+				.padding(top = SET_TAB_OVERHANG)
+				// The keyboard's cursor. An outline, so it reads as pointing at a row rather than as
+				// the row being in some other state.
+				.then(
+					if (isSelected) {
+						Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CardDefaults.shape)
+					} else {
+						Modifier
+					},
+				)
+				// The row is one half of the container transform into the card grid; the grid screen's
+				// root is the other. See `Modifier.sharedSetContainer`.
+				.sharedSetContainer(set.id.qualified)
+				// Before the click, so the ripple keeps to the card's corners.
+				.clip(CardDefaults.shape)
+				.then(
+					if (isEditing) Modifier else Modifier.clickable(role = Role.Button, onClick = onClick),
+				),
+			elevation = CardDefaults.cardElevation(
+				defaultElevation = if (isDragging) DRAGGED_ROW_ELEVATION else 0.dp,
+			),
 		) {
-			Card(
-				// Not clickable while arranging, for the reason the game picker is not: the row's job there
-				// is to be dragged, and opening a set from under a press aimed at its handle is the obvious
-				// way to get that wrong.
+			Row(
+				// Constant, in both modes, for the reason recorded on the game picker's row.
 				//
-				// Absent rather than disabled, and one `Card` rather than one per mode. A disabled `Card`
-				// greys everything inside it -- the set's name reads as unavailable when it is merely not
-				// tappable -- and announces itself to a screen reader as a button that does nothing. Two
-				// call sites would be worse still: that is a composition identity, and toggling the mode
-				// would throw away everything inside, which is the bug the game picker's rows had.
+				// It used to drop from 16dp to 4dp to claw back room for the handle, and being a plain
+				// `if` rather than an animation it did not ease at all: 12dp of inset vanished in one
+				// frame while the handle was still springing open beside it. That step against a spring
+				// is the boing. One animation drives this corner now -- the handle's -- and the room it
+				// needs is the room it makes.
 				modifier = Modifier
 					.fillMaxWidth()
-					// Room for the half of the tab that stands above the card.
-					.padding(top = SET_TAB_OVERHANG)
-					// The keyboard's cursor. An outline, so it reads as pointing at a row rather than as
-					// the row being in some other state.
-					.then(
-						if (isSelected) {
-							Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CardDefaults.shape)
-						} else {
-							Modifier
-						},
-					)
-					// Before the click, so the ripple keeps to the card's corners.
-					.clip(CardDefaults.shape)
-					.then(
-						if (isEditing) Modifier else Modifier.clickable(role = Role.Button, onClick = onClick),
-					),
-				elevation = CardDefaults.cardElevation(
-					defaultElevation = if (isDragging) DRAGGED_ROW_ELEVATION else 0.dp,
-				),
+					// Behind the content and outside the padding, so it covers the whole card and is
+					// clipped to its corners.
+					.drawBehind { drawSetHatch(vTint, vHatchStrength) }
+					.padding(16.dp),
+				verticalAlignment = Alignment.CenterVertically,
 			) {
-				Row(
-					// Constant, in both modes, for the reason recorded on the game picker's row.
-					//
-					// It used to drop from 16dp to 4dp to claw back room for the handle, and being a plain
-					// `if` rather than an animation it did not ease at all: 12dp of inset vanished in one
-					// frame while the handle was still springing open beside it. That step against a spring
-					// is the boing. One animation drives this corner now -- the handle's -- and the room it
-					// needs is the room it makes.
-					modifier = Modifier
-						.fillMaxWidth()
-						// Behind the content and outside the padding, so it covers the whole card and is
-						// clipped to its corners.
-						.drawBehind { drawSetHatch(vTint, vHatchStrength) }
-						.padding(16.dp),
-					verticalAlignment = Alignment.CenterVertically,
-				) {
-					// The defaults, for the reason recorded on the game picker's row: `AnimatedVisibility`
-					// in a `Row` is `fadeIn() + expandHorizontally()` on one critically damped spring, and
-					// `expandHorizontally` already anchors its content to the end -- so the handle slides
-					// in from outside the row without help. Adding a slide on top was a second animation
-					// moving the same object a different distance, and it chattered.
-					AnimatedVisibility(visible = handleModifier != null) {
-						ReorderHandle(handleModifier ?: Modifier)
-					}
-					SetMark(set)
-					Column(Modifier.weight(1f)) {
-						Text(
-							text = set.name,
-							style = MaterialTheme.typography.titleMedium,
-							fontWeight = FontWeight.Medium,
-						)
+				// The defaults, for the reason recorded on the game picker's row: `AnimatedVisibility`
+				// in a `Row` is `fadeIn() + expandHorizontally()` on one critically damped spring, and
+				// `expandHorizontally` already anchors its content to the end -- so the handle slides
+				// in from outside the row without help. Adding a slide on top was a second animation
+				// moving the same object a different distance, and it chattered.
+				AnimatedVisibility(visible = handleModifier != null) {
+					ReorderHandle(handleModifier ?: Modifier)
+				}
+				SetMark(set)
+				Column(Modifier.weight(1f)) {
+					Text(
+						text = set.name,
+						style = MaterialTheme.typography.titleMedium,
+						fontWeight = FontWeight.Medium,
+					)
 
-						Spacer(Modifier.height(2.dp))
-						// The badge sits on the subtitle line rather than at the end of the row. As a
-						// trailing sibling of a weighted column it took its width from the set name, and
-						// on a row that also says "Last opened" that left the name about one character
-						// wide. Here it competes with nothing: it is provenance, like the code and the
-						// date it sits next to.
-						// A flow rather than a row, so a line that runs out of width breaks *between*
-						// these facts and never inside one. As a row, the date was the element with
-						// slack at the end and wrapped itself: "Nov" with "2024" on the line below,
-						// which is a date cut in half and reads as a bug. Each child is one line and
-						// does not wrap, so the whole date drops to the next line or none of it does.
-						FlowRow(
-							horizontalArrangement = Arrangement.spacedBy(8.dp),
-							verticalArrangement = Arrangement.spacedBy(2.dp),
-							// Three: a set in several languages can take the first line with its badge
-							// and pin alone, leaving the count and the date a line each.
-							maxLines = 3,
-						) {
-							if (region != null) {
-								RegionBadge(region)
-							}
-							LanguagePin(availableLanguages)
+					Spacer(Modifier.height(2.dp))
+					// The badge sits on the subtitle line rather than at the end of the row. As a
+					// trailing sibling of a weighted column it took its width from the set name, and
+					// on a row that also says "Last opened" that left the name about one character
+					// wide. Here it competes with nothing: it is provenance, like the code and the
+					// date it sits next to.
+					// A flow rather than a row, so a line that runs out of width breaks *between*
+					// these facts and never inside one. As a row, the date was the element with
+					// slack at the end and wrapped itself: "Nov" with "2024" on the line below,
+					// which is a date cut in half and reads as a bug. Each child is one line and
+					// does not wrap, so the whole date drops to the next line or none of it does.
+					FlowRow(
+						horizontalArrangement = Arrangement.spacedBy(8.dp),
+						verticalArrangement = Arrangement.spacedBy(2.dp),
+						// Three: a set in several languages can take the first line with its badge
+						// and pin alone, leaving the count and the date a line each.
+						maxLines = 3,
+					) {
+						if (region != null) {
+							RegionBadge(region)
+						}
+						LanguagePin(availableLanguages)
+						Text(
+							text = setSubtitle(set, confirmedCardCount),
+							style = MaterialTheme.typography.bodySmall,
+							color = MaterialTheme.colorScheme.onSurfaceVariant,
+							maxLines = 1,
+							softWrap = false,
+							overflow = TextOverflow.Ellipsis,
+						)
+						set.releaseDate?.let {
 							Text(
-								text = setSubtitle(set, confirmedCardCount),
-								style = MaterialTheme.typography.bodySmall,
-								color = MaterialTheme.colorScheme.onSurfaceVariant,
+								text = "${monthName(it.month.ordinal)} ${it.year}",
+								style = MaterialTheme.typography.labelSmall,
+								fontWeight = FontWeight.Light,
 								maxLines = 1,
 								softWrap = false,
-								overflow = TextOverflow.Ellipsis,
 							)
-							set.releaseDate?.let {
-								Text(
-									text = "${monthName(it.month.ordinal)} ${it.year}",
-									style = MaterialTheme.typography.labelSmall,
-									fontWeight = FontWeight.Light,
-									maxLines = 1,
-									softWrap = false,
+						}
+					}
+				}
+				// A running download replaces the button with its own progress, so the row shows one
+				// state rather than a button next to a spinner describing the same thing.
+				when {
+					downloadStatus?.isActive == true -> {
+						Spacer(Modifier.size(8.dp))
+						val vProgress = downloadStatus.progress
+						// Wavy, to agree with the Downloads screen. The reason is recorded there and
+						// applies just as much here: a long download that is progressing looks
+						// identical to a stalled one under a static indicator, and the wave moves on
+						// its own. This is the app's other live-download surface, so it should not
+						// read differently.
+						Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+							if (vProgress == null) {
+								CircularWavyProgressIndicator(Modifier.size(24.dp))
+							} else {
+								CircularWavyProgressIndicator(
+									progress = { vProgress },
+									modifier = Modifier.size(24.dp),
 								)
 							}
 						}
 					}
-					// A running download replaces the button with its own progress, so the row shows one
-					// state rather than a button next to a spinner describing the same thing.
-					when {
-						downloadStatus?.isActive == true -> {
-							Spacer(Modifier.size(8.dp))
-							val vProgress = downloadStatus.progress
-							// Wavy, to agree with the Downloads screen. The reason is recorded there and
-							// applies just as much here: a long download that is progressing looks
-							// identical to a stalled one under a static indicator, and the wave moves on
-							// its own. This is the app's other live-download surface, so it should not
-							// read differently.
-							Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
-								if (vProgress == null) {
-									CircularWavyProgressIndicator(Modifier.size(24.dp))
-								} else {
-									CircularWavyProgressIndicator(
-										progress = { vProgress },
-										modifier = Modifier.size(24.dp),
-									)
-								}
-							}
-						}
 
-						// The star is a control, and only while arranging. Browsing, it said nothing the
-						// list was not already saying: a favourite is already under the "N favourites"
-						// heading, so a star beside it repeats that heading once per row.
-						//
-						// The slot stays 32dp wide either way. Collapsing it would be a second layout
-						// change on the corner the handle is already animating, which is exactly the
-						// bounce that took three attempts to find the first time.
-						else -> {
-							Spacer(Modifier.size(4.dp))
-							FavouriteStar(
-								name = set.name,
-								isFavourite = isFavourite,
-								isEditing = isEditing,
-								onToggle = onToggleFavourite,
-							)
-							// Offered only while there is something left to fetch, and only while browsing.
-							// A button that starts a download of nothing is worse than no button: it
-							// invites a tap, does the work of checking, and reports that everything was
-							// already there. Arranging is a different job, and a row being dragged should
-							// not also be a row that starts a download.
-							//
-							// The marks below still say what is held -- this removes the *offer*, not the
-							// statement. Which is the right way round: "you have this" is information, and
-							// "get this" is an action that has nothing to act on.
-							AnimatedVisibility(visible = canOfferDownload && !isEditing) {
-								DownloadButton(name = set.name, onDownload = onDownload)
-							}
-						}
-					}
-					// Two rings, because the two halves of a download are separately true: a set can have
-					// its records and none of its thumbnails, which is the common case after browsing it
-					// once. Full-size art has no ring because it is never bulk-downloaded and so has no
-					// state to report -- see `DownloadKind`.
+					// The star is a control, and only while arranging. Browsing, it said nothing the
+					// list was not already saying: a favourite is already under the "N favourites"
+					// heading, so a star beside it repeats that heading once per row.
 					//
-					// Browsing only. They are things to read, and arranging is not reading: leaving them
-					// on put the star of a downloaded set two notches left of an undownloaded one's, and a
-					// column of controls that do not line up reads as a bug.
-					AnimatedVisibility(visible = !isEditing && (isSaved || images?.isEmpty == false)) {
-						Row(verticalAlignment = Alignment.CenterVertically) {
-							Spacer(Modifier.size(6.dp))
-							CoverageRings(
-								// Card info keeps no per-set fraction, so an unfinished one is drawn as
-								// interrupted rather than as a made-up sweep. "Saved", not "complete":
-								// a fetch stopped part-way leaves a file behind too.
-								info = when {
-									!isSaved -> Coverage.Unknown
-									isIncomplete -> Coverage.Interrupted
-									else -> Coverage.Complete
-								},
-								infoIcon = AppIcons.Description,
-								thumbnails = images?.thumbnails.toCoverage(),
-								thumbnailIcon = AppIcons.GridView,
-							)
+					// The slot stays 32dp wide either way. Collapsing it would be a second layout
+					// change on the corner the handle is already animating, which is exactly the
+					// bounce that took three attempts to find the first time.
+					else -> {
+						Spacer(Modifier.size(4.dp))
+						FavouriteStar(
+							name = set.name,
+							isFavourite = isFavourite,
+							isEditing = isEditing,
+							onToggle = onToggleFavourite,
+						)
+						// Offered only while there is something left to fetch, and only while browsing.
+						// A button that starts a download of nothing is worse than no button: it
+						// invites a tap, does the work of checking, and reports that everything was
+						// already there. Arranging is a different job, and a row being dragged should
+						// not also be a row that starts a download.
+						//
+						// The marks below still say what is held -- this removes the *offer*, not the
+						// statement. Which is the right way round: "you have this" is information, and
+						// "get this" is an action that has nothing to act on.
+						AnimatedVisibility(visible = canOfferDownload && !isEditing) {
+							DownloadButton(name = set.name, onDownload = onDownload)
 						}
 					}
-					// "Last opened" is on the metadata line rather than out here. As an unweighted
-					// trailing sibling it was measured at its full intrinsic width before the weighted
-					// column got any, so on a row with a long set name the name was squeezed to about one
-					// character per line. The row's own tint is the primary signal anyway; this is the
-					// label that explains it.
 				}
+				// Two rings, because the two halves of a download are separately true: a set can have
+				// its records and none of its thumbnails, which is the common case after browsing it
+				// once. Full-size art has no ring because it is never bulk-downloaded and so has no
+				// state to report -- see `DownloadKind`.
+				//
+				// Browsing only. They are things to read, and arranging is not reading: leaving them
+				// on put the star of a downloaded set two notches left of an undownloaded one's, and a
+				// column of controls that do not line up reads as a bug.
+				AnimatedVisibility(visible = !isEditing && (isSaved || images?.isEmpty == false)) {
+					Row(verticalAlignment = Alignment.CenterVertically) {
+						Spacer(Modifier.size(6.dp))
+						CoverageRings(
+							// Card info keeps no per-set fraction, so an unfinished one is drawn as
+							// interrupted rather than as a made-up sweep. "Saved", not "complete":
+							// a fetch stopped part-way leaves a file behind too.
+							info = when {
+								!isSaved -> Coverage.Unknown
+								isIncomplete -> Coverage.Interrupted
+								else -> Coverage.Complete
+							},
+							infoIcon = AppIcons.Description,
+							thumbnails = images?.thumbnails.toCoverage(),
+							thumbnailIcon = AppIcons.GridView,
+						)
+					}
+				}
+				// "Last opened" is on the metadata line rather than out here. As an unweighted
+				// trailing sibling it was measured at its full intrinsic width before the weighted
+				// column got any, so on a row with a long set name the name was squeezed to about one
+				// character per line. The row's own tint is the primary signal anyway; this is the
+				// label that explains it.
 			}
-			// After the card, so it lies over it -- in the overlay too, once the container is in
-			// flight. It carries no click of its own, so the tap still reaches the card underneath
-			// and opens the set.
-			SetTab(set.code, Modifier.align(Alignment.TopStart))
 		}
+		// After the card, so it lies over it. It carries no click of its own, so the tap still
+		// reaches the card underneath and opens the set.
+		SetTab(set.code, Modifier.align(Alignment.TopStart).fadesWithSharedContainer())
 	}
 }
 
