@@ -1325,6 +1325,24 @@ class CardRepository(
 	// ============
 	//  Keys
 
+	/**
+	 * The language [game]'s records are filed under, for a caller outside this class that has to
+	 * key something the same way.
+	 *
+	 * The image-download record is the one such thing: it lives in preferences rather than in the
+	 * store, so the queue writes it and the set list reads it without either going through a cache
+	 * key. Both used `ProviderRegistry.effectiveLanguage`, whose `?: language` fallback hands back
+	 * the *user's raw preference* for a source that states no language -- OPTCG and TCGCSV. The two
+	 * sides agreed with each other and disagreed with the data: the record for One Piece was filed
+	 * under whatever language the reader happened to prefer, so changing that preference in
+	 * Settings orphaned it and the set offered its pictures for download again.
+	 *
+	 * `null` here means "nothing to file it under" and is a perfectly good key component -- see
+	 * [imageDownloadKey], which spells it `-`. It does **not** mean the language is unknown, and it
+	 * must not be replaced by the caller's own preference.
+	 */
+	fun storageLanguageFor(game: GameId, language: CardLanguage?): CardLanguage? =
+		mRegistry.resolve(game, language)?.let { effectiveLanguage(it, language) }
 
 	/**
 	 * The language a provider will really answer in, given what a caller asked for.

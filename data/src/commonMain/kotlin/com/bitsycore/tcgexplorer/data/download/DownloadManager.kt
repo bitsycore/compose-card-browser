@@ -625,7 +625,15 @@ class DownloadManager(
 		// null set -- but the record is keyed by set id, so there would be nothing to write under.
 		val vSetId = request.setId ?: return
 		runCatching {
-			val vKey = imageDownloadKey(vSetId.qualified, request.language, kind.name)
+			// The job's language normalised against what the source really files under, not the
+			// job's own. A job for One Piece carries whatever the reader prefers, because that is
+			// what the dialog had to offer; the record has to outlive a change to that preference.
+			// See `CardRepository.storageLanguageFor`.
+			val vKey = imageDownloadKey(
+				vSetId.qualified,
+				mRepository.storageLanguageFor(request.game, request.language),
+				kind.name,
+			)
 			mPreferences.update { vPreferences ->
 				vPreferences.copy(
 					imageDownloads = vPreferences.imageDownloads +

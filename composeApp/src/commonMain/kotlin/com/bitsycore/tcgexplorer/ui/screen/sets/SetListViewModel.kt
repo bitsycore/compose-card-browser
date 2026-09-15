@@ -405,8 +405,14 @@ class SetListViewModel(
 		// `fr` ones, so a downloaded set went on offering its thumbnails for download forever.
 		//
 		// The repository resolves this for itself in `savedSetIds` and the rest; the image side
-		// reads preferences directly and has to do it here. Same function, same answer.
-		val vEffective = mRegistry.effectiveLanguage(game, language) ?: language
+		// reads preferences directly and has to do it here. Same function, same answer -- and the
+		// function is the repository's, not the registry's.
+		//
+		// `ProviderRegistry.effectiveLanguage` ends in `?: language`, which hands back the reader's
+		// raw preference for a source that states none. OPTCG and TCGCSV do, so One Piece's
+		// pictures were filed under whichever language the reader happened to browse in, and
+		// changing that in Settings lost the record and re-offered the download.
+		val vEffective = mRepository.storageLanguageFor(game, language)
 		// Read ahead by the startup sweep where it got there first, and looked up now where it did
 		// not. Same call either way -- `localSetFacts` is the one place the question is asked.
 		val vFacts = mWarmer.peek(game, language, vSets)

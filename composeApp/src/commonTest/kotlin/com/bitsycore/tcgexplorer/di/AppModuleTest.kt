@@ -197,7 +197,7 @@ class AppModuleTest {
 	}
 
 	@Test
-	fun `a source states whether it publishes thumbnails -- and only two do not`() {
+	fun `a source states whether it publishes thumbnails -- and only three do not`() {
 		// The capability exists because the app falls back to the full image where there is no
 		// small one, and a download offering "Thumbnails -- about 3 MB" then fetches six times
 		// that.
@@ -205,6 +205,11 @@ class AppModuleTest {
 		// Wuthering Waves was on this list and is not any more, which is the pattern worth
 		// noticing: its CDN resizes on request, so the rendition existed and nobody had asked for
 		// it. A source with no *second file* may still have a second size.
+		//
+		// The WoW TCG is the reverse and was missed for the same reason in mirror image: TCGCSV
+		// declared one capability for all three of its catalogues, and that one serves the same
+		// 200x280 pixels under every suffix. The flag is per catalogue now. The grain of a fact
+		// about renditions is the catalogue, not the adapter that happens to serve three.
 		//
 		// Pinned as a table rather than asserted loosely, so a provider that gains or loses a
 		// rendition has to come here and say so.
@@ -217,7 +222,7 @@ class AppModuleTest {
 			.toSet()
 
 		assertEquals(
-			setOf("optcg", "altered-db"),
+			setOf("optcg", "altered-db", "tcgcsv-wowtcg"),
 			vWithout,
 			"a source changed what renditions it publishes",
 		)

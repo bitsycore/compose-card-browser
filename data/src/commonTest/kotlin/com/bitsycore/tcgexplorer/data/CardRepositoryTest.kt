@@ -1185,6 +1185,46 @@ class CardRepositoryTest {
 	}
 
 	@Test
+	fun `a source that states no language files under none -- whatever the reader prefers`() = runTest {
+		// The key an image-download record is stored under, which lives in preferences rather than
+		// the store and so is built by the queue and read by the set list without either going
+		// through a cache key.
+		//
+		// Both used `ProviderRegistry.effectiveLanguage`, which ends `?: language` -- so for OPTCG
+		// and TCGCSV, which state none, they agreed with each other and disagreed with the data:
+		// the record went under whatever the reader happened to prefer. Changing that preference in
+		// Settings orphaned it, and One Piece offered its pictures for download again.
+		//
+		// The answer must not move when the preference does.
+		val vProvider = FakeProvider(mProviderId, listOf(listOf(card(1))), mLanguages = emptySet())
+		val vRepository = repositoryFor(vProvider, FakeFileSystem())
+
+		for (vPreference in listOf(CardLanguage.FRENCH, CardLanguage.ENGLISH, CardLanguage.JAPANESE, null)) {
+			assertEquals(
+				null,
+				vRepository.storageLanguageFor(TestGame.id, vPreference),
+				"a source stating no language must file under none, and $vPreference changed it",
+			)
+		}
+	}
+
+	@Test
+	fun `a source with one language files under it -- whatever the reader prefers`() = runTest {
+		// The other half. Riftcodex serves English whoever is reading, so the key is `en` and stays
+		// `en`: this must normalise, not merely return null for everyone.
+		val vProvider = FakeProvider(mProviderId, listOf(listOf(card(1))))
+		val vRepository = repositoryFor(vProvider, FakeFileSystem())
+
+		for (vPreference in listOf(CardLanguage.FRENCH, CardLanguage.ENGLISH, null)) {
+			assertEquals(
+				CardLanguage.ENGLISH,
+				vRepository.storageLanguageFor(TestGame.id, vPreference),
+				"an English-only source must file under English, and $vPreference changed it",
+			)
+		}
+	}
+
+	@Test
 	fun `facets are found for a set fetched under a language the provider does not serve`() = runTest {
 		// Same key, same bug: an empty facet set meant a filter sheet with nothing in it.
 		val vProvider = FakeProvider(mProviderId, listOf(listOf(card(1, rarity = "Epic"))))

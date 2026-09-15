@@ -30,6 +30,14 @@ private fun tcgCsvCapabilities(
 	filters: Set<CardFilterField>,
 	sorting: Set<CardSortField>,
 	attribution: String,
+	/**
+	 * False for a catalogue whose CDN cannot resize -- see [TcgCsvMapping.hasLargerArt].
+	 *
+	 * Per catalogue, because that is the grain the fact has. Two of the three serve a real `_200w`
+	 * and the third serves the same pixels under every name, so "this source publishes a small
+	 * rendition" is true for two of them and flatly false for the other.
+	 */
+	hasThumbnails: Boolean = true,
 ): ProviderCapabilities = ProviderCapabilities(
 	filtering = FilterSupport(remote = emptySet(), localOnly = filters),
 	sorting = sorting,
@@ -50,11 +58,16 @@ private fun tcgCsvCapabilities(
 		cardmarketProductMapping = false,
 		// No query endpoint of any kind exists. A cross-set search therefore covers only the sets
 		// already downloaded, and the app labels it as such with a count.
-		// Per card rather than for the whole catalogue: a `_200w` rendition exists only where the
-		// product advertises larger art, which `TcgCsvMapper` reads off the record. Capability is
-		// the ceiling and coverage is the fact, so the ceiling is true here and each printing
-		// still states its own.
-		thumbnailImages = true,
+		// Capability is the ceiling and coverage is the fact, so within a catalogue that *has* a
+		// small rendition this stays true and each printing still states its own.
+		//
+		// But the ceiling itself differs per catalogue, and pinning it at true for all three was
+		// wrong: the WoW column of `TcgCsvMapper`'s table is the same 200x280 pixels under every
+		// name, so `hasLargerArt` is false there and no WoW printing has ever carried a thumbnail.
+		// The dialog read this flag, called the row "Thumbnails" and priced it at a thumbnail --
+		// for a fetch of the full image, and before `Artwork.thumbnailChain` existed, for a fetch
+		// of nothing at all.
+		thumbnailImages = hasThumbnails,
 	),
 	attribution = Attribution(text = attribution, url = "https://tcgcsv.com/"),
 	maxPageSize = TcgCsvProvider.MAX_PAGE_SIZE,
@@ -244,6 +257,10 @@ class WowTcgCsvProvider(
 		),
 		attribution = "World of Warcraft TCG card data from TCGCSV, a public mirror of " +
 			"TCGplayer's catalogue. Not affiliated with Blizzard Entertainment.",
+		// The one catalogue with a single rendition: originals are 200x280 and every suffix
+		// returns those same pixels. `TcgCsvMapping.hasLargerArt` is false here for the same
+		// reason, and this is that fact stated where the download dialog can read it.
+		hasThumbnails = false,
 	)
 
 	companion object {
