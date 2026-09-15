@@ -397,7 +397,9 @@ enum class ImageVariant {
 	 * renditions yields a chain of one and behaves exactly as before.
 	 */
 	fun chainFor(artwork: Artwork): List<String> = when (this) {
-		THUMBNAIL -> listOf(artwork.thumbnailUrl, artwork.displayUrl, artwork.imageUrl)
+		// `Artwork.thumbnailChain`, because the download queue warms exactly what a tile draws and
+		// two copies of that order is one edit from caching a rendition nothing asks for.
+		THUMBNAIL -> return artwork.thumbnailChain
 		DISPLAY -> listOf(artwork.displayUrl, artwork.imageUrl)
 		// Nothing to escalate to: this *is* what the provider published.
 		ORIGINAL -> listOf(artwork.imageUrl)

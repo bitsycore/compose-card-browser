@@ -665,17 +665,19 @@ private fun megabytes(cardCount: Int, bytesPerCard: Int): Int =
  * rendition bulk-fetched at all. See `DownloadKind`.
  *
  * The spread is wide, so this is an order of magnitude and not a promise: Scryfall's two
- * renditions barely differ, and a provider with no small rendition at all fetches nothing.
+ * renditions barely differ. A provider with no small rendition is priced at [FULL_IMAGE_BYTES]
+ * instead, because that is what the grid draws and what the queue fetches.
  */
 private const val THUMBNAIL_BYTES = 32_000
 
 /**
  * The per-card cost where a source publishes no small rendition, measured rather than guessed.
  *
- * Three of the sources here -- Wuthering Waves, One Piece and Altered -- map `thumbnailUrl` to
- * null, so the grid draws the full image and a bulk fetch downloads that. Sampled 2026-09-11, a
- * Wuthering Waves card is 196 KB of WebP and it is the only rendition offered; the full images
- * behind the three sources that do publish thumbnails run 63 to 153 KB. 150 KB is the middle of
+ * Two of the sources here -- One Piece and Altered -- map `thumbnailUrl` to null, so the grid
+ * draws the full image and a bulk fetch downloads that. Wuthering Waves was a third until its CDN
+ * turned out to resize on request; `AppModuleTest` pins the list. Sampled 2026-09-11, a Wuthering
+ * Waves card is 196 KB of WebP at its own size, and the full images behind the sources that do
+ * publish thumbnails run 63 to 153 KB. 150 KB is the middle of
  * that and deliberately not the largest: an estimate that overstates is as unhelpful as one that
  * understates, and this row is a caution rather than a quote.
  */

@@ -1147,6 +1147,44 @@ class CardRepositoryTest {
 	}
 
 	@Test
+	fun `a set from a source that states no languages reads as saved and as held`() = runTest {
+		// The shipped fault, on One Piece: OPTCG states no languages, so every set it serves is
+		// written under none -- `-` in the column. `languagesHeld` mapped that through
+		// `CardLanguage.fromCode`, got null, and dropped it as an unrecognised tag, so a fully
+		// downloaded set reported *no* languages held. `isSaved` is `languagesHeld().isNotEmpty()`,
+		// so the row never got its mark, the dialog never saw the edition as held and offered the
+		// download again for ever, and a cross-game search said it had looked at 0 sets.
+		//
+		// The storage screen was right throughout, because it counts pinned rows straight out of
+		// `storedSetsForGame` -- which is why this looked like a display bug and was not.
+		val vProvider = FakeProvider(mProviderId, listOf(listOf(card(1), card(2))), mLanguages = emptySet())
+		val vRepository = repositoryFor(vProvider, FakeFileSystem())
+		val vSet = CardSet(mSetId, TestGame.id, "OGN", "Origins", 2, null)
+
+		vRepository.cards(mSetId, TestGame.id, CardQuery(), language = CardLanguage.ENGLISH).toList()
+
+		val vFacts = vRepository.localSetFacts(TestGame.id, listOf(vSet), CardLanguage.ENGLISH)
+
+		assertEquals(
+			setOf(mSetId.qualified),
+			vFacts.savedSetIds,
+			"a set held under no language is still held",
+		)
+		assertEquals(
+			setOf(null),
+			vFacts.savedLanguages[mSetId.qualified],
+			"the edition on disk states no language, and that is the answer -- not an empty set",
+		)
+		// And the menu question, which is the one place the null must *not* show up: nothing
+		// confirmed a language here, because the source never named one.
+		assertEquals(
+			null,
+			vFacts.availableLanguages[mSetId.qualified],
+			"silence is not a language to offer",
+		)
+	}
+
+	@Test
 	fun `facets are found for a set fetched under a language the provider does not serve`() = runTest {
 		// Same key, same bug: an empty facet set meant a filter sheet with nothing in it.
 		val vProvider = FakeProvider(mProviderId, listOf(listOf(card(1, rarity = "Epic"))))

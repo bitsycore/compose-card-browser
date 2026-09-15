@@ -876,14 +876,18 @@ class CardRepository(
 	 * would open in, which is the one a source that states none will have written under. A set with
 	 * no entry at all is absent from the map rather than mapping to an empty set, so "nothing
 	 * downloaded" and "nothing known" stay distinguishable.
+	 *
+	 * `null` is a member and means the edition held states no language, which for OPTCG and TCGCSV
+	 * is the only edition there is. Dropping it reported four games as holding nothing, so the mark
+	 * never appeared and the dialog re-offered a download that was already on disk.
 	 */
 	suspend fun savedLanguages(
 		game: GameId,
 		sets: List<CardSet>,
 		language: CardLanguage? = null,
-	): Map<String, Set<CardLanguage>> {
+	): Map<String, Set<CardLanguage?>> {
 		val vProvider = mRegistry.resolve(game, language) ?: return emptyMap()
-		val vResult = mutableMapOf<String, Set<CardLanguage>>()
+		val vResult = mutableMapOf<String, Set<CardLanguage?>>()
 		for (vSet in sets) {
 			currentCoroutineContext().ensureActive()
 			// The same candidates `isSaved` uses, and for the same reason: a set that states no
@@ -995,7 +999,12 @@ class CardRepository(
 			val vStated = vConfirmed?.takeIf { it.isNotEmpty() } ?: vSet.languages
 			// Plus every language this device actually holds cards in. The same candidate sweep
 			// `savedLanguages` runs -- one file-existence check per candidate, no requests.
-			val vHeld = mSetStore.languagesHeld(vProvider.id, vSet.id)
+			//
+			// Records held under *no* language are dropped here, and only here. This answers a
+			// language menu, and a source that names none has not told us the set is in one --
+			// listing it would put a language on screen that nothing established. `savedLanguages`
+			// keeps the null, because "is this edition already on disk" is a different question.
+			val vHeld = mSetStore.languagesHeld(vProvider.id, vSet.id).filterNotNull()
 			val vKnown = vStated + vHeld
 			if (vKnown.isNotEmpty()) vResult[vSet.id.qualified] = vKnown
 		}
@@ -1057,7 +1066,10 @@ class CardRepository(
 			.orEmpty()
 		val vSet = setRecord(setId, game)
 		// The same candidate sweep the set list runs: file-existence checks, no requests.
-		return vConfirmed + mSetStore.languagesHeld(vProvider.id, setId)
+		//
+		// Records held under no language contribute nothing: this is a language menu, and a source
+		// that names none has confirmed no language by serving them. See `availableLanguages`.
+		return vConfirmed + mSetStore.languagesHeld(vProvider.id, setId).filterNotNull()
 	}
 
 	suspend fun knownLanguagesFor(setId: SourceId, game: GameId): Set<CardLanguage> {

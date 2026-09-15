@@ -105,8 +105,14 @@ interface SetRecordStore {
 	 *
 	 * One query where the file cache needed a file-existence check per candidate language -- up to
 	 * eleven per set, per row of the set list.
+	 *
+	 * `null` is a member, not an absence: a source that states no languages -- OPTCG and TCGCSV --
+	 * writes its records under none, and those rows are held just as firmly as any other. Dropping
+	 * it made every One Piece set read as not downloaded while it sat on disk, so the row never got
+	 * its mark and the dialog offered the same download for ever. An **empty** set is the only way
+	 * to say nothing is held.
 	 */
-	suspend fun languagesHeld(provider: ProviderId, setId: SourceId): Set<CardLanguage>
+	suspend fun languagesHeld(provider: ProviderId, setId: SourceId): Set<CardLanguage?>
 
 	suspend fun isPinned(provider: ProviderId, setId: SourceId, language: CardLanguage?): Boolean
 
@@ -284,10 +290,16 @@ class SqlSetRecordStore(
 		mStore.cardCount(provider.value, setId.qualified, language)
 	}
 
-	override suspend fun languagesHeld(provider: ProviderId, setId: SourceId): Set<CardLanguage> =
+	override suspend fun languagesHeld(provider: ProviderId, setId: SourceId): Set<CardLanguage?> =
 		withContext(mIoDispatcher) {
-			mStore.languagesHeld(provider.value, setId.qualified)
-				.mapNotNullTo(mutableSetOf()) { CardLanguage.fromCode(it) }
+			buildSet {
+				for (vCode in mStore.languagesHeld(provider.value, setId.qualified)) {
+					// A null code is a row written under no language and is kept. A tag this build
+					// has no entry for is dropped, because nothing here could fetch it -- and it
+					// must not arrive as the same null that means "the source states none".
+					if (vCode == null) add(null) else CardLanguage.fromCode(vCode)?.let(::add)
+				}
+			}
 		}
 
 	override suspend fun isPinned(

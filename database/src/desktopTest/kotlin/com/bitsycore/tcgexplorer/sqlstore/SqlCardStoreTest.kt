@@ -93,6 +93,19 @@ class SqlCardStoreTest {
 	}
 
 	@Test
+	fun `a set held under no language is held -- and says so as null`() {
+		// OPTCG and TCGCSV state no languages, so this is how four of the ten games store every
+		// set they have. The sentinel is `-` in the column, and handing that out raw meant
+		// `CardLanguage.fromCode` turned it into the same null an unknown tag gives -- and the
+		// caller dropped both. Every One Piece set then read as not downloaded while it sat on
+		// disk: no saved mark, and a download dialog that offered the same set for ever.
+		write("s", null, "Set", false, 1L, listOf(card(1)))
+
+		assertEquals(listOf(null), mStore.languagesHeld("p", "s"))
+		assertTrue(mStore.hasSet("p", "s", null), "the row is there under no language")
+	}
+
+	@Test
 	fun `rewriting a set replaces it rather than merging into it`() {
 		// A refetch that returns fewer cards must not leave the dropped ones behind. That is how
 		// a set ends up holding printings the source no longer serves, with nothing on screen to

@@ -100,10 +100,18 @@ class InMemorySetRecordStore(
 	override suspend fun cardCount(provider: ProviderId, setId: SourceId, language: CardLanguage?) =
 		mRows[key(provider, setId, language)]?.cards?.size
 
-	override suspend fun languagesHeld(provider: ProviderId, setId: SourceId): Set<CardLanguage> =
-		mRows.keys
-			.filter { it.provider == provider.value && it.setId == setId.qualified }
-			.mapNotNullTo(mutableSetOf()) { it.language?.let(CardLanguage::fromCode) }
+	// Mirrors the SQL store exactly, including which null is which: a row held under no language
+	// is a member, an unrecognised tag is not. The lenient version -- dropping both -- is what hid
+	// the fault that every One Piece set read as not downloaded while it sat on disk.
+	override suspend fun languagesHeld(provider: ProviderId, setId: SourceId): Set<CardLanguage?> =
+		buildSet {
+			val vKeys = mRows.keys
+				.filter { it.provider == provider.value && it.setId == setId.qualified }
+			for (vKey in vKeys) {
+				val vCode = vKey.language
+				if (vCode == null) add(null) else CardLanguage.fromCode(vCode)?.let(::add)
+			}
+		}
 
 	override suspend fun isPinned(provider: ProviderId, setId: SourceId, language: CardLanguage?) =
 		mRows[key(provider, setId, language)]?.isPinned == true

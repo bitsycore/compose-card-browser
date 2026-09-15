@@ -521,16 +521,23 @@ class DownloadManager(
 				return
 			}
 
-			// 2. The thumbnails. Still keyed by kind rather than a bare list, because the record
+			// 2. The pictures. Still keyed by kind rather than a bare list, because the record
 			//    written afterwards is per rendition and a second one may well come back one day.
-			//    A provider with no small rendition (One Piece, Altered) yields an empty list
-			//    rather than quietly falling back to the full image, which would both record art
-			//    under the heading "thumbnails" and fetch exactly the megabytes this avoids.
+			//
+			//    The full image where the source publishes no small one -- OPTCG and Altered.
+			//    This used to yield an empty list instead, to avoid fetching megabytes under the
+			//    heading "thumbnails". But the dialog has already relabelled the row "Card images"
+			//    and priced it at the full size off `DataCapabilities.thumbnailImages`, so the
+			//    honesty problem was solved there, and refusing here only meant the download did
+			//    nothing at all: no files, no record -- so the row never ticked, One Piece could be
+			//    "downloaded" for ever, and the grid it was meant to fill still went to the network.
 			val vByKind: Map<DownloadKind, List<String>> = buildMap {
 				if (DownloadKind.GRID_THUMBNAILS in vRequest.kinds) {
 					put(
 						DownloadKind.GRID_THUMBNAILS,
-						vCards.mapNotNull { it.artwork.thumbnailUrl?.ifBlank { null } }.distinct(),
+						// The first of the chain, which is the one a tile asks for. Warming any
+						// other rendition fills the cache with files the grid never requests.
+						vCards.mapNotNull { it.artwork.thumbnailChain.firstOrNull() }.distinct(),
 					)
 				}
 			}

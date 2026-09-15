@@ -322,9 +322,18 @@ class SqlCardStore(driver: SqlDriver) {
 	fun hasSet(provider: String, setId: String, language: CardLanguage?): Boolean =
 		mQueries.hasSet(provider, setId, language?.code ?: "-").executeAsOne() > 0
 
-	/** Which languages of a set are held, without a file-existence check per candidate. */
-	fun languagesHeld(provider: String, setId: String): List<String> =
-		mQueries.languagesHeldForSet(provider, setId).executeAsList()
+	/**
+	 * Which languages of a set are held, without a file-existence check per candidate.
+	 *
+	 * Decodes the sentinel rather than handing it out: a row written under no language is stored as
+	 * `"-"`, and a caller reading that through `CardLanguage.fromCode` gets `null` -- the same
+	 * `null` an unrecognised tag gives. Two different facts through one hole. `null` here means the
+	 * row states no language; anything else is a tag for the caller to resolve.
+	 */
+	fun languagesHeld(provider: String, setId: String): List<String?> =
+		mQueries.languagesHeldForSet(provider, setId)
+			.executeAsList()
+			.map { it.takeUnless { vCode -> vCode == NO_LANGUAGE } }
 
 	/** How many cards a set really holds in one language. The `.n` sidecar, as a column. */
 	fun cardCount(provider: String, setId: String, language: CardLanguage?): Int? =
@@ -558,6 +567,15 @@ class SqlCardStore(driver: SqlDriver) {
 	private fun delimited(values: Set<String>) = values.joinToString(DOMAIN_SEPARATOR)
 
 	private companion object {
+
+		/**
+		 * What `cached_set.language` holds for a record written under no language at all.
+		 *
+		 * A column in a primary key cannot be null and compare equal, so silence needs a value.
+		 * OPTCG and TCGCSV state no languages, so this is the ordinary case for four of the ten
+		 * games rather than an edge.
+		 */
+		const val NO_LANGUAGE = "-"
 
 		/** The one treatment the serialiser omits, because it is the default. */
 

@@ -146,8 +146,12 @@ object SetListContract :
 		 *
 		 * A set with nothing on disk is absent rather than mapping to an empty set, so "none
 		 * downloaded" and "not yet resolved" stay distinguishable.
+		 *
+		 * `null` is a member and means the edition held states no language, which is the only kind
+		 * OPTCG and TCGCSV write. The chip picker drops it -- there is no chip for silence -- but
+		 * the state says what is there.
 		 */
-		val savedLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
+		val savedLanguages: Map<String, Set<CardLanguage?>> = emptyMap(),
 		/**
 		 * How many cards each set really holds in the language it opens in, by qualified set id.
 		 *
@@ -465,7 +469,7 @@ object SetListContract :
 		data class SavedSetsResolved(
 			val setIds: Set<String>,
 			val imageDownloads: Map<String, SetImageStatus> = emptyMap(),
-			val savedLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
+			val savedLanguages: Map<String, Set<CardLanguage?>> = emptyMap(),
 			val confirmedCardCounts: Map<String, Int> = emptyMap(),
 			val completeSetIds: Set<String> = emptySet(),
 			val availableLanguages: Map<String, Set<CardLanguage>> = emptyMap(),

@@ -14,8 +14,13 @@ import com.bitsycore.tcgexplorer.core.model.CardLanguage
 data class LocalSetFacts(
 	/** Sets with any edition on disk. */
 	val savedSetIds: Set<String> = emptySet(),
-	/** Which editions, per set: the question the download dialog asks. */
-	val savedLanguages: Map<String, Set<CardLanguage>> = emptyMap(),
+	/**
+	 * Which editions, per set: the question the download dialog asks.
+	 *
+	 * `null` is a member and means the edition held states no language -- the only kind OPTCG and
+	 * TCGCSV write. Not the same question as [availableLanguages], which is a menu.
+	 */
+	val savedLanguages: Map<String, Set<CardLanguage?>> = emptyMap(),
 	/** What each set really holds in the language it opens in, where a fetch established it. */
 	val confirmedCardCounts: Map<String, Int> = emptyMap(),
 	/** Sets with nothing left to fetch. Stricter than [savedSetIds]. */

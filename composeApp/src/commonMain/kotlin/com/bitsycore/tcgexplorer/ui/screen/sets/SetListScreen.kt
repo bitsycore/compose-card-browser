@@ -580,7 +580,11 @@ fun SetListContent(
 			isCardDataBundled = vState.isCardDataBundled,
 			isCardInfoBulkOnly = vState.isCardInfoBulkOnly,
 			hasThumbnails = vState.hasThumbnails,
-			infoLanguages = vState.savedLanguages[vSet.id.qualified].orEmpty(),
+			// Chips only, so an edition held under no language has none to light up. That it is
+			// held at all is carried by `savedSetIds`, which is what locks the card-info row.
+			infoLanguages = vState.savedLanguages[vSet.id.qualified]
+				.orEmpty()
+				.filterNotNullTo(mutableSetOf()),
 			// One set, so no dump is involved and there is nothing to choose: a 78 MB file to
 			// fill one set is far worse than the request it would replace. See `BulkCatalogue`.
 			onConfirm = { vKinds, vInfoLanguages, vArtLanguages, _ ->
@@ -635,7 +639,9 @@ fun SetListContent(
 			infoLanguages = vSets
 				.map { vState.savedLanguages[it.id.qualified].orEmpty() }
 				.reduceOrNull { vAcc, vNext -> vAcc intersect vNext }
-				.orEmpty(),
+				.orEmpty()
+				// Chips only. See the single-set dialog above.
+				.filterNotNullTo(mutableSetOf()),
 			onDismiss = { vPendingAll = false },
 			isImportingGame = vIsImportingGame,
 			importedVariantIds = state.importedVariantIds,

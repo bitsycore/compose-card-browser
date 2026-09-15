@@ -198,6 +198,23 @@ data class Artwork(
 		get() = imageUrl.isNotBlank() ||
 			!thumbnailUrl.isNullOrBlank() ||
 			!displayUrl.isNullOrBlank()
+
+	/**
+	 * Every rendition a grid tile would try, cheapest first. Empty when the source published none.
+	 *
+	 * Here rather than beside the Compose code because two layers need the same answer and they are
+	 * in different modules: the grid draws the first of these, and the download queue has to warm
+	 * exactly that URL. Prefetching a different rendition caches a file nothing then asks for --
+	 * which is a download that appears to work and leaves the grid going to the network.
+	 *
+	 * The fallback is the point for OPTCG and Altered, which publish no small rendition. The queue
+	 * used to refuse them and fetch nothing at all; what makes that honest is the dialog, which
+	 * reads `DataCapabilities.thumbnailImages` and prices the row at the full size.
+	 *
+	 * `ImageVariant.THUMBNAIL.chainFor` is this list.
+	 */
+	val thumbnailChain: List<String>
+		get() = listOf(thumbnailUrl, displayUrl, imageUrl).mapNotNull { it?.ifBlank { null } }.distinct()
 }
 
 /** A physical finish. Which of these a printing actually exists in is [FinishCoverage]. */
