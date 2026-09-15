@@ -6,11 +6,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -102,6 +104,7 @@ import com.bitsycore.tcgexplorer.ui.component.ErrorState
 import com.bitsycore.tcgexplorer.ui.component.LoadingState
 import com.bitsycore.tcgexplorer.ui.component.LanguageMenu
 import com.bitsycore.tcgexplorer.ui.component.NoticeBanner
+import com.bitsycore.tcgexplorer.ui.component.fadesWithSharedContainer
 import com.bitsycore.tcgexplorer.ui.component.sharedSetContainer
 import com.bitsycore.tcgexplorer.ui.preview.PreviewData
 import com.bitsycore.tcgexplorer.ui.preview.PreviewFrame
@@ -978,25 +981,37 @@ private fun SetRow(
 					// on a row that also says "Last opened" that left the name about one character
 					// wide. Here it competes with nothing: it is provenance, like the code and the
 					// date it sits next to.
-					Row(verticalAlignment = Alignment.CenterVertically) {
+					// A flow rather than a row, so a line that runs out of width breaks *between*
+					// these facts and never inside one. As a row, the date was the element with
+					// slack at the end and wrapped itself: "Nov" with "2024" on the line below,
+					// which is a date cut in half and reads as a bug. Each child is one line and
+					// does not wrap, so the whole date drops to the next line or none of it does.
+					FlowRow(
+						horizontalArrangement = Arrangement.spacedBy(8.dp),
+						verticalArrangement = Arrangement.spacedBy(2.dp),
+						// Three: a set in several languages can take the first line with its badge
+						// and pin alone, leaving the count and the date a line each.
+						maxLines = 3,
+					) {
 						if (region != null) {
 							RegionBadge(region)
-							Spacer(Modifier.size(6.dp))
 						}
 						LanguagePin(availableLanguages)
 						Text(
 							text = setSubtitle(set, confirmedCardCount),
 							style = MaterialTheme.typography.bodySmall,
 							color = MaterialTheme.colorScheme.onSurfaceVariant,
-							maxLines = 2,
+							maxLines = 1,
+							softWrap = false,
 							overflow = TextOverflow.Ellipsis,
 						)
 						set.releaseDate?.let {
-							Spacer(Modifier.width(8.dp))
 							Text(
 								text = "${monthName(it.month.ordinal)} ${it.year}",
 								style = MaterialTheme.typography.labelSmall,
 								fontWeight = FontWeight.Light,
+								maxLines = 1,
+								softWrap = false,
 							)
 						}
 					}
@@ -1088,7 +1103,7 @@ private fun SetRow(
 		}
 		// After the card, so it lies over it. It carries no click of its own, so the tap still
 		// reaches the card underneath and opens the set.
-		SetTab(set.code, Modifier.align(Alignment.TopStart))
+		SetTab(set.code, Modifier.align(Alignment.TopStart).fadesWithSharedContainer())
 	}
 }
 
@@ -1299,16 +1314,26 @@ private fun SetMark(set: CardSet) {
 	val vSymbol = set.symbol ?: return
 
 	Box(
+		// Fixed height, width from the picture. The sources' marks are not one shape: Scryfall's
+		// set symbols are square glyphs and TCGdex's logos are wide wordmarks, and a square slot
+		// letterboxed the second kind down to a fraction of the space it was given. The slot is at
+		// least square, so a square symbol is drawn at full size and a row whose symbol has not
+		// loaded yet does not start its name against the edge.
+		//
 		// The gap to the name travels with the mark, so a row without one closes up rather than
 		// starting its name 12dp in from nothing.
-		modifier = Modifier.padding(end = 12.dp).size(SET_MARK_WIDTH, SET_MARK_HEIGHT),
+		modifier = Modifier
+			.padding(end = 12.dp)
+			.height(SET_MARK_HEIGHT)
+			.widthIn(min = SET_MARK_HEIGHT, max = SET_MARK_MAX_WIDTH),
 		contentAlignment = Alignment.Center,
 	) {
 		SubcomposeAsyncImage(
 			model = vSymbol.url,
 			contentDescription = null,
 			contentScale = ContentScale.Fit,
-			modifier = Modifier.fillMaxSize().padding(2.dp),
+			// Height only: the width is left to the painter's own ratio, capped by the box.
+			modifier = Modifier.fillMaxHeight().padding(2.dp),
 			// A monochrome glyph has no colour of its own -- Scryfall's SVGs carry no `fill` and
 			// default to black, invisible against the dark theme -- so it is drawn in the theme's
 			// foreground. Full-colour artwork is never recoloured.
@@ -1419,7 +1444,6 @@ private fun LanguagePin(languages: Set<CardLanguage>) {
 		.map { it.code.uppercase() }
 	Row(
 		modifier = Modifier
-			.padding(end = 6.dp)
 			.clip(RoundedCornerShape(4.dp))
 			.background(MaterialTheme.colorScheme.surfaceVariant)
 			.padding(horizontal = 5.dp, vertical = 1.dp),
@@ -1553,7 +1577,14 @@ private fun SetListSavedPreview() = PreviewFrame {
  * shaped set logos that TCGdex and Scryfall publish into a smear. Landscape suits both: a code sits
  * comfortably on one line, and a logo letterboxes instead of cropping.
  */
-private val SET_MARK_WIDTH = 44.dp
+/**
+ * How wide a set's mark may get before it is scaled down.
+ *
+ * The slot is at least [SET_MARK_HEIGHT] square and grows with the picture's own ratio up to this,
+ * so TCGdex's wide wordmarks are drawn wide and Scryfall's square symbols are drawn square. Capped,
+ * because a very wide logo would otherwise take the name's width.
+ */
+private val SET_MARK_MAX_WIDTH = 76.dp
 
 private val SET_MARK_HEIGHT = 44.dp
 

@@ -17,14 +17,20 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import com.bitsycore.tcgexplorer.ui.component.sharedSetContainer
+import com.bitsycore.tcgexplorer.ui.component.fadesWithSharedContainer
+import com.bitsycore.tcgexplorer.ui.component.LocalSharedTransitionScope
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.ImageInfo
@@ -107,6 +113,101 @@ class ContainerTransformProbe {
 			vOverlapping.all { it >= EMPTY_ENOUGH },
 			"Overlapping fades should never leave the container empty, got $vOverlapping",
 		)
+	}
+
+	@Test
+	fun `an ornament beside the container is not drawn while the container is in flight`() {
+		// The set row's tab. It is drawn over the row's card but cannot join the transform -- the
+		// other half of that is a whole screen -- so while the card is in the shared overlay the
+		// tab sits on the page underneath it, and reappears on top the instant the transition ends.
+		// Reported as the id popping in front after the animation rather than arriving with it.
+		//
+		// `fadesWithSharedContainer` is the real modifier, reached by providing the two locals it
+		// reads. A copy of it here would be a test of the copy.
+		val vOrnament = ornamentOverTime()
+
+		val vFlight = vOrnament.take(ORNAMENT_FLIGHT_FRAMES)
+		assertTrue(
+			vFlight.all { it == 0 },
+			"the ornament was drawn while the container was still travelling: $vOrnament",
+		)
+		assertTrue(
+			vOrnament.last() > 0,
+			"the ornament never arrived: $vOrnament",
+		)
+	}
+
+	/**
+	 * Arrives at the small side -- the set list -- and measures the ornament on each frame.
+	 *
+	 * The container starts expanded and shrinks, which is the direction the pop was seen in: coming
+	 * back from the grid. The ornament belongs to the small side only, and is placed away from the
+	 * container so the two colours cannot overlap.
+	 */
+	private fun ornamentOverTime(): List<Int> {
+		var vExpanded by mutableStateOf(true)
+		val vCounts = mutableListOf<Int>()
+		val vTransform = ContentTransform(
+			targetContentEnter = EnterTransition.None,
+			initialContentExit = ExitTransition.None,
+			sizeTransform = null,
+		)
+
+		val vScene = ImageComposeScene(width = SCENE, height = SCENE, density = Density(1f)) {
+			SharedTransitionLayout {
+				CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+					AnimatedContent(targetState = vExpanded, transitionSpec = { vTransform }) { vBig ->
+						CompositionLocalProvider(LocalNavAnimatedContentScope provides this) {
+							Box(Modifier.fillMaxSize().padding(4.dp)) {
+								Box(
+									modifier = Modifier
+										.sharedSetContainer("probe")
+										.width(if (vBig) BIG else SMALL)
+										.height(if (vBig) BIG else SMALL)
+										.background(Color.Red),
+								)
+								if (!vBig) {
+									Box(
+										modifier = Modifier
+											.align(Alignment.TopEnd)
+											.fadesWithSharedContainer()
+											.width(ORNAMENT)
+											.height(ORNAMENT)
+											.background(Color.Green),
+									)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		try {
+			vScene.render(0L)
+			vExpanded = false
+			for (vFrame in 1..ORNAMENT_FRAMES) {
+				vCounts += greenWidth(vScene.render(vFrame * FRAME_STEP_MILLIS * 1_000_000L))
+			}
+		} finally {
+			vScene.close()
+		}
+		return vCounts
+	}
+
+	/** How many pixels wide the green ornament is on a row through the top of the scene. */
+	private fun greenWidth(image: org.jetbrains.skia.Image): Int {
+		val vInfo = ImageInfo.makeN32(image.width, image.height, ColorAlphaType.PREMUL)
+		val vBitmap = Bitmap().apply { allocPixels(vInfo) }
+		check(image.readPixels(vBitmap)) { "could not read the rendered pixels" }
+		var vCount = 0
+		for (vX in 0 until image.width) {
+			val vPixel = vBitmap.getColor(vX, 8)
+			val vRed = (vPixel shr 16) and 0xFF
+			val vGreen = (vPixel shr 8) and 0xFF
+			if (vGreen > 100 && vRed < 100) vCount++
+		}
+		return vCount
 	}
 
 	/** Flips the state, then measures the coloured region's width on each of several frames. */
@@ -237,5 +338,14 @@ class ContainerTransformProbe {
 
 		/** Below this share of the row painted, the container is empty for practical purposes. */
 		const val EMPTY_ENOUGH = 0.02
+
+		/** The ornament's own size. Placed at the far corner, so it cannot overlap the container. */
+		val ORNAMENT = 30.dp
+
+		/** Past the ornament's own delay, so the settled frame is really settled. */
+		const val ORNAMENT_FRAMES = 14
+
+		/** Frames the container is still visibly travelling for, at 30 ms each. */
+		const val ORNAMENT_FLIGHT_FRAMES = 6
 	}
 }
