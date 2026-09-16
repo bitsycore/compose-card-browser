@@ -48,14 +48,33 @@ actual fun platformModule(): Module = module {
 private fun iosDirectory(directory: platform.Foundation.NSSearchPathDirectory): String =
 	NSSearchPathForDirectoriesInDomains(directory, NSUserDomainMask, true).first() as String
 
-/** Hands a URL to iOS, which opens Safari or whatever handles the scheme. */
+/** Hands a URL to iOS, which opens whichever browser the user has set as default. */
 private class IosLinkOpener : LinkOpener {
 
+	/**
+	 * No `canOpenURL` gate, which is what stopped every link on a device.
+	 *
+	 * Since iOS 9 that call answers false for any scheme the app has not listed under
+	 * `LSApplicationQueriesSchemes`, and this app lists none -- so it rejected each URL before
+	 * anything was handed over, and the screen showed "could not open" for a link that was fine.
+	 * `openURL:options:completionHandler:` needs no such declaration. Nothing here wants the gate
+	 * anyway: the only URLs that reach this are `https` ones the app built itself.
+	 *
+	 * The completion handler is the one place iOS says whether it worked and it runs after this
+	 * function has returned, so the answer here is "a web URL went to the system" -- which is all
+	 * that can honestly be said without making the whole interface suspend.
+	 */
 	@OptIn(ExperimentalForeignApi::class)
 	override fun open(url: String): Boolean {
 		val vUrl = NSURL.URLWithString(url) ?: return false
-		if (!UIApplication.sharedApplication.canOpenURL(vUrl)) return false
+		if (vUrl.scheme?.lowercase() !in WEB_SCHEMES) return false
 		UIApplication.sharedApplication.openURL(vUrl, emptyMap<Any?, Any?>(), null)
 		return true
+	}
+
+	private companion object {
+
+		/** Everything this app links to. Anything else is a bug upstream, not a link to follow. */
+		val WEB_SCHEMES = setOf("http", "https")
 	}
 }
