@@ -10,7 +10,6 @@ import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
@@ -205,9 +204,16 @@ private class AnimatedCornerClip(private val mCorner: State<Dp>) : SharedTransit
  *
  * The set row's tab is the case this exists for. It is drawn over its card and cannot join the
  * transform: the other half of that transform is a whole screen, and a tab stretched across one is
- * not a tab. So while the card flies it is in the shared overlay, above everything, and the tab is
- * left behind on the page -- it vanishes under the travelling card and reappears on top of it the
- * instant the transition ends, which is the pop that was reported.
+ * not a tab. So while the card flies it is in the shared overlay, above everything, and the tab was
+ * left behind on the page -- under the travelling card for the whole flight and back over it the
+ * frame the transition ended, which is the pop that was reported.
+ *
+ * `renderInSharedTransitionScopeOverlay` puts the tab in that same overlay a layer above the card,
+ * for as long as the transition runs. That is the z-order fault itself rather than its symptom, and
+ * with it gone the fade below is a deliberate exit rather than a cover for one. The tab still does
+ * not *travel*: it holds the row's position while the card leaves it. Making it fly would need a
+ * `sharedElement` of its own and something on the grid screen to fly to, and the grid draws the set
+ * code nowhere.
  *
  * ## Why not simply put it inside the container
  *
@@ -223,36 +229,105 @@ private class AnimatedCornerClip(private val mCorner: State<Dp>) : SharedTransit
  *
  * - **Leaving**, it goes at once. An ornament still sitting where a row used to be, after the row
  *   has left, is the same artefact the other way round.
- * - **Arriving**, it waits. The tab is laid out at the row's final position from the first frame,
- *   while the card is still somewhere between the two screens -- so fading it in early would draw
- *   a tab floating over empty space, attached to nothing. The delay lands it as the card arrives
- *   underneath it.
+ * - **Arriving**, it waits for the transition to *end*. The tab is laid out at the row's final
+ *   position from the first frame, while the card is still somewhere between the two screens -- so
+ *   drawing it early puts a tab over empty space, attached to nothing.
+ *
+ * Arriving used to wait a fixed 200 ms, matched by eye to the bounds spring. That is a guess at
+ * when the card lands, and predictive back makes the guess wrong: the gesture drives the
+ * transition from a finger, so a tab timed off a clock appears part way through a slow drag and
+ * again on one that is abandoned. Waiting for the transition to settle is the same intent measured
+ * rather than estimated, and needs no case for the gesture at all.
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun Modifier.fadesWithSharedContainer(): Modifier {
+fun Modifier.fadesWithSharedContainer(setId: String, isTransitioning: Boolean = true): Modifier {
 	// No shared scope means no transform and nothing to hide from: a preview, or a screen that is
 	// not one of the pair. The ornament is simply drawn.
-	LocalSharedTransitionScope.current ?: return this
-	val vAlpha = LocalNavAnimatedContentScope.current.transition.animateFloat(
-		transitionSpec = {
-			if (targetState == EnterExitState.Visible) {
-				tween(ORNAMENT_FADE_IN_MILLIS, delayMillis = ORNAMENT_FADE_IN_DELAY_MILLIS)
-			} else {
-				tween(ORNAMENT_FADE_OUT_MILLIS)
-			}
-		},
-		label = "container-ornament-alpha",
-	) { vState -> if (vState == EnterExitState.Visible) 1f else 0f }
-	return this.graphicsLayer { alpha = vAlpha.value }
+	val vSharedScope = LocalSharedTransitionScope.current ?: return this
+
+	// Only the row whose container is actually flying. Every row reads the same screen transition,
+	// so without this opening one set faded every tab in the list, and coming back made all of them
+	// wait for an animation that only one of them was in.
+	//
+	// Told rather than asked. The shared element's own `isMatchFound` is the obvious source and
+	// cannot be used: it is only true once the *other* side has composed, which
+	// `ContainerTransformProbe` measured as five frames of tab still drawn after the flight began.
+	if (!isTransitioning) return this
+
+	return with(vSharedScope) {
+		this@fadesWithSharedContainer
+			// A shared element of its own, so it *travels* with the container instead of sitting
+			// where the row used to be. Its match is [sharedSetTabTarget] on the grid screen, which
+			// exists only to say where the tab is going: the top-left corner the container's own
+			// corner becomes.
+			//
+			// Above the card in the overlay, which is the fault this started as. Left on the page
+			// the tab was under the travelling card for the whole flight and back over it the frame
+			// the transition ended -- the pop. In the overlay a layer up it is never occluded, so
+			// the fade is a deliberate exit rather than a cover for one.
+			.sharedBounds(
+				sharedContentState = rememberSharedContentState(key = "set-tab:$setId"),
+				animatedVisibilityScope = LocalNavAnimatedContentScope.current,
+				boundsTransform = CARD_BOUNDS_TRANSFORM,
+				// Both sides are the same tab, so there is nothing to scale between them.
+				resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+				// Held, then let go. The tab rides the container's corner before it fades, which is
+				// what reads as attached rather than as a thing that vanished when tapped.
+				exit = fadeOut(tween(ORNAMENT_FADE_OUT_MILLIS, delayMillis = ORNAMENT_HOLD_MILLIS)),
+				// Coming back it is attached from the first frame, so it can return part way rather
+				// than waiting for the end -- there is no longer any empty space for it to hover in.
+				enter = fadeIn(tween(ORNAMENT_FADE_IN_MILLIS, delayMillis = ORNAMENT_RETURN_MILLIS)),
+				zIndexInOverlay = TAB_Z_IN_OVERLAY,
+			)
+	}
 }
 
-/** Most of the way through the container's flight, so the tab arrives with its row. */
-private const val ORNAMENT_FADE_IN_DELAY_MILLIS = 200
+/**
+ * The other end of [fadesWithSharedContainer]: where the set's tab flies to.
+ *
+ * Drawn nowhere -- the grid screen has no code pill and is not gaining one. This exists only so the
+ * tab has a match, and therefore a destination: without one a shared element stays put and the tab
+ * would fade on the spot. Placed at the corner the container's own corner becomes.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+fun Modifier.sharedSetTabTarget(setId: String): Modifier {
+	val vSharedScope = LocalSharedTransitionScope.current ?: return this
+	return with(vSharedScope) {
+		this@sharedSetTabTarget
+			.sharedBounds(
+				sharedContentState = rememberSharedContentState(key = "set-tab:$setId"),
+				animatedVisibilityScope = LocalNavAnimatedContentScope.current,
+				boundsTransform = CARD_BOUNDS_TRANSFORM,
+				resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+				zIndexInOverlay = TAB_Z_IN_OVERLAY,
+			)
+			// Never seen. The match is the point of this, not the pixels.
+			.graphicsLayer { alpha = 0f }
+	}
+}
+
+/** Above the container, which takes the overlay's default of zero. */
+private const val TAB_Z_IN_OVERLAY = 1f
 
 private const val ORNAMENT_FADE_IN_MILLIS = 120
 
-/** Quick: the row is leaving, and the ornament must not outlive it. */
-private const val ORNAMENT_FADE_OUT_MILLIS = 90
+/** Long enough to read as a fade while the container is still visibly travelling. */
+private const val ORNAMENT_FADE_OUT_MILLIS = 180
+
+/** About half way, so it is back and attached for the second half of a scrubbed gesture. */
+private const val ORNAMENT_RETURN_MILLIS = 140
+
+/**
+ * Stuck to the corner before it lets go.
+ *
+ * Both this and [ORNAMENT_RETURN_MILLIS] are read on the *transition's* timeline, not the wall
+ * clock: `sharedBounds` times its enter and exit from the transition, which predictive back seeks
+ * with the finger. So a slowly dragged back shows the tab at the same point in the gesture rather
+ * than at the same number of milliseconds.
+ */
+private const val ORNAMENT_HOLD_MILLIS = 70
 
 /**
  * How the corner radius travels. The same spring as the bounds, so the two cannot drift apart.

@@ -9,7 +9,7 @@ plugins {
 	id("tcgexplorer.native-desktop")
 }
 
-val nativeDesktop = providers.gradleProperty("nativeDesktop").map(String::toBoolean).getOrElse(false)
+val nativeDesktop = providers.gradleProperty ("nativeDesktop").map(String::toBoolean).getOrElse(false)
 
 /** Writes `AppBuild.kt` from the version catalogue, so the app can say which build it is. */
 val vGenerateAppBuild = tasks.register("generateAppBuild") {

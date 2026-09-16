@@ -74,6 +74,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.Composable
 import com.bitsycore.tcgexplorer.ui.component.sharedSetContainer
+import com.bitsycore.tcgexplorer.ui.component.sharedSetTabTarget
+import com.bitsycore.tcgexplorer.ui.screen.sets.SetTab
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -200,6 +202,10 @@ fun CardGridScreen(
 	// a Material 3 `Card` uses. The container starts that round and squares off as it fills the
 	// screen, so the row visibly becomes the screen rather than being swapped for it.
 	Box(Modifier.fillMaxSize().sharedSetContainer(setId, expandsFromCorner = SET_ROW_CORNER)) {
+		// Where the set list's tab flies to, and the only reason this screen knows the code. Never
+		// drawn -- `sharedSetTabTarget` holds it at zero alpha. Aligned to the corner the expanding
+		// container's own corner becomes, so the tab travels the same path the container does.
+		SetTab(setCode, Modifier.align(Alignment.TopStart).sharedSetTabTarget(setId))
 		CardGridContent(
 			snackbarHostState = vSnackbarHost,
 			state = vState,

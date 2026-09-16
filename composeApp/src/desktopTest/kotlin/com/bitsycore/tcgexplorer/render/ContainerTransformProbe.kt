@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.bitsycore.tcgexplorer.ui.component.sharedSetContainer
 import com.bitsycore.tcgexplorer.ui.component.fadesWithSharedContainer
+import com.bitsycore.tcgexplorer.ui.component.sharedSetTabTarget
 import com.bitsycore.tcgexplorer.ui.component.LocalSharedTransitionScope
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import org.jetbrains.skia.Bitmap
@@ -220,7 +221,7 @@ class ContainerTransformProbe {
 	}
 
 	@Test
-	fun `an ornament beside the container is not drawn while the container is in flight`() {
+	fun `an ornament beside the container comes back part way through the flight`() {
 		// The set row's tab. It is drawn over the row's card but cannot join the transform -- the
 		// other half of that is a whole screen -- so while the card is in the shared overlay the
 		// tab sits on the page underneath it, and reappears on top the instant the transition ends.
@@ -274,7 +275,20 @@ class ContainerTransformProbe {
 									Box(
 										modifier = Modifier
 											.align(Alignment.TopEnd)
-											.fadesWithSharedContainer()
+											.fadesWithSharedContainer("probe")
+											.width(ORNAMENT)
+											.height(ORNAMENT)
+											.background(Color.Green),
+									)
+								} else {
+									// The tab's destination, as the grid screen provides one. Needed
+									// here and not merely realistic: `sharedBounds` runs no enter or
+									// exit at all without a match, so with the big side bare the
+									// ornament never faded and this measured nothing.
+									Box(
+										modifier = Modifier
+											.align(Alignment.TopEnd)
+											.sharedSetTabTarget("probe")
 											.width(ORNAMENT)
 											.height(ORNAMENT)
 											.background(Color.Green),
@@ -446,10 +460,22 @@ class ContainerTransformProbe {
 		/** The ornament's own size. Placed at the far corner, so it cannot overlap the container. */
 		val ORNAMENT = 30.dp
 
-		/** Past the ornament's own delay, so the settled frame is really settled. */
-		const val ORNAMENT_FRAMES = 14
+		/**
+		 * Past the end of the transition, not past a delay.
+		 *
+		 * The ornament waits for the container to *settle* rather than for a fixed 200 ms, so the
+		 * window has to outlast the bounds spring -- which runs longer than the delay it replaced.
+		 */
+		const val ORNAMENT_FRAMES = 24
 
-		/** Frames the container is still visibly travelling for, at 30 ms each. */
-		const val ORNAMENT_FLIGHT_FRAMES = 6
+		/**
+		 * Frames before the tab is due back, at 30 ms each.
+		 *
+		 * Short of `ORNAMENT_RETURN_MILLIS`. The tab is a shared element now, so it travels with
+		 * the container rather than sitting where the row was, and it is allowed -- wanted -- back
+		 * part way through the flight. It used to have to stay down for the whole of it, because
+		 * out there on its own it had nothing to be attached to.
+		 */
+		const val ORNAMENT_FLIGHT_FRAMES = 4
 	}
 }

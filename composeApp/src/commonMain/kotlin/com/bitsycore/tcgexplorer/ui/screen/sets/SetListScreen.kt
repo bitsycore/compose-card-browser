@@ -62,6 +62,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.bitsycore.tcgexplorer.data.download.DownloadJob
 import com.bitsycore.tcgexplorer.data.download.DownloadKind
@@ -188,6 +189,11 @@ fun SetListContent(
 	// Which set's download dialog is open, and whether the queue is showing. Local because neither
 	// is worth a trip through the state machine: nothing outside this screen cares.
 	var vPendingSet by remember { mutableStateOf<CardSet?>(null) }
+
+	// The set the container transform is carrying, so only its tab takes part in the transition.
+	// Saveable because this composition is torn down while the grid is up: a plain `remember`
+	// comes back null and the returning row does not know it is the one arriving.
+	var vOpenedId by rememberSaveable { mutableStateOf<String?>(null) }
 	var vPendingAll by remember { mutableStateOf(false) }
 
 	// `enterAlways`, exactly the card grid's, and for the reason recorded there: both collapse on
@@ -478,6 +484,7 @@ fun SetListContent(
 								},
 								onActivate = {
 									vSelectable.getOrNull(vSelected)?.let {
+										vOpenedId = it.id.qualified
 										dispatch(SetListContract.Intent.SetOpened(it))
 									}
 								},
@@ -518,6 +525,8 @@ fun SetListContent(
 								reorder = vReorder.takeIf { state.canReorderFavourites },
 								reorderKeys = vFavouriteKeys,
 								onMove = vOnMove,
+								openedId = vOpenedId,
+								onOpen = { vOpenedId = it },
 							)
 
 							if (vFavourites.isNotEmpty() && state.otherSets.isNotEmpty()) {
@@ -535,6 +544,8 @@ fun SetListContent(
 								reorder = null,
 								reorderKeys = emptyList(),
 								onMove = vOnMove,
+								openedId = vOpenedId,
+								onOpen = { vOpenedId = it },
 							)
 
 							// A tally and nothing else. The option that changes it lives in
@@ -782,6 +793,10 @@ private fun LazyListScope.setRows(
 	reorder: ReorderState?,
 	reorderKeys: List<String>,
 	onMove: (String, Int) -> Unit,
+	/** The set the container transform is carrying, if it is in this group. */
+	openedId: String?,
+	/** Records the set being opened, before the navigation that carries it. */
+	onOpen: (String) -> Unit,
 ) {
 	items(sets, key = { it.id.qualified }) { vSet ->
 		val vId = vSet.id.qualified
@@ -810,7 +825,11 @@ private fun LazyListScope.setRows(
 					vId in state.completeSetIds &&
 						state.imageDownloads[vId]?.thumbnails?.isComplete == true
 					),
-			onClick = { dispatch(SetListContract.Intent.SetOpened(vSet)) },
+			onClick = {
+				onOpen(vId)
+				dispatch(SetListContract.Intent.SetOpened(vSet))
+			},
+			isTransitioning = vId == openedId,
 			// Absent until the set has been fetched in the language it opens in, and the row then
 			// falls back to the figure the source states. See `UiState.confirmedCardCounts`.
 			confirmedCardCount = state.confirmedCardCounts[vId],
@@ -902,6 +921,13 @@ private fun SetRow(
 	isLifted: Boolean = false,
 	dragOffsetY: Float = 0f,
 	handleModifier: Modifier? = null,
+	/**
+	 * Whether this row is the one the container transform is carrying.
+	 *
+	 * Passed down rather than discovered: see `fadesWithSharedContainer`, which cannot ask the
+	 * shared element itself because the answer arrives several frames late.
+	 */
+	isTransitioning: Boolean = false,
 ) {
 	val vTint = setColour(set.code)
 	// The same tint reads louder over a light surface than a dark one, so it is drawn weaker
@@ -956,167 +982,176 @@ private fun SetRow(
 				defaultElevation = if (isDragging) DRAGGED_ROW_ELEVATION else 0.dp,
 			),
 		) {
-			Row(
-				// Constant, in both modes, for the reason recorded on the game picker's row.
-				//
-				// It used to drop from 16dp to 4dp to claw back room for the handle, and being a plain
-				// `if` rather than an animation it did not ease at all: 12dp of inset vanished in one
-				// frame while the handle was still springing open beside it. That step against a spring
-				// is the boing. One animation drives this corner now -- the handle's -- and the room it
-				// needs is the room it makes.
-				modifier = Modifier
-					.fillMaxWidth()
-					// Behind the content and outside the padding, so it covers the whole card and is
-					// clipped to its corners.
-					.drawBehind { drawSetHatch(vTint, vHatchStrength) }
-					.padding(16.dp),
-				verticalAlignment = Alignment.CenterVertically,
+			Box(
+				// Fills the card, not the row. The two differ only during the container transform: the
+				// card is remeasured to the animated bounds while the row keeps its own height, so a
+				// hatch drawn on the row stopped at row height and the rest of the growing card was
+				// bare. In the list the height is unbounded and `fillMaxSize` does nothing.
+				Modifier.fillMaxSize(),
 			) {
-				// The defaults, for the reason recorded on the game picker's row: `AnimatedVisibility`
-				// in a `Row` is `fadeIn() + expandHorizontally()` on one critically damped spring, and
-				// `expandHorizontally` already anchors its content to the end -- so the handle slides
-				// in from outside the row without help. Adding a slide on top was a second animation
-				// moving the same object a different distance, and it chattered.
-				AnimatedVisibility(visible = handleModifier != null) {
-					ReorderHandle(handleModifier ?: Modifier)
-				}
-				SetMark(set)
-				Column(Modifier.weight(1f)) {
-					Text(
-						text = set.name,
-						style = MaterialTheme.typography.titleMedium,
-						fontWeight = FontWeight.Medium,
-					)
-
-					Spacer(Modifier.height(2.dp))
-					// The badge sits on the subtitle line rather than at the end of the row. As a
-					// trailing sibling of a weighted column it took its width from the set name, and
-					// on a row that also says "Last opened" that left the name about one character
-					// wide. Here it competes with nothing: it is provenance, like the code and the
-					// date it sits next to.
-					// A flow rather than a row, so a line that runs out of width breaks *between*
-					// these facts and never inside one. As a row, the date was the element with
-					// slack at the end and wrapped itself: "Nov" with "2024" on the line below,
-					// which is a date cut in half and reads as a bug. Each child is one line and
-					// does not wrap, so the whole date drops to the next line or none of it does.
-					FlowRow(
-						horizontalArrangement = Arrangement.spacedBy(8.dp),
-						verticalArrangement = Arrangement.spacedBy(2.dp),
-						// Three: a set in several languages can take the first line with its badge
-						// and pin alone, leaving the count and the date a line each.
-						maxLines = 3,
-					) {
-						if (region != null) {
-							RegionBadge(region)
-						}
-						LanguagePin(availableLanguages)
+				// Behind the row and outside its padding, so it covers the whole card and is clipped
+				// to its corners. `matchParentSize` takes the box's size without contributing to it,
+				// so the row alone still decides how tall the card is.
+				Spacer(Modifier.matchParentSize().drawBehind { drawSetHatch(vTint, vHatchStrength) })
+				Row(
+					// Constant, in both modes, for the reason recorded on the game picker's row.
+					//
+					// It used to drop from 16dp to 4dp to claw back room for the handle, and being a plain
+					// `if` rather than an animation it did not ease at all: 12dp of inset vanished in one
+					// frame while the handle was still springing open beside it. That step against a spring
+					// is the boing. One animation drives this corner now -- the handle's -- and the room it
+					// needs is the room it makes.
+					modifier = Modifier
+						.fillMaxWidth()
+						.padding(16.dp),
+					verticalAlignment = Alignment.CenterVertically,
+				) {
+					// The defaults, for the reason recorded on the game picker's row: `AnimatedVisibility`
+					// in a `Row` is `fadeIn() + expandHorizontally()` on one critically damped spring, and
+					// `expandHorizontally` already anchors its content to the end -- so the handle slides
+					// in from outside the row without help. Adding a slide on top was a second animation
+					// moving the same object a different distance, and it chattered.
+					AnimatedVisibility(visible = handleModifier != null) {
+						ReorderHandle(handleModifier ?: Modifier)
+					}
+					SetMark(set)
+					Column(Modifier.weight(1f)) {
 						Text(
-							text = setSubtitle(set, confirmedCardCount),
-							style = MaterialTheme.typography.bodySmall,
-							color = MaterialTheme.colorScheme.onSurfaceVariant,
-							maxLines = 1,
-							softWrap = false,
-							overflow = TextOverflow.Ellipsis,
+							text = set.name,
+							style = MaterialTheme.typography.titleMedium,
+							fontWeight = FontWeight.Medium,
 						)
-						set.releaseDate?.let {
+
+						Spacer(Modifier.height(2.dp))
+						// The badge sits on the subtitle line rather than at the end of the row. As a
+						// trailing sibling of a weighted column it took its width from the set name, and
+						// on a row that also says "Last opened" that left the name about one character
+						// wide. Here it competes with nothing: it is provenance, like the code and the
+						// date it sits next to.
+						// A flow rather than a row, so a line that runs out of width breaks *between*
+						// these facts and never inside one. As a row, the date was the element with
+						// slack at the end and wrapped itself: "Nov" with "2024" on the line below,
+						// which is a date cut in half and reads as a bug. Each child is one line and
+						// does not wrap, so the whole date drops to the next line or none of it does.
+						FlowRow(
+							horizontalArrangement = Arrangement.spacedBy(8.dp),
+							verticalArrangement = Arrangement.spacedBy(2.dp),
+							// Three: a set in several languages can take the first line with its badge
+							// and pin alone, leaving the count and the date a line each.
+							maxLines = 3,
+						) {
+							if (region != null) {
+								RegionBadge(region)
+							}
+							LanguagePin(availableLanguages)
 							Text(
-								text = "${monthName(it.month.ordinal)} ${it.year}",
-								style = MaterialTheme.typography.labelSmall,
-								fontWeight = FontWeight.Light,
+								text = setSubtitle(set, confirmedCardCount),
+								style = MaterialTheme.typography.bodySmall,
+								color = MaterialTheme.colorScheme.onSurfaceVariant,
 								maxLines = 1,
 								softWrap = false,
+								overflow = TextOverflow.Ellipsis,
 							)
-						}
-					}
-				}
-				// A running download replaces the button with its own progress, so the row shows one
-				// state rather than a button next to a spinner describing the same thing.
-				when {
-					downloadStatus?.isActive == true -> {
-						Spacer(Modifier.size(8.dp))
-						val vProgress = downloadStatus.progress
-						// Wavy, to agree with the Downloads screen. The reason is recorded there and
-						// applies just as much here: a long download that is progressing looks
-						// identical to a stalled one under a static indicator, and the wave moves on
-						// its own. This is the app's other live-download surface, so it should not
-						// read differently.
-						Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
-							if (vProgress == null) {
-								CircularWavyProgressIndicator(Modifier.size(24.dp))
-							} else {
-								CircularWavyProgressIndicator(
-									progress = { vProgress },
-									modifier = Modifier.size(24.dp),
+							set.releaseDate?.let {
+								Text(
+									text = "${monthName(it.month.ordinal)} ${it.year}",
+									style = MaterialTheme.typography.labelSmall,
+									fontWeight = FontWeight.Light,
+									maxLines = 1,
+									softWrap = false,
 								)
 							}
 						}
 					}
+					// A running download replaces the button with its own progress, so the row shows one
+					// state rather than a button next to a spinner describing the same thing.
+					when {
+						downloadStatus?.isActive == true -> {
+							Spacer(Modifier.size(8.dp))
+							val vProgress = downloadStatus.progress
+							// Wavy, to agree with the Downloads screen. The reason is recorded there and
+							// applies just as much here: a long download that is progressing looks
+							// identical to a stalled one under a static indicator, and the wave moves on
+							// its own. This is the app's other live-download surface, so it should not
+							// read differently.
+							Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+								if (vProgress == null) {
+									CircularWavyProgressIndicator(Modifier.size(24.dp))
+								} else {
+									CircularWavyProgressIndicator(
+										progress = { vProgress },
+										modifier = Modifier.size(24.dp),
+									)
+								}
+							}
+						}
 
-					// The star is a control, and only while arranging. Browsing, it said nothing the
-					// list was not already saying: a favourite is already under the "N favourites"
-					// heading, so a star beside it repeats that heading once per row.
-					//
-					// The slot stays 32dp wide either way. Collapsing it would be a second layout
-					// change on the corner the handle is already animating, which is exactly the
-					// bounce that took three attempts to find the first time.
-					else -> {
-						Spacer(Modifier.size(4.dp))
-						FavouriteStar(
-							name = set.name,
-							isFavourite = isFavourite,
-							isEditing = isEditing,
-							onToggle = onToggleFavourite,
-						)
-						// Offered only while there is something left to fetch, and only while browsing.
-						// A button that starts a download of nothing is worse than no button: it
-						// invites a tap, does the work of checking, and reports that everything was
-						// already there. Arranging is a different job, and a row being dragged should
-						// not also be a row that starts a download.
+						// The star is a control, and only while arranging. Browsing, it said nothing the
+						// list was not already saying: a favourite is already under the "N favourites"
+						// heading, so a star beside it repeats that heading once per row.
 						//
-						// The marks below still say what is held -- this removes the *offer*, not the
-						// statement. Which is the right way round: "you have this" is information, and
-						// "get this" is an action that has nothing to act on.
-						AnimatedVisibility(visible = canOfferDownload && !isEditing) {
-							DownloadButton(name = set.name, onDownload = onDownload)
+						// The slot stays 32dp wide either way. Collapsing it would be a second layout
+						// change on the corner the handle is already animating, which is exactly the
+						// bounce that took three attempts to find the first time.
+						else -> {
+							Spacer(Modifier.size(4.dp))
+							FavouriteStar(
+								name = set.name,
+								isFavourite = isFavourite,
+								isEditing = isEditing,
+								onToggle = onToggleFavourite,
+							)
+							// Offered only while there is something left to fetch, and only while browsing.
+							// A button that starts a download of nothing is worse than no button: it
+							// invites a tap, does the work of checking, and reports that everything was
+							// already there. Arranging is a different job, and a row being dragged should
+							// not also be a row that starts a download.
+							//
+							// The marks below still say what is held -- this removes the *offer*, not the
+							// statement. Which is the right way round: "you have this" is information, and
+							// "get this" is an action that has nothing to act on.
+							AnimatedVisibility(visible = canOfferDownload && !isEditing) {
+								DownloadButton(name = set.name, onDownload = onDownload)
+							}
 						}
 					}
-				}
-				// Two rings, because the two halves of a download are separately true: a set can have
-				// its records and none of its thumbnails, which is the common case after browsing it
-				// once. Full-size art has no ring because it is never bulk-downloaded and so has no
-				// state to report -- see `DownloadKind`.
-				//
-				// Browsing only. They are things to read, and arranging is not reading: leaving them
-				// on put the star of a downloaded set two notches left of an undownloaded one's, and a
-				// column of controls that do not line up reads as a bug.
-				AnimatedVisibility(visible = !isEditing && (isSaved || images?.isEmpty == false)) {
-					Row(verticalAlignment = Alignment.CenterVertically) {
-						Spacer(Modifier.size(6.dp))
-						CoverageRings(
-							// Card info keeps no per-set fraction, so an unfinished one is drawn as
-							// interrupted rather than as a made-up sweep. "Saved", not "complete":
-							// a fetch stopped part-way leaves a file behind too.
-							info = when {
-								!isSaved -> Coverage.Unknown
-								isIncomplete -> Coverage.Interrupted
-								else -> Coverage.Complete
-							},
-							infoIcon = AppIcons.Description,
-							thumbnails = images?.thumbnails.toCoverage(),
-							thumbnailIcon = AppIcons.GridView,
-						)
+					// Two rings, because the two halves of a download are separately true: a set can have
+					// its records and none of its thumbnails, which is the common case after browsing it
+					// once. Full-size art has no ring because it is never bulk-downloaded and so has no
+					// state to report -- see `DownloadKind`.
+					//
+					// Browsing only. They are things to read, and arranging is not reading: leaving them
+					// on put the star of a downloaded set two notches left of an undownloaded one's, and a
+					// column of controls that do not line up reads as a bug.
+					AnimatedVisibility(visible = !isEditing && (isSaved || images?.isEmpty == false)) {
+						Row(verticalAlignment = Alignment.CenterVertically) {
+							Spacer(Modifier.size(6.dp))
+							CoverageRings(
+								// Card info keeps no per-set fraction, so an unfinished one is drawn as
+								// interrupted rather than as a made-up sweep. "Saved", not "complete":
+								// a fetch stopped part-way leaves a file behind too.
+								info = when {
+									!isSaved -> Coverage.Unknown
+									isIncomplete -> Coverage.Interrupted
+									else -> Coverage.Complete
+								},
+								infoIcon = AppIcons.Description,
+								thumbnails = images?.thumbnails.toCoverage(),
+								thumbnailIcon = AppIcons.GridView,
+							)
+						}
 					}
+					// "Last opened" is on the metadata line rather than out here. As an unweighted
+					// trailing sibling it was measured at its full intrinsic width before the weighted
+					// column got any, so on a row with a long set name the name was squeezed to about one
+					// character per line. The row's own tint is the primary signal anyway; this is the
+					// label that explains it.
 				}
-				// "Last opened" is on the metadata line rather than out here. As an unweighted
-				// trailing sibling it was measured at its full intrinsic width before the weighted
-				// column got any, so on a row with a long set name the name was squeezed to about one
-				// character per line. The row's own tint is the primary signal anyway; this is the
-				// label that explains it.
 			}
 		}
 		// After the card, so it lies over it. It carries no click of its own, so the tap still
 		// reaches the card underneath and opens the set.
-		SetTab(set.code, Modifier.align(Alignment.TopStart).fadesWithSharedContainer())
+		SetTab(set.code, Modifier.align(Alignment.TopStart).fadesWithSharedContainer(set.id.qualified, isTransitioning))
 	}
 }
 
@@ -1267,7 +1302,7 @@ private fun ImageDownloadRecord?.toCoverage(): Coverage = when {
  * rounded shape laid over one of them, which is the arrangement the project owner drew.
  */
 @Composable
-private fun SetTab(code: String, modifier: Modifier = Modifier) {
+internal fun SetTab(code: String, modifier: Modifier = Modifier) {
 	val vTint = setColour(code)
 	Box(
 		modifier = modifier
