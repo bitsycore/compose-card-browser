@@ -50,6 +50,7 @@ import com.bitsycore.tcgexplorer.games.pokemon.PokemonGame
 import com.bitsycore.tcgexplorer.games.riftbound.RiftboundGame
 import com.bitsycore.tcgexplorer.games.yugioh.YuGiOhGame
 import com.bitsycore.tcgexplorer.ui.component.AppIcons
+import com.bitsycore.tcgexplorer.ui.component.READABLE_WIDTH
 import com.bitsycore.tcgexplorer.ui.art.GameArtRegistry
 import com.bitsycore.tcgexplorer.ui.art.GameMark
 import com.bitsycore.tcgexplorer.ui.preview.PreviewFrame
@@ -115,7 +116,7 @@ fun SetupContent(
 				.padding(vPadding)
 				.fillMaxSize()
 				.wrapContentWidth()
-				.widthIn(max = 640.dp)
+				.widthIn(max = READABLE_WIDTH)
 				.padding(horizontal = 24.dp),
 			horizontalAlignment = Alignment.CenterHorizontally,
 		) {

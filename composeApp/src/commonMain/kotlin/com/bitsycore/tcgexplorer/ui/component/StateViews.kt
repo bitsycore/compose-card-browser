@@ -136,7 +136,12 @@ fun NoticeBanner(
 	modifier: Modifier = Modifier,
 ) {
 	Surface(
-		modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+		// Held in like the content it sits above, or the strip spans a tablet while the list it is
+		// talking about sits in the middle -- which reads as belonging to the window, not the list.
+		modifier = modifier
+			.fillMaxWidth()
+			.padding(horizontal = 12.dp, vertical = 4.dp)
+			.readableColumn(),
 		color = MaterialTheme.colorScheme.surfaceVariant,
 		shape = RoundedCornerShape(8.dp),
 	) {

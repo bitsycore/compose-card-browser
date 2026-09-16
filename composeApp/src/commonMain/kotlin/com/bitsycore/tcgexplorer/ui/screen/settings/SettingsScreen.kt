@@ -45,8 +45,10 @@ import androidx.compose.ui.unit.dp
 import com.bitsycore.tcgexplorer.data.settings.BrowsingPreferences
 import com.bitsycore.tcgexplorer.data.settings.ThemeMode
 import com.bitsycore.tcgexplorer.ui.component.AppIcons
+import com.bitsycore.tcgexplorer.ui.component.withoutBottom
 import com.bitsycore.tcgexplorer.ui.component.FinePrint
 import com.bitsycore.tcgexplorer.ui.component.arrowScroll
+import com.bitsycore.tcgexplorer.ui.component.readableColumn
 import com.bitsycore.tcgexplorer.ui.preview.PreviewFrame
 import com.bitsycore.lib.pulse.compose.collectAsStateWithLifecycle
 import com.bitsycore.lib.pulse.compose.collectEffect
@@ -105,11 +107,19 @@ fun SettingsContent(
 		val vScroll = rememberScrollState()
 		Column(
 			modifier = Modifier
-				.padding(vPadding)
+				.padding(vPadding.withoutBottom())
 				.fillMaxSize()
 				.verticalScroll(vScroll)
 				.arrowScroll(vScroll)
-				.padding(horizontal = 20.dp, vertical = 8.dp),
+				// The bottom inset is inside the scroll, so the content passes under the home
+				// indicator and the last row still scrolls clear of it.
+				.padding(
+					start = 20.dp,
+					end = 20.dp,
+					top = 8.dp,
+					bottom = 8.dp + vPadding.calculateBottomPadding(),
+				)
+				.readableColumn(),
 		) {
 			// ============
 			//  General

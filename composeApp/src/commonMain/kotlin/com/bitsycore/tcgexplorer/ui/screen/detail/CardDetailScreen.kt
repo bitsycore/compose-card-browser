@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import com.bitsycore.tcgexplorer.ui.component.arrowKeys
+import com.bitsycore.tcgexplorer.ui.component.readableColumn
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -664,7 +665,10 @@ private fun CardDetailPage(
 			modifier = Modifier
 				.fillMaxSize()
 				.verticalScroll(vScroll)
-				.padding(horizontal = 20.dp),
+				// Inside the pager page, so the pager keeps the full width and a swipe anywhere
+				// still changes card. Only the column of text is held to a readable width.
+				.padding(horizontal = 20.dp)
+				.readableColumn(),
 			horizontalAlignment = Alignment.CenterHorizontally,
 		) {
 			// Inside the scroll, not on it: padding on a scrolling container clips at its edge, while

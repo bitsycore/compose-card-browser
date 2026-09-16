@@ -8,6 +8,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,7 +47,11 @@ fun AppOverflowMenu(
 			)
 		}
 	}
-	DropdownMenu(expanded = vOpen, onDismissRequest = { vOpen = false }) {
+	DropdownMenu(
+		expanded = vOpen,
+		onDismissRequest = { vOpen = false },
+		modifier = Modifier.boundedMenuHeight(),
+	) {
 		DropdownMenuItem(
 			text = { Text("Settings") },
 			onClick = {

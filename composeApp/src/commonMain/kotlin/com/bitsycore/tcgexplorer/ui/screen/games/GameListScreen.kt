@@ -17,6 +17,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import com.bitsycore.tcgexplorer.ui.component.arrowSelection
+import com.bitsycore.tcgexplorer.ui.component.readablePadding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -103,6 +105,7 @@ import com.bitsycore.lib.pulse.compose.collectEffect
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
 import com.bitsycore.tcgexplorer.ui.component.AppIcons
+import com.bitsycore.tcgexplorer.ui.component.withoutBottom
 import com.bitsycore.tcgexplorer.ui.component.AppOverflowMenu
 
 /**
@@ -240,7 +243,8 @@ fun GameListContent(
 			)
 		},
 	) { vPadding ->
-		Box(Modifier.padding(vPadding).fillMaxSize()) {
+		// Knows its own width, which is what the rows are centred within on a tablet.
+		BoxWithConstraints(Modifier.padding(vPadding.withoutBottom()).fillMaxSize()) {
 			if (state.isLoading) {
 				LoadingState()
 			} else {
@@ -286,7 +290,14 @@ fun GameListContent(
 
 				LazyColumn(
 					state = vListState,
-					contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+					contentPadding = PaddingValues(
+						start = readablePadding(maxWidth, 16.dp),
+						end = readablePadding(maxWidth, 16.dp),
+						top = 8.dp,
+						// The bottom inset as content rather than margin, so rows pass under the
+						// home indicator and the last one still clears it.
+						bottom = 8.dp + vPadding.calculateBottomPadding(),
+					),
 					verticalArrangement = Arrangement.spacedBy(8.dp),
 					modifier = Modifier.arrowSelection(
 						count = vVisible.size,

@@ -70,9 +70,13 @@ import com.bitsycore.tcgexplorer.ui.component.AppIcons
  */
 @Composable
 private fun dialogWidth(): Modifier = Modifier
+	// The cap goes first. Behind `fillMaxWidth` it capped only the content: the dialog's own box
+	// still filled the window, and `BasicAlertDialog` aligns that box top-start -- so on a tablet a
+	// 420dp dialog sat against the left edge of a 1024dp screen. A phone never showed it, because
+	// there the two widths are the same number.
+	.widthIn(max = MAX_DIALOG_WIDTH)
 	.fillMaxWidth()
 	.padding(horizontal = 24.dp)
-	.widthIn(max = MAX_DIALOG_WIDTH)
 
 /** Paired with [dialogWidth]: the platform's own width would override it. */
 private val STABLE_DIALOG = DialogProperties(usePlatformDefaultWidth = false)

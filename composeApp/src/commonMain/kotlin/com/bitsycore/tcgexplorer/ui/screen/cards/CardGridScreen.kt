@@ -56,6 +56,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed as itemsIndexedInColumn
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import com.bitsycore.tcgexplorer.ui.component.arrowSelection
+import com.bitsycore.tcgexplorer.ui.component.boundedMenuHeight
+import com.bitsycore.tcgexplorer.ui.component.readableColumn
+import com.bitsycore.tcgexplorer.ui.component.readablePadding
 import com.bitsycore.tcgexplorer.data.settings.CardRowHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Row
@@ -67,6 +70,7 @@ import androidx.compose.material3.HorizontalDivider
 import com.bitsycore.tcgexplorer.data.settings.CardViewMode
 import androidx.compose.runtime.mutableStateOf
 import com.bitsycore.tcgexplorer.data.settings.CardTileSize
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.Composable
 import com.bitsycore.tcgexplorer.ui.component.sharedSetContainer
@@ -467,7 +471,10 @@ fun CardGridContent(
 					Row(
 						modifier = Modifier
 							.fillMaxWidth()
-							.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
+							.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)
+							// Same column as the set list's field. The grid below is deliberately
+							// not held in, but the field is the same control on both screens.
+							.readableColumn(),
 						verticalAlignment = Alignment.CenterVertically,
 					) {
 						SearchField(
@@ -555,7 +562,9 @@ fun CardGridContent(
 			}
 		},
 	) { vPadding ->
-		Box(Modifier.fillMaxSize()) {
+		// Knows its own width, which the list mode centres its rows within. The grid ignores it:
+		// its tiles are the content, and more of them across a tablet is the point.
+		BoxWithConstraints(Modifier.fillMaxSize()) {
 			when {
 				vState.isInitialLoad -> LoadingState(Modifier.padding(vPadding))
 
@@ -580,6 +589,7 @@ fun CardGridContent(
 				vState.viewMode == CardViewMode.LIST -> CardList(
 					cards = vState.cards,
 					listState = vListState,
+					sidePadding = readablePadding(maxWidth, TILE_GAP),
 					rowHeight = vState.rowHeight,
 					// The denominator for "4/352". Null where the set's size is unknown, which the
 					// row prints as a bare number rather than inventing one.
@@ -733,6 +743,8 @@ private fun CardGrid(
 private fun CardList(
 	cards: List<CardPrinting>,
 	listState: androidx.compose.foundation.lazy.LazyListState,
+	/** Left and right content padding, which centres the rows in a readable column on a tablet. */
+	sidePadding: Dp,
 	rowHeight: CardRowHeight,
 	knownSetSize: Int?,
 	game: GameProfile?,
@@ -747,8 +759,8 @@ private fun CardList(
 	LazyColumn(
 		state = listState,
 		contentPadding = PaddingValues(
-			start = TILE_GAP,
-			end = TILE_GAP,
+			start = sidePadding,
+			end = sidePadding,
 			top = contentPadding.calculateTopPadding() + TILE_GAP,
 			bottom = contentPadding.calculateBottomPadding() + TILE_GAP,
 		),
@@ -1165,7 +1177,11 @@ private fun ViewModeButton(
 				contentDescription = "How cards are shown",
 			)
 		}
-		DropdownMenu(expanded = vIsOpen, onDismissRequest = { vIsOpen = false }) {
+		DropdownMenu(
+			expanded = vIsOpen,
+			onDismissRequest = { vIsOpen = false },
+			modifier = Modifier.boundedMenuHeight(),
+		) {
 			CardViewMode.entries.forEach { vMode ->
 				DropdownMenuItem(
 					text = { Text(vMode.label) },

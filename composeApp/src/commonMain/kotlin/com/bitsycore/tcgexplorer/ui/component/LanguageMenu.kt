@@ -76,7 +76,11 @@ fun LanguageMenu(
 			)
 		}
 
-		DropdownMenu(expanded = vIsOpen, onDismissRequest = { vIsOpen = false }) {
+		DropdownMenu(
+			expanded = vIsOpen,
+			onDismissRequest = { vIsOpen = false },
+			modifier = Modifier.boundedMenuHeight(),
+		) {
 			if (header != null) {
 				Text(
 					text = header,

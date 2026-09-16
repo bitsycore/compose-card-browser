@@ -183,6 +183,15 @@ a column that is already vertically scrollable, so a lazy list inside it is a sc
 scrollable. The filter axes use an `AlertDialog` past ten values: a separate window, so nothing is
 nested, and the right shape for a long multi-select anyway.
 
+**A `DropdownMenu` also cannot survive an unbounded height, and says so by crashing as it opens.**
+`DropdownMenuContent` is `width(IntrinsicSize.Max)` over a `verticalScroll`, and
+`MaxIntrinsicWidthModifier` measures its child with `Constraints.fixedWidth`, whose `maxHeight` is
+`Infinity`; it clamps that against the constraints it was handed, so an unbounded height arriving
+from the popup layer survives into the scroll — *"Vertically scrollable component was measured with
+an infinity maximum height constraints"*. iPadOS hands the layer exactly that while a window is
+being resized, so it needs a resizable window to reach and appeared the day multitasking was turned
+on. Every menu takes `Modifier.boundedMenuHeight()`; a new one wants it too.
+
 **A view model's scope is `Dispatchers.Main.immediate`, which a plain JVM test has not got.**
 Every `handleIntent` is silently dropped and the state never moves, which looks exactly like the bug
 you are chasing. `Dispatchers.setMain(StandardTestDispatcher())` in a `@BeforeTest` — this cost an

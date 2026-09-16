@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -47,6 +48,8 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.runtime.Composable
 import com.bitsycore.tcgexplorer.ui.component.arrowSelection
+import com.bitsycore.tcgexplorer.ui.component.readableColumn
+import com.bitsycore.tcgexplorer.ui.component.readablePadding
 import com.bitsycore.tcgexplorer.ui.component.reorderHandle
 import com.bitsycore.tcgexplorer.ui.component.rememberReorder
 import com.bitsycore.tcgexplorer.ui.component.ReorderState
@@ -113,6 +116,7 @@ import com.bitsycore.lib.pulse.compose.collectEffect
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import com.bitsycore.tcgexplorer.ui.component.AppIcons
+import com.bitsycore.tcgexplorer.ui.component.withoutBottom
 import com.bitsycore.tcgexplorer.ui.component.Coverage
 import com.bitsycore.tcgexplorer.ui.component.CoverageRings
 import com.bitsycore.tcgexplorer.ui.component.AppOverflowMenu
@@ -336,7 +340,10 @@ fun SetListContent(
 							end = 16.dp,
 							top = if (state.regionOptions.isEmpty()) 12.dp else 4.dp,
 							bottom = 8.dp,
-						),
+						)
+						// Same column as the rows below, or the field would run the width of a
+						// tablet while the list it searches sat in the middle.
+						.readableColumn(),
 					verticalAlignment = Alignment.CenterVertically,
 				) {
 					OutlinedTextField(
@@ -369,7 +376,7 @@ fun SetListContent(
 			}
 		},
 	) { vPadding ->
-		Column(Modifier.padding(vPadding).fillMaxSize()) {
+		Column(Modifier.padding(vPadding.withoutBottom()).fillMaxSize()) {
 
 			// The honesty strip. Shown whenever what is on screen is not a fresh network result.
 			when {
@@ -383,7 +390,8 @@ fun SetListContent(
 				)
 			}
 
-			Box(Modifier.weight(1f)) {
+			// Knows its own width, which is what the rows are centred within on a tablet.
+			BoxWithConstraints(Modifier.weight(1f)) {
 				when {
 					state.isInitialLoad -> LoadingState()
 
@@ -441,13 +449,18 @@ fun SetListContent(
 						LazyColumn(
 							state = vListState,
 							// 4dp at the top so the first row sits the same distance below the search field
-				// as the field sits below the bar. The field contributes 8dp of its own.
-				contentPadding = PaddingValues(
-					start = 16.dp,
-					end = 16.dp,
-					top = 4.dp,
-					bottom = 8.dp,
-				),
+							// as the field sits below the bar. The field contributes 8dp of its own.
+							//
+							// The sides centre the rows in a readable column on a tablet, as padding
+							// rather than a narrower list so a drag anywhere still scrolls.
+							contentPadding = PaddingValues(
+								start = readablePadding(maxWidth, 16.dp),
+								end = readablePadding(maxWidth, 16.dp),
+								top = 4.dp,
+								// The bottom inset as content rather than margin, so rows pass
+								// under the home indicator and the last one still clears it.
+								bottom = 8.dp + vPadding.calculateBottomPadding(),
+							),
 							verticalArrangement = Arrangement.spacedBy(8.dp),
 							modifier = Modifier.arrowSelection(
 								count = vSelectable.size,

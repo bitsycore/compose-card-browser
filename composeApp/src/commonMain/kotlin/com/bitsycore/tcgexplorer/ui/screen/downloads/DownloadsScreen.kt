@@ -3,7 +3,6 @@ package com.bitsycore.tcgexplorer.ui.screen.downloads
 import com.bitsycore.tcgexplorer.data.download.DownloadRequest
 import androidx.compose.material3.Button
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AssistChip
@@ -39,9 +39,11 @@ import com.bitsycore.tcgexplorer.data.download.DownloadJob
 import com.bitsycore.tcgexplorer.data.download.DownloadKind
 import com.bitsycore.tcgexplorer.data.download.DownloadStatus
 import com.bitsycore.tcgexplorer.ui.component.EmptyState
+import com.bitsycore.tcgexplorer.ui.component.readablePadding
 import com.bitsycore.tcgexplorer.ui.preview.PreviewFrame
 import androidx.compose.ui.tooling.preview.Preview
 import com.bitsycore.tcgexplorer.ui.component.AppIcons
+import com.bitsycore.tcgexplorer.ui.component.withoutBottom
 
 /**
  * The download queue, as a screen.
@@ -105,12 +107,19 @@ fun DownloadsScreen(
 			)
 		},
 	) { vPadding ->
-		Box(Modifier.padding(vPadding).fillMaxSize()) {
+		BoxWithConstraints(Modifier.padding(vPadding.withoutBottom()).fillMaxSize()) {
 			if (jobs.isEmpty()) {
 				EmptyState("Nothing queued. Downloads you start appear here.")
 			} else {
 				LazyColumn(
-					contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+					contentPadding = PaddingValues(
+						start = readablePadding(maxWidth, 16.dp),
+						end = readablePadding(maxWidth, 16.dp),
+						top = 8.dp,
+						// The bottom inset as content rather than margin, so cards pass under the
+						// home indicator and the last one still clears it.
+						bottom = 8.dp + vPadding.calculateBottomPadding(),
+					),
 					verticalArrangement = Arrangement.spacedBy(10.dp),
 				) {
 					item(key = "summary") {
