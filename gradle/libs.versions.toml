@@ -12,8 +12,8 @@
 
 # The app's own version. Read by androidApp's `versionName` and by the generated `AppBuild`, so
 # the About screen and the package can never disagree about which build this is.
-app = "1.0.0"
-appCode = "1"
+app = "1.0.1"
+appCode = "2"
 
 # =========================================
 # MARK: KMP
